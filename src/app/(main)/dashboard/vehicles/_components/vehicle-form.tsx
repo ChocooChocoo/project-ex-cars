@@ -36,11 +36,23 @@ export function VehicleForm({ defaultValues }: VehicleFormProps) {
     resolver: zodResolver(vehicleSchema),
     defaultValues: defaultValues ?? {
       stock_code: "",
+      vin: "",
       make: "",
       model: "",
       year: new Date().getFullYear(),
       condition: "used",
+      mileage: undefined,
+      fuel_type: "",
+      transmission: "",
+      exterior_color: "",
+      interior_color: "",
+      body_type: "",
+      engine: "",
+      description: "",
+      current_price: undefined,
       pricing_type: "negotiable",
+      warranty_details: "",
+      offer_details: "",
     },
   });
 

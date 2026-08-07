@@ -16,7 +16,8 @@ import {
 } from "@/components/ui/sidebar";
 import { APP_CONFIG } from "@/config/app-config";
 import { type GceRole, ROLE_NAV_ACCESS } from "@/lib/auth/roles";
-import { sidebarItems } from "@/navigation/sidebar/sidebar-items";
+import { rolePath } from "@/lib/routing/paths";
+import { type NavMainItem, sidebarItems } from "@/navigation/sidebar/sidebar-items";
 import { usePreferencesStore } from "@/stores/preferences/preferences-provider";
 
 import { NavMain } from "./nav-main";
@@ -35,6 +36,22 @@ const _data = {
     { name: "Word Assistant", url: "#", icon: File },
   ],
 };
+
+function resolveItemUrl(item: NavMainItem, role: string): NavMainItem {
+  if ("url" in item && item.url) {
+    return { ...item, url: rolePath(role, item.url) };
+  }
+  if ("subItems" in item && item.subItems) {
+    return {
+      ...item,
+      subItems: item.subItems.map((sub) => ({
+        ...sub,
+        url: rolePath(role, sub.url),
+      })),
+    };
+  }
+  return item;
+}
 
 export function AppSidebar({
   userRole,
@@ -77,7 +94,13 @@ export function AppSidebar({
         return false;
       }),
     }))
-    .filter((group) => group.items.length > 0);
+    .filter((group) => group.items.length > 0)
+    .map((group) => ({
+      ...group,
+      items: group.items.map((item) => (userRole ? resolveItemUrl(item, userRole) : item)),
+    }));
+
+  const brandHref = userRole ? rolePath(userRole, "/dashboard/default") : "/dashboard/default";
 
   return (
     <Sidebar {...props} variant={variant} collapsible={collapsible}>
@@ -85,7 +108,7 @@ export function AppSidebar({
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton asChild>
-              <Link prefetch={false} href="/dashboard/default">
+              <Link prefetch={false} href={brandHref}>
                 <Command />
                 <span className="font-semibold text-base">{APP_CONFIG.name}</span>
               </Link>

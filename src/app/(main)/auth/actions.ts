@@ -1,8 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { landingPath } from "@/lib/routing/paths";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -14,14 +16,28 @@ export async function signIn(formData: FormData) {
     password: formData.get("password") as string,
   };
 
-  const { error } = await supabase.auth.signInWithPassword(credentials);
+  const { data, error } = await supabase.auth.signInWithPassword(credentials);
 
   if (error) {
     return { error: error.message };
   }
 
+  const userId = data.user?.id;
+  if (userId) {
+    const { data: roles } = await supabase.rpc("get_user_roles");
+    if (roles) {
+      const userRole = (roles as { account_id: string; role: string }[]).find((r) => r.account_id === userId);
+      if (userRole) {
+        const cookieStore = await cookies();
+        cookieStore.set("gce-role", userRole.role, { httpOnly: false, sameSite: "lax", maxAge: 604800, path: "/" });
+        revalidatePath("/", "layout");
+        redirect(landingPath(userRole.role));
+      }
+    }
+  }
+
   revalidatePath("/", "layout");
-  redirect("/dashboard/default");
+  redirect("/auth/v1/login");
 }
 
 export async function signUp(formData: FormData) {
@@ -46,10 +62,13 @@ export async function signUp(formData: FormData) {
   if (data.user) {
     const admin = createAdminClient();
     await admin.from("profiles").update({ full_name: fullName }).eq("id", data.user.id);
+
+    const cookieStore = await cookies();
+    cookieStore.set("gce-role", "customer", { httpOnly: false, sameSite: "lax", maxAge: 604800, path: "/" });
   }
 
   revalidatePath("/", "layout");
-  redirect("/dashboard/default");
+  redirect("/customer/showroom");
 }
 
 export async function signOut() {

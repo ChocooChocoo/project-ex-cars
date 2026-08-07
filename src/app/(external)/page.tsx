@@ -1,13 +1,12 @@
 import { redirect } from "next/navigation";
 
 import { getCurrentRole } from "@/app/(main)/auth/actions";
-import { ROLE_LANDING_PAGES } from "@/lib/auth/roles";
+import { landingPath } from "@/lib/routing/paths";
 
 export default async function Home() {
   const role = await getCurrentRole();
   if (role) {
-    const landing = ROLE_LANDING_PAGES[role as keyof typeof ROLE_LANDING_PAGES] ?? "/dashboard/default";
-    redirect(landing);
+    redirect(landingPath(role));
   }
 
   redirect("/auth/v1/login");
