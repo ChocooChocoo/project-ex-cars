@@ -82,14 +82,14 @@ export const DOCUMENT_VERIFICATION_STATES = ["pending", "verified", "rejected"] 
 
 /** Nav item IDs each role may see. "all" grants access to every nav item. */
 export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
-  customer: new Set(["showroom"]),
-  supplier: new Set(["showroom"]),
-  ceo: new Set(["default", "vehicles", "showroom", "content", "inspections", "roles", "users"]),
-  account_manager: new Set(["default", "roles", "users", "inspections"]),
+  customer: new Set(["showroom", "inquiries"]),
+  supplier: new Set(["showroom", "inquiries"]),
+  ceo: new Set(["default", "vehicles", "showroom", "content", "inspections", "inquiries", "roles", "users"]),
+  account_manager: new Set(["default", "roles", "users", "inspections", "inquiries"]),
   head_accountant: new Set(["default", "vehicles"]),
   marketing_specialist: new Set(["default", "vehicles", "showroom", "content"]),
   mechanic: new Set(["default", "inspections"]),
-  sales_manager: new Set(["default", "vehicles", "inspections"]),
+  sales_manager: new Set(["default", "vehicles", "inspections", "inquiries"]),
   confidential_informant: new Set(["default"]),
   head_security: new Set(["default"]),
 };

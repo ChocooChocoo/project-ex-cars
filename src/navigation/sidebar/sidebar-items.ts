@@ -152,6 +152,12 @@ export const sidebarItems: NavGroup[] = [
         url: "/dashboard/inspections",
         icon: ClipboardList,
       },
+      {
+        id: "inquiries",
+        title: "Inquiries",
+        url: "/dashboard/inquiries",
+        icon: MessageSquare,
+      },
     ],
   },
   {

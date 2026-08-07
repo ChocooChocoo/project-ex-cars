@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { createServerSupabase } from "@/lib/supabase/server";
 
+import { InquiryButtons } from "../_components/inquiry-buttons";
+
 export default async function VehicleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createServerSupabase();
@@ -88,6 +90,8 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
                 </div>
               </>
             )}
+            <Separator />
+            <InquiryButtons vehicleId={id} />
           </CardContent>
         </Card>
       </div>
