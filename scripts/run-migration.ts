@@ -1,7 +1,8 @@
 // @ts-nocheck
+
+import dns from "node:dns";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import dns from "node:dns";
 
 const POOLER_IPS = ["54.255.219.82", "52.77.146.31", "52.74.252.201"];
 const DB_HOST = "db.nsdwyxwrsmtarrxgzeuj.supabase.co";
