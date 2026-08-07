@@ -1,0 +1,47 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+import { Car, MessageSquare, Sparkles } from "lucide-react";
+
+import { cn } from "@/lib/utils";
+
+export function CustomerHeader() {
+  const path = usePathname();
+
+  const links = [
+    { href: "/showroom", label: "Showroom", icon: Car },
+    { href: "/inquiries", label: "My Inquiries", icon: MessageSquare },
+    { href: "/recommendations", label: "Find Your Car", icon: Sparkles },
+  ];
+
+  return (
+    <header className="sticky top-0 z-40 w-full border-b bg-background/80 backdrop-blur-sm">
+      <div className="mx-auto flex h-12 max-w-6xl items-center justify-between px-4">
+        <Link href="/showroom" className="flex items-center gap-2 font-semibold text-sm">
+          <Car className="size-4" />
+          <span>GCE Auto</span>
+        </Link>
+        <nav className="flex items-center gap-1">
+          {links.map((link) => {
+            const active = path.startsWith(link.href);
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors",
+                  active ? "bg-primary/10 font-medium text-primary" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <link.icon className="size-3.5" />
+                {link.label}
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
+    </header>
+  );
+}

@@ -95,13 +95,13 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
     "roles",
     "users",
   ]),
-  account_manager: new Set(["default", "roles", "users", "inspections", "inquiries", "recommendations"]),
+  account_manager: new Set(["default", "roles", "users", "vehicles", "inspections", "inquiries", "recommendations"]),
   head_accountant: new Set(["default", "vehicles"]),
   marketing_specialist: new Set(["default", "vehicles", "showroom", "content"]),
-  mechanic: new Set(["default", "inspections"]),
-  sales_manager: new Set(["default", "vehicles", "inspections", "inquiries", "recommendations"]),
-  confidential_informant: new Set(["default"]),
-  head_security: new Set(["default"]),
+  mechanic: new Set(["default", "vehicles", "inspections"]),
+  sales_manager: new Set(["default", "vehicles", "showroom", "inspections", "inquiries", "recommendations"]),
+  confidential_informant: new Set(["default", "vehicles", "inspections"]),
+  head_security: new Set(["default", "vehicles"]),
 };
 
 /** Landing page path for each role after sign-in. */
