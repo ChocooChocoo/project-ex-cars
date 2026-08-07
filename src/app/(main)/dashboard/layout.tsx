@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { cookies } from "next/headers";
 
+import { getCurrentRole } from "@/app/(main)/auth/actions";
 import { AppSidebar } from "@/app/(main)/dashboard/_components/sidebar/app-sidebar";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -16,9 +17,10 @@ import { ThemeSwitcher } from "./_components/sidebar/theme-switcher";
 export default async function Layout({ children }: Readonly<{ children: ReactNode }>) {
   const cookieStore = await cookies();
   const defaultOpen = cookieStore.get("sidebar_state")?.value !== "false";
-  const [variant, collapsible] = await Promise.all([
+  const [variant, collapsible, role] = await Promise.all([
     getPreference("sidebar_variant", SIDEBAR_VARIANT_VALUES, "inset"),
     getPreference("sidebar_collapsible", SIDEBAR_COLLAPSIBLE_VALUES, "icon"),
+    getCurrentRole(),
   ]);
 
   return (
@@ -30,7 +32,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
         } as React.CSSProperties
       }
     >
-      <AppSidebar variant={variant} collapsible={collapsible} />
+      <AppSidebar variant={variant} collapsible={collapsible} userRole={role} />
       <SidebarInset
         className={cn(
           "[html[data-content-layout=centered]_&>*]:mx-auto",

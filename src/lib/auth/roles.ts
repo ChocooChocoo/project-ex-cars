@@ -79,3 +79,31 @@ export const SUPPLIER_STATES = [
 export type SupplierState = (typeof SUPPLIER_STATES)[number];
 
 export const DOCUMENT_VERIFICATION_STATES = ["pending", "verified", "rejected"] as const;
+
+/** Nav item IDs each role may see. "all" grants access to every nav item. */
+export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
+  customer: new Set(["showroom"]),
+  supplier: new Set(["showroom"]),
+  ceo: new Set(["default", "vehicles", "showroom", "content", "inspections", "roles", "users"]),
+  account_manager: new Set(["default", "roles", "users", "inspections"]),
+  head_accountant: new Set(["default", "vehicles"]),
+  marketing_specialist: new Set(["default", "vehicles", "showroom", "content"]),
+  mechanic: new Set(["default", "inspections"]),
+  sales_manager: new Set(["default", "vehicles", "inspections"]),
+  confidential_informant: new Set(["default"]),
+  head_security: new Set(["default"]),
+};
+
+/** Landing page path for each role after sign-in. */
+export const ROLE_LANDING_PAGES: Record<GceRole, string> = {
+  customer: "/showroom",
+  supplier: "/showroom",
+  ceo: "/dashboard/default",
+  account_manager: "/dashboard/default",
+  head_accountant: "/dashboard/default",
+  marketing_specialist: "/dashboard/vehicles",
+  mechanic: "/dashboard/inspections",
+  sales_manager: "/dashboard/vehicles",
+  confidential_informant: "/dashboard/default",
+  head_security: "/dashboard/default",
+};

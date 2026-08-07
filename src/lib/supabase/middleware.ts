@@ -32,16 +32,27 @@ export async function updateSession(request: NextRequest) {
 
   const isAuthPage = request.nextUrl.pathname.startsWith("/auth");
   const isDashboard = request.nextUrl.pathname.startsWith("/dashboard");
+  const isRoot = request.nextUrl.pathname === "/";
 
-  if (!user && isDashboard) {
+  if (!user && (isDashboard || isRoot)) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth/v1/login";
     return NextResponse.redirect(url);
   }
 
-  if (user && isAuthPage) {
+  if (user && (isAuthPage || isRoot)) {
+    const role = request.cookies.get("gce-role")?.value;
     const url = request.nextUrl.clone();
-    url.pathname = "/dashboard/default";
+
+    if (role === "customer" || role === "supplier") {
+      url.pathname = "/showroom";
+    } else if (role === "mechanic") {
+      url.pathname = "/dashboard/inspections";
+    } else if (role === "marketing_specialist") {
+      url.pathname = "/dashboard/vehicles";
+    } else {
+      url.pathname = "/dashboard/default";
+    }
     return NextResponse.redirect(url);
   }
 

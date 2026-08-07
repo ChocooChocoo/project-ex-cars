@@ -1,7 +1,10 @@
 import {
   Banknote,
   Calendar,
+  Car,
   ChartBar,
+  ClipboardList,
+  Eye,
   Fingerprint,
   Forklift,
   Gauge,
@@ -12,6 +15,7 @@ import {
   Lock,
   type LucideIcon,
   Mail,
+  Megaphone,
   MessageSquare,
   ReceiptText,
   Server,
@@ -122,6 +126,36 @@ export const sidebarItems: NavGroup[] = [
   },
   {
     id: 2,
+    label: "Operations",
+    items: [
+      {
+        id: "vehicles",
+        title: "Vehicles",
+        url: "/dashboard/vehicles",
+        icon: Car,
+      },
+      {
+        id: "showroom",
+        title: "Showroom",
+        url: "/showroom",
+        icon: Eye,
+      },
+      {
+        id: "content",
+        title: "Content",
+        url: "/dashboard/content",
+        icon: Megaphone,
+      },
+      {
+        id: "inspections",
+        title: "Inspections",
+        url: "/dashboard/inspections",
+        icon: ClipboardList,
+      },
+    ],
+  },
+  {
+    id: 3,
     label: "Pages",
     items: [
       {
@@ -180,7 +214,7 @@ export const sidebarItems: NavGroup[] = [
     ],
   },
   {
-    id: 3,
+    id: 4,
     label: "Legacy",
     items: [
       {
@@ -196,7 +230,7 @@ export const sidebarItems: NavGroup[] = [
     ],
   },
   {
-    id: 4,
+    id: 5,
     label: "Misc",
     items: [
       {
