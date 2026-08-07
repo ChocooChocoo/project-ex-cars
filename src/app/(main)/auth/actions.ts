@@ -75,19 +75,11 @@ export async function getCurrentRole(): Promise<string | null> {
 
   if (!user) return null;
 
-  const { data } = await supabase.from("profiles").select("id").eq("id", user.id).single();
+  const { data: roles } = await supabase.rpc("get_user_roles");
+  if (!roles) return null;
 
-  if (!data) return null;
-
-  const admin = createAdminClient();
-  const { data: roleData } = await admin
-    .from("user_roles")
-    .select("role")
-    .eq("account_id", user.id)
-    .eq("active", true)
-    .single();
-
-  return roleData?.role ?? null;
+  const userRole = (roles as { account_id: string; role: string }[]).find((r) => r.account_id === user.id);
+  return userRole?.role ?? null;
 }
 
 interface AssignRoleParams {
@@ -99,16 +91,11 @@ interface AssignRoleParams {
 export async function assignRole(params: AssignRoleParams) {
   const admin = createAdminClient();
 
-  const { error } = await admin.from("user_roles").upsert(
-    {
-      account_id: params.accountId,
-      role: params.role,
-      assigned_by: params.assignedBy,
-      assigned_at: new Date().toISOString(),
-      active: true,
-    },
-    { onConflict: "account_id" },
-  );
+  const { error } = await admin.rpc("assign_user_role", {
+    p_account_id: params.accountId,
+    p_role: params.role,
+    p_assigned_by: params.assignedBy,
+  });
 
   if (error) {
     return { error: error.message };
