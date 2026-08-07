@@ -1,6 +1,6 @@
 # 08 - ROADMAP TRACKER
 
-[[00 - START HERE|Back to start]] · Previous: [[07 - DEVELOPMENT ROADMAP]] · Next: [[09 - TASK TRACKER]]
+[Back to start](00%20-%20START%20HERE.md) · Previous: [07 - DEVELOPMENT ROADMAP](07%20-%20DEVELOPMENT%20ROADMAP.md) · Next: [09 - TASK TRACKER](09%20-%20TASK%20TRACKER.md)
 
 **Last checked:** 7 August 2026
 
@@ -83,7 +83,7 @@ Phase 1 implementation began 7 August 2026. Code infrastructure (auth, database 
 | R-22 | Chief executive dashboard with sales, revenue, inventory, pending work, staff performance, report and price approvals, employee announcements, and agreed recommendation measures | ❓ Unclear | No working dashboard or report was supplied. |
 | R-23 | Security photographs, sourcing, mechanic assignment, delivery, case expenses, and vehicle-recovery records within the agreed boundary | ❓ Unclear | No working records were supplied. |
 | R-26 | Payroll workflow covering attendance inputs, salary and deduction entry, report preparation, payslip approval, and salary-payment responsibility | ❓ Unclear | No working payroll records or approval evidence were supplied. |
-| R-38 | Direct chief-executive-to-supplier communication channel | ❓ Unclear | Requested at the last presentation, but marked “if applicable”; see [[00 - START HERE#Open questions\|Q-23]]. |
+| R-38 | Direct chief-executive-to-supplier communication channel | ❓ Unclear | Requested at the last presentation, but marked “if applicable”; see [Q-23](00%20-%20START%20HERE.md#open-questions). |
 
 ## Phase 7 — Mobile use and acceptance are checked
 
@@ -91,7 +91,7 @@ Phase 1 implementation began 7 August 2026. Code infrastructure (auth, database 
 |---|---|---|---|
 | R-24 | Responsive customer and employee experiences across the completed features | ❓ Unclear | No running pages were supplied for phone or computer checks. |
 | R-25 | User acceptance, usability, and satisfaction checks with recorded results | ❓ Unclear | No questionnaire results or test evidence were supplied. |
-| R-41 | Mobile application obtained from inside the system, without avoidable outside websites | ❓ Unclear | Requested at the last presentation, but it disagrees with the native-application exclusion; see [[02 - DOCUMENT FINDINGS#Active disagreement\|C-06]]. |
+| R-41 | Mobile application obtained from inside the system, without avoidable outside websites | ❓ Unclear | Requested at the last presentation, but it disagrees with the native-application exclusion; see [C-06](02%20-%20DOCUMENT%20FINDINGS.md#active-disagreement). |
 
 ## Cross-phase work
 
@@ -102,7 +102,7 @@ Phase 1 implementation began 7 August 2026. Code infrastructure (auth, database 
 
 ## What is blocked
 
-No roadmap item is marked blocked because the material does not report an active build. Several open questions could block future work, but the current evidence supports only ❓ Unclear. R-41 is the closest to blocked, because it directly disagrees with a stated exclusion, but no active build has been reported for it either. See [[00 - START HERE#Open questions]].
+No roadmap item is marked blocked because the material does not report an active build. Several open questions could block future work, but the current evidence supports only ❓ Unclear. R-41 is the closest to blocked, because it directly disagrees with a stated exclusion, but no active build has been reported for it either. See [00 - START HERE](00%20-%20START%20HERE.md#open-questions).
 
 ## Status legend
 

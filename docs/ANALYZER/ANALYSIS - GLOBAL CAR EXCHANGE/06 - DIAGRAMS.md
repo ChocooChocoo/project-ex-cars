@@ -1,6 +1,6 @@
 # 06 - DIAGRAMS
 
-[[00 - START HERE|Back to start]] · Previous: [[05 - SYSTEM ARCHITECTURE]] · Next: [[07 - DEVELOPMENT ROADMAP]]
+[Back to start](00%20-%20START%20HERE.md) · Previous: [05 - SYSTEM ARCHITECTURE](05%20-%20SYSTEM%20ARCHITECTURE.md) · Next: [07 - DEVELOPMENT ROADMAP](07%20-%20DEVELOPMENT%20ROADMAP.md)
 
 Pictures of the proposed system. Each picture has a plain-language reading beneath it, so nothing here depends on knowing how to read a diagram.
 
@@ -47,7 +47,7 @@ flowchart LR
     sales --> movement
 ```
 
-**Reading this:** Buyers, sellers, operational staff, and leaders would all enter through responsive web pages. The pages would check accounts and role access before opening the areas for vehicles, sales, payroll, finance, recommendations, and oversight. Every area would share one information store. Money would still be settled outside the system, while delivery and vehicle recovery would remain assigned human work. This picture is *drawn from* **GCE FULL CHAPTER 1 - 3.docx**, pages 15–22; **GCE ADDITIONAL DOCUMENTS.docx**, pages 1–3; and **GCE USERS LEVELS MODULES.md**, headings “CEO” through “Head Security”. It matches [[05 - SYSTEM ARCHITECTURE#The arrangement being proposed]].
+**Reading this:** Buyers, sellers, operational staff, and leaders would all enter through responsive web pages. The pages would check accounts and role access before opening the areas for vehicles, sales, payroll, finance, recommendations, and oversight. Every area would share one information store. Money would still be settled outside the system, while delivery and vehicle recovery would remain assigned human work. This picture is *drawn from* **GCE FULL CHAPTER 1 - 3.docx**, pages 15–22; **GCE ADDITIONAL DOCUMENTS.docx**, pages 1–3; and **GCE USERS LEVELS MODULES.md**, headings “CEO” through “Head Security”. It matches [05 - SYSTEM ARCHITECTURE](05%20-%20SYSTEM%20ARCHITECTURE.md#the-arrangement-being-proposed).
 
 ## 2. How a job gets done — buying a listed vehicle
 
@@ -187,7 +187,7 @@ flowchart LR
     inventory --> managerResult
 ```
 
-**Reading this:** The customer-facing path combines budget and preferences with mechanic findings, vehicle details, and past demand. The fixed weights are then applied before available vehicles are ranked. The chapter document separately asks for management pricing and sales insight. Whether these are one Decision Support System or two related tools remains [[00 - START HERE#Open questions|Q-05]]. — **GCE FULL CHAPTER 1 - 3.docx**, pages 16 and 19–20; **GCE ADDITIONAL DOCUMENTS.docx**, pages 2–3
+**Reading this:** The customer-facing path combines budget and preferences with mechanic findings, vehicle details, and past demand. The fixed weights are then applied before available vehicles are ranked. The chapter document separately asks for management pricing and sales insight. Whether these are one Decision Support System or two related tools remains [Q-05](00%20-%20START%20HERE.md#open-questions). — **GCE FULL CHAPTER 1 - 3.docx**, pages 16 and 19–20; **GCE ADDITIONAL DOCUMENTS.docx**, pages 2–3
 
 ## 7. The order of the phases
 
@@ -210,7 +210,7 @@ flowchart LR
     phase6 --> phase7
 ```
 
-**Reading this:** The shared people and information foundation starts first. Vehicle records follow because conversations and recommendations both need a vehicle to refer to. Conversations and recommendations can then be developed alongside each other. Transactions need both. Staff, management, finance, and payroll work build on the earlier records, and the final phase checks the complete experience on phones and with intended users. This order is *drawn from* **GCE FULL CHAPTER 1 - 3.docx**, pages 14–22; **GCE ADDITIONAL DOCUMENTS.docx**, pages 1–3; and **GCE USERS LEVELS MODULES.md**, headings “CEO” through “Head Security”. It matches [[07 - DEVELOPMENT ROADMAP#The phases at a glance]].
+**Reading this:** The shared people and information foundation starts first. Vehicle records follow because conversations and recommendations both need a vehicle to refer to. Conversations and recommendations can then be developed alongside each other. Transactions need both. Staff, management, finance, and payroll work build on the earlier records, and the final phase checks the complete experience on phones and with intended users. This order is *drawn from* **GCE FULL CHAPTER 1 - 3.docx**, pages 14–22; **GCE ADDITIONAL DOCUMENTS.docx**, pages 1–3; and **GCE USERS LEVELS MODULES.md**, headings “CEO” through “Head Security”. It matches [07 - DEVELOPMENT ROADMAP](07%20-%20DEVELOPMENT%20ROADMAP.md#the-phases-at-a-glance).
 
 ## 8. The proposed arrangement
 
@@ -262,7 +262,7 @@ flowchart LR
     security --> outsideMovement
 ```
 
-**Reading this:** One responsive entry point accepts registered accounts and the walk-in accounts created by the Sales Manager. Role checks decide which work each person can reach. Customer, vehicle, payroll, finance, approval, delivery, and security areas all share the same information. Financial settlement and physical vehicle movement cross the boundary into human work outside the program. This proposed arrangement is *drawn from* **GCE FULL CHAPTER 1 - 3.docx**, pages 15–22; **GCE ADDITIONAL DOCUMENTS.docx**, pages 1–3; and **GCE USERS LEVELS MODULES.md**, headings “CEO” through “Head Security”. The current arrangement cannot be verified, as explained in [[05 - SYSTEM ARCHITECTURE#The arrangement today]].
+**Reading this:** One responsive entry point accepts registered accounts and the walk-in accounts created by the Sales Manager. Role checks decide which work each person can reach. Customer, vehicle, payroll, finance, approval, delivery, and security areas all share the same information. Financial settlement and physical vehicle movement cross the boundary into human work outside the program. This proposed arrangement is *drawn from* **GCE FULL CHAPTER 1 - 3.docx**, pages 15–22; **GCE ADDITIONAL DOCUMENTS.docx**, pages 1–3; and **GCE USERS LEVELS MODULES.md**, headings “CEO” through “Head Security”. The current arrangement cannot be verified, as explained in [05 - SYSTEM ARCHITECTURE](05%20-%20SYSTEM%20ARCHITECTURE.md#the-arrangement-today).
 
 ## 9. Payroll handoff
 
@@ -285,7 +285,7 @@ flowchart LR
     unclear --> payment
 ```
 
-**Reading this:** Employee time and request records feed the Account Manager's payroll preparation. The Account Manager enters salaries and deductions and prepares the report. The source separately gives payslip review work to the Head Accountant and report approval work to the chief executive. It then gives salary-payment responsibility to the Head Accountant. The order between those approvals is not stated, so the middle of the handoff remains [[00 - START HERE#Open questions|Q-13]]. — **GCE USERS LEVELS MODULES.md**, headings “CEO — 2. Approval and Rejection of Reports”, “Account Manager — 4. Attendance, Leave, and Overtime Records; Payroll Processing; and Reconditioning Disbursements”, and “Head Accountant — 2. Payroll” through “Head Accountant — 6. Attendance Monitoring”
+**Reading this:** Employee time and request records feed the Account Manager's payroll preparation. The Account Manager enters salaries and deductions and prepares the report. The source separately gives payslip review work to the Head Accountant and report approval work to the chief executive. It then gives salary-payment responsibility to the Head Accountant. The order between those approvals is not stated, so the middle of the handoff remains [Q-13](00%20-%20START%20HERE.md#open-questions). — **GCE USERS LEVELS MODULES.md**, headings “CEO — 2. Approval and Rejection of Reports”, “Account Manager — 4. Attendance, Leave, and Overtime Records; Payroll Processing; and Reconditioning Disbursements”, and “Head Accountant — 2. Payroll” through “Head Accountant — 6. Attendance Monitoring”
 
 ## 10. Installment escalation and vehicle recovery
 
@@ -315,7 +315,7 @@ flowchart TD
     recover --> finish
 ```
 
-**Reading this:** The Head Accountant watches installment due dates and asks the Account Manager to contact a late buyer. If payment is still missing after an ultimatum, the Head Accountant instructs the Confidential Informant to retrieve or tow the vehicle. The source does not state the ultimatum length or whether another approval is required, so those points remain [[00 - START HERE#Open questions|Q-15]]. — **GCE USERS LEVELS MODULES.md**, headings “Head Accountant — 5. Installment Accounts” and “Confidential Informant — 3. Repossession”
+**Reading this:** The Head Accountant watches installment due dates and asks the Account Manager to contact a late buyer. If payment is still missing after an ultimatum, the Head Accountant instructs the Confidential Informant to retrieve or tow the vehicle. The source does not state the ultimatum length or whether another approval is required, so those points remain [Q-15](00%20-%20START%20HERE.md#open-questions). — **GCE USERS LEVELS MODULES.md**, headings “Head Accountant — 5. Installment Accounts” and “Confidential Informant — 3. Repossession”
 
 ## 11. Supplier registration and approval
 
@@ -349,7 +349,7 @@ flowchart TD
     refuseSupplier --> finishSupplier
 ```
 
-**Reading this:** The revision list prefers the Procurement Team creating the supplier account outright. If a separate supplier portal is kept instead, the system must also hold evidence that GCE invited that supplier. Both paths then require a Company or Individual declaration and two primary valid IDs. Sign-in stays closed until GCE approves. The source does not say who the Procurement Team is, whether the portal is kept, or which IDs are accepted, so those points remain [[00 - START HERE#Open questions|Q-19]], [[00 - START HERE#Open questions|Q-20]], and [[00 - START HERE#Open questions|Q-21]]. — **REVISIONS LISTS.md**, heading “5. Supplier Registration and Account Management”
+**Reading this:** The revision list prefers the Procurement Team creating the supplier account outright. If a separate supplier portal is kept instead, the system must also hold evidence that GCE invited that supplier. Both paths then require a Company or Individual declaration and two primary valid IDs. Sign-in stays closed until GCE approves. The source does not say who the Procurement Team is, whether the portal is kept, or which IDs are accepted, so those points remain [Q-19](00%20-%20START%20HERE.md#open-questions), [Q-20](00%20-%20START%20HERE.md#open-questions), and [Q-21](00%20-%20START%20HERE.md#open-questions). — **REVISIONS LISTS.md**, heading “5. Supplier Registration and Account Management”
 
 ## 12. Checklist to inspection report
 
@@ -381,4 +381,4 @@ flowchart TD
     reportCheck --> finishCheck
 ```
 
-**Reading this:** The mechanic works down a nested list: a vehicle system, then its components, then its parts. Each part gets exactly one of three statuses. Choosing For Repair or For Replacement opens fields for the replacement item name, brand, and estimated cost. The inspection report is then built from those saved answers, so the mechanic never types the same finding twice. Only engine, brakes, and suspension are given as examples, so the approved full list remains [[00 - START HERE#Open questions|Q-27]]. — **REVISIONS LISTS.md**, headings “11. Mechanic Inspection Checklist” through “13. Inspection Report”
+**Reading this:** The mechanic works down a nested list: a vehicle system, then its components, then its parts. Each part gets exactly one of three statuses. Choosing For Repair or For Replacement opens fields for the replacement item name, brand, and estimated cost. The inspection report is then built from those saved answers, so the mechanic never types the same finding twice. Only engine, brakes, and suspension are given as examples, so the approved full list remains [Q-27](00%20-%20START%20HERE.md#open-questions). — **REVISIONS LISTS.md**, headings “11. Mechanic Inspection Checklist” through “13. Inspection Report”

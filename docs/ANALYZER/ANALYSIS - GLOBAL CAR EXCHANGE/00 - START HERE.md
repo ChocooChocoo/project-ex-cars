@@ -1,6 +1,6 @@
 # 00 - START HERE
 
-Next: [[01 - OVERVIEW]]
+Next: [01 - OVERVIEW](01%20-%20OVERVIEW.md)
 
 **What this is about:** Global Car Exchange  
 **Written:** 7 August 2026  
@@ -31,16 +31,16 @@ The revision list then adds a further layer of required work. Suppliers return a
 
 | File | What it holds |
 |---|---|
-| [[01 - OVERVIEW]] | What Global Car Exchange is and what it is meant to do |
-| [[02 - DOCUMENT FINDINGS]] | What the two documents say |
-| [[05 - SYSTEM ARCHITECTURE]] | The proposed parts and how they would hand work along |
-| [[06 - DIAGRAMS]] | Plain pictures of the proposed system and its main work |
-| [[07 - DEVELOPMENT ROADMAP]] | What to build, in what order |
-| [[08 - ROADMAP TRACKER]] | Where every roadmap item stands |
-| [[09 - TASK TRACKER]] | Every task and where it came from |
-| [[10 - WORD LIST]] | Plain meanings for unavoidable project terms |
-| [[11 - TECH STACK]] | The proposed Next.js and Supabase technology choices and boundaries |
-| [[12 - DATABASE SCHEMA]] | The proposed tables, relationships, files, access rules, and build order |
+| [01 - OVERVIEW](01%20-%20OVERVIEW.md) | What Global Car Exchange is and what it is meant to do |
+| [02 - DOCUMENT FINDINGS](02%20-%20DOCUMENT%20FINDINGS.md) | What the two documents say |
+| [05 - SYSTEM ARCHITECTURE](05%20-%20SYSTEM%20ARCHITECTURE.md) | The proposed parts and how they would hand work along |
+| [06 - DIAGRAMS](06%20-%20DIAGRAMS.md) | Plain pictures of the proposed system and its main work |
+| [07 - DEVELOPMENT ROADMAP](07%20-%20DEVELOPMENT%20ROADMAP.md) | What to build, in what order |
+| [08 - ROADMAP TRACKER](08%20-%20ROADMAP%20TRACKER.md) | Where every roadmap item stands |
+| [09 - TASK TRACKER](09%20-%20TASK%20TRACKER.md) | Every task and where it came from |
+| [10 - WORD LIST](10%20-%20WORD%20LIST.md) | Plain meanings for unavoidable project terms |
+| [11 - TECH STACK](11%20-%20TECH%20STACK.md) | The proposed Next.js and Supabase technology choices and boundaries |
+| [12 - DATABASE SCHEMA](12%20-%20DATABASE%20SCHEMA.md) | The proposed tables, relationships, files, access rules, and build order |
 
 ## Not made this time
 
@@ -51,7 +51,7 @@ The revision list then adds a further layer of required work. Suppliers return a
 
 ## How to read this
 
-Start with [[01 - OVERVIEW]] for the quickest explanation. Read [[02 - DOCUMENT FINDINGS]] for the evidence and disagreements. Use [[05 - SYSTEM ARCHITECTURE]] and [[06 - DIAGRAMS]] to see how the proposed parts fit together. Go to [[07 - DEVELOPMENT ROADMAP]] for the build order and [[08 - ROADMAP TRACKER]] for the current, unverified status. Read [[11 - TECH STACK]] for the proposed implementation choices and [[12 - DATABASE SCHEMA]] for the table-level plan.
+Start with [01 - OVERVIEW](01%20-%20OVERVIEW.md) for the quickest explanation. Read [02 - DOCUMENT FINDINGS](02%20-%20DOCUMENT%20FINDINGS.md) for the evidence and disagreements. Use [05 - SYSTEM ARCHITECTURE](05%20-%20SYSTEM%20ARCHITECTURE.md) and [06 - DIAGRAMS](06%20-%20DIAGRAMS.md) to see how the proposed parts fit together. Go to [07 - DEVELOPMENT ROADMAP](07%20-%20DEVELOPMENT%20ROADMAP.md) for the build order and [08 - ROADMAP TRACKER](08%20-%20ROADMAP%20TRACKER.md) for the current, unverified status. Read [11 - TECH STACK](11%20-%20TECH%20STACK.md) for the proposed implementation choices and [12 - DATABASE SCHEMA](12%20-%20DATABASE%20SCHEMA.md) for the table-level plan.
 
 ## Status legend
 
@@ -88,7 +88,7 @@ Start with [[01 - OVERVIEW]] for the quickest explanation. Read [[02 - DOCUMENT 
 | Q-21 | Which valid IDs are accepted from suppliers, and does the two-ID rule also change the customer rule? | The revision list requires a published list of accepted IDs and two primary valid IDs, but names none of them. | Project owners |
 | Q-22 | Which flexible payment terms and arrangements are allowed, and who approves each one? | The revision list requires support for them without naming the terms, limits, or approver. | Head Accountant and chief executive |
 | Q-23 | Is a direct chief-executive-to-supplier communication channel actually wanted? | The revision list marks this feature “if applicable”, so its inclusion is not settled. | Chief executive |
-| Q-24 | What is the “mobile application” that users would download from the system? | The revision list asks for an in-system download, while the chapter document excludes native iOS and Android applications. See [[02 - DOCUMENT FINDINGS#Active disagreement\|C-06]]. | Project owners and development team |
+| Q-24 | What is the “mobile application” that users would download from the system? | The revision list asks for an in-system download, while the chapter document excludes native iOS and Android applications. See [C-06](02%20-%20DOCUMENT%20FINDINGS.md#active-disagreement). | Project owners and development team |
 | Q-25 | What are the exact limits for each form field? | The revision list requires smallest and largest numbers, text lengths, allowed types, required fields, and formats without giving any values. | Project owners and development team |
 | Q-26 | Which vehicle documents belong on the required checklist? | The revision list requires a checklist of vehicle documents but does not list them. | Sales Manager and Head Accountant |
 | Q-27 | What is the approved inspection checklist of systems, components, and parts? | The revision list gives engine, brakes, and suspension only as an example, not as the final list. | Mechanic and project owners |

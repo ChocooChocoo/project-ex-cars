@@ -1,6 +1,6 @@
 # 07 - DEVELOPMENT ROADMAP
 
-[[00 - START HERE|Back to start]] · Previous: [[06 - DIAGRAMS]] · Next: [[08 - ROADMAP TRACKER]]
+[Back to start](00%20-%20START%20HERE.md) · Previous: [06 - DIAGRAMS](06%20-%20DIAGRAMS.md) · Next: [08 - ROADMAP TRACKER](08%20-%20ROADMAP%20TRACKER.md)
 
 ## What this covers
 
@@ -8,7 +8,7 @@ This roadmap orders the development work described in the supplied documents. It
 
 ## Where the plan came from
 
-The plan is drawn from [[02 - DOCUMENT FINDINGS]], especially the promised features, stated limits, detailed role modules, presentation revisions, and unresolved contradictions. The revision list is the current authority where it overlaps older material, followed by the Markdown role document. No source code was supplied, so the roadmap does not treat any feature as already built.
+The plan is drawn from [02 - DOCUMENT FINDINGS](02%20-%20DOCUMENT%20FINDINGS.md), especially the promised features, stated limits, detailed role modules, presentation revisions, and unresolved contradictions. The revision list is the current authority where it overlaps older material, followed by the Markdown role document. No source code was supplied, so the roadmap does not treat any feature as already built.
 
 Items `R-27` through `R-41` come from the revision list. They were added to the phases where their work belongs rather than gathered into a phase of their own, because renumbering or resequencing the earlier items would break every reference pointing at them.
 
@@ -25,7 +25,7 @@ Items `R-27` through `R-41` come from the revision list. They were added to the 
 | Phase 7 — Mobile use and acceptance are checked | A responsive complete system checked with its intended users | Phase 6 |
 | Cross-phase work | Readable text and consistent confirmation prompts across every screen built | Nothing — it applies to each phase as that phase is built |
 
-The same order appears as a picture in [[06 - DIAGRAMS#7. The order of the phases]].
+The same order appears as a picture in [06 - DIAGRAMS](06%20-%20DIAGRAMS.md#7-the-order-of-the-phases).
 
 ---
 
@@ -55,7 +55,7 @@ The same order appears as a picture in [[06 - DIAGRAMS#7. The order of the phase
 - A customer's private identification is not visible to unrelated users.
 - A form refuses information outside its stated limits and says why, and a returning person is not asked again for details already held.
 
-**What could hold it up:** Financing eligibility and walk-in account security rules remain open in [[00 - START HERE#Open questions|Q-12]] and [[00 - START HERE#Open questions|Q-17]]. The supplier work also waits on the Procurement Team's identity, the supplier portal decision, and the accepted ID list in [[00 - START HERE#Open questions|Q-19]], [[00 - START HERE#Open questions|Q-20]], and [[00 - START HERE#Open questions|Q-21]], and no field limits have been supplied yet — [[00 - START HERE#Open questions|Q-25]].
+**What could hold it up:** Financing eligibility and walk-in account security rules remain open in [Q-12](00%20-%20START%20HERE.md#open-questions) and [Q-17](00%20-%20START%20HERE.md#open-questions). The supplier work also waits on the Procurement Team's identity, the supplier portal decision, and the accepted ID list in [Q-19](00%20-%20START%20HERE.md#open-questions), [Q-20](00%20-%20START%20HERE.md#open-questions), and [Q-21](00%20-%20START%20HERE.md#open-questions), and no field limits have been supplied yet — [Q-25](00%20-%20START%20HERE.md#open-questions).
 
 ---
 
@@ -90,7 +90,7 @@ The same order appears as a picture in [[06 - DIAGRAMS#7. The order of the phase
 - A vehicle's required documents can be seen as submitted or still missing.
 - A sold or unavailable vehicle is not presented as available elsewhere.
 
-**What could hold it up:** The pricing approval path and exact meaning of “real-time” are stated only broadly. Final business rules must come from the Sales Manager and project owners. The approved checklist contents and the required vehicle document list are also missing — [[00 - START HERE#Open questions|Q-26]] and [[00 - START HERE#Open questions|Q-27]]. — **GCE FULL CHAPTER 1 - 3.docx**, pages 20–22; **GCE ADDITIONAL DOCUMENTS.docx**, pages 1–3; **REVISIONS LISTS.md**, headings “10. Vehicle Document Checklist” and “11. Mechanic Inspection Checklist”
+**What could hold it up:** The pricing approval path and exact meaning of “real-time” are stated only broadly. Final business rules must come from the Sales Manager and project owners. The approved checklist contents and the required vehicle document list are also missing — [Q-26](00%20-%20START%20HERE.md#open-questions) and [Q-27](00%20-%20START%20HERE.md#open-questions). — **GCE FULL CHAPTER 1 - 3.docx**, pages 20–22; **GCE ADDITIONAL DOCUMENTS.docx**, pages 1–3; **REVISIONS LISTS.md**, headings “10. Vehicle Document Checklist” and “11. Mechanic Inspection Checklist”
 
 ---
 
@@ -121,7 +121,7 @@ The same order appears as a picture in [[06 - DIAGRAMS#7. The order of the phase
 - The Sales Manager can see the visit and take over when the client arrives.
 - New and read messages show the correct notice count.
 
-**What could hold it up:** The documents do not say whether Facebook, Viber, WhatsApp, or phone records are imported, linked, or simply replaced. The complete arrangement-form rules remain [[00 - START HERE#Open questions|Q-18]], and the words, languages, and hide-or-censor choice for the filter remain [[00 - START HERE#Open questions|Q-28]]. — **GCE FULL CHAPTER 1 - 3.docx**, pages 14–15; **GCE USERS LEVELS MODULES.md**, heading “Account Manager — 2. Inquiries and Viewing Schedule”; **REVISIONS LISTS.md**, heading “1. Chat, Notifications, and Reports”
+**What could hold it up:** The documents do not say whether Facebook, Viber, WhatsApp, or phone records are imported, linked, or simply replaced. The complete arrangement-form rules remain [Q-18](00%20-%20START%20HERE.md#open-questions), and the words, languages, and hide-or-censor choice for the filter remain [Q-28](00%20-%20START%20HERE.md#open-questions). — **GCE FULL CHAPTER 1 - 3.docx**, pages 14–15; **GCE USERS LEVELS MODULES.md**, heading “Account Manager — 2. Inquiries and Viewing Schedule”; **REVISIONS LISTS.md**, heading “1. Chat, Notifications, and Reports”
 
 ---
 
@@ -145,7 +145,7 @@ The same order appears as a picture in [[06 - DIAGRAMS#7. The order of the phase
 - The result can show which stated criteria affected the order.
 - Managers can see only the final agreed decision measures and accuracy result.
 
-**What could hold it up:** The Decision Support System has three different descriptions. Its final users and outputs must be settled through [[00 - START HERE#Open questions|Q-05]].
+**What could hold it up:** The Decision Support System has three different descriptions. Its final users and outputs must be settled through [Q-05](00%20-%20START%20HERE.md#open-questions).
 
 ---
 
@@ -175,7 +175,7 @@ The same order appears as a picture in [[06 - DIAGRAMS#7. The order of the phase
 - The Sales Manager can trace each sold vehicle to the buyer, payment information, and required paperwork.
 - Completing a sale makes the vehicle unavailable everywhere.
 
-**What could hold it up:** Finance, approval, installment, and arrangement boundaries remain open in [[00 - START HERE#Open questions|Q-04]], [[00 - START HERE#Open questions|Q-15]], and [[00 - START HERE#Open questions|Q-18]]. The allowed payment terms and their approver remain [[00 - START HERE#Open questions|Q-22]].
+**What could hold it up:** Finance, approval, installment, and arrangement boundaries remain open in [Q-04](00%20-%20START%20HERE.md#open-questions), [Q-15](00%20-%20START%20HERE.md#open-questions), and [Q-18](00%20-%20START%20HERE.md#open-questions). The allowed payment terms and their approver remain [Q-22](00%20-%20START%20HERE.md#open-questions).
 
 ---
 
@@ -205,7 +205,7 @@ The same order appears as a picture in [[06 - DIAGRAMS#7. The order of the phase
 - The chief executive can trace dashboard totals and approvals back to the underlying records and send an employee announcement.
 - Head Security can attach before-and-after photographic proof to a duty record.
 
-**What could hold it up:** Offline finance boundaries, the payroll approval order, the fund-release handoff, the installment rule, and salary and deduction calculations remain [[00 - START HERE#Open questions|Q-04]], [[00 - START HERE#Open questions|Q-13]], [[00 - START HERE#Open questions|Q-14]], [[00 - START HERE#Open questions|Q-15]], and [[00 - START HERE#Open questions|Q-16]]. Whether the chief-executive-to-supplier channel is wanted at all remains [[00 - START HERE#Open questions|Q-23]].
+**What could hold it up:** Offline finance boundaries, the payroll approval order, the fund-release handoff, the installment rule, and salary and deduction calculations remain [Q-04](00%20-%20START%20HERE.md#open-questions), [Q-13](00%20-%20START%20HERE.md#open-questions), [Q-14](00%20-%20START%20HERE.md#open-questions), [Q-15](00%20-%20START%20HERE.md#open-questions), and [Q-16](00%20-%20START%20HERE.md#open-questions). Whether the chief-executive-to-supplier channel is wanted at all remains [Q-23](00%20-%20START%20HERE.md#open-questions).
 
 ---
 
@@ -230,7 +230,7 @@ The same order appears as a picture in [[06 - DIAGRAMS#7. The order of the phase
 - A user can obtain the mobile application without being sent to an outside website.
 - The accepted system stays within the agreed boundary, once that boundary is settled.
 
-**What could hold it up:** The final meaning of separate customer and employee mobile experiences remains [[00 - START HERE#Open questions|Q-06]]. R-41 cannot start until [[00 - START HERE#Open questions|Q-24]] settles what the downloadable application is, because the older documents exclude native phone applications. See [[02 - DOCUMENT FINDINGS#Active disagreement|C-06]].
+**What could hold it up:** The final meaning of separate customer and employee mobile experiences remains [Q-06](00%20-%20START%20HERE.md#open-questions). R-41 cannot start until [Q-24](00%20-%20START%20HERE.md#open-questions) settles what the downloadable application is, because the older documents exclude native phone applications. See [C-06](02%20-%20DOCUMENT%20FINDINGS.md#active-disagreement).
 
 ---
 
@@ -261,9 +261,9 @@ The same order appears as a picture in [[06 - DIAGRAMS#7. The order of the phase
 |---|---|
 | Direct online payment and a payment gateway | Explicitly outside scope in **GCE FULL CHAPTER 1 - 3.docx**, page 16 |
 | Delivery tracking and automatic logistics | Explicitly outside scope in **GCE FULL CHAPTER 1 - 3.docx**, pages 16–17 |
-| Native iOS and Android applications | Explicitly outside scope in **GCE FULL CHAPTER 1 - 3.docx**, page 17. The revision list now asks for a downloadable mobile application, so this exclusion is contested rather than settled — see [[02 - DOCUMENT FINDINGS#Active disagreement\|C-06]] and R-41 above |
+| Native iOS and Android applications | Explicitly outside scope in **GCE FULL CHAPTER 1 - 3.docx**, page 17. The revision list now asks for a downloadable mobile application, so this exclusion is contested rather than settled — see [C-06](02%20-%20DOCUMENT%20FINDINGS.md#active-disagreement) and R-41 above |
 | Offline operation | Explicitly outside scope in **GCE FULL CHAPTER 1 - 3.docx**, page 17 |
 | Automatic marketplace listing and advanced campaign tools | Explicitly outside scope in **GCE FULL CHAPTER 1 - 3.docx**, pages 16–17 |
 | ~~Supplier area~~ — **no longer left out** | The role document left the supplier out, but the newer revision list restores supplier registration and approval. The work is now R-27 in Phase 1. — **REVISIONS LISTS.md**, heading “5. Supplier Registration and Account Management” |
-| Academic manuscript completion | Writing work rather than system development; retained in [[09 - TASK TRACKER#Tasks that serve no roadmap item]] |
+| Academic manuscript completion | Writing work rather than system development; retained in [09 - TASK TRACKER](09%20-%20TASK%20TRACKER.md#tasks-that-serve-no-roadmap-item) |
 | Dates, budgets, hiring, and launch work | The supplied material does not provide an approved development schedule or operational plan |

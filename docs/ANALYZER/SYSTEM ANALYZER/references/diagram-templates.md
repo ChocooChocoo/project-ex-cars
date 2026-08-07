@@ -30,7 +30,7 @@ These are the failures Obsidian actually hits. A diagram that will not draw show
 | 3 | Who talks to whom, in order | An exchange between parts over time | When something interesting passes between parts |
 | 4 | The order of the phases | The roadmap as a picture | Always |
 | 5 | The life story of a thing | The states something moves through | When something in the system has states — an order, a booking, an application |
-| 6 | The proposed arrangement | What the parts would look like after the changes | When [[05 - SYSTEM ARCHITECTURE]] proposes changes |
+| 6 | The proposed arrangement | What the parts would look like after the changes | When [05 - SYSTEM ARCHITECTURE](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/05%20-%20SYSTEM%20ARCHITECTURE.md) proposes changes |
 
 ---
 
@@ -39,7 +39,7 @@ These are the failures Obsidian actually hits. A diagram that will not draw show
 ````markdown
 # 06 - DIAGRAMS
 
-[[00 - START HERE|Back to start]] · Previous: [[05 - SYSTEM ARCHITECTURE]] · Next: [[07 - DEVELOPMENT ROADMAP]]
+[Back to start](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/00%20-%20START%20HERE.md) · Previous: [05 - SYSTEM ARCHITECTURE](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/05%20-%20SYSTEM%20ARCHITECTURE.md) · Next: [07 - DEVELOPMENT ROADMAP](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/07%20-%20DEVELOPMENT%20ROADMAP.md)
 
 Pictures of how this works. Each one has a plain-language reading beneath it, so nothing here depends on being able to read a diagram.
 
@@ -74,7 +74,7 @@ flowchart LR
     engine --> outside
 ```
 
-**Reading this:** <A short paragraph. Start at the people on the left and walk across to the stores on the right, saying what each part does and what it hands to the next. Matches the description in [[05 - SYSTEM ARCHITECTURE]] — if the two ever disagree, the words win and the picture gets fixed.>
+**Reading this:** <A short paragraph. Start at the people on the left and walk across to the stores on the right, saying what each part does and what it hands to the next. Matches the description in [05 - SYSTEM ARCHITECTURE](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/05%20-%20SYSTEM%20ARCHITECTURE.md) — if the two ever disagree, the words win and the picture gets fixed.>
 
 ## 2. How a job gets done — <name of the process>
 
@@ -139,7 +139,7 @@ flowchart LR
     p2 --> p4
 ```
 
-**Reading this:** <Say which phase starts, what each one waits for, and which ones could run alongside each other. Matches the order in [[07 - DEVELOPMENT ROADMAP]] exactly. An arrow means the phase it points at cannot start until the phase behind it is done.>
+**Reading this:** <Say which phase starts, what each one waits for, and which ones could run alongside each other. Matches the order in [07 - DEVELOPMENT ROADMAP](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/07%20-%20DEVELOPMENT%20ROADMAP.md) exactly. An arrow means the phase it points at cannot start until the phase behind it is done.>
 
 ## 5. The life story of a <thing>
 
@@ -159,7 +159,7 @@ stateDiagram-v2
 
 ## 6. The proposed arrangement
 
-<Only when [[05 - SYSTEM ARCHITECTURE]] proposes changes. Same shape as the big picture above, showing what it would look like afterwards. Say in the reading which parts are new and which already exist.>
+<Only when [05 - SYSTEM ARCHITECTURE](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/05%20-%20SYSTEM%20ARCHITECTURE.md) proposes changes. Same shape as the big picture above, showing what it would look like afterwards. Say in the reading which parts are new and which already exist.>
 
 ```mermaid
 flowchart LR

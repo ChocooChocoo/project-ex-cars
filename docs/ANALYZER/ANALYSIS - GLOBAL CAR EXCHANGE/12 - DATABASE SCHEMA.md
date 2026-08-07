@@ -1,12 +1,12 @@
 # 12 - DATABASE SCHEMA
 
-[[00 - START HERE|Back to start]] · Previous: [[11 - TECH STACK]]
+[Back to start](00%20-%20START%20HERE.md) · Previous: [11 - TECH STACK](11%20-%20TECH%20STACK.md)
 
 ## Status and purpose
 
-This is a **proposed Supabase database schema**, not a record of an existing database. No database, source code, migration, or running system was supplied. Every implementation status therefore remains ❓ Unclear as recorded in [[08 - ROADMAP TRACKER]].
+This is a **proposed Supabase database schema**, not a record of an existing database. No database, source code, migration, or running system was supplied. Every implementation status therefore remains ❓ Unclear as recorded in [08 - ROADMAP TRACKER](08%20-%20ROADMAP%20TRACKER.md).
 
-The design is *drawn from* [[02 - DOCUMENT FINDINGS]], [[05 - SYSTEM ARCHITECTURE]], [[07 - DEVELOPMENT ROADMAP]], and [[09 - TASK TRACKER]]. It turns the documented work into a table-level plan for the Next.js and Supabase arrangement selected in conversation on 7 August 2026. Where the material is incomplete, the design keeps a safe place for the future answer without inventing the answer itself.
+The design is *drawn from* [02 - DOCUMENT FINDINGS](02%20-%20DOCUMENT%20FINDINGS.md), [05 - SYSTEM ARCHITECTURE](05%20-%20SYSTEM%20ARCHITECTURE.md), [07 - DEVELOPMENT ROADMAP](07%20-%20DEVELOPMENT%20ROADMAP.md), and [09 - TASK TRACKER](09%20-%20TASK%20TRACKER.md). It turns the documented work into a table-level plan for the Next.js and Supabase arrangement selected in conversation on 7 August 2026. Where the material is incomplete, the design keeps a safe place for the future answer without inventing the answer itself.
 
 ## The shape in one paragraph
 
@@ -37,117 +37,117 @@ The plan uses 52 custom tables. This is the smallest arrangement here that keeps
 
 | Table | What one row represents | Important fields and links | Serves |
 |---|---|---|---|
-| `profiles` | The business profile belonging to one Supabase account | Same identifier as `auth.users`; full name, address, account state, creator, activation date, and created date | [[07 - DEVELOPMENT ROADMAP#Phase 1 — One shared foundation\|R-01]], [[07 - DEVELOPMENT ROADMAP#Phase 1 — One shared foundation\|R-03]] |
-| `private.user_roles` | The one current role assigned to an account | Account identifier, one of the ten current roles, active state, assigned by, and assigned date | [[07 - DEVELOPMENT ROADMAP#Phase 1 — One shared foundation\|R-02]] |
-| `customer_documents` | One valid ID or proof-of-billing file supplied by a customer | Customer, document kind, private Storage path, verification state, verifier, and verification date | [[07 - DEVELOPMENT ROADMAP#Phase 1 — One shared foundation\|R-01]], [[07 - DEVELOPMENT ROADMAP#Phase 5 — Transactions can be followed\|R-15]] |
-| `audit_events` | One protected history entry for a sensitive change | Actor, action, record kind, record identifier, non-sensitive change summary, and event time | *Drawn from* the approval, role, money, and status responsibilities across [[07 - DEVELOPMENT ROADMAP]] |
-| `acceptance_feedback` | One completed usability or acceptance questionnaire | Respondent or anonymous code, respondent role, questionnaire version, variable answers, comments, and submission time | [[07 - DEVELOPMENT ROADMAP#Phase 7 — Mobile use and acceptance are checked\|R-25]] |
-| `suppliers` — *from the revision list* | One supplier known to GCE | Optional account identifier, supplier kind of company or individual, business or personal name, contact details, creator, creation route of staff-created or portal, optional invitation evidence path, approval decision, approver, approval date, and current state | [[07 - DEVELOPMENT ROADMAP#Phase 1 — One shared foundation\|R-27]] |
-| `supplier_documents` — *from the revision list* | One valid ID or supporting file supplied by a supplier | Supplier, document kind, whether it counts as one of the two primary valid IDs, private Storage path, verification state, verifier, and verification date | [[07 - DEVELOPMENT ROADMAP#Phase 1 — One shared foundation\|R-27]] |
+| `profiles` | The business profile belonging to one Supabase account | Same identifier as `auth.users`; full name, address, account state, creator, activation date, and created date | [R-01](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-1-one-shared-foundation), [R-03](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-1-one-shared-foundation) |
+| `private.user_roles` | The one current role assigned to an account | Account identifier, one of the ten current roles, active state, assigned by, and assigned date | [R-02](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-1-one-shared-foundation) |
+| `customer_documents` | One valid ID or proof-of-billing file supplied by a customer | Customer, document kind, private Storage path, verification state, verifier, and verification date | [R-01](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-1-one-shared-foundation), [R-15](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-5-transactions-can-be-followed) |
+| `audit_events` | One protected history entry for a sensitive change | Actor, action, record kind, record identifier, non-sensitive change summary, and event time | *Drawn from* the approval, role, money, and status responsibilities across [07 - DEVELOPMENT ROADMAP](07%20-%20DEVELOPMENT%20ROADMAP.md) |
+| `acceptance_feedback` | One completed usability or acceptance questionnaire | Respondent or anonymous code, respondent role, questionnaire version, variable answers, comments, and submission time | [R-25](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-7-mobile-use-and-acceptance-are-checked) |
+| `suppliers` — *from the revision list* | One supplier known to GCE | Optional account identifier, supplier kind of company or individual, business or personal name, contact details, creator, creation route of staff-created or portal, optional invitation evidence path, approval decision, approver, approval date, and current state | [R-27](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-1-one-shared-foundation) |
+| `supplier_documents` — *from the revision list* | One valid ID or supporting file supplied by a supplier | Supplier, document kind, whether it counts as one of the two primary valid IDs, private Storage path, verification state, verifier, and verification date | [R-27](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-1-one-shared-foundation) |
 
 The role values are `customer`, `supplier`, `ceo`, `account_manager`, `head_accountant`, `confidential_informant`, `marketing_specialist`, `mechanic`, `sales_manager`, and `head_security`. `supplier` was previously left out because the role document did not contain it. The newer revision list restores supplier registration, so the value returns. — **REVISIONS LISTS.md**, heading “5. Supplier Registration and Account Management”
 
-No role value is proposed for the Procurement Team, because the revision list names that group without saying which of the existing roles it is. `suppliers.created_by` records whoever actually created the account until [[00 - START HERE#Open questions|Q-19]] is answered. A supplier row may exist before any sign-in account exists, which is why the account identifier is optional; the account must stay unusable until the approval decision is recorded.
+No role value is proposed for the Procurement Team, because the revision list names that group without saying which of the existing roles it is. `suppliers.created_by` records whoever actually created the account until [Q-19](00%20-%20START%20HERE.md#open-questions) is answered. A supplier row may exist before any sign-in account exists, which is why the account identifier is optional; the account must stay unusable until the approval decision is recorded.
 
 ### B. Vehicles and the Virtual Showroom
 
 | Table | What one row represents | Important fields and links | Serves |
 |---|---|---|---|
-| `vehicles` | One vehicle known to Global Car Exchange | Unique stock code, optional unique VIN, make, model, year, condition, mileage, fuel, availability, current approved price, pricing type of negotiable or fixed, warranty details, current offer or promotion, listing state, and posting date | [[07 - DEVELOPMENT ROADMAP#Phase 2 — Vehicles can be found and understood\|R-04]], [[07 - DEVELOPMENT ROADMAP#Phase 2 — Vehicles can be found and understood\|R-06]], [[07 - DEVELOPMENT ROADMAP#Phase 2 — Vehicles can be found and understood\|R-30]] |
-| `vehicle_media` | One photograph or 360-degree media item for a vehicle | Vehicle, media kind, Storage path, display order, public state, uploader, and upload date | [[07 - DEVELOPMENT ROADMAP#Phase 2 — Vehicles can be found and understood\|R-07]] |
-| `vehicle_inspections` | One mechanic inspection | Vehicle, mechanic, optional field case, condition score, findings, recommendation, and inspection date | [[07 - DEVELOPMENT ROADMAP#Phase 2 — Vehicles can be found and understood\|R-05]] |
-| `repairs` | One repair job and its current progress | Vehicle, mechanic, description, status, start date, completion date, and notes | [[07 - DEVELOPMENT ROADMAP#Phase 2 — Vehicles can be found and understood\|R-05]] |
-| `vehicle_price_proposals` | One price proposed by Marketing for chief-executive review | Vehicle, proposed amount, proposer, decision, decision maker, decision date, and notes | [[07 - DEVELOPMENT ROADMAP#Phase 2 — Vehicles can be found and understood\|R-08]] |
-| `favourites` | One customer saving one vehicle | Customer, vehicle, and saved date; customer and vehicle are unique together | [[07 - DEVELOPMENT ROADMAP#Phase 2 — Vehicles can be found and understood\|R-06]] |
-| `inspection_checklist_nodes` — *from the revision list* | One entry in the nested checklist: a vehicle system, one of its components, or one part | Parent entry, level of system or component or part, name, display order, checklist version, and active state | [[07 - DEVELOPMENT ROADMAP#Phase 2 — Vehicles can be found and understood\|R-31]] |
-| `inspection_checklist_results` — *from the revision list* | One mechanic's answer for one checklist entry in one inspection | Inspection, checklist entry, status of good or for_repair or for_replacement, notes, and answered time; inspection and checklist entry are unique together | [[07 - DEVELOPMENT ROADMAP#Phase 2 — Vehicles can be found and understood\|R-31]], [[07 - DEVELOPMENT ROADMAP#Phase 2 — Vehicles can be found and understood\|R-33]] |
-| `part_replacements` — *from the revision list* | The repair or replacement detail attached to one checklist answer | Checklist answer, replacement item name, brand, estimated cost, and recorded time | [[07 - DEVELOPMENT ROADMAP#Phase 2 — Vehicles can be found and understood\|R-32]] |
-| `vehicle_document_items` — *from the revision list* | One required document for one vehicle and its current state | Vehicle, document kind, required state, submitted state, private Storage path, checker, and check date; vehicle and document kind are unique together | [[07 - DEVELOPMENT ROADMAP#Phase 2 — Vehicles can be found and understood\|R-34]] |
+| `vehicles` | One vehicle known to Global Car Exchange | Unique stock code, optional unique VIN, make, model, year, condition, mileage, fuel, availability, current approved price, pricing type of negotiable or fixed, warranty details, current offer or promotion, listing state, and posting date | [R-04](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-2-vehicles-can-be-found-and-understood), [R-06](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-2-vehicles-can-be-found-and-understood), [R-30](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-2-vehicles-can-be-found-and-understood) |
+| `vehicle_media` | One photograph or 360-degree media item for a vehicle | Vehicle, media kind, Storage path, display order, public state, uploader, and upload date | [R-07](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-2-vehicles-can-be-found-and-understood) |
+| `vehicle_inspections` | One mechanic inspection | Vehicle, mechanic, optional field case, condition score, findings, recommendation, and inspection date | [R-05](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-2-vehicles-can-be-found-and-understood) |
+| `repairs` | One repair job and its current progress | Vehicle, mechanic, description, status, start date, completion date, and notes | [R-05](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-2-vehicles-can-be-found-and-understood) |
+| `vehicle_price_proposals` | One price proposed by Marketing for chief-executive review | Vehicle, proposed amount, proposer, decision, decision maker, decision date, and notes | [R-08](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-2-vehicles-can-be-found-and-understood) |
+| `favourites` | One customer saving one vehicle | Customer, vehicle, and saved date; customer and vehicle are unique together | [R-06](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-2-vehicles-can-be-found-and-understood) |
+| `inspection_checklist_nodes` — *from the revision list* | One entry in the nested checklist: a vehicle system, one of its components, or one part | Parent entry, level of system or component or part, name, display order, checklist version, and active state | [R-31](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-2-vehicles-can-be-found-and-understood) |
+| `inspection_checklist_results` — *from the revision list* | One mechanic's answer for one checklist entry in one inspection | Inspection, checklist entry, status of good or for_repair or for_replacement, notes, and answered time; inspection and checklist entry are unique together | [R-31](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-2-vehicles-can-be-found-and-understood), [R-33](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-2-vehicles-can-be-found-and-understood) |
+| `part_replacements` — *from the revision list* | The repair or replacement detail attached to one checklist answer | Checklist answer, replacement item name, brand, estimated cost, and recorded time | [R-32](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-2-vehicles-can-be-found-and-understood) |
+| `vehicle_document_items` — *from the revision list* | One required document for one vehicle and its current state | Vehicle, document kind, required state, submitted state, private Storage path, checker, and check date; vehicle and document kind are unique together | [R-34](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-2-vehicles-can-be-found-and-understood) |
 
 Only an approved price proposal may become `vehicles.current_price`. Only a vehicle marked approved, available, and posted may appear in the public catalogue. The application may calculate that public condition, but the database must still prevent an unapproved price from being presented as approved.
 
-The checklist entries are kept apart from the answers so the approved list can be versioned without rewriting past inspections. A finished inspection therefore keeps the wording it was answered against. The nesting uses a parent link on each entry, which supports the three levels in the example — a system such as Engine, a component such as Oil System, and a part beneath it — without fixing the depth in the table shape. The example names only engine, brakes, and suspension, so no entries are proposed here; the approved list is [[00 - START HERE#Open questions|Q-27]].
+The checklist entries are kept apart from the answers so the approved list can be versioned without rewriting past inspections. A finished inspection therefore keeps the wording it was answered against. The nesting uses a parent link on each entry, which supports the three levels in the example — a system such as Engine, a component such as Oil System, and a part beneath it — without fixing the depth in the table shape. The example names only engine, brakes, and suspension, so no entries are proposed here; the approved list is [Q-27](00%20-%20START%20HERE.md#open-questions).
 
-A repair detail row may exist only for an answer whose status is for_repair or for_replacement. The inspection report reads `inspection_checklist_results` and `part_replacements` rather than storing a second copy of the same findings, which is what the revision list asks for. The required vehicle document kinds are likewise not listed here — see [[00 - START HERE#Open questions|Q-26]]. — **REVISIONS LISTS.md**, headings “10. Vehicle Document Checklist” through “13. Inspection Report”
+A repair detail row may exist only for an answer whose status is for_repair or for_replacement. The inspection report reads `inspection_checklist_results` and `part_replacements` rather than storing a second copy of the same findings, which is what the revision list asks for. The required vehicle document kinds are likewise not listed here — see [Q-26](00%20-%20START%20HERE.md#open-questions). — **REVISIONS LISTS.md**, headings “10. Vehicle Document Checklist” through “13. Inspection Report”
 
 ### C. Inquiries, messages, and arrangements
 
 | Table | What one row represents | Important fields and links | Serves |
 |---|---|---|---|
-| `inquiries` | One customer's Inquiry or Buy Now intention for a vehicle | Customer, vehicle, intention kind, assigned Account Manager, assigned Sales Manager, handoff state, and overall state | [[07 - DEVELOPMENT ROADMAP#Phase 3 — Conversations stay together\|R-09]], [[07 - DEVELOPMENT ROADMAP#Phase 3 — Conversations stay together\|R-10]] |
-| `inquiry_messages` | One message inside an inquiry | Inquiry, sender, message text, optional private image path, sent time, and read time | [[07 - DEVELOPMENT ROADMAP#Phase 3 — Conversations stay together\|R-09]], [[07 - DEVELOPMENT ROADMAP#Phase 3 — Conversations stay together\|R-11]] |
-| `viewing_arrangements` | One delivery, CALABARZON meet-up, or GCE-visit arrangement | Inquiry, optional purchase transaction, arrangement kind, schedule, location, down-payment amount, confirmation state, confirmer, and notes | [[07 - DEVELOPMENT ROADMAP#Phase 3 — Conversations stay together\|R-10]], [[07 - DEVELOPMENT ROADMAP#Phase 5 — Transactions can be followed\|R-15]] |
-| `message_attachments` — *from the revision list* | One photograph or file sent inside a message | Message, file kind, private Storage path, original file name, file size, uploader, and upload time | [[07 - DEVELOPMENT ROADMAP#Phase 3 — Conversations stay together\|R-35]] |
-| `message_reports` — *from the revision list* | One report raised against a message or conversation | Reported message or inquiry, reporter, reason, state, reviewer, decision, and decision date | [[07 - DEVELOPMENT ROADMAP#Phase 3 — Conversations stay together\|R-35]] |
-| `supplier_messages` — *from the revision list* | One message in a direct chief-executive-to-supplier conversation | Supplier, sender, message text, optional private file path, sent time, and read time | [[07 - DEVELOPMENT ROADMAP#Phase 6 — Staff and managers can run the business\|R-38]] |
+| `inquiries` | One customer's Inquiry or Buy Now intention for a vehicle | Customer, vehicle, intention kind, assigned Account Manager, assigned Sales Manager, handoff state, and overall state | [R-09](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-3-conversations-stay-together), [R-10](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-3-conversations-stay-together) |
+| `inquiry_messages` | One message inside an inquiry | Inquiry, sender, message text, optional private image path, sent time, and read time | [R-09](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-3-conversations-stay-together), [R-11](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-3-conversations-stay-together) |
+| `viewing_arrangements` | One delivery, CALABARZON meet-up, or GCE-visit arrangement | Inquiry, optional purchase transaction, arrangement kind, schedule, location, down-payment amount, confirmation state, confirmer, and notes | [R-10](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-3-conversations-stay-together), [R-15](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-5-transactions-can-be-followed) |
+| `message_attachments` — *from the revision list* | One photograph or file sent inside a message | Message, file kind, private Storage path, original file name, file size, uploader, and upload time | [R-35](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-3-conversations-stay-together) |
+| `message_reports` — *from the revision list* | One report raised against a message or conversation | Reported message or inquiry, reporter, reason, state, reviewer, decision, and decision date | [R-35](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-3-conversations-stay-together) |
+| `supplier_messages` — *from the revision list* | One message in a direct chief-executive-to-supplier conversation | Supplier, sender, message text, optional private file path, sent time, and read time | [R-38](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-6-staff-and-managers-can-run-the-business) |
 
-The arrangement table contains only the common fields currently supported by evidence. Additional required delivery, meet-up, or visit fields wait for [[00 - START HERE#Open questions|Q-18]].
+The arrangement table contains only the common fields currently supported by evidence. Additional required delivery, meet-up, or visit fields wait for [Q-18](00%20-%20START%20HERE.md#open-questions).
 
-`inquiry_messages` keeps the original text as sent. The filtered form shown to readers is produced when the message is displayed, so a later change to the word list does not rewrite history and a moderator can still see what was actually written. Whether words are hidden or censored, and which words are covered, remain [[00 - START HERE#Open questions|Q-28]]. `supplier_messages` is proposed but should not be built until [[00 - START HERE#Open questions|Q-23]] confirms the channel is wanted. — **REVISIONS LISTS.md**, headings “1. Chat, Notifications, and Reports” and “3. CEO-to-Supplier Communication”
+`inquiry_messages` keeps the original text as sent. The filtered form shown to readers is produced when the message is displayed, so a later change to the word list does not rewrite history and a moderator can still see what was actually written. Whether words are hidden or censored, and which words are covered, remain [Q-28](00%20-%20START%20HERE.md#open-questions). `supplier_messages` is proposed but should not be built until [Q-23](00%20-%20START%20HERE.md#open-questions) confirms the channel is wanted. — **REVISIONS LISTS.md**, headings “1. Chat, Notifications, and Reports” and “3. CEO-to-Supplier Communication”
 
 ### D. Buy, Sell, Request-a-Car, installments, and physical assignments
 
 | Table | What one row represents | Important fields and links | Serves |
 |---|---|---|---|
-| `transactions` | One Buy, Sell, or Request-a-Car case | Customer, transaction kind, optional vehicle, current state, creator, opened date, and completed date | [[07 - DEVELOPMENT ROADMAP#Phase 5 — Transactions can be followed\|R-15]] through [[07 - DEVELOPMENT ROADMAP#Phase 5 — Transactions can be followed\|R-18]] |
-| `transaction_status_history` | One movement from one transaction state to another | Transaction, earlier state, new state, actor, reason, and change time | [[07 - DEVELOPMENT ROADMAP#Phase 5 — Transactions can be followed\|R-18]] |
-| `purchase_details` | The Buy-only information for one transaction | Transaction, payment method, final price, arrangement, document-check state, checker, and check date | [[07 - DEVELOPMENT ROADMAP#Phase 5 — Transactions can be followed\|R-15]], [[07 - DEVELOPMENT ROADMAP#Phase 5 — Transactions can be followed\|R-19]] |
-| `sell_details` | The Sell-only information for one transaction | Transaction, offered amount, valuation amount, review notes, decision, decision maker, and decision date | [[07 - DEVELOPMENT ROADMAP#Phase 5 — Transactions can be followed\|R-16]] |
-| `vehicle_requests` | The Request-a-Car information for one transaction | Transaction, requested make, model, year range, budget, other preferences, agreed price, and assigned Confidential Informant | [[07 - DEVELOPMENT ROADMAP#Phase 5 — Transactions can be followed\|R-17]] |
-| `transaction_documents` | One invoice, receipt, sale document, or other transaction file | Transaction, document kind, private Storage path, uploader, verification state, verifier, and upload date | [[07 - DEVELOPMENT ROADMAP#Phase 5 — Transactions can be followed\|R-19]] |
-| `payment_records` | One record of money settled outside the application | Transaction, optional installment, amount, method, external reference, recorded by, verified by, and settlement date | [[07 - DEVELOPMENT ROADMAP#Phase 5 — Transactions can be followed\|R-19]] |
-| `installment_accounts` | One installment agreement for a completed purchase | Purchase transaction, financed total, down payment, opening balance, start date, state, and closed date | [[07 - DEVELOPMENT ROADMAP#Phase 5 — Transactions can be followed\|R-19]] |
-| `installments` | One scheduled payment within an installment account | Account, sequence number, due date, amount due, state, and payment date | [[07 - DEVELOPMENT ROADMAP#Phase 5 — Transactions can be followed\|R-19]] |
-| `collection_actions` | One late-payment notice, ultimatum, recovery instruction, or recovery result | Installment, action kind, actor, optional deadline, notes, and action time | [[07 - DEVELOPMENT ROADMAP#Phase 5 — Transactions can be followed\|R-19]], [[07 - DEVELOPMENT ROADMAP#Phase 6 — Staff and managers can run the business\|R-23]] |
-| `field_cases` | One physical acquisition, delivery, or vehicle-recovery assignment | Vehicle, optional transaction, case kind, assigned Confidential Informant, optional mechanic, schedule, location, state, and completion date | [[07 - DEVELOPMENT ROADMAP#Phase 6 — Staff and managers can run the business\|R-23]] |
-| `payment_terms` — *from the revision list* | The agreed payment arrangement for one purchase | Purchase transaction, arrangement description, total amount, down payment, number of payments, payment frequency, first due date, agreed by, approver, approval date, and state | [[07 - DEVELOPMENT ROADMAP#Phase 5 — Transactions can be followed\|R-37]] |
+| `transactions` | One Buy, Sell, or Request-a-Car case | Customer, transaction kind, optional vehicle, current state, creator, opened date, and completed date | [R-15](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-5-transactions-can-be-followed) through [R-18](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-5-transactions-can-be-followed) |
+| `transaction_status_history` | One movement from one transaction state to another | Transaction, earlier state, new state, actor, reason, and change time | [R-18](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-5-transactions-can-be-followed) |
+| `purchase_details` | The Buy-only information for one transaction | Transaction, payment method, final price, arrangement, document-check state, checker, and check date | [R-15](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-5-transactions-can-be-followed), [R-19](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-5-transactions-can-be-followed) |
+| `sell_details` | The Sell-only information for one transaction | Transaction, offered amount, valuation amount, review notes, decision, decision maker, and decision date | [R-16](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-5-transactions-can-be-followed) |
+| `vehicle_requests` | The Request-a-Car information for one transaction | Transaction, requested make, model, year range, budget, other preferences, agreed price, and assigned Confidential Informant | [R-17](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-5-transactions-can-be-followed) |
+| `transaction_documents` | One invoice, receipt, sale document, or other transaction file | Transaction, document kind, private Storage path, uploader, verification state, verifier, and upload date | [R-19](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-5-transactions-can-be-followed) |
+| `payment_records` | One record of money settled outside the application | Transaction, optional installment, amount, method, external reference, recorded by, verified by, and settlement date | [R-19](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-5-transactions-can-be-followed) |
+| `installment_accounts` | One installment agreement for a completed purchase | Purchase transaction, financed total, down payment, opening balance, start date, state, and closed date | [R-19](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-5-transactions-can-be-followed) |
+| `installments` | One scheduled payment within an installment account | Account, sequence number, due date, amount due, state, and payment date | [R-19](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-5-transactions-can-be-followed) |
+| `collection_actions` | One late-payment notice, ultimatum, recovery instruction, or recovery result | Installment, action kind, actor, optional deadline, notes, and action time | [R-19](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-5-transactions-can-be-followed), [R-23](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-6-staff-and-managers-can-run-the-business) |
+| `field_cases` | One physical acquisition, delivery, or vehicle-recovery assignment | Vehicle, optional transaction, case kind, assigned Confidential Informant, optional mechanic, schedule, location, state, and completion date | [R-23](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-6-staff-and-managers-can-run-the-business) |
+| `payment_terms` — *from the revision list* | The agreed payment arrangement for one purchase | Purchase transaction, arrangement description, total amount, down payment, number of payments, payment frequency, first due date, agreed by, approver, approval date, and state | [R-37](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-5-transactions-can-be-followed) |
 
-`payment_terms` holds what was agreed with a buyer before the installments themselves are created, so an arrangement can be agreed and approved without inventing a schedule the business has not confirmed. The allowed arrangements and their approver remain [[00 - START HERE#Open questions|Q-22]]. — **REVISIONS LISTS.md**, heading “2. Payment Terms”
+`payment_terms` holds what was agreed with a buyer before the installments themselves are created, so an arrangement can be agreed and approved without inventing a schedule the business has not confirmed. The allowed arrangements and their approver remain [Q-22](00%20-%20START%20HERE.md#open-questions). — **REVISIONS LISTS.md**, heading “2. Payment Terms”
 
-`payment_records` records money handled elsewhere; it does not authorize online collection. `collection_actions` records the steps without automatically starting recovery. The deadline and extra approval rules remain [[00 - START HERE#Open questions|Q-15]].
+`payment_records` records money handled elsewhere; it does not authorize online collection. `collection_actions` records the steps without automatically starting recovery. The deadline and extra approval rules remain [Q-15](00%20-%20START%20HERE.md#open-questions).
 
 ### E. Finance, disbursements, and reports
 
 | Table | What one row represents | Important fields and links | Serves |
 |---|---|---|---|
-| `financial_entries` | One permitted expense or revenue record | Entry kind, category, amount, date, optional transaction, optional field case, recorder, and notes | [[07 - DEVELOPMENT ROADMAP#Phase 6 — Staff and managers can run the business\|R-21]] |
-| `disbursement_requests` | One request for vehicle-purchase, reconditioning, case, or payroll funds | Request kind, amount, requester, optional vehicle, field case, or payroll run, current state, and created date | [[07 - DEVELOPMENT ROADMAP#Phase 6 — Staff and managers can run the business\|R-21]] |
-| `disbursement_events` | One submission, approval, rejection, release, receipt, or payment event for a request | Request, event kind, actor, amount, event date, and notes | [[07 - DEVELOPMENT ROADMAP#Phase 6 — Staff and managers can run the business\|R-21]] |
-| `reports` | One submitted attendance, payroll, disbursement, expense, revenue, inventory, sales, or management report | Report kind, covered period, submitter, summary, optional private file path, decision, decision maker, decision date, and notes | [[07 - DEVELOPMENT ROADMAP#Phase 6 — Staff and managers can run the business\|R-22]] |
+| `financial_entries` | One permitted expense or revenue record | Entry kind, category, amount, date, optional transaction, optional field case, recorder, and notes | [R-21](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-6-staff-and-managers-can-run-the-business) |
+| `disbursement_requests` | One request for vehicle-purchase, reconditioning, case, or payroll funds | Request kind, amount, requester, optional vehicle, field case, or payroll run, current state, and created date | [R-21](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-6-staff-and-managers-can-run-the-business) |
+| `disbursement_events` | One submission, approval, rejection, release, receipt, or payment event for a request | Request, event kind, actor, amount, event date, and notes | [R-21](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-6-staff-and-managers-can-run-the-business) |
+| `reports` | One submitted attendance, payroll, disbursement, expense, revenue, inventory, sales, or management report | Report kind, covered period, submitter, summary, optional private file path, decision, decision maker, decision date, and notes | [R-22](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-6-staff-and-managers-can-run-the-business) |
 
-The event table preserves both described fund paths without choosing a final sequence. The approved sequence and responsibility still require [[00 - START HERE#Open questions|Q-14]]. Finance records stop at recording and verification until [[00 - START HERE#Open questions|Q-04]] settles the final boundary.
+The event table preserves both described fund paths without choosing a final sequence. The approved sequence and responsibility still require [Q-14](00%20-%20START%20HERE.md#open-questions). Finance records stop at recording and verification until [Q-04](00%20-%20START%20HERE.md#open-questions) settles the final boundary.
 
 ### F. Attendance, requests, compensation, and payroll
 
 | Table | What one row represents | Important fields and links | Serves |
 |---|---|---|---|
-| `attendance_entries` | One employee's work record for one date | Employee, work date, time in, time out, late minutes, absence state, recorder, and check state | [[07 - DEVELOPMENT ROADMAP#Phase 6 — Staff and managers can run the business\|R-20]], [[07 - DEVELOPMENT ROADMAP#Phase 6 — Staff and managers can run the business\|R-26]] |
-| `employee_requests` | One leave or overtime request | Employee, request kind, dates or hours, reason, state, decision maker, and decision date | [[07 - DEVELOPMENT ROADMAP#Phase 6 — Staff and managers can run the business\|R-20]] |
-| `private.staff_compensation` | One employee's salary setting for an effective period | Employee, base salary, start date, optional end date, set by, and set date | [[07 - DEVELOPMENT ROADMAP#Phase 6 — Staff and managers can run the business\|R-26]] |
-| `payroll_runs` | One payroll period prepared for staff | Period start, period end, preparer, preparation date, state, and payment date | [[07 - DEVELOPMENT ROADMAP#Phase 6 — Staff and managers can run the business\|R-26]] |
-| `payslips` | One employee's result within one payroll run | Payroll run, employee, gross pay, total deductions, net pay, payslip state, and salary-payment state | [[07 - DEVELOPMENT ROADMAP#Phase 6 — Staff and managers can run the business\|R-26]] |
-| `payslip_items` | One earning or deduction line on a payslip | Payslip, item kind, code, description, amount, source value, and calculation note | [[07 - DEVELOPMENT ROADMAP#Phase 6 — Staff and managers can run the business\|R-26]] |
-| `payroll_approvals` | One review decision made against a payroll run or payslip | Payroll run, optional payslip, reviewer role, reviewer, decision, optional sequence, decision date, and notes | [[07 - DEVELOPMENT ROADMAP#Phase 6 — Staff and managers can run the business\|R-26]] |
+| `attendance_entries` | One employee's work record for one date | Employee, work date, time in, time out, late minutes, absence state, recorder, and check state | [R-20](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-6-staff-and-managers-can-run-the-business), [R-26](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-6-staff-and-managers-can-run-the-business) |
+| `employee_requests` | One leave or overtime request | Employee, request kind, dates or hours, reason, state, decision maker, and decision date | [R-20](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-6-staff-and-managers-can-run-the-business) |
+| `private.staff_compensation` | One employee's salary setting for an effective period | Employee, base salary, start date, optional end date, set by, and set date | [R-26](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-6-staff-and-managers-can-run-the-business) |
+| `payroll_runs` | One payroll period prepared for staff | Period start, period end, preparer, preparation date, state, and payment date | [R-26](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-6-staff-and-managers-can-run-the-business) |
+| `payslips` | One employee's result within one payroll run | Payroll run, employee, gross pay, total deductions, net pay, payslip state, and salary-payment state | [R-26](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-6-staff-and-managers-can-run-the-business) |
+| `payslip_items` | One earning or deduction line on a payslip | Payslip, item kind, code, description, amount, source value, and calculation note | [R-26](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-6-staff-and-managers-can-run-the-business) |
+| `payroll_approvals` | One review decision made against a payroll run or payslip | Payroll run, optional payslip, reviewer role, reviewer, decision, optional sequence, decision date, and notes | [R-26](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-6-staff-and-managers-can-run-the-business) |
 
-The payroll tables store entered amounts and the exact values used for each payslip. They do not invent salary formulas or government-deduction calculations. Those rules remain [[00 - START HERE#Open questions|Q-16]]. `payroll_approvals.sequence` remains optional until [[00 - START HERE#Open questions|Q-13]] settles the order.
+The payroll tables store entered amounts and the exact values used for each payslip. They do not invent salary formulas or government-deduction calculations. Those rules remain [Q-16](00%20-%20START%20HERE.md#open-questions). `payroll_approvals.sequence` remains optional until [Q-13](00%20-%20START%20HERE.md#open-questions) settles the order.
 
 ### G. Content, announcements, and security evidence
 
 | Table | What one row represents | Important fields and links | Serves |
 |---|---|---|---|
-| `content_items` | One landing-page section, promotion, or featured-vehicle item | Content kind, optional vehicle, title, body, author, publication state, and publication dates | [[07 - DEVELOPMENT ROADMAP#Phase 2 — Vehicles can be found and understood\|R-08]] |
-| `announcements` | One chief-executive announcement for employees | Title, body, author, publication state, published date, and optional expiry date | [[07 - DEVELOPMENT ROADMAP#Phase 6 — Staff and managers can run the business\|R-22]] |
-| `security_duty_checks` | One Head Security before-and-after duty check | Head Security account, duty date, before and after private media paths, notes, and completion time | [[07 - DEVELOPMENT ROADMAP#Phase 6 — Staff and managers can run the business\|R-23]] |
+| `content_items` | One landing-page section, promotion, or featured-vehicle item | Content kind, optional vehicle, title, body, author, publication state, and publication dates | [R-08](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-2-vehicles-can-be-found-and-understood) |
+| `announcements` | One chief-executive announcement for employees | Title, body, author, publication state, published date, and optional expiry date | [R-22](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-6-staff-and-managers-can-run-the-business) |
+| `security_duty_checks` | One Head Security before-and-after duty check | Head Security account, duty date, before and after private media paths, notes, and completion time | [R-23](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-6-staff-and-managers-can-run-the-business) |
 
 ### H. Recommendations and decision support
 
 | Table | What one row represents | Important fields and links | Serves |
 |---|---|---|---|
-| `recommendation_runs` | One customer's request for ranked vehicle choices | Customer, budget, stated preferences, criteria version, and run date | [[07 - DEVELOPMENT ROADMAP#Phase 4 — Recommendations can be explained\|R-12]] |
-| `recommendation_results` | One vehicle's score and rank inside a recommendation run | Run, vehicle, budget score, condition score, fuel score, demand score, mileage score, total score, and rank | [[07 - DEVELOPMENT ROADMAP#Phase 4 — Recommendations can be explained\|R-12]] |
-| `recommendation_feedback` | One later outcome used to judge recommendation usefulness | Run, selected vehicle, helpful state, resulting transaction, outcome, and feedback date | [[07 - DEVELOPMENT ROADMAP#Phase 4 — Recommendations can be explained\|R-14]] |
+| `recommendation_runs` | One customer's request for ranked vehicle choices | Customer, budget, stated preferences, criteria version, and run date | [R-12](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-4-recommendations-can-be-explained) |
+| `recommendation_results` | One vehicle's score and rank inside a recommendation run | Run, vehicle, budget score, condition score, fuel score, demand score, mileage score, total score, and rank | [R-12](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-4-recommendations-can-be-explained) |
+| `recommendation_feedback` | One later outcome used to judge recommendation usefulness | Run, selected vehicle, helpful state, resulting transaction, outcome, and feedback date | [R-14](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-4-recommendations-can-be-explained) |
 
-The five documented customer-ranking factors can be stored now. No separate management Decision Support System tables are proposed until [[00 - START HERE#Open questions|Q-05]] confirms whether management pricing and market insights are part of the same tool. Existing vehicle, price, transaction, installment, and report records can support those views after the required outputs are approved.
+The five documented customer-ranking factors can be stored now. No separate management Decision Support System tables are proposed until [Q-05](00%20-%20START%20HERE.md#open-questions) confirms whether management pricing and market insights are part of the same tool. Existing vehicle, price, transaction, installment, and report records can support those views after the required outputs are approved.
 
 ## Main relationships
 
@@ -171,21 +171,21 @@ The five documented customer-ranking factors can be stored now. No separate mana
 
 | Area | Proposed values | What is still open |
 |---|---|---|
-| Account | invited, active, suspended, archived | Walk-in activation and first access — [[00 - START HERE#Open questions\|Q-17]] |
+| Account | invited, active, suspended, archived | Walk-in activation and first access — [Q-17](00%20-%20START%20HERE.md#open-questions) |
 | Vehicle | draft, inspecting, repairing, awaiting_price_approval, available, reserved, sold, archived | Final meaning of every business state |
 | Inquiry | open, assigned, scheduled, handed_off, closed | Whether outside-channel conversations are imported |
 | Transaction | pending, under_review, approved, rejected, completed, cancelled | Cancellation rules were not supplied |
-| Installment | upcoming, due, paid, overdue, waived | Ultimatum length and recovery authorization — [[00 - START HERE#Open questions\|Q-15]] |
+| Installment | upcoming, due, paid, overdue, waived | Ultimatum length and recovery authorization — [Q-15](00%20-%20START%20HERE.md#open-questions) |
 | Field case | assigned, accepted, in_progress, completed, cancelled | Proof and cancellation requirements |
-| Approval | pending, approved, rejected | Payroll order and fund handoffs — [[00 - START HERE#Open questions\|Q-13]], [[00 - START HERE#Open questions\|Q-14]] |
-| Payroll | draft, submitted, under_review, approved, paid, rejected | Final review and payment sequence — [[00 - START HERE#Open questions\|Q-13]] |
-| Supplier | invited, registered, pending_approval, approved, rejected, suspended | Which group performs the approval — [[00 - START HERE#Open questions\|Q-19]] |
+| Approval | pending, approved, rejected | Payroll order and fund handoffs — [Q-13](00%20-%20START%20HERE.md#open-questions), [Q-14](00%20-%20START%20HERE.md#open-questions) |
+| Payroll | draft, submitted, under_review, approved, paid, rejected | Final review and payment sequence — [Q-13](00%20-%20START%20HERE.md#open-questions) |
+| Supplier | invited, registered, pending_approval, approved, rejected, suspended | Which group performs the approval — [Q-19](00%20-%20START%20HERE.md#open-questions) |
 | Supplier kind | company, individual | Which extra details each kind must supply |
-| Checklist answer | good, for_repair, for_replacement | The approved checklist entries themselves — [[00 - START HERE#Open questions\|Q-27]] |
-| Vehicle document item | required, submitted, verified, rejected | Which documents are required — [[00 - START HERE#Open questions\|Q-26]] |
+| Checklist answer | good, for_repair, for_replacement | The approved checklist entries themselves — [Q-27](00%20-%20START%20HERE.md#open-questions) |
+| Vehicle document item | required, submitted, verified, rejected | Which documents are required — [Q-26](00%20-%20START%20HERE.md#open-questions) |
 | Pricing type | negotiable, fixed | Whether a negotiated final price is recorded separately |
 | Message report | open, reviewed, upheld, dismissed | Who reviews reports and what follows an upheld one |
-| Payment terms | proposed, approved, rejected, active, completed | The allowed arrangements and their approver — [[00 - START HERE#Open questions\|Q-22]] |
+| Payment terms | proposed, approved, rejected, active, completed | The allowed arrangements and their approver — [Q-22](00%20-%20START%20HERE.md#open-questions) |
 
 Every movement between transaction states goes into `transaction_status_history`. Approval and money-related movements also go into `audit_events`. A status must never be changed merely to hide or overwrite an earlier decision.
 
@@ -222,7 +222,7 @@ These are proposed policy outcomes, not SQL. “Own” means the row points to t
 - Read and change permitted parts of their own supplier record while it is still being prepared.
 - Upload and read their own valid IDs and supporting files; they cannot mark them verified.
 - Reach nothing at all until the approval decision on their record is `approved`.
-- Read and add messages only in their own direct conversation, and only if that channel is confirmed by [[00 - START HERE#Open questions|Q-23]].
+- Read and add messages only in their own direct conversation, and only if that channel is confirmed by [Q-23](00%20-%20START%20HERE.md#open-questions).
 - Cannot read customer, vehicle-work, transaction, payroll, finance, or another supplier's records. What else an approved supplier may do is not stated by the revision list and is not invented here.
 
 ### Chief executive
@@ -274,7 +274,7 @@ These are proposed policy outcomes, not SQL. “Own” means the row points to t
 ### Sales Manager
 
 - Receive Buy Now cases and scheduled GCE-visit handoffs.
-- Create a walk-in account only through the protected server process required by [[00 - START HERE#Open questions|Q-17]].
+- Create a walk-in account only through the protected server process required by [Q-17](00%20-%20START%20HERE.md#open-questions).
 - Read the customer documents required for an assigned purchase and record their verification result.
 - Manage assigned Buy and Sell transaction details, paperwork, and completed sales information.
 - Cannot read unrelated customer identification or approve financial records outside the role's documented responsibility.
@@ -309,7 +309,7 @@ These are proposed policy outcomes, not SQL. “Own” means the row points to t
 | Vehicle documents | Unique vehicle-and-document-kind pair; index outstanding required documents by vehicle |
 | Listing prices | Require the pricing type to be negotiable or fixed on any posted vehicle |
 | Chat attachments and reports | Index attachments by message; index open reports by state and reported time |
-| Field limits | Apply the agreed smallest and largest numbers, text lengths, and formats as database constraints as well as browser checks, once [[00 - START HERE#Open questions\|Q-25]] supplies the values |
+| Field limits | Apply the agreed smallest and largest numbers, text lengths, and formats as database constraints as well as browser checks, once [Q-25](00%20-%20START%20HERE.md#open-questions) supplies the values |
 
 Indexes must follow real page and report searches. This list is the starting set, not permission to index every column. Supabase's PostgreSQL guidance recommends indexes for foreign keys and frequent filters while avoiding unused indexes that slow changes. — [Supabase index guidance](https://supabase.com/docs/guides/database/postgres/indexes)
 
@@ -357,13 +357,13 @@ The database should follow the existing roadmap rather than being created as one
 
 | Order | Tables introduced | Why this order |
 |---|---|---|
-| 1. Shared foundation | Profiles, protected roles, customer documents, audit events, suppliers, supplier documents | Every later record needs a recognised person and enforceable role, and a supplier must be approved before it can act. — [[07 - DEVELOPMENT ROADMAP#Phase 1 — One shared foundation]] |
-| 2. Vehicles | Vehicles, media, inspections, repairs, price proposals, favourites, public content, checklist entries, checklist answers, replacement details, vehicle document items | Inquiries, recommendations, and transactions all need reliable vehicle records, and the inspection report is built from the checklist answers. — [[07 - DEVELOPMENT ROADMAP#Phase 2 — Vehicles can be found and understood]] |
-| 3. Conversations | Inquiries, messages, attachments, message reports, arrangements | Establish ownership and handoffs before transaction work depends on them. — [[07 - DEVELOPMENT ROADMAP#Phase 3 — Conversations stay together]] |
-| 4. Recommendations | Recommendation runs, results, and feedback | Vehicle and inspection information must exist first. — [[07 - DEVELOPMENT ROADMAP#Phase 4 — Recommendations can be explained]] |
-| 5. Transactions | Transactions, type details, history, documents, payments, payment terms, installments, collection actions, field cases | These records depend on people, vehicles, conversations, and inspections. — [[07 - DEVELOPMENT ROADMAP#Phase 5 — Transactions can be followed]] |
-| 6. Staff and management | Attendance, requests, compensation, payroll, finance, disbursements, reports, announcements, security checks, and supplier messages if confirmed | These areas depend on the operational records they summarize or approve. — [[07 - DEVELOPMENT ROADMAP#Phase 6 — Staff and managers can run the business]] |
-| 7. Acceptance | Acceptance feedback | Feedback becomes meaningful after intended journeys can be used. — [[07 - DEVELOPMENT ROADMAP#Phase 7 — Mobile use and acceptance are checked]] |
+| 1. Shared foundation | Profiles, protected roles, customer documents, audit events, suppliers, supplier documents | Every later record needs a recognised person and enforceable role, and a supplier must be approved before it can act. — [07 - DEVELOPMENT ROADMAP](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-1-one-shared-foundation) |
+| 2. Vehicles | Vehicles, media, inspections, repairs, price proposals, favourites, public content, checklist entries, checklist answers, replacement details, vehicle document items | Inquiries, recommendations, and transactions all need reliable vehicle records, and the inspection report is built from the checklist answers. — [07 - DEVELOPMENT ROADMAP](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-2-vehicles-can-be-found-and-understood) |
+| 3. Conversations | Inquiries, messages, attachments, message reports, arrangements | Establish ownership and handoffs before transaction work depends on them. — [07 - DEVELOPMENT ROADMAP](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-3-conversations-stay-together) |
+| 4. Recommendations | Recommendation runs, results, and feedback | Vehicle and inspection information must exist first. — [07 - DEVELOPMENT ROADMAP](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-4-recommendations-can-be-explained) |
+| 5. Transactions | Transactions, type details, history, documents, payments, payment terms, installments, collection actions, field cases | These records depend on people, vehicles, conversations, and inspections. — [07 - DEVELOPMENT ROADMAP](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-5-transactions-can-be-followed) |
+| 6. Staff and management | Attendance, requests, compensation, payroll, finance, disbursements, reports, announcements, security checks, and supplier messages if confirmed | These areas depend on the operational records they summarize or approve. — [07 - DEVELOPMENT ROADMAP](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-6-staff-and-managers-can-run-the-business) |
+| 7. Acceptance | Acceptance feedback | Feedback becomes meaningful after intended journeys can be used. — [07 - DEVELOPMENT ROADMAP](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-7-mobile-use-and-acceptance-are-checked) |
 
 ## Before any migration is written
 

@@ -1,23 +1,23 @@
 # 11 - TECH STACK
 
-[[00 - START HERE|Back to start]] · Previous: [[10 - WORD LIST]] · Next: [[12 - DATABASE SCHEMA]]
+[Back to start](00%20-%20START%20HERE.md) · Previous: [10 - WORD LIST](10%20-%20WORD%20LIST.md) · Next: [12 - DATABASE SCHEMA](12%20-%20DATABASE%20SCHEMA.md)
 
 ## Status of this decision
 
-This is a **proposed** technology arrangement. The user selected Next.js and Supabase in conversation on 7 August 2026. No application, Supabase project, database, installed supporting files, or published application was supplied, so none of this is marked as already built. See [[00 - START HERE#Open questions|Q-01]].
+This is a **proposed** technology arrangement. The user selected Next.js and Supabase in conversation on 7 August 2026. No application, Supabase project, database, installed supporting files, or published application was supplied, so none of this is marked as already built. See [Q-01](00%20-%20START%20HERE.md#open-questions).
 
-The arrangement below is *drawn from* the documented system responsibilities in [[02 - DOCUMENT FINDINGS]], the proposed parts in [[05 - SYSTEM ARCHITECTURE]], and the build order in [[07 - DEVELOPMENT ROADMAP]].
+The arrangement below is *drawn from* the documented system responsibilities in [02 - DOCUMENT FINDINGS](02%20-%20DOCUMENT%20FINDINGS.md), the proposed parts in [05 - SYSTEM ARCHITECTURE](05%20-%20SYSTEM%20ARCHITECTURE.md), and the build order in [07 - DEVELOPMENT ROADMAP](07%20-%20DEVELOPMENT%20ROADMAP.md).
 
 ## The proposed stack
 
 | Part | Proposed choice | What it would do | Why it fits this project |
 |---|---|---|---|
 | Web application | Next.js App Router | Provide the customer pages, staff work areas, server-side actions, and responsive layouts | One browser-based application can serve customers and employees without creating native phone applications. — **GCE FULL CHAPTER 1 - 3.docx**, pages 15–17 and 21 |
-| Application language | TypeScript | Add clear checks around the shapes of users, vehicles, transactions, approvals, and payroll records | The system has many linked record types and role boundaries; early mismatch checks reduce avoidable mistakes. — *Drawn from* [[07 - DEVELOPMENT ROADMAP]] |
+| Application language | TypeScript | Add clear checks around the shapes of users, vehicles, transactions, approvals, and payroll records | The system has many linked record types and role boundaries; early mismatch checks reduce avoidable mistakes. — *Drawn from* [07 - DEVELOPMENT ROADMAP](07%20-%20DEVELOPMENT%20ROADMAP.md) |
 | Structured records | Supabase PostgreSQL | Keep the shared customer, vehicle, conversation, transaction, finance, and staff records | The documents require one consistent information store instead of scattered spreadsheets and paper records. — **GCE FULL CHAPTER 1 - 3.docx**, pages 10–16 and 20–21 |
-| Accounts | Supabase Auth | Register users, verify sign-in details, maintain signed-in sessions, and supply each person's unique account identifier | Registration, sign-in, email and phone checks, profiles, and walk-in account creation are required by [[07 - DEVELOPMENT ROADMAP#Phase 1 — One shared foundation\|R-01]]. |
+| Accounts | Supabase Auth | Register users, verify sign-in details, maintain signed-in sessions, and supply each person's unique account identifier | Registration, sign-in, email and phone checks, profiles, and walk-in account creation are required by [R-01](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-1-one-shared-foundation). |
 | File storage | Supabase Storage | Hold vehicle photographs, 360-degree media, identification, proof of billing, paperwork, reports, payslips, and security evidence | The documents require several public and private file types with different viewers. — **GCE FULL CHAPTER 1 - 3.docx**, pages 34–43; **GCE USERS LEVELS MODULES.md**, headings “Mechanic”, “Sales Manager”, and “Head Security” |
-| Selected live updates | Supabase Realtime | Update inquiry messages, unread notices, and selected work-status changes without a manual page refresh | Vehicle-linked chat and unread notices are required by [[07 - DEVELOPMENT ROADMAP#Phase 3 — Conversations stay together\|R-09]] through [[07 - DEVELOPMENT ROADMAP#Phase 3 — Conversations stay together\|R-11]]. |
+| Selected live updates | Supabase Realtime | Update inquiry messages, unread notices, and selected work-status changes without a manual page refresh | Vehicle-linked chat and unread notices are required by [R-09](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-3-conversations-stay-together) through [R-11](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-3-conversations-stay-together). |
 | Record access | PostgreSQL Row Level Security | Check each requested row against the signed-in person and assigned role | Customers, suppliers, and eight operational roles must see only their own or assigned work. — **GCE USERS LEVELS MODULES.md**, headings “CEO” through “Head Security”; **REVISIONS LISTS.md**, heading “5. Supplier Registration and Account Management” |
 
 Next.js documents the App Router as its current application structure. Supabase's official Next.js guide uses that arrangement with protected signed-in state, while its database documentation explains that Supabase records live in PostgreSQL. — [Next.js App Router](https://nextjs.org/docs/app), [Supabase Auth with Next.js](https://supabase.com/docs/guides/auth/quickstarts/nextjs), [Supabase database overview](https://supabase.com/docs/guides/database/overview)
@@ -40,7 +40,7 @@ Supabase Auth would own sign-in identities. A separate profile record would hold
 
 ### Supabase PostgreSQL
 
-PostgreSQL would hold structured records and their relationships. Database constraints would stop impossible records, such as a negative amount, two favourites for the same customer and vehicle, or two installment numbers for the same account. Indexes would support the searches people use repeatedly. The proposed tables and rules are in [[12 - DATABASE SCHEMA]].
+PostgreSQL would hold structured records and their relationships. Database constraints would stop impossible records, such as a negative amount, two favourites for the same customer and vehicle, or two installment numbers for the same account. Indexes would support the searches people use repeatedly. The proposed tables and rules are in [12 - DATABASE SCHEMA](12%20-%20DATABASE%20SCHEMA.md).
 
 ### Supabase Storage
 
@@ -73,14 +73,14 @@ Money would still be settled outside the application. The system would keep perm
 |---|---|
 | Hosting provider | Next.js and Supabase can be planned without choosing the final web host. |
 | Visual component library and styling system | The supplied material describes behaviour, not a final visual system. |
-| Email delivery and phone-verification providers | The documents require checks but do not name providers or message rules. See [[00 - START HERE#Open questions\|Q-08]]. |
+| Email delivery and phone-verification providers | The documents require checks but do not name providers or message rules. See [Q-08](00%20-%20START%20HERE.md#open-questions). |
 | 360-degree media viewer | The documents require the experience but do not name a file format or viewer. |
 | Report export format | Reports are required, but PDF, spreadsheet, and print rules are not stated. |
 | Backup, retention, and deletion periods | Private identification, payroll, finance, and security records need approved retention rules before implementation. |
-| Separate customer and employee applications | The current proposal uses one responsive Next.js application until [[00 - START HERE#Open questions\|Q-06]] is answered. |
-| What the downloadable mobile application is | The revision list asks for an in-system download while the chapter document excludes native phone applications. No installable arrangement is chosen here until [[00 - START HERE#Open questions\|Q-24]] is answered. See [[02 - DOCUMENT FINDINGS#Active disagreement\|C-06]]. |
-| How inappropriate words are detected | A stored word list, a ready-made filter, or an outside service are all possible. The words, languages, and hide-or-censor choice are missing — [[00 - START HERE#Open questions\|Q-28]]. |
-| The field-limit values themselves | The revision list requires limits but supplies none, so no numbers, lengths, or formats are proposed here — [[00 - START HERE#Open questions\|Q-25]]. |
+| Separate customer and employee applications | The current proposal uses one responsive Next.js application until [Q-06](00%20-%20START%20HERE.md#open-questions) is answered. |
+| What the downloadable mobile application is | The revision list asks for an in-system download while the chapter document excludes native phone applications. No installable arrangement is chosen here until [Q-24](00%20-%20START%20HERE.md#open-questions) is answered. See [C-06](02%20-%20DOCUMENT%20FINDINGS.md#active-disagreement). |
+| How inappropriate words are detected | A stored word list, a ready-made filter, or an outside service are all possible. The words, languages, and hide-or-censor choice are missing — [Q-28](00%20-%20START%20HERE.md#open-questions). |
+| The field-limit values themselves | The revision list requires limits but supplies none, so no numbers, lengths, or formats are proposed here — [Q-25](00%20-%20START%20HERE.md#open-questions). |
 
 ## What this note does not authorize
 

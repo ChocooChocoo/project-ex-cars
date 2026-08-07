@@ -113,12 +113,12 @@ Numbers are fixed and never shift. If `02 - DOCUMENT FINDINGS` does not apply be
 
 ## 5. Linking
 
-Obsidian wikilinks: `[[01 - OVERVIEW]]`. To point at a section inside a file: `[[07 - DEVELOPMENT ROADMAP#Phase 2 — Booking]]`.
+Obsidian wikilinks: `[01 - OVERVIEW](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/01%20-%20OVERVIEW.md)`. To point at a section inside a file: `[07 - DEVELOPMENT ROADMAP](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/07%20-%20DEVELOPMENT%20ROADMAP.md#phase-2-booking)`.
 
 **Navigation line.** Every file opens with one, directly under its title, before any other content:
 
 ```
-[[00 - START HERE|Back to start]] · Previous: [[01 - OVERVIEW]] · Next: [[03 - CODE FINDINGS]]
+[Back to start](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/00%20-%20START%20HERE.md) · Previous: [01 - OVERVIEW](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/01%20-%20OVERVIEW.md) · Next: [03 - CODE FINDINGS](03%20-%20CODE%20FINDINGS.md)
 ```
 
 - `00 - START HERE` has no previous. Its line is just the next file.
@@ -130,10 +130,10 @@ Obsidian wikilinks: `[[01 - OVERVIEW]]`. To point at a section inside a file: `[
 A link after `#` points at a heading, never at a row in a table. Roadmap items and tasks live in rows, so they are linked through the heading they sit under, with the number kept as the visible text:
 
 ```
-[[08 - ROADMAP TRACKER#Phase 2 — The Rules Match What Was Promised|R-04]]
+[R-04](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/08%20-%20ROADMAP%20TRACKER.md#phase-2-the-rules-match-what-was-promised)
 ```
 
-Not `[[08 - ROADMAP TRACKER#R-04]]` — there is no heading called `R-04`, so that link goes nowhere.
+Not `[08 - ROADMAP TRACKER](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/08%20-%20ROADMAP%20TRACKER.md#r-04)` — there is no heading called `R-04`, so that link goes nowhere.
 
 **No orphans.** Every file is reachable from `00 - START HERE`, and every file links back to it. Checkable in Obsidian's graph view: one connected cluster, nothing floating.
 

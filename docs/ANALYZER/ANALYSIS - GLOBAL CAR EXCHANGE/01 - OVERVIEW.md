@@ -1,6 +1,6 @@
 # 01 - OVERVIEW
 
-[[00 - START HERE|Back to start]] · Next: [[02 - DOCUMENT FINDINGS]]
+[Back to start](00%20-%20START%20HERE.md) · Next: [02 - DOCUMENT FINDINGS](02%20-%20DOCUMENT%20FINDINGS.md)
 
 ## What it is
 
@@ -55,4 +55,4 @@ The stated boundary excludes direct online payment processing, a payment gateway
 
 ## Where the details are
 
-The evidence and contradictions are in [[02 - DOCUMENT FINDINGS]]. The proposed arrangement is in [[05 - SYSTEM ARCHITECTURE]] and its pictures are in [[06 - DIAGRAMS]]. The evidence-based build order begins in [[07 - DEVELOPMENT ROADMAP]]. The proposed implementation choices are in [[11 - TECH STACK]], followed by the table-level plan in [[12 - DATABASE SCHEMA]].
+The evidence and contradictions are in [02 - DOCUMENT FINDINGS](02%20-%20DOCUMENT%20FINDINGS.md). The proposed arrangement is in [05 - SYSTEM ARCHITECTURE](05%20-%20SYSTEM%20ARCHITECTURE.md) and its pictures are in [06 - DIAGRAMS](06%20-%20DIAGRAMS.md). The evidence-based build order begins in [07 - DEVELOPMENT ROADMAP](07%20-%20DEVELOPMENT%20ROADMAP.md). The proposed implementation choices are in [11 - TECH STACK](11%20-%20TECH%20STACK.md), followed by the table-level plan in [12 - DATABASE SCHEMA](12%20-%20DATABASE%20SCHEMA.md).

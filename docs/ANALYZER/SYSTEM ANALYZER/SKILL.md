@@ -91,7 +91,7 @@ Add one line for this run to `00 - START HERE.md` at the top of the vault, linki
 Before telling the user it is done, confirm each of these:
 
 - [ ] Every file that should exist, exists — and is named exactly right, prefix and spacing included.
-- [ ] Every `[[link]]` points at a file that is really there. A typo in a link is a dead end in Obsidian.
+- [ ] Every `[link](link.md)` points at a file that is really there. A typo in a link is a dead end in Obsidian.
 - [ ] Every file has its navigation line at the top.
 - [ ] Every Mermaid block follows the rules in `references/diagram-templates.md`.
 - [ ] Every roadmap item has an `R-` number, and every one of them appears in `08 - ROADMAP TRACKER`.

@@ -56,7 +56,7 @@ Everything here comes from what the user supplied — the documents, the code, a
 ````markdown
 # 07 - DEVELOPMENT ROADMAP
 
-[[00 - START HERE|Back to start]] · Previous: [[06 - DIAGRAMS]] · Next: [[08 - ROADMAP TRACKER]]
+[Back to start](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/00%20-%20START%20HERE.md) · Previous: [06 - DIAGRAMS](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/06%20-%20DIAGRAMS.md) · Next: [08 - ROADMAP TRACKER](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/08%20-%20ROADMAP%20TRACKER.md)
 
 ## What this covers
 
@@ -64,7 +64,7 @@ Everything here comes from what the user supplied — the documents, the code, a
 
 ## Where the plan came from
 
-<Two or three sentences naming the material this was drawn from — the findings files, the documents, the code, anything the user asked for directly. Links to [[02 - DOCUMENT FINDINGS]], [[03 - CODE FINDINGS]], [[04 - COMBINED FINDINGS]].>
+<Two or three sentences naming the material this was drawn from — the findings files, the documents, the code, anything the user asked for directly. Links to [02 - DOCUMENT FINDINGS](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/02%20-%20DOCUMENT%20FINDINGS.md), [03 - CODE FINDINGS](03%20-%20CODE%20FINDINGS.md), [04 - COMBINED FINDINGS](04%20-%20COMBINED%20FINDINGS.md).>
 
 ## The phases at a glance
 
@@ -73,7 +73,7 @@ Everything here comes from what the user supplied — the documents, the code, a
 | Phase 1 — <name> | <one line> | Nothing — this one starts |
 | Phase 2 — <name> | <one line> | Phase 1 |
 
-<The picture of this order lives in [[06 - DIAGRAMS]].>
+<The picture of this order lives in [06 - DIAGRAMS](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/06%20-%20DIAGRAMS.md).>
 
 ---
 
@@ -88,7 +88,7 @@ Everything here comes from what the user supplied — the documents, the code, a
 | # | What gets built | Why it is needed | Where the need came from |
 |---|---|---|---|
 | R-01 | <plain description of one thing to be built> | <what it makes possible> | `<file>`, page <n> |
-| R-02 | <plain description> | <what it makes possible> | [[04 - COMBINED FINDINGS#G-01]] |
+| R-02 | <plain description> | <what it makes possible> | [04 - COMBINED FINDINGS](04%20-%20COMBINED%20FINDINGS.md#g-01) |
 
 **How you know the phase is finished:**
 
@@ -126,7 +126,7 @@ Everything here comes from what the user supplied — the documents, the code, a
 | What | Why it is not here |
 |---|---|
 | <thing the material mentions> | Not building work — <what it is instead>. |
-| <thing the material mentions> | <another reason, such as: the material never says enough about it to plan it. See [[00 - START HERE#Open questions]].> |
+| <thing the material mentions> | <another reason, such as: the material never says enough about it to plan it. See [00 - START HERE](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/00%20-%20START%20HERE.md#open-questions).> |
 
 <This section stops readers wondering whether something was forgotten.>
 ````
@@ -148,7 +148,7 @@ Every roadmap item, with its status. Read at a glance, top to bottom.
 ````markdown
 # 08 - ROADMAP TRACKER
 
-[[00 - START HERE|Back to start]] · Previous: [[07 - DEVELOPMENT ROADMAP]] · Next: [[09 - TASK TRACKER]]
+[Back to start](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/00%20-%20START%20HERE.md) · Previous: [07 - DEVELOPMENT ROADMAP](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/07%20-%20DEVELOPMENT%20ROADMAP.md) · Next: [09 - TASK TRACKER](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/09%20-%20TASK%20TRACKER.md)
 
 **Last checked:** <date in full>
 
@@ -173,7 +173,7 @@ Every roadmap item, with its status. Read at a glance, top to bottom.
 |---|---|---|---|
 | R-01 | <plain description> | 🔵 Already there | Found working in `<file>`, line <n>. |
 | R-02 | <plain description> | ⭕ Not started | |
-| R-03 | <plain description> | ❌ Blocked | Waiting on <what>. Raised as [[00 - START HERE#Open questions\|Q-02]]. |
+| R-03 | <plain description> | ❌ Blocked | Waiting on <what>. Raised as [Q-02](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/00%20-%20START%20HERE.md#open-questions). |
 
 ## Phase 2 — <Name>
 
@@ -181,7 +181,7 @@ Every roadmap item, with its status. Read at a glance, top to bottom.
 |---|---|---|---|
 | R-04 | <plain description> | ⭕ Not started | |
 
-<One table per phase, phases in the same order as [[07 - DEVELOPMENT ROADMAP]].>
+<One table per phase, phases in the same order as [07 - DEVELOPMENT ROADMAP](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/07%20-%20DEVELOPMENT%20ROADMAP.md).>
 
 ## What is blocked
 
@@ -221,7 +221,7 @@ A task is a piece of work small enough that one person could pick it up and know
 ````markdown
 # 09 - TASK TRACKER
 
-[[00 - START HERE|Back to start]] · Previous: [[08 - ROADMAP TRACKER]] · Next: [[10 - WORD LIST]]
+[Back to start](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/00%20-%20START%20HERE.md) · Previous: [08 - ROADMAP TRACKER](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/08%20-%20ROADMAP%20TRACKER.md) · Next: [10 - WORD LIST](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/10%20-%20WORD%20LIST.md)
 
 **Last checked:** <date in full>
 
@@ -244,10 +244,10 @@ Every task here names where it came from. A task with no traceable origin is not
 
 | # | The task | Where it came from | What it refers to | Serves | Status |
 |---|---|---|---|---|---|
-| T-01 | <plain description of one piece of work> | `Requirements.docx`, page 4 | The rule that a booking cannot be made for a past date | [[07 - DEVELOPMENT ROADMAP#Phase 1 — <Name>\|R-01]] | ⭕ |
-| T-02 | <plain description> | `booking.py`, lines 200–230 | The check that already exists but only covers one of the two ways in | [[07 - DEVELOPMENT ROADMAP#Phase 1 — <Name>\|R-01]] | 🔵 |
-| T-03 | <plain description> | Asked for in conversation, <date in full> | The user's request to <what they asked for> | [[07 - DEVELOPMENT ROADMAP#Phase 2 — <Name>\|R-04]] | ⭕ |
-| T-04 | <plain description> | *Drawn from* `Spec.pdf` page 9 and `orders.py` line 88 | The gap between what was promised and what was built — [[04 - COMBINED FINDINGS#G-02]] | [[07 - DEVELOPMENT ROADMAP#Phase 2 — <Name>\|R-05]] | ⭕ |
+| T-01 | <plain description of one piece of work> | `Requirements.docx`, page 4 | The rule that a booking cannot be made for a past date | [R-01](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/07%20-%20DEVELOPMENT%20ROADMAP.md#phase-1-name) | ⭕ |
+| T-02 | <plain description> | `booking.py`, lines 200–230 | The check that already exists but only covers one of the two ways in | [R-01](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/07%20-%20DEVELOPMENT%20ROADMAP.md#phase-1-name) | 🔵 |
+| T-03 | <plain description> | Asked for in conversation, <date in full> | The user's request to <what they asked for> | [R-04](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/07%20-%20DEVELOPMENT%20ROADMAP.md#phase-2-name) | ⭕ |
+| T-04 | <plain description> | *Drawn from* `Spec.pdf` page 9 and `orders.py` line 88 | The gap between what was promised and what was built — [04 - COMBINED FINDINGS](04%20-%20COMBINED%20FINDINGS.md#g-02) | [R-05](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/07%20-%20DEVELOPMENT%20ROADMAP.md#phase-2-name) | ⭕ |
 
 ## Tasks that serve no roadmap item
 

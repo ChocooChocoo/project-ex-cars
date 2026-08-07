@@ -12,7 +12,7 @@ Every note is written for someone with no technical background. Nothing here nee
 
 | Analysis | What it covers | Started | Last updated |
 |---|---|---|---|
-| [[CAPSTONE - 01/ANALYZER/ANALYSIS - GLOBAL CAR EXCHANGE/00 - START HERE\|Global Car Exchange]] | The proposed vehicle exchange system, its document findings, architecture, diagrams, and development plan | 7 August 2026 | 7 August 2026 |
+| [Global Car Exchange](./ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/00%20-%20START%20HERE.md) | The proposed vehicle exchange system, its document findings, architecture, diagrams, and development plan | 7 August 2026 | 7 August 2026 |
 
 ## How to start one
 

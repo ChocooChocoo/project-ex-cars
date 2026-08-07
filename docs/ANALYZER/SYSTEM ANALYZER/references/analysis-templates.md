@@ -11,7 +11,7 @@ The front door. Written first as a skeleton, finished last once the other files 
 ````markdown
 # 00 - START HERE
 
-Next: [[01 - OVERVIEW]]
+Next: [01 - OVERVIEW](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/01%20-%20OVERVIEW.md)
 
 **What this is about:** <subject name>
 **Written:** <date in full>
@@ -35,16 +35,16 @@ Next: [[01 - OVERVIEW]]
 
 | File | What it holds |
 |---|---|
-| [[01 - OVERVIEW]] | What this thing is and what it does |
-| [[02 - DOCUMENT FINDINGS]] | What the documents say |
-| [[03 - CODE FINDINGS]] | What the working files actually do |
-| [[04 - COMBINED FINDINGS]] | Where the documents and the working files agree and disagree |
-| [[05 - SYSTEM ARCHITECTURE]] | The parts and how they hand work along |
-| [[06 - DIAGRAMS]] | The pictures |
-| [[07 - DEVELOPMENT ROADMAP]] | What to build, in what order |
-| [[08 - ROADMAP TRACKER]] | Where each roadmap item stands |
-| [[09 - TASK TRACKER]] | Every task and where it came from |
-| [[10 - WORD LIST]] | Plain meanings for the words that could not be avoided |
+| [01 - OVERVIEW](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/01%20-%20OVERVIEW.md) | What this thing is and what it does |
+| [02 - DOCUMENT FINDINGS](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/02%20-%20DOCUMENT%20FINDINGS.md) | What the documents say |
+| [03 - CODE FINDINGS](03%20-%20CODE%20FINDINGS.md) | What the working files actually do |
+| [04 - COMBINED FINDINGS](04%20-%20COMBINED%20FINDINGS.md) | Where the documents and the working files agree and disagree |
+| [05 - SYSTEM ARCHITECTURE](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/05%20-%20SYSTEM%20ARCHITECTURE.md) | The parts and how they hand work along |
+| [06 - DIAGRAMS](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/06%20-%20DIAGRAMS.md) | The pictures |
+| [07 - DEVELOPMENT ROADMAP](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/07%20-%20DEVELOPMENT%20ROADMAP.md) | What to build, in what order |
+| [08 - ROADMAP TRACKER](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/08%20-%20ROADMAP%20TRACKER.md) | Where each roadmap item stands |
+| [09 - TASK TRACKER](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/09%20-%20TASK%20TRACKER.md) | Every task and where it came from |
+| [10 - WORD LIST](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/10%20-%20WORD%20LIST.md) | Plain meanings for the words that could not be avoided |
 
 ## Not made this time
 
@@ -96,7 +96,7 @@ The one file a reader in a hurry will actually open. No findings, no plan — ju
 ````markdown
 # 01 - OVERVIEW
 
-[[00 - START HERE|Back to start]] · Next: [[02 - DOCUMENT FINDINGS]]
+[Back to start](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/00%20-%20START%20HERE.md) · Next: [02 - DOCUMENT FINDINGS](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/02%20-%20DOCUMENT%20FINDINGS.md)
 
 ## What it is
 
@@ -122,7 +122,7 @@ The one file a reader in a hurry will actually open. No findings, no plan — ju
 
 ## Where the details are
 
-<Two or three lines pointing at [[05 - SYSTEM ARCHITECTURE]], [[06 - DIAGRAMS]], [[07 - DEVELOPMENT ROADMAP]].>
+<Two or three lines pointing at [05 - SYSTEM ARCHITECTURE](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/05%20-%20SYSTEM%20ARCHITECTURE.md), [06 - DIAGRAMS](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/06%20-%20DIAGRAMS.md), [07 - DEVELOPMENT ROADMAP](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/07%20-%20DEVELOPMENT%20ROADMAP.md).>
 ````
 
 ---
@@ -134,7 +134,7 @@ Written when documents were supplied. What the documents say — not what you th
 ````markdown
 # 02 - DOCUMENT FINDINGS
 
-[[00 - START HERE|Back to start]] · Previous: [[01 - OVERVIEW]] · Next: [[03 - CODE FINDINGS]]
+[Back to start](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/00%20-%20START%20HERE.md) · Previous: [01 - OVERVIEW](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/01%20-%20OVERVIEW.md) · Next: [03 - CODE FINDINGS](03%20-%20CODE%20FINDINGS.md)
 
 ## What was read
 
@@ -168,7 +168,7 @@ Contradictions found between documents, or inside one. Recorded, not resolved.
 
 ## What the documents leave unsaid
 
-<Gaps that matter. Each becomes a question in the *Open questions* section of [[00 - START HERE]].>
+<Gaps that matter. Each becomes a question in the *Open questions* section of [00 - START HERE](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/00%20-%20START%20HERE.md).>
 ````
 
 ---
@@ -180,7 +180,7 @@ Written when source code was supplied. What the code actually does, in words, po
 ````markdown
 # 03 - CODE FINDINGS
 
-[[00 - START HERE|Back to start]] · Previous: [[02 - DOCUMENT FINDINGS]] · Next: [[04 - COMBINED FINDINGS]]
+[Back to start](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/00%20-%20START%20HERE.md) · Previous: [02 - DOCUMENT FINDINGS](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/02%20-%20DOCUMENT%20FINDINGS.md) · Next: [04 - COMBINED FINDINGS](04%20-%20COMBINED%20FINDINGS.md)
 
 ## What was read
 
@@ -198,7 +198,7 @@ Written when source code was supplied. What the code actually does, in words, po
 
 ## How work travels through it
 
-<For each main journey through the system — someone signs in, someone places an order — walk it step by step in plain words, naming the file and line each step lives at. These journeys become the flowcharts in [[06 - DIAGRAMS]].>
+<For each main journey through the system — someone signs in, someone places an order — walk it step by step in plain words, naming the file and line each step lives at. These journeys become the flowcharts in [06 - DIAGRAMS](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/06%20-%20DIAGRAMS.md).>
 
 **<Name of the journey>**
 
@@ -237,7 +237,7 @@ Written only when both documents and source code were supplied. Usually the most
 ````markdown
 # 04 - COMBINED FINDINGS
 
-[[00 - START HERE|Back to start]] · Previous: [[03 - CODE FINDINGS]] · Next: [[05 - SYSTEM ARCHITECTURE]]
+[Back to start](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/00%20-%20START%20HERE.md) · Previous: [03 - CODE FINDINGS](03%20-%20CODE%20FINDINGS.md) · Next: [05 - SYSTEM ARCHITECTURE](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/05%20-%20SYSTEM%20ARCHITECTURE.md)
 
 ## The picture in one paragraph
 
@@ -255,7 +255,7 @@ Written only when both documents and source code were supplied. Usually the most
 |---|---|---|---|
 | G-01 | <plain description> | `<file>`, page <n> | Nothing / <the partial version that exists> |
 
-<These are the strongest candidates for the roadmap in [[07 - DEVELOPMENT ROADMAP]].>
+<These are the strongest candidates for the roadmap in [07 - DEVELOPMENT ROADMAP](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/07%20-%20DEVELOPMENT%20ROADMAP.md).>
 
 ## Built but never written down
 
@@ -269,11 +269,11 @@ Written only when both documents and source code were supplied. Usually the most
 |---|---|---|---|
 | K-01 | <written version> | <built version> | `<file>` page <n> and `<file>` line <n> |
 
-<Each contradiction becomes a question in [[00 - START HERE]] — which one is right is not yours to decide.>
+<Each contradiction becomes a question in [00 - START HERE](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/00%20-%20START%20HERE.md) — which one is right is not yours to decide.>
 
 ## What this means for what happens next
 
-<A short section carrying the reader from findings to plan. Names the biggest gaps and why they lead the roadmap. Links into [[07 - DEVELOPMENT ROADMAP]].>
+<A short section carrying the reader from findings to plan. Names the biggest gaps and why they lead the roadmap. Links into [07 - DEVELOPMENT ROADMAP](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/07%20-%20DEVELOPMENT%20ROADMAP.md).>
 ````
 
 ---
@@ -285,7 +285,7 @@ Two jobs: describe the arrangement that exists, and set out the one being propos
 ````markdown
 # 05 - SYSTEM ARCHITECTURE
 
-[[00 - START HERE|Back to start]] · Previous: [[04 - COMBINED FINDINGS]] · Next: [[06 - DIAGRAMS]]
+[Back to start](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/00%20-%20START%20HERE.md) · Previous: [04 - COMBINED FINDINGS](04%20-%20COMBINED%20FINDINGS.md) · Next: [06 - DIAGRAMS](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/06%20-%20DIAGRAMS.md)
 
 ## How to read this note
 
@@ -301,7 +301,7 @@ Two jobs: describe the arrangement that exists, and set out the one being propos
 
 ### How work passes between them
 
-<Plain prose, part by part. What each hands to the next and what comes back. This section is the words behind the big-picture diagram in [[06 - DIAGRAMS]] — the two must agree.>
+<Plain prose, part by part. What each hands to the next and what comes back. This section is the words behind the big-picture diagram in [06 - DIAGRAMS](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/06%20-%20DIAGRAMS.md) — the two must agree.>
 
 ### Where things are kept
 
@@ -327,15 +327,15 @@ Two jobs: describe the arrangement that exists, and set out the one being propos
 
 ### How work would pass between them
 
-<Same as above, for the proposed arrangement. Matches the proposed diagram in [[06 - DIAGRAMS]].>
+<Same as above, for the proposed arrangement. Matches the proposed diagram in [06 - DIAGRAMS](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/06%20-%20DIAGRAMS.md).>
 
 ### What it would take to get there
 
-<Plain description of the move from today's arrangement to the proposed one — what must happen first, what can happen alongside, what cannot be undone once started. Feeds the phase order in [[07 - DEVELOPMENT ROADMAP]].>
+<Plain description of the move from today's arrangement to the proposed one — what must happen first, what can happen alongside, what cannot be undone once started. Feeds the phase order in [07 - DEVELOPMENT ROADMAP](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/07%20-%20DEVELOPMENT%20ROADMAP.md).>
 
 ### What is being given up
 
-<Every arrangement trades something away. Say what. If the material does not say, this becomes a question in [[00 - START HERE]].>
+<Every arrangement trades something away. Say what. If the material does not say, this becomes a question in [00 - START HERE](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/00%20-%20START%20HERE.md).>
 ````
 
 ---
@@ -347,13 +347,13 @@ Every technical word that survived into the output, explained once, properly.
 ````markdown
 # 10 - WORD LIST
 
-[[00 - START HERE|Back to start]] · Previous: [[09 - TASK TRACKER]]
+[Back to start](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/00%20-%20START%20HERE.md) · Previous: [09 - TASK TRACKER](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/09%20-%20TASK%20TRACKER.md)
 
 Words that could not be avoided, because they are real names of real things. Each one explained as it is used here.
 
 | Word | What it means here | Where it comes up |
 |---|---|---|
-| `<the word>` | <one plain sentence — no other technical words inside the explanation> | [[03 - CODE FINDINGS]], [[05 - SYSTEM ARCHITECTURE]] |
+| `<the word>` | <one plain sentence — no other technical words inside the explanation> | [03 - CODE FINDINGS](03%20-%20CODE%20FINDINGS.md), [05 - SYSTEM ARCHITECTURE](../../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/05%20-%20SYSTEM%20ARCHITECTURE.md) |
 
 ## How this list was built
 
