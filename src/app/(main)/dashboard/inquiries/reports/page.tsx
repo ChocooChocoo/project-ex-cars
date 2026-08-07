@@ -1,6 +1,6 @@
 import { createServerSupabase } from "@/lib/supabase/server";
 
-import { ReportReview } from "./_components/report-review";
+import { ReportReview } from "../_components/report-review";
 
 export default async function ReportsPage() {
   const supabase = await createServerSupabase();

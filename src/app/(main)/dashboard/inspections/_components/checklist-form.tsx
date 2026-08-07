@@ -16,7 +16,7 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/in
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
-interface ChecklistEntry {
+export interface ChecklistEntry {
   id: string;
   parent_id: string | null;
   level: "system" | "component" | "part";
@@ -24,7 +24,7 @@ interface ChecklistEntry {
   display_order: number;
 }
 
-interface ChecklistResult {
+export interface ChecklistResult {
   id: string;
   inspection_id: string;
   checklist_entry_id: string;

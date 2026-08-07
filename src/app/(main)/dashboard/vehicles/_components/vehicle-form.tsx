@@ -33,8 +33,9 @@ export function VehicleForm({ defaultValues }: VehicleFormProps) {
   const isEdit = !!defaultValues?.id;
 
   const form = useForm<z.infer<typeof vehicleSchema>>({
-    resolver: zodResolver(vehicleSchema),
-    defaultValues: defaultValues ?? {
+    // biome-ignore lint/suspicious/noExplicitAny: zod coerce fields cause resolver type mismatch
+    resolver: zodResolver(vehicleSchema) as any,
+    defaultValues: (defaultValues ?? {
       stock_code: "",
       vin: "",
       make: "",
@@ -53,7 +54,7 @@ export function VehicleForm({ defaultValues }: VehicleFormProps) {
       pricing_type: "negotiable",
       warranty_details: "",
       offer_details: "",
-    },
+    }) as never,
   });
 
   async function onSubmit(data: z.infer<typeof vehicleSchema>) {

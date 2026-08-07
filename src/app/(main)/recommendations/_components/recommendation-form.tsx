@@ -28,7 +28,8 @@ export function RecommendationForm({ onResults }: RecommendationFormProps) {
   const [running, setRunning] = useState(false);
 
   const form = useForm<RecommendationPreferences>({
-    resolver: zodResolver(recommendationPreferencesSchema),
+    // biome-ignore lint/suspicious/noExplicitAny: zod coerce fields cause resolver type mismatch
+    resolver: zodResolver(recommendationPreferencesSchema) as any,
     defaultValues: {
       budget: 500000,
       condition: "any",

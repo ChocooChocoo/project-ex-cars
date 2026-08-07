@@ -178,7 +178,7 @@ export function VehicleTable({ vehicles }: { readonly vehicles: Record<string, u
           <Pagination className="w-fit">
             <PaginationContent>
               <PaginationItem>
-                <PaginationPrevious disabled={!table.getCanPreviousPage()} onClick={() => table.previousPage()} />
+                <PaginationPrevious aria-disabled={!table.getCanPreviousPage()} onClick={() => table.previousPage()} />
               </PaginationItem>
               {Array.from({ length: table.getPageCount() }, (_, i) => {
                 const pageKey = `page-${i}`;
@@ -204,7 +204,7 @@ export function VehicleTable({ vehicles }: { readonly vehicles: Record<string, u
                 );
               })}
               <PaginationItem>
-                <PaginationNext disabled={!table.getCanNextPage()} onClick={() => table.nextPage()} />
+                <PaginationNext aria-disabled={!table.getCanNextPage()} onClick={() => table.nextPage()} />
               </PaginationItem>
             </PaginationContent>
           </Pagination>

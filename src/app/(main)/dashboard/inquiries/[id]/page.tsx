@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 
 import { createServerSupabase } from "@/lib/supabase/server";
 
-import { StaffChatView } from "./_components/staff-chat-view";
+import { StaffChatView } from "../_components/staff-chat-view";
 
 export default async function StaffChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

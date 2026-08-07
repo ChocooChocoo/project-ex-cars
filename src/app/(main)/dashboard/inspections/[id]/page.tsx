@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { createServerSupabase } from "@/lib/supabase/server";
 
-import { ChecklistForm } from "../_components/checklist-form";
+import { ChecklistForm, type ChecklistEntry, type ChecklistResult } from "../_components/checklist-form";
 
 export default async function InspectionDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -48,8 +48,8 @@ export default async function InspectionDetailPage({ params }: { params: Promise
         <div className="lg:col-span-2">
           <ChecklistForm
             inspectionId={id}
-            checklist={(checklist as Record<string, unknown>[]) ?? []}
-            existingResults={(results as Record<string, unknown>[]) ?? []}
+            checklist={(checklist as Record<string, unknown>[]).map((e) => e as unknown as ChecklistEntry)}
+            existingResults={(results as Record<string, unknown>[]).map((r) => r as unknown as ChecklistResult)}
           />
         </div>
         <Card className="h-fit">
@@ -63,18 +63,18 @@ export default async function InspectionDetailPage({ params }: { params: Promise
                 {insp.condition_score ? `${insp.condition_score}/100` : "—"}
               </Badge>
             </div>
-            {insp.findings && (
+            {(insp.findings as string) ? (
               <div>
                 <span className="text-muted-foreground text-sm">Findings</span>
                 <p className="text-sm">{insp.findings as string}</p>
               </div>
-            )}
-            {insp.recommendation && (
+            ) : null}
+            {(insp.recommendation as string) ? (
               <div>
                 <span className="text-muted-foreground text-sm">Recommendation</span>
                 <p className="text-sm">{insp.recommendation as string}</p>
               </div>
-            )}
+            ) : null}
           </CardContent>
         </Card>
       </div>

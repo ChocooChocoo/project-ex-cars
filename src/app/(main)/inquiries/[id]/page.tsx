@@ -35,7 +35,6 @@ export default async function InquiryChatPage({ params }: { params: Promise<{ id
       inquiry={inquiry as Record<string, unknown>}
       messages={(messages as Record<string, unknown>[]) ?? []}
       arrangement={arrangement as Record<string, unknown> | null}
-      baseUrl="/inquiries"
     />
   );
 }

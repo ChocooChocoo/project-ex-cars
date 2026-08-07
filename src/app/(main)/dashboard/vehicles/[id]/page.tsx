@@ -29,7 +29,7 @@ export default async function EditVehiclePage({ params }: { params: Promise<{ id
     engine: (vehicle.engine as string) ?? "",
     description: (vehicle.description as string) ?? "",
     current_price: (vehicle.current_price as number | undefined) ?? undefined,
-    pricing_type: (vehicle.pricing_type as string) ?? "negotiable",
+    pricing_type: ((vehicle.pricing_type as string) ?? "negotiable") as "fixed" | "negotiable",
     warranty_details: (vehicle.warranty_details as string) ?? "",
     offer_details: (vehicle.offer_details as string) ?? "",
   };

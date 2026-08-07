@@ -93,7 +93,7 @@ export function ContentManager({ items, vehicles }: ContentManagerProps) {
                     <SelectGroup>
                       {vehicles.map((v) => (
                         <SelectItem key={v.id as string} value={v.id as string}>
-                          {v.make} {v.model} ({v.year})
+                          {(v.make as string)} {(v.model as string)} ({(v.year as number)})
                         </SelectItem>
                       ))}
                     </SelectGroup>
@@ -141,7 +141,7 @@ export function ContentManager({ items, vehicles }: ContentManagerProps) {
             </CardHeader>
             {(item.body || item.publication_state !== "published") && (
               <CardContent className="flex flex-col gap-2">
-                {item.body && <p className="text-muted-foreground text-sm">{item.body as string}</p>}
+                {item.body ? <p className="text-muted-foreground text-sm">{item.body as string}</p> : null}
                 {item.publication_state !== "published" && (
                   <Button
                     size="sm"

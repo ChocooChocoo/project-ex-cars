@@ -87,7 +87,7 @@ export function BuyingPatterns() {
                   cy="50%"
                   outerRadius={80}
                   fill="var(--color-primary)"
-                  label={({ count }) => `${count}`}
+                  label={((p: Record<string, unknown>) => String((p.payload as Record<string, unknown>)?.count ?? "")) as () => string}
                 >
                   <Label
                     position="center"

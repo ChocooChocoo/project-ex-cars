@@ -41,11 +41,11 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
                 {(v.pricing_type as string) ?? "negotiable"}
               </Badge>
             </div>
-            {v.offer_details && (
+            {(v.offer_details as string) ? (
               <Badge variant="outline" className="w-fit text-green-700">
                 {v.offer_details as string}
               </Badge>
-            )}
+            ) : null}
             <Separator />
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
@@ -81,7 +81,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
                 <p>{(v.stock_code as string) ?? "—"}</p>
               </div>
             </div>
-            {v.warranty_details && (
+            {(v.warranty_details as string) ? (
               <>
                 <Separator />
                 <div>
@@ -89,13 +89,13 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
                   <p className="text-sm">{v.warranty_details as string}</p>
                 </div>
               </>
-            )}
+            ) : null}
             <Separator />
             <InquiryButtons vehicleId={id} />
           </CardContent>
         </Card>
       </div>
-      {v.description && (
+      {(v.description as string) ? (
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Description</CardTitle>
@@ -104,7 +104,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
             <p className="text-muted-foreground text-sm">{v.description as string}</p>
           </CardContent>
         </Card>
-      )}
+      ) : null}
     </div>
   );
 }

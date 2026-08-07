@@ -46,7 +46,7 @@ export function StaffChatView({
   const vehicles = inquiry.vehicles as Record<string, unknown> | undefined;
   const intention = inquiry.intention_kind as string;
   const state = inquiry.state as string;
-  const hasManager = inquiry.assigned_account_manager || inquiry.assigned_sales_manager;
+  const hasManager = (inquiry.assigned_account_manager as string | null | undefined) || (inquiry.assigned_sales_manager as string | null | undefined);
 
   useEffect(() => {
     void markMessagesRead(inquiryId);
@@ -145,7 +145,7 @@ export function StaffChatView({
                   ? "CALABARZON Meet-Up"
                   : "Delivery"}{" "}
               — {new Date(arr.schedule as string).toLocaleString()}
-              {arr.location && ` at ${arr.location}`}
+              {(arr.location as string) ? ` at ${arr.location as string}` : null}
             </CardTitle>
           </CardHeader>
         </Card>
