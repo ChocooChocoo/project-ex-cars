@@ -8,16 +8,16 @@
 
 | Status | How many |
 |---:|---|
-| ✅ Finished | 17 |
+| ✅ Finished | 20 |
 | 🟨 Being worked on | 3 |
 | ⭕ Not started | 0 |
 | ❌ Blocked | 0 |
 | 🔵 Already there | 0 |
 | ⬜ Dropped | 0 |
-| ❓ Unclear | 21 |
+| ❓ Unclear | 18 |
 | **Total** | **41** |
 
-Phases 1, 2, and 3 completed 7 August 2026. Role-based dashboards implemented as cross-phase infrastructure. R-07 (360° viewer) remains placeholder; R-28/R-29 remain in-progress spanning later phases.
+Phases 1, 2, and 3 completed 7 August 2026. Phase 4 completed 7 August 2026. Role-based dashboards implemented as cross-phase infrastructure. R-07 (360° viewer) remains placeholder; R-28/R-29 remain in-progress spanning later phases.
 
 ## Phase 1 — One shared foundation
 
@@ -59,9 +59,9 @@ Phases 1, 2, and 3 completed 7 August 2026. Role-based dashboards implemented as
 
 | # | What gets built | Status | Notes |
 |---|---|---|---|
-| R-12 | Customer vehicle ranking using the five stated criteria and weights | ❓ Unclear | Not yet started. |
-| R-13 | Agreed management views for pricing, stock turnover, buying patterns, and market information | ❓ Unclear | Not yet started. |
-| R-14 | A way to report recommendation accuracy | ❓ Unclear | Not yet started. |
+| R-12 | Customer vehicle ranking using the five stated criteria and weights | ✅ | Ranking engine in src/lib/recommendations/engine.ts; customer-facing page at /recommendations with budget input, preference form, ranked results and per-criterion score breakdowns; runs saved to recommendation_runs/results. |
+| R-13 | Agreed management views for pricing, stock turnover, buying patterns, and market information | ✅ | Management dashboard at /dashboard/recommendations with tabs: Pricing Trends, Stock Turnover, Buying Patterns, Market Insights, Accuracy. All data derived from existing platform tables. |
+| R-14 | A way to report recommendation accuracy | ✅ | Accuracy tracking view comparing recommendation feedback (helpful/not_helpful) against runs; accuracy percentage, most recommended vehicles, feedback tally. |
 
 ## Phase 5 — Transactions can be followed
 

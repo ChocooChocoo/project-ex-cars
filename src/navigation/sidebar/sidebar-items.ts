@@ -20,6 +20,7 @@ import {
   ReceiptText,
   Server,
   ShoppingBag,
+  Sparkles,
   SquareArrowUpRight,
   Users,
 } from "lucide-react";
@@ -157,6 +158,12 @@ export const sidebarItems: NavGroup[] = [
         title: "Inquiries",
         url: "/dashboard/inquiries",
         icon: MessageSquare,
+      },
+      {
+        id: "recommendations",
+        title: "Recommendations",
+        url: "/dashboard/recommendations",
+        icon: Sparkles,
       },
     ],
   },

@@ -10,16 +10,16 @@ Every task here names where it came from. A task with no traceable origin is not
 
 | Status | How many |
 |---:|---|
-| ✅ Finished | 22 |
+| ✅ Finished | 25 |
 | 🟨 Being worked on | 4 |
 | ⭕ Not started | 0 |
 | ❌ Blocked | 0 |
 | 🔵 Already there | 0 |
 | ⬜ Dropped | 0 |
-| ❓ Unclear | 33 |
+| ❓ Unclear | 30 |
 | **Total** | **59** |
 
-Phases 1, 2, and 3 completed 7 August 2026. Role-based dashboards implemented as cross-phase infrastructure.
+Phases 1, 2, and 3 completed 7 August 2026. Phase 4 completed 7 August 2026. Role-based dashboards implemented as cross-phase infrastructure.
 
 ## The tasks
 
@@ -36,9 +36,9 @@ Phases 1, 2, and 3 completed 7 August 2026. Role-based dashboards implemented as
 | T-09 | Create real-time inquiry chat tied to a vehicle and able to carry images | **GCE FULL CHAPTER 1 - 3.docx**, pages 39–40; **GCE ADDITIONAL DOCUMENTS.docx**, page 2 | The vehicle-linked messaging journey | R-09 | ✅ |
 | T-10 | Create the Account Manager queue, inquiry assignment, viewing schedules, and communication record | **GCE ADDITIONAL DOCUMENTS.docx**, page 2 | The stated inquiry ownership and follow-up work | R-10 | ✅ |
 | T-11 | Create unread-message counts and a reliable read state | **GCE FULL CHAPTER 1 - 3.docx**, page 41 | The described notification behaviour | R-11 | ✅ |
-| T-12 | Rank available vehicles with the five stated customer criteria and weights | **GCE ADDITIONAL DOCUMENTS.docx**, pages 2–3 | The buyer recommendation calculation | R-12 | ❓ Unclear |
-| T-13 | Create the final agreed management pricing, stock-turnover, buying-pattern, and market views | **GCE FULL CHAPTER 1 - 3.docx**, pages 19–20 | The management Decision Support System promises | R-13 | ❓ Unclear |
-| T-14 | Define and show the agreed recommendation accuracy measure | **GCE ADDITIONAL DOCUMENTS.docx**, page 2 | The chief executive dashboard's Decision Support System accuracy item | R-14 | ❓ Unclear |
+| T-12 | Rank available vehicles with the five stated customer criteria and weights | **GCE ADDITIONAL DOCUMENTS.docx**, pages 2–3 | The buyer recommendation calculation | R-12 | ✅ |
+| T-13 | Create the final agreed management pricing, stock-turnover, buying-pattern, and market views | **GCE FULL CHAPTER 1 - 3.docx**, pages 19–20 | The management Decision Support System promises | R-13 | ✅ |
+| T-14 | Define and show the agreed recommendation accuracy measure | **GCE ADDITIONAL DOCUMENTS.docx**, page 2 | The chief executive dashboard's Decision Support System accuracy item | R-14 | ✅ |
 | T-15 | Create the Buy path for cash, financing, cheque, and down-payment records | **GCE ADDITIONAL DOCUMENTS.docx**, page 2 | The first named transaction type and its payment choices | R-15 | ❓ Unclear |
 | T-16 | Create the Sell path with inspection, valuation, review, approval, and rejection | **GCE ADDITIONAL DOCUMENTS.docx**, pages 1–2 | The second named transaction type | R-16 | ❓ Unclear |
 | T-17 | Create the Request-a-Car path from customer specifications through price discussion and sourcing | **GCE ADDITIONAL DOCUMENTS.docx**, page 2 | The third named transaction type | R-17 | ❓ Unclear |
