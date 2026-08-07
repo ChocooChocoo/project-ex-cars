@@ -15,6 +15,7 @@ All test accounts share the same password: **`GCEtest123!@#`**
 | Field | Value |
 |---|---|
 | Email | `customer@gce.local` |
+| Password | `GCEtest123!@#` |
 | Role | `customer` |
 | Landing page | `/showroom` |
 | Job function | Browse vehicles, inquire about listings, receive recommendations |
@@ -29,6 +30,7 @@ All test accounts share the same password: **`GCEtest123!@#`**
 | Field | Value |
 |---|---|
 | Email | `supplier@gce.local` |
+| Password | `GCEtest123!@#` |
 | Role | `supplier` |
 | Landing page | `/showroom` |
 | Job function | Supply vehicles to the platform |
@@ -43,6 +45,7 @@ All test accounts share the same password: **`GCEtest123!@#`**
 | Field | Value |
 |---|---|
 | Email | `ceo@gce.local` |
+| Password | `GCEtest123!@#` |
 | Role | `ceo` |
 | Landing page | `/dashboard/default` |
 | Job function | Oversee entire business, approve decisions, monitor performance |
@@ -57,6 +60,7 @@ All test accounts share the same password: **`GCEtest123!@#`**
 | Field | Value |
 |---|---|
 | Email | `account_manager@gce.local` |
+| Password | `GCEtest123!@#` |
 | Role | `account_manager` |
 | Landing page | `/dashboard/default` |
 | Job function | Manage user accounts, roles, inquiries, vehicle inventory |
@@ -71,6 +75,7 @@ All test accounts share the same password: **`GCEtest123!@#`**
 | Field | Value |
 |---|---|
 | Email | `head_accountant@gce.local` |
+| Password | `GCEtest123!@#` |
 | Role | `head_accountant` |
 | Landing page | `/dashboard/default` |
 | Job function | Financial oversight, vehicle pricing review |
@@ -85,6 +90,7 @@ All test accounts share the same password: **`GCEtest123!@#`**
 | Field | Value |
 |---|---|
 | Email | `confidential_informant@gce.local` |
+| Password | `GCEtest123!@#` |
 | Role | `confidential_informant` |
 | Landing page | `/dashboard/default` |
 | Job function | Source vehicles, field cases, delivery coordination |
@@ -99,6 +105,7 @@ All test accounts share the same password: **`GCEtest123!@#`**
 | Field | Value |
 |---|---|
 | Email | `marketing_specialist@gce.local` |
+| Password | `GCEtest123!@#` |
 | Role | `marketing_specialist` |
 | Landing page | `/dashboard/vehicles` |
 | Job function | Manage vehicle listings, content, promotions, and showroom presentation |
@@ -113,6 +120,7 @@ All test accounts share the same password: **`GCEtest123!@#`**
 | Field | Value |
 |---|---|
 | Email | `mechanic@gce.local` |
+| Password | `GCEtest123!@#` |
 | Role | `mechanic` |
 | Landing page | `/dashboard/inspections` |
 | Job function | Inspect vehicles, complete checklists, track repairs |
@@ -127,6 +135,7 @@ All test accounts share the same password: **`GCEtest123!@#`**
 | Field | Value |
 |---|---|
 | Email | `sales_manager@gce.local` |
+| Password | `GCEtest123!@#` |
 | Role | `sales_manager` |
 | Landing page | `/dashboard/vehicles` |
 | Job function | Manage sales, vehicle inventory, inquiries, and customer recommendations |
@@ -141,6 +150,7 @@ All test accounts share the same password: **`GCEtest123!@#`**
 | Field | Value |
 |---|---|
 | Email | `head_security@gce.local` |
+| Password | `GCEtest123!@#` |
 | Role | `head_security` |
 | Landing page | `/dashboard/default` |
 | Job function | Security oversight, duty checks, vehicle lot awareness |
