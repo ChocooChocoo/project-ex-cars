@@ -22,7 +22,7 @@ export function isKnownRole(role: string): role is GceRole {
 export function resolveInternalPath(role: string, segment: string): string {
   if (isStaffRole(role)) {
     if (segment === "dashboard") return "/dashboard/default";
-    if (segment === "showroom") return "/showroom";
+    if (segment === "showroom") return "/dashboard/showroom";
     return `/dashboard/${segment}`;
   }
 
