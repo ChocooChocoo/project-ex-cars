@@ -19,6 +19,10 @@ export function CustomerHeader({ userRole }: CustomerHeaderProps) {
     { href: rolePath(userRole, "/my-transactions"), label: "Transactions", icon: ReceiptText },
   ];
 
+  if (userRole === "supplier") {
+    links.push({ href: rolePath(userRole, "/supplier-messages"), label: "Supplier Messages", icon: MessageSquare });
+  }
+
   return (
     <header className="sticky top-0 z-40 w-full border-b bg-background/80 backdrop-blur-sm">
       <div className="mx-auto flex h-12 max-w-6xl items-center justify-between px-4">

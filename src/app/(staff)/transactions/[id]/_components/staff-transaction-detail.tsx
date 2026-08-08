@@ -1,7 +1,7 @@
 "use client";
 "use no memo";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { useRouter } from "next/navigation";
 
@@ -12,16 +12,19 @@ import { toast } from "sonner";
 import {
   activatePaymentTerms,
   approvePaymentTerms,
+  instructRepossession,
   markInstallmentWaived,
   recordPaperwork,
   recordPayment,
   reviewSellTransaction,
   transitionTransaction,
   verifyPayment,
+  verifyTransactionDocument,
 } from "@/app/(staff)/transactions/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -45,6 +48,7 @@ export function StaffTransactionDetail({
   paymentTerms,
   viewingArrangements,
   userRole,
+  informants,
 }: {
   readonly transaction: Record<string, unknown>;
   readonly history: Record<string, unknown>[];
@@ -54,6 +58,7 @@ export function StaffTransactionDetail({
   readonly paymentTerms: Record<string, unknown> | null;
   readonly viewingArrangements: Record<string, unknown>[];
   readonly userRole: string;
+  readonly informants: { id: string; full_name: string | null }[];
 }) {
   const router = useRouter();
   const id = transaction.id as string;
@@ -78,6 +83,62 @@ export function StaffTransactionDetail({
   // Sell review form
   const [valuation, setValuation] = useState(sellDetails?.valuation_amount ? String(sellDetails.valuation_amount) : "");
   const [reviewNotes, setReviewNotes] = useState((sellDetails?.review_notes as string) ?? "");
+
+  // Repossession form
+  const [repoOpen, setRepoOpen] = useState(false);
+  const [repoInformant, setRepoInformant] = useState("");
+  const [repoReason, setRepoReason] = useState("");
+
+  // Purchase document upload
+  const [docKind, setDocKind] = useState("valid_id");
+  const [docIdType, setDocIdType] = useState("");
+  const docFileRef = useRef<HTMLInputElement>(null);
+
+  async function handleUploadPurchaseDocument() {
+    const file = docFileRef.current?.files?.[0];
+    if (!file) {
+      toast.error("Select a file to upload.");
+      return;
+    }
+    if (docKind === "valid_id" && !docIdType) {
+      toast.error("Select the ID type.");
+      return;
+    }
+    const fd = new FormData();
+    fd.set("transaction_id", id);
+    fd.set("document_kind", docKind);
+    fd.set("id_type", docIdType);
+    fd.set("file", file);
+    const result = await recordPaperwork(fd);
+    if (result.error) toast.error(result.error);
+    else {
+      toast.success(
+        docKind === "valid_id" ? "Valid ID uploaded. Verify it below." : "Proof of billing uploaded. Verify it below.",
+      );
+      if (docFileRef.current) docFileRef.current.value = "";
+      router.refresh();
+    }
+  }
+
+  async function handleInstructRepossession() {
+    if (!repoInformant) {
+      toast.error("Select a Confidential Informant.");
+      return;
+    }
+    const fd = new FormData();
+    fd.set("transaction_id", id);
+    fd.set("informant_id", repoInformant);
+    if (repoReason) fd.set("reason", repoReason);
+    const result = await instructRepossession(fd);
+    if (result.error) toast.error(result.error);
+    else {
+      toast.success("Repossession instructed. A recovery field case was created.");
+      setRepoOpen(false);
+      setRepoInformant("");
+      setRepoReason("");
+      router.refresh();
+    }
+  }
 
   async function doTransition(to: TransactionState) {
     setTransitioning(true);
@@ -126,6 +187,10 @@ export function StaffTransactionDetail({
   const insts = installmentAccount
     ? (((installmentAccount as Record<string, unknown>).installments as Record<string, unknown>[]) ?? [])
     : [];
+
+  const hasDueOrOverdue = insts.some(
+    (inst: Record<string, unknown>) => inst.state === "due" || inst.state === "overdue",
+  );
 
   return (
     <>
@@ -505,6 +570,17 @@ export function StaffTransactionDetail({
         <TabsContent value="installments" className="mt-4">
           <Card>
             <CardContent className="py-4">
+              {userRole === "head_accountant" && hasDueOrOverdue ? (
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/40 bg-destructive/5 p-3">
+                  <p className="text-sm text-destructive">
+                    This account has due or overdue installments. You may instruct a Confidential Informant to repossess
+                    the vehicle.
+                  </p>
+                  <Button size="sm" variant="destructive" onClick={() => setRepoOpen(true)}>
+                    Instruct Repossession
+                  </Button>
+                </div>
+              ) : null}
               {!installmentAccount || insts.length === 0 ? (
                 <p className="text-muted-foreground text-sm">No installment plan.</p>
               ) : (
@@ -560,18 +636,110 @@ export function StaffTransactionDetail({
 
         <TabsContent value="documents" className="mt-4">
           <Card>
-            <CardContent className="py-4">
+            <CardContent className="flex flex-col gap-4 py-4">
+              {kind === "buy" ? (
+                <div className="flex flex-wrap items-end gap-3 rounded-lg border p-3">
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="purchase-doc-kind">Document</Label>
+                    <Select value={docKind} onValueChange={setDocKind}>
+                      <SelectTrigger id="purchase-doc-kind" className="w-44">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="valid_id">Valid ID</SelectItem>
+                        <SelectItem value="proof_of_billing">Proof of Billing</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {docKind === "valid_id" ? (
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="purchase-doc-id-type">ID Type</Label>
+                      <Select value={docIdType} onValueChange={setDocIdType}>
+                        <SelectTrigger id="purchase-doc-id-type" className="w-44">
+                          <SelectValue placeholder="Select ID type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="passport">Passport</SelectItem>
+                          <SelectItem value="drivers_license">Driver's License</SelectItem>
+                          <SelectItem value="umid">UMID</SelectItem>
+                          <SelectItem value="sss_id">SSS ID</SelectItem>
+                          <SelectItem value="gsis_id">GSIS ID</SelectItem>
+                          <SelectItem value="philhealth_id">PhilHealth ID</SelectItem>
+                          <SelectItem value="voters_id">Voter's ID</SelectItem>
+                          <SelectItem value="national_id">National ID</SelectItem>
+                          <SelectItem value="prc_id">PRC ID</SelectItem>
+                          <SelectItem value="postal_id">Postal ID</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : null}
+                  <Input
+                    ref={docFileRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
+                    className="w-56"
+                  />
+                  <Button size="sm" onClick={handleUploadPurchaseDocument}>
+                    Upload
+                  </Button>
+                </div>
+              ) : null}
               {documents.length === 0 ? (
                 <p className="text-muted-foreground text-sm">No documents.</p>
               ) : (
                 <div className="flex flex-col gap-2">
                   {documents.map((doc) => (
-                    <div key={doc.id as string} className="flex items-center gap-3 text-sm">
-                      <FileText className="size-4 text-muted-foreground" />
-                      <span className="capitalize">{(doc.document_kind as string).replace(/_/g, " ")}</span>
-                      <Badge variant="secondary" className="text-xs">
-                        {doc.verification_state as string}
-                      </Badge>
+                    <div key={doc.id as string} className="flex items-center justify-between gap-3 text-sm">
+                      <div className="flex items-center gap-3">
+                        <FileText className="size-4 text-muted-foreground" />
+                        <span className="capitalize">{(doc.document_kind as string).replace(/_/g, " ")}</span>
+                        {doc.id_type ? (
+                          <span className="text-muted-foreground text-xs capitalize">
+                            {(doc.id_type as string).replace(/_/g, " ")}
+                          </span>
+                        ) : null}
+                        <Badge variant="secondary" className="text-xs">
+                          {doc.verification_state as string}
+                        </Badge>
+                      </div>
+                      {doc.verification_state === "pending" &&
+                      ["ceo", "sales_manager", "account_manager"].includes(userRole) ? (
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            onClick={async () => {
+                              const fd = new FormData();
+                              fd.set("document_id", doc.id as string);
+                              fd.set("decision", "verified");
+                              const result = await verifyTransactionDocument(fd);
+                              if (result.error) toast.error(result.error);
+                              else {
+                                toast.success("Document verified.");
+                                router.refresh();
+                              }
+                            }}
+                          >
+                            Verify
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={async () => {
+                              const fd = new FormData();
+                              fd.set("document_id", doc.id as string);
+                              fd.set("decision", "rejected");
+                              const result = await verifyTransactionDocument(fd);
+                              if (result.error) toast.error(result.error);
+                              else {
+                                toast.success("Document rejected.");
+                                router.refresh();
+                              }
+                            }}
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                      ) : null}
                     </div>
                   ))}
                 </div>
@@ -580,6 +748,48 @@ export function StaffTransactionDetail({
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={repoOpen} onOpenChange={setRepoOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Instruct Repossession</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="repo-informant">Confidential Informant</Label>
+              <Select value={repoInformant} onValueChange={setRepoInformant}>
+                <SelectTrigger id="repo-informant">
+                  <SelectValue placeholder="Select informant" />
+                </SelectTrigger>
+                <SelectContent>
+                  {informants.map((informant) => (
+                    <SelectItem key={informant.id} value={informant.id}>
+                      {informant.full_name ?? informant.id.slice(0, 8)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="repo-reason">Reason (optional)</Label>
+              <Input
+                id="repo-reason"
+                value={repoReason}
+                onChange={(e) => setRepoReason(e.target.value)}
+                placeholder="e.g. Buyer missed two consecutive payments"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setRepoOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleInstructRepossession} disabled={informants.length === 0}>
+              {informants.length === 0 ? "No informants available" : "Instruct"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

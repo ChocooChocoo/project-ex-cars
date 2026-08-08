@@ -50,6 +50,29 @@ export async function transitionTransaction(formData: FormData) {
   // Use admin client for state transitions (bypass RLS for role-gated logic).
   const admin = await createAdminClient();
 
+  // Two valid IDs + proof of billing must be verified before a purchase completes (G16).
+  if (toState === "completed" && tx.transaction_kind === "buy") {
+    const [{ count: verifiedIds }, { count: verifiedBilling }] = await Promise.all([
+      admin
+        .from("transaction_documents")
+        .select("id", { count: "exact", head: true })
+        .eq("transaction_id", id)
+        .eq("document_kind", "valid_id")
+        .eq("verification_state", "verified"),
+      admin
+        .from("transaction_documents")
+        .select("id", { count: "exact", head: true })
+        .eq("transaction_id", id)
+        .eq("document_kind", "proof_of_billing")
+        .eq("verification_state", "verified"),
+    ]);
+    if ((verifiedIds ?? 0) < 2 || (verifiedBilling ?? 0) < 1) {
+      return {
+        error: "Two verified valid IDs and a verified proof of billing are required before completing this purchase.",
+      };
+    }
+  }
+
   const { error } = await admin
     .from("transactions")
     .update({
@@ -302,6 +325,7 @@ export async function recordPaperwork(formData: FormData) {
 
   const transactionId = formData.get("transaction_id") as string;
   const documentKind = formData.get("document_kind") as string;
+  const idType = (formData.get("id_type") as string) || null;
   const file = formData.get("file") as File | null;
 
   let storagePath: string | null = null;
@@ -313,18 +337,93 @@ export async function recordPaperwork(formData: FormData) {
     if (uploadError) return { error: uploadError.message };
   }
 
+  // Valid IDs and proof of billing require staff verification before the sale is
+  // considered document-complete; other paperwork uploads are trusted.
+  const requiresVerification = documentKind === "valid_id" || documentKind === "proof_of_billing";
+
   const { error } = await supabase.from("transaction_documents").insert({
     transaction_id: transactionId,
     document_kind: documentKind,
+    id_type: idType,
     storage_path: storagePath,
     uploader_id: user.user.id,
-    verification_state: "verified",
+    verification_state: requiresVerification ? "pending" : "verified",
   });
 
   if (error) return { error: error.message };
 
   revalidatePath(`/dashboard/transactions/${transactionId}`);
   revalidatePath("/dashboard/transactions/paperwork");
+  return { success: true };
+}
+
+export async function verifyTransactionDocument(formData: FormData) {
+  const supabase = await createServerSupabase();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+
+  const role = await getCurrentRole();
+  if (!role || !["ceo", "sales_manager", "account_manager"].includes(role)) {
+    return { error: "Not authorized to verify purchase documents" };
+  }
+
+  const documentId = formData.get("document_id") as string;
+  const decision = formData.get("decision") as string;
+  if (!documentId || !["verified", "rejected"].includes(decision)) {
+    return { error: "Invalid verification request." };
+  }
+
+  const admin = createAdminClient();
+
+  const { data: doc } = await admin
+    .from("transaction_documents")
+    .select("id, transaction_id, document_kind, verification_state")
+    .eq("id", documentId)
+    .maybeSingle();
+  if (!doc) return { error: "Document not found." };
+  if (doc.verification_state !== "pending") {
+    return { error: "Only pending documents can be verified or rejected." };
+  }
+
+  const { error } = await admin
+    .from("transaction_documents")
+    .update({ verification_state: decision, verifier_id: user.user.id })
+    .eq("id", documentId);
+  if (error) return { error: error.message };
+
+  if (decision === "verified" && doc.document_kind === "valid_id") {
+    const { count } = await admin
+      .from("transaction_documents")
+      .select("id", { count: "exact", head: true })
+      .eq("transaction_id", doc.transaction_id)
+      .eq("document_kind", "valid_id")
+      .eq("verification_state", "verified");
+    if ((count ?? 0) >= 2) {
+      const { data: proof } = await admin
+        .from("transaction_documents")
+        .select("id")
+        .eq("transaction_id", doc.transaction_id)
+        .eq("document_kind", "proof_of_billing")
+        .eq("verification_state", "verified")
+        .maybeSingle();
+      if (proof) {
+        await admin
+          .from("purchase_details")
+          .update({ document_check_state: "verified", checked_by: user.user.id, checked_at: new Date().toISOString() })
+          .eq("transaction_id", doc.transaction_id);
+      }
+    }
+  }
+
+  await logAuditEvent({
+    actorId: user.user.id,
+    action: `purchase_document_${decision}`,
+    recordKind: "transaction_documents",
+    recordId: documentId,
+    summary: `Purchase document ${documentId} (${doc.document_kind}) ${decision}`,
+  });
+
+  revalidatePath(`/dashboard/transactions/${doc.transaction_id}`);
   return { success: true };
 }
 
@@ -500,4 +599,177 @@ export async function createWalkInTransaction(formData: FormData) {
 
   revalidatePath("/dashboard/transactions");
   return { success: true, id: transaction.id };
+}
+
+export async function createFieldCase(formData: FormData) {
+  const supabase = await createServerSupabase();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+
+  const role = await getCurrentRole();
+  const CREATORS: Record<string, string[]> = {
+    acquisition: ["ceo", "confidential_informant", "sales_manager"],
+    delivery: ["ceo", "confidential_informant", "sales_manager"],
+    recovery: ["ceo", "head_accountant"],
+    sourcing: ["ceo", "sales_manager"],
+  };
+
+  const caseKind = formData.get("case_kind") as string;
+  const allowed = CREATORS[caseKind];
+  if (!role || !allowed?.includes(role)) {
+    return { error: `Not authorized to create ${caseKind ?? ""} field cases` };
+  }
+
+  const transactionId = (formData.get("transaction_id") as string) || null;
+  const vehicleId = (formData.get("vehicle_id") as string) || null;
+  const informantId = (formData.get("assigned_confidential_informant") as string) || null;
+  const mechanicId = (formData.get("mechanic_id") as string) || null;
+  const schedule = (formData.get("schedule") as string) || null;
+  const location = (formData.get("location") as string) || null;
+  const notes = (formData.get("notes") as string) || null;
+
+  if (!transactionId && !vehicleId) {
+    return { error: "A transaction or vehicle is required." };
+  }
+  if (!informantId && !mechanicId) {
+    return { error: "Assign a worker to this field case." };
+  }
+
+  const { data: fieldCase, error } = await supabase
+    .from("field_cases")
+    .insert({
+      transaction_id: transactionId,
+      vehicle_id: vehicleId,
+      case_kind: caseKind,
+      assigned_confidential_informant: informantId,
+      mechanic_id: mechanicId,
+      schedule: schedule ? new Date(schedule).toISOString() : null,
+      location,
+      state: "assigned",
+      notes,
+    })
+    .select()
+    .single();
+
+  if (error) return { error: error.message };
+
+  await logAuditEvent({
+    actorId: user.user.id,
+    action: `field_case_created_${caseKind}`,
+    recordKind: "field_cases",
+    recordId: fieldCase.id,
+    summary: `${caseKind} field case created for transaction ${transactionId ?? vehicleId ?? ""}`,
+  });
+
+  revalidatePath("/dashboard/field-cases");
+  revalidatePath("/dashboard/transactions");
+  return { success: true, id: fieldCase.id };
+}
+
+export async function assignMechanic(formData: FormData) {
+  const supabase = await createServerSupabase();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+
+  const role = await getCurrentRole();
+  if (!role || !["ceo", "confidential_informant", "sales_manager"].includes(role)) {
+    return { error: "Not authorized to assign mechanics" };
+  }
+
+  const fieldCaseId = formData.get("field_case_id") as string;
+  const mechanicId = formData.get("mechanic_id") as string;
+
+  if (!fieldCaseId || !mechanicId) return { error: "Field case and mechanic are required." };
+
+  const { data: mechanic } = await supabase
+    .from("profiles")
+    .select("id, private_user_roles!inner(role)")
+    .eq("id", mechanicId)
+    .eq("private_user_roles.role", "mechanic")
+    .eq("private_user_roles.active", true)
+    .maybeSingle();
+  if (!mechanic) return { error: "The selected user is not an active mechanic." };
+
+  const { error } = await supabase.from("field_cases").update({ mechanic_id: mechanicId }).eq("id", fieldCaseId);
+  if (error) return { error: error.message };
+
+  await logAuditEvent({
+    actorId: user.user.id,
+    action: "mechanic_assigned",
+    recordKind: "field_cases",
+    recordId: fieldCaseId,
+    summary: `Mechanic ${mechanicId} assigned to field case ${fieldCaseId}`,
+  });
+
+  revalidatePath("/dashboard/field-cases");
+  return { success: true };
+}
+
+export async function instructRepossession(formData: FormData) {
+  const supabase = await createServerSupabase();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+
+  const role = await getCurrentRole();
+  if (!role || role !== "head_accountant") {
+    return { error: "Only the Head Accountant can instruct repossession." };
+  }
+
+  const transactionId = formData.get("transaction_id") as string;
+  const informantId = formData.get("informant_id") as string;
+  const reason = (formData.get("reason") as string) || null;
+
+  if (!transactionId || !informantId) return { error: "Transaction and informant are required." };
+
+  const { data: tx } = await supabase.from("transactions").select("id").eq("id", transactionId).maybeSingle();
+  if (!tx) return { error: "Transaction not found." };
+
+  const { data: account } = await supabase
+    .from("installment_accounts")
+    .select("id")
+    .eq("purchase_transaction_id", transactionId)
+    .maybeSingle();
+  if (!account) return { error: "No installment account exists for this transaction." };
+
+  const { data: overdue } = await supabase
+    .from("installments")
+    .select("id")
+    .eq("account_id", account.id)
+    .in("state", ["due", "overdue"])
+    .order("due_date", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (!overdue) return { error: "No due or overdue installments found for this transaction." };
+
+  const { data: fieldCase, error } = await supabase
+    .from("field_cases")
+    .insert({
+      transaction_id: transactionId,
+      case_kind: "recovery",
+      assigned_confidential_informant: informantId,
+      state: "assigned",
+      notes: reason ?? `Repossession instructed for transaction ${transactionId}`,
+    })
+    .select()
+    .single();
+  if (error) return { error: error.message };
+
+  await supabase.from("collection_actions").insert({
+    installment_id: overdue.id,
+    action_kind: "recovery_instruction",
+    actor_id: user.user.id,
+    notes: reason ?? `Repossession instructed for transaction ${transactionId}`,
+  });
+
+  await logAuditEvent({
+    actorId: user.user.id,
+    action: "repossession_instructed",
+    recordKind: "field_cases",
+    recordId: fieldCase.id,
+    summary: `Repossession instructed for transaction ${transactionId} to informant ${informantId}`,
+  });
+
+  revalidatePath(`/dashboard/transactions/${transactionId}`);
+  revalidatePath("/dashboard/field-cases");
+  return { success: true, id: fieldCase.id };
 }

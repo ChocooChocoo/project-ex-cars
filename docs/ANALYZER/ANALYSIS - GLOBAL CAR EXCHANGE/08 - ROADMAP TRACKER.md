@@ -2,22 +2,22 @@
 
 [Back to start](00%20-%20START%20HERE.md) · Previous: [07 - DEVELOPMENT ROADMAP](07%20-%20DEVELOPMENT%20ROADMAP.md) · Next: [09 - TASK TRACKER](09%20-%20TASK%20TRACKER.md)
 
-**Last checked:** 8 August 2026 (🟨 resolution pass via docs/tasks/12.md)
+**Last checked:** 9 August 2026 (audit remediation pass)
 
 ## Where everything stands
 
 | Status | How many |
 |---:|---|
-| ✅ Finished | 34 |
+| ✅ Finished | 35 |
 | 🟨 Being worked on | 0 |
 | ⭕ Not started | 0 |
 | ❌ Blocked | 0 |
 | 🔵 Already there | 0 |
-| ⬜ Dropped | 1 |
+| ⬜ Dropped | 0 |
 | ❓ Unclear | 6 |
 | **Total** | **41** |
 
-The earlier tracker state recorded Phases 1–5 as completed. The source-code audit in [14 - PHASE 6 IMPLEMENTATION PLAN](14%20-%20PHASE%206%20IMPLEMENTATION%20PLAN.md) found that this completion statement is not yet supported by build, authorization, user-journey, and repeatable-test evidence. Existing Phase 1–5 item labels require evidence-based reconciliation through Recovery Gates 0–3. R-07 (360° viewer) remains a placeholder, and R-28/R-29 remain in progress.
+The earlier tracker state recorded Phases 1–5 as completed. The source-code audit in [14 - PHASE 6 IMPLEMENTATION PLAN](14%20-%20PHASE%206%20IMPLEMENTATION%20PLAN.md) found that this completion statement is not yet supported by build, authorization, user-journey, and repeatable-test evidence. Existing Phase 1–5 item labels require evidence-based reconciliation through Recovery Gates 0–3. R-07 (360° viewer) remains a placeholder, and R-28/R-29 remain in progress. **9 Aug 2026 audit pass:** R-38 (CEO↔supplier channel) moved from dropped to finished; R-27 notes refreshed with the full KYC flow.
 
 ## Phase 1 — One shared foundation
 
@@ -26,7 +26,7 @@ The earlier tracker state recorded Phases 1–5 as completed. The source-code au
 | R-01 | Registration, sign-in, email and phone checks, customer profiles, identification upload, and Sales Manager creation of walk-in buyer and seller accounts | ✅ | Auth forms connected to Supabase; profile auto-creation via database trigger; customer document upload server action; walk-in account creation via admin client. |
 | R-02 | Role-based access for the customer, the supplier, and the eight operational roles, managed by the Account Manager | ✅ | All 10 roles in `src/lib/auth/roles.ts`; RLS policies per table; role assignment RPC; RBAC page at /dashboard/roles; middleware; role-based sidebar filtering and landing pages. |
 | R-03 | One shared record foundation with consistent customer, vehicle, conversation, transaction, inspection, and staff information | ✅ | Phase 1 migration executed. All 6 tables (profiles, private.user_roles, customer_documents, audit_events, suppliers, supplier_documents) live with RLS. |
-| R-27 | Supplier registration and account management with staff-created accounts, Company or Individual, two primary valid IDs, and approval before sign-in | ✅ | suppliers and supplier_documents tables with RLS; createSupplier and approveSupplier server actions; controlled states. |
+| R-27 | Supplier registration and account management with staff-created accounts, Company or Individual, two primary valid IDs, and approval before sign-in | ✅ | suppliers and supplier_documents tables with RLS; createSupplier and approveSupplier server actions; controlled states. Audit pass (9 Aug 2026): server-side Company/Individual validation, two **verified** primary IDs required before approval, sign-in gating for non-approved suppliers, account linkage on first sign-in, document upload/verify UI, supplier-documents storage bucket (migrations 00024–00028). |
 | R-28 | Field checks on every form for numbers, lengths, kinds of information, required fields, and formats | ✅ | Zod schemas in src/lib/validation/ wired into auth, vehicles, transactions, buy/sell/request, inquiries, and Phase 6 actions. Verified with tsc, biome, and production build. |
 | R-29 | Automatic filling of forms from details already held | ✅ | getProfileAutoFill() wired into buy-details location and inquiry arrangement forms; arrangement autofill now uses the customer's registered address. |
 
@@ -85,7 +85,7 @@ Planning is complete in [14 - PHASE 6 IMPLEMENTATION PLAN](14%20-%20PHASE%206%20
 | R-22 | Chief executive dashboard with sales, revenue, inventory, pending work, staff performance, report and price approvals, employee announcements, and agreed recommendation measures | ✅ | Source-backed CEO totals added: completed sales, verified revenue, available inventory, pending report approvals; performance review UI on staff records; CEO price-approval queue on vehicle inventory; existing report approval queue. Every metric links to its source records. |
 | R-23 | Security photographs, sourcing, mechanic assignment, delivery, case expenses, and vehicle-recovery records within the agreed boundary | ✅ | Field case state/expense updates; security duty before/after image uploads to a private storage bucket (migration 00021) with completion requiring both images. |
 | R-26 | Payroll workflow covering attendance inputs, salary and deduction entry, report preparation, payslip approval, and salary-payment responsibility | ✅ | Compensation entry UI (base salary + effective periods) feeds run generation; payslip payment status (pending/paid) with Head Accountant handoff (migration 00022); existing approval sequence and printable payslips. |
-| R-38 | Direct chief-executive-to-supplier communication channel | ⬜ | Q-23 provisionally answered **no**; page remains read-only, no messaging workflow built. |
+| R-38 | Direct chief-executive-to-supplier communication channel | ✅ | Q-23 answered **yes** on 9 Aug 2026: CEO and approved suppliers send and read messages on `/supplier-messages` (`sendSupplierMessage`, realtime thread, RLS enforced). |
 
 ## Phase 7 — Mobile use and acceptance are checked
 

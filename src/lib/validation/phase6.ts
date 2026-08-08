@@ -50,6 +50,10 @@ export const compensationSchema = z.object({
   base_salary_cents: z.coerce.number().int().min(1, "Salary must be greater than zero."),
   effective_from: z.string().min(1, "Effective date is required."),
   effective_until: z.string().optional().or(z.literal("")),
+  sss_contribution_cents: z.coerce.number().int().min(0).default(0),
+  pagibig_contribution_cents: z.coerce.number().int().min(0).default(0),
+  philhealth_contribution_cents: z.coerce.number().int().min(0).default(0),
+  tin_number: z.string().max(20).optional().or(z.literal("")),
 });
 
 export const payrollRunSchema = z

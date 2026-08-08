@@ -3,19 +3,11 @@
 
 import type { ColumnDef } from "@tanstack/react-table";
 import { parse } from "date-fns";
-import { Check, Clock, MoreHorizontal, X } from "lucide-react";
+import { Check, Clock, X } from "lucide-react";
 
 import { Avatar, AvatarBadge, AvatarFallback, AvatarGroup, AvatarGroupCount } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { cn, getInitials } from "@/lib/utils";
 
 import { statusMeta, type UserRow } from "./data";
@@ -187,35 +179,5 @@ export const usersColumns: ColumnDef<UserRow>[] = [
     accessorFn: (row) => parse(row.joinedDate, "dd MMM yyyy, h:mm a", new Date()).getTime(),
     header: "Joined date",
     cell: ({ row }) => <div className="text-foreground text-sm">{row.original.joinedDate}</div>,
-  },
-  {
-    id: "actions",
-    header: () => <div className="text-right">Actions</div>,
-    cell: ({ row }) => (
-      <div className="text-right">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              aria-label={`Open actions for ${row.original.name}`}
-              className="size-8 rounded-md text-muted-foreground hover:bg-muted/50"
-              size="icon-sm"
-              variant="ghost"
-            >
-              <MoreHorizontal className="size-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem>View profile</DropdownMenuItem>
-            <DropdownMenuItem>Edit user</DropdownMenuItem>
-            <DropdownMenuItem>Manage team</DropdownMenuItem>
-            <DropdownMenuItem>Resend invite</DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive">Deactivate user</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    ),
-    enableHiding: false,
-    enableSorting: false,
   },
 ];

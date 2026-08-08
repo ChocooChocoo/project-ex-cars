@@ -35,6 +35,8 @@
 
 ## 4. Attendance, Leave, and Overtime Records; Payroll Processing; and Reconditioning Disbursements
 
+> **Implementation status (9 Aug 2026):** statutory deduction amounts (SSS, Pag-IBIG, PhilHealth, TIN) are captured on each employee's compensation record and are added automatically as deduction items when a payroll run is created. Vehicle reconditioning status is surfaced on the dashboard (vehicles with inspection items flagged for repair/replacement).
+
 - The Account Manager processes the attendance records, leave requests, overtime requests, and late-arrival records of GCE employees and administrators. These records provide the employee information used in payroll processing.
 - The Account Manager prepares a payroll report for GCE staff and submits it to the Head Accountant for payslip approval. This establishes the documented handoff between the Account Manager's payroll preparation and the Head Accountant's payroll responsibility.
   - As part of payroll preparation, the Account Manager sets the salary of each employee and enters the deductions that will appear on the employee's payslip, including deductions for late arrivals and absences. The original explanation notes that GCE did not disclose the individual salaries of its employees during the interview.
@@ -47,6 +49,8 @@
 # Head Accountant
 
 ## 1. Disbursement for Car Purchases
+
+> **Implementation status (9 Aug 2026):** implemented as the CEO/Account Manager "Request Purchase Funds" action on the Finance page; only the Head Accountant may advance (approve/release) purchase-tagged disbursements.
 
 - The Head Accountant releases the funds needed for the company to purchase a vehicle. The disbursement is made in response to a request from the CEO.
 
@@ -63,6 +67,8 @@
 - The Head Accountant can view the company's vehicle sales, including the individual vehicles that have been sold. This gives the role visibility into the sales records relevant to financial monitoring.
 
 ## 5. Installment Accounts
+
+> **Implementation status (9 Aug 2026):** installment accounts are managed via `payment_terms` (approve/activate) and `installments` (verify, waive). The due-date notification to the Account Manager is implemented (automated notifications from the installment schedule), and the repossession instruction to the Confidential Informant is implemented via the "Instruct Repossession" action, which creates a recovery field case. See `docs/ANALYZER/ANALYSIS - GLOBAL CAR EXCHANGE/15 - SYSTEM STATUS.md`.
 
 - The Head Accountant manages or monitors the accounts of customers who purchase vehicles through installment plans. These accounts identify the buyers whose vehicle payments are made on an installment basis.
 - When an installment payment reaches its due date, the Head Accountant notifies the Account Manager so the buyer can be contacted. This assigns the payment monitoring to the Head Accountant and the buyer-contact step to the Account Manager.
@@ -96,6 +102,8 @@
 - The Confidential Informant can view the mechanic's reports for a vehicle. These reports provide the vehicle information recorded by the mechanic after inspection or repair work.
 
 ## 6. Payment Approval Process
+
+> **Implementation status (9 Aug 2026):** realized through the generalized disbursement ledger. The Confidential Informant can create disbursement requests and view their own requests on the Finance page; the CEO/Head Accountant advance them through approval/release. There is no separate CEO → Informant cash handoff in the system.
 
 - The Confidential Informant sends a payment request to the CEO for approval. The payment cannot proceed through this workflow until the CEO has reviewed the request.
 - After the CEO approves the request, the CEO gives or sends the required funds to the Confidential Informant. The Confidential Informant then has the funds needed to make the payment connected with the vehicle transaction.

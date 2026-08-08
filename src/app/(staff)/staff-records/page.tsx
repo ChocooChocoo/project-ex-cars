@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { createServerSupabase } from "@/lib/supabase/server";
 
+import { AccountActionsCell } from "./_components/account-actions-cell";
 import { type PerformanceReviewRow, PerformanceReviews } from "./_components/performance-reviews";
 import { WalkInForm } from "./_components/walk-in-form";
 
@@ -59,6 +60,7 @@ export default async function StaffRecordsPage() {
                 <TableHead>Role</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Created</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -75,6 +77,17 @@ export default async function StaffRecordsPage() {
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm">
                     {new Date(p.created_at as string).toLocaleDateString()}
+                  </TableCell>
+                  <TableCell>
+                    <AccountActionsCell
+                      account={{
+                        id: p.id as string,
+                        full_name: (p.full_name as string | null) ?? null,
+                        phone: (p.phone as string | null) ?? null,
+                        address: (p.address as string | null) ?? null,
+                        account_state: p.account_state as string,
+                      }}
+                    />
                   </TableCell>
                 </TableRow>
               ))}

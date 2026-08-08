@@ -56,6 +56,12 @@ export default async function TransactionDetailPage({ params }: { readonly param
     .eq("purchase_transaction_id", id)
     .order("created_at", { ascending: false });
 
+  const { data: informants } = await supabase
+    .from("profiles")
+    .select("id, full_name, private_user_roles!inner(role)")
+    .eq("private_user_roles.role", "confidential_informant")
+    .eq("private_user_roles.active", true);
+
   return (
     <div className="flex flex-col gap-6">
       <StaffTransactionDetail
@@ -67,6 +73,7 @@ export default async function TransactionDetailPage({ params }: { readonly param
         paymentTerms={paymentTerms as Record<string, unknown> | null}
         viewingArrangements={(viewingArrangements as Record<string, unknown>[]) ?? []}
         userRole={role}
+        informants={(informants as { id: string; full_name: string | null }[]) ?? []}
       />
     </div>
   );

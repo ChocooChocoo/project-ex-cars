@@ -202,14 +202,55 @@ export async function handoffInquiry(inquiryId: string) {
   if (!user.user) return { error: "Not authenticated" };
 
   const { data: roles } = await supabase.rpc("get_user_roles");
-  const hasRole = (roles as { role: string }[] | undefined)?.some((r) =>
-    ["ceo", "account_manager", "sales_manager"].includes(r.role),
-  );
-  if (!hasRole) return { error: "Not authorized" };
+  const hasRole = (roles as { role: string }[] | undefined)?.some((r) => ["ceo", "account_manager"].includes(r.role));
+  if (!hasRole) return { error: "Only the CEO or Account Manager can request a handoff." };
+
+  const { data: inquiry } = await supabase
+    .from("inquiries")
+    .select("state, handoff_state")
+    .eq("id", inquiryId)
+    .maybeSingle();
+  if (!inquiry) return { error: "Inquiry not found." };
+  if (inquiry.state !== "scheduled") {
+    return { error: "A viewing must be scheduled before handing off." };
+  }
+  if (inquiry.handoff_state === "pending_handoff") {
+    return { error: "A handoff is already pending acceptance." };
+  }
+  if (inquiry.handoff_state === "handed_off") {
+    return { error: "This inquiry has already been handed off." };
+  }
+
+  const { error } = await supabase.from("inquiries").update({ handoff_state: "pending_handoff" }).eq("id", inquiryId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/dashboard/inquiries/${inquiryId}`);
+  return { success: true };
+}
+
+export async function acceptHandoff(inquiryId: string) {
+  const supabase = await createServerSupabase();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+
+  const { data: roles } = await supabase.rpc("get_user_roles");
+  const hasRole = (roles as { role: string }[] | undefined)?.some((r) => ["ceo", "sales_manager"].includes(r.role));
+  if (!hasRole) return { error: "Only the Sales Manager (or CEO) can accept a handoff." };
+
+  const { data: inquiry } = await supabase.from("inquiries").select("handoff_state").eq("id", inquiryId).maybeSingle();
+  if (!inquiry) return { error: "Inquiry not found." };
+  if (inquiry.handoff_state !== "pending_handoff") {
+    return { error: "There is no pending handoff to accept." };
+  }
 
   const { error } = await supabase
     .from("inquiries")
-    .update({ handoff_state: "handed_off", state: "handed_off" })
+    .update({
+      handoff_state: "handed_off",
+      state: "handed_off",
+      assigned_sales_manager: user.user.id,
+    })
     .eq("id", inquiryId);
 
   if (error) return { error: error.message };

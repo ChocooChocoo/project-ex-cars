@@ -2,7 +2,7 @@
 
 [Back to start](00%20-%20START%20HERE.md) · Previous: [08 - ROADMAP TRACKER](08%20-%20ROADMAP%20TRACKER.md) · Next: [10 - WORD LIST](10%20-%20WORD%20LIST.md)
 
-**Last checked:** 8 August 2026 (🟨 resolution pass via docs/tasks/12.md)
+**Last checked:** 9 August 2026 (audit remediation pass via docs/tasks/13.md)
 
 Every task here names where it came from. A task with no traceable origin is not on this list.
 
@@ -10,16 +10,16 @@ Every task here names where it came from. A task with no traceable origin is not
 
 | Status | How many |
 |---:|---|
-| ✅ Finished | 50 |
+| ✅ Finished | 51 |
 | 🟨 Being worked on | 0 |
 | ⭕ Not started | 0 |
 | ❌ Blocked | 0 |
 | 🔵 Already there | 0 |
 | ⬜ Dropped | 0 |
-| ❓ Unclear | 10 |
+| ❓ Unclear | 9 |
 | **Total** | **60** |
 
-The earlier task state recorded Phases 1–5 as completed. The source-code audit and prerequisite fix sequence are now documented in [14 - PHASE 6 IMPLEMENTATION PLAN](14%20-%20PHASE%206%20IMPLEMENTATION%20PLAN.md). Existing finished labels require evidence-based reconciliation through its Recovery Gates 0–3. Phase 6 planning is complete, but its implementation tasks remain unstarted/unclear.
+The earlier task state recorded Phases 1–5 as completed. The source-code audit and prerequisite fix sequence are now documented in [14 - PHASE 6 IMPLEMENTATION PLAN](14%20-%20PHASE%206%20IMPLEMENTATION%20PLAN.md). Existing finished labels require evidence-based reconciliation through its Recovery Gates 0–3. Phase 6 planning is complete, but its implementation tasks remain unstarted/unclear. **9 Aug 2026 audit pass:** T-56 (CEO↔supplier channel) moved to finished.
 
 ## The tasks
 
@@ -100,7 +100,7 @@ These come from the changes requested at the project's most recent presentation.
 | T-53 | Let users send photographs and files in chat, improve chat controls, and provide a way to report a message | **REVISIONS LISTS.md**, heading "1." | The chat attachment and reporting requests | R-35 | ✅ |
 | T-54 | Hide or censor inappropriate words automatically | **REVISIONS LISTS.md**, heading "1." | The requested word filter | R-36 | ✅ |
 | T-55 | Record flexible payment terms and payment arrangements against a purchase | **REVISIONS LISTS.md**, heading "2." | The request for arrangements beyond the fixed payment choices | R-37 | ✅ |
-| T-56 | Provide a direct chief-executive-to-supplier communication channel if the business confirms it applies | **REVISIONS LISTS.md**, heading "3." | The conditional coordination channel | R-38 | ❓ Unclear |
+| T-56 | Provide a direct chief-executive-to-supplier communication channel if the business confirms it applies | **REVISIONS LISTS.md**, heading "3." | The conditional coordination channel | R-38 | ✅ |
 | T-57 | Improve text-against-background contrast on every screen and check Light Mode specifically | **REVISIONS LISTS.md**, heading "6." | The readability complaint raised at the presentation | R-39 | ❓ Unclear |
 | T-58 | Ask for confirmation before submissions, approvals, and deletions, and keep confirmation messages and system notices consistent | **REVISIONS LISTS.md**, headings "1." and "14." | The missing safety prompts and inconsistent wording | R-40 | ❓ Unclear |
 | T-59 | Let users obtain the mobile application from inside the system and remove avoidable trips to outside websites | **REVISIONS LISTS.md**, heading "7." | The in-system download request | R-41 | ❓ Unclear |
