@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { getCurrentRole } from "@/app/(auth)/actions";
+import { getCurrentRole } from "@/app/auth/actions";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 import { StaffTransactionDetail } from "./_components/staff-transaction-detail";

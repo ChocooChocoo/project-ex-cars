@@ -1,4 +1,4 @@
-import { getCurrentRole } from "@/app/(auth)/actions";
+import { getCurrentRole } from "@/app/auth/actions";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 import { TransactionsTable } from "./_components/transactions-table";

@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { getCurrentRole } from "@/app/(auth)/actions";
+import { getCurrentRole } from "@/app/auth/actions";
 import { AppSidebar } from "@/app/(ceo)/_components/sidebar/app-sidebar";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";

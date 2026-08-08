@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { LogOut, User } from "lucide-react";
 
+import { signOut as signOutAction } from "@/app/auth/actions";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,12 +29,6 @@ export function UserMenu() {
       setUser(data.user);
     });
   }, [supabase]);
-
-  async function handleSignOut() {
-    await supabase.auth.signOut();
-    router.push("/auth/v1/login");
-    router.refresh();
-  }
 
   if (!user) return null;
 
@@ -72,7 +67,7 @@ export function UserMenu() {
               Profile
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleSignOut}>
+            <DropdownMenuItem onClick={() => signOutAction()}>
               <LogOut className="mr-2 size-4" />
               Sign out
             </DropdownMenuItem>

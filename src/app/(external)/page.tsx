@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { Car } from "lucide-react";
 
-import { getCurrentRole } from "@/app/(auth)/actions";
+import { getCurrentRole } from "@/app/auth/actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { createServerSupabase } from "@/lib/supabase/server";

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { getCurrentRole } from "@/app/(auth)/actions";
+import { getCurrentRole } from "@/app/auth/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
