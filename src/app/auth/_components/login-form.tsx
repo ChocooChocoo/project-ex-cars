@@ -2,18 +2,16 @@
 
 import { useState } from "react";
 
-import { useRouter } from "next/navigation";
-
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
+import { signIn } from "@/app/auth/actions";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldContent, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { createClient } from "@/lib/supabase/client";
 import { emailSchema } from "@/lib/validation/forms";
 
 const formSchema = z.object({
@@ -23,9 +21,7 @@ const formSchema = z.object({
 });
 
 export function LoginForm() {
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const supabase = createClient();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -38,19 +34,17 @@ export function LoginForm() {
 
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({
-      email: data.email,
-      password: data.password,
-    });
 
-    if (error) {
-      toast.error(error.message);
+    const formData = new FormData();
+    formData.set("email", data.email);
+    formData.set("password", data.password);
+
+    const result = await signIn(formData);
+
+    if (result?.error) {
+      toast.error(result.error);
       setLoading(false);
-      return;
     }
-
-    router.push("/dashboard/default");
-    router.refresh();
   };
 
   return (

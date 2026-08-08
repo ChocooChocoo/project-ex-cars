@@ -1,4 +1,4 @@
-import { getCurrentRole } from "@/app/(auth)/actions";
+import { getCurrentRole } from "@/app/auth/actions";
 import { CustomerHeader } from "@/app/(customer)/_components/customer-header";
 
 import { RecommendationPageClient } from "./_components/recommendation-page-client";

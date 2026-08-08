@@ -1,4 +1,13 @@
 // @ts-nocheck
+// Seed script: creates GCE demo users.
+//
+// Usage:
+//   node --env-file=.env.local scripts/seed-users.cjs
+//
+// Users are created with the "customer" role (auto-assigned by DB trigger).
+// After running this, assign proper roles with:
+//   npx supabase db query --linked --file scripts/seed-roles.sql
+
 const { createClient } = require("@supabase/supabase-js");
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -36,19 +45,22 @@ const SEED_USERS = [
 ];
 
 async function seed() {
-  console.log("Seeding users...\n");
+  // Step 1: Delete existing seed users
+  console.log("Cleaning up existing seed users...\n");
+  const { data: existing } = await admin.auth.admin.listUsers();
+  const seedEmails = new Set(SEED_USERS.map((u) => u.email));
+  const toDelete = (existing?.users ?? []).filter((u) => seedEmails.has(u.email));
+  for (const u of toDelete) {
+    process.stdout.write(`Deleting ${u.email}... `);
+    const { error } = await admin.auth.admin.deleteUser(u.id);
+    console.log(error ? `FAILED: ${error.message}` : "OK");
+  }
 
+  // Step 2: Create all seed users (DB trigger auto-assigns "customer" role)
+  console.log("\nCreating seed users...\n");
   for (const u of SEED_USERS) {
     process.stdout.write(`Creating ${u.role} (${u.email})... `);
 
-    // Check if already exists
-    const { data: existing } = await admin.auth.admin.listUsers();
-    if (existing?.users?.find((x) => x.email === u.email)) {
-      console.log("already exists, skipping.");
-      continue;
-    }
-
-    // Create user
     const { data: created, error: createErr } = await admin.auth.admin.createUser({
       email: u.email,
       password: DEFAULT_PASSWORD,
@@ -61,26 +73,12 @@ async function seed() {
       continue;
     }
 
-    const uid = created.user.id;
-
-    // Update profile with full name
-    await admin.from("profiles").update({ full_name: u.name }).eq("id", uid);
-
-    // Assign role
-    const { error: roleErr } = await admin.rpc("assign_user_role", {
-      p_account_id: uid,
-      p_role: u.role,
-      p_assigned_by: uid,
-    });
-
-    if (roleErr) {
-      console.log(`created but role FAILED: ${roleErr.message}`);
-    } else {
-      console.log("OK");
-    }
+    await admin.from("profiles").update({ full_name: u.name }).eq("id", created.user.id);
+    console.log("OK");
   }
 
-  console.log("\nSeeding complete.");
+  console.log(`\nUsers created with default "customer" role.`);
+  console.log(`Run: npx supabase db query --linked --file scripts/seed-roles.sql`);
   console.log(`Default password for all users: ${DEFAULT_PASSWORD}`);
 }
 
