@@ -8,13 +8,14 @@ import { useRouter } from "next/navigation";
 import { Check, CheckCheck, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 
-import { createPayrollRun, finalizePayrollRun, reviewPayrollRun } from "@/app/(ceo)/payroll/actions";
+import { createPayrollRun, finalizePayrollRun, reviewPayrollRun, saveCompensation } from "@/app/(ceo)/payroll/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
 export interface PayrollRunRow {
@@ -28,8 +29,19 @@ export interface PayrollRunRow {
   notes: string | null;
 }
 
+export interface CompensationRow {
+  id: string;
+  employee_id: string;
+  base_salary_cents: number;
+  effective_from: string;
+  effective_until: string | null;
+  profiles: { full_name: string | null } | null;
+}
+
 interface PayrollClientProps {
   runs: PayrollRunRow[];
+  compensation: CompensationRow[];
+  employees: { id: string; full_name: string | null }[];
   canPrepare: boolean;
   canReview: boolean;
   canFinalize: boolean;
@@ -43,7 +55,14 @@ const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | 
   cancelled: "destructive",
 };
 
-export function PayrollClient({ runs, canPrepare, canReview, canFinalize }: PayrollClientProps) {
+export function PayrollClient({
+  runs,
+  compensation,
+  employees,
+  canPrepare,
+  canReview,
+  canFinalize,
+}: PayrollClientProps) {
   const router = useRouter();
   const [formOpen, setFormOpen] = useState(false);
   const [periodStart, setPeriodStart] = useState("");
@@ -51,6 +70,14 @@ export function PayrollClient({ runs, canPrepare, canReview, canFinalize }: Payr
   const [notes, setNotes] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const [compOpen, setCompOpen] = useState(false);
+  const [compEmployee, setCompEmployee] = useState("");
+  const [compSalary, setCompSalary] = useState("");
+  const [compFrom, setCompFrom] = useState("");
+  const [compUntil, setCompUntil] = useState("");
+  const [compError, setCompError] = useState<string | null>(null);
+  const [compLoading, setCompLoading] = useState(false);
 
   async function submitCreate() {
     setLoading(true);
@@ -70,6 +97,33 @@ export function PayrollClient({ runs, canPrepare, canReview, canFinalize }: Payr
     setPeriodStart("");
     setPeriodEnd("");
     setNotes("");
+    router.refresh();
+  }
+
+  async function submitCompensation() {
+    if (!compEmployee || !compSalary || !compFrom) {
+      setCompError("Employee, salary, and effective date are required.");
+      return;
+    }
+    setCompLoading(true);
+    setCompError(null);
+    const fd = new FormData();
+    fd.set("employee_id", compEmployee);
+    fd.set("base_salary_cents", String(Math.round(Number.parseFloat(compSalary) * 100)));
+    fd.set("effective_from", compFrom);
+    if (compUntil) fd.set("effective_until", compUntil);
+    const result = await saveCompensation(fd);
+    setCompLoading(false);
+    if ("error" in result && result.error) {
+      setCompError(result.error);
+      return;
+    }
+    toast.success("Compensation record saved.");
+    setCompOpen(false);
+    setCompEmployee("");
+    setCompSalary("");
+    setCompFrom("");
+    setCompUntil("");
     router.refresh();
   }
 
@@ -114,6 +168,53 @@ export function PayrollClient({ runs, canPrepare, canReview, canFinalize }: Payr
           </Button>
         ) : null}
       </div>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Staff Compensation</CardTitle>
+          {canPrepare ? (
+            <Button size="sm" onClick={() => setCompOpen(true)}>
+              <Plus data-icon="inline-start" />
+              Add Compensation
+            </Button>
+          ) : null}
+        </CardHeader>
+        <CardContent>
+          {compensation.length === 0 ? (
+            <p className="text-muted-foreground text-sm">
+              No compensation records yet. The Account Manager enters base salary and effective periods here — these
+              feed draft payroll runs.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-muted-foreground">
+                    <th className="px-2 py-2 font-medium">Employee</th>
+                    <th className="px-2 py-2 font-medium">Base Salary (₱/mo)</th>
+                    <th className="px-2 py-2 font-medium">Effective</th>
+                    <th className="px-2 py-2 font-medium">Until</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {compensation.map((row) => (
+                    <tr key={row.id} className="border-b last:border-0">
+                      <td className="px-2 py-2 font-medium">
+                        {row.profiles?.full_name ?? row.employee_id.slice(0, 8)}
+                      </td>
+                      <td className="px-2 py-2">₱{(row.base_salary_cents / 100).toLocaleString()}</td>
+                      <td className="px-2 py-2">{new Date(row.effective_from).toLocaleDateString()}</td>
+                      <td className="px-2 py-2">
+                        {row.effective_until ? new Date(row.effective_until).toLocaleDateString() : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -214,6 +315,67 @@ export function PayrollClient({ runs, canPrepare, canReview, canFinalize }: Payr
             </Button>
             <Button type="button" onClick={submitCreate} disabled={loading}>
               {loading ? "Creating..." : "Create Run"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={compOpen} onOpenChange={setCompOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Compensation Record</DialogTitle>
+          </DialogHeader>
+          <FieldGroup className="gap-4">
+            <Field>
+              <FieldLabel>Employee</FieldLabel>
+              <Select value={compEmployee} onValueChange={setCompEmployee}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select employee" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {employees.map((emp) => (
+                      <SelectItem key={emp.id} value={emp.id}>
+                        {emp.full_name ?? emp.id.slice(0, 8)}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field>
+              <FieldLabel>Base Salary per Month (₱)</FieldLabel>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={compSalary}
+                onChange={(e) => setCompSalary(e.target.value)}
+                placeholder="e.g. 15000.00"
+              />
+            </Field>
+            <div className="grid grid-cols-2 gap-4">
+              <Field>
+                <FieldLabel>Effective From</FieldLabel>
+                <Input type="date" value={compFrom} onChange={(e) => setCompFrom(e.target.value)} />
+              </Field>
+              <Field>
+                <FieldLabel>Effective Until (optional)</FieldLabel>
+                <Input type="date" value={compUntil} onChange={(e) => setCompUntil(e.target.value)} />
+              </Field>
+            </div>
+            <p className="text-muted-foreground text-xs">
+              Draft payslips compute the daily rate as base salary ÷ 30 working days. Leave the "until" date empty for
+              the current salary.
+            </p>
+            {compError ? <p className="text-destructive text-sm">{compError}</p> : null}
+          </FieldGroup>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setCompOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={submitCompensation} disabled={compLoading}>
+              {compLoading ? "Saving..." : "Save Compensation"}
             </Button>
           </DialogFooter>
         </DialogContent>

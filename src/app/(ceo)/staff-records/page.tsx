@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { createServerSupabase } from "@/lib/supabase/server";
 
+import { type PerformanceReviewRow, PerformanceReviews } from "./_components/performance-reviews";
 import { WalkInForm } from "./_components/walk-in-form";
 
 export default async function StaffRecordsPage() {
@@ -23,6 +24,18 @@ export default async function StaffRecordsPage() {
   for (const r of (roles as { account_id: string; role: string }[]) ?? []) {
     roleMap.set(r.account_id, r.role);
   }
+
+  const staffRoleIds = (roles as { account_id: string; role: string }[] | null)
+    ?.filter((r) => !["customer", "supplier"].includes(r.role))
+    .map((r) => r.account_id);
+
+  const staffProfiles = (profiles ?? []).filter((p) => staffRoleIds?.includes(p.id as string));
+  const employeeOptions = staffProfiles.map((p) => ({ id: p.id as string, full_name: p.full_name as string | null }));
+
+  const { data: reviews } = await supabase
+    .from("performance_reviews")
+    .select("*, profiles(full_name)")
+    .order("created_at", { ascending: false });
 
   return (
     <div className="flex flex-col gap-6">
@@ -69,6 +82,12 @@ export default async function StaffRecordsPage() {
           </Table>
         </CardContent>
       </Card>
+
+      <PerformanceReviews
+        reviews={(reviews as unknown as PerformanceReviewRow[]) ?? []}
+        employees={employeeOptions}
+        canManage={["ceo", "account_manager"].includes(role)}
+      />
     </div>
   );
 }

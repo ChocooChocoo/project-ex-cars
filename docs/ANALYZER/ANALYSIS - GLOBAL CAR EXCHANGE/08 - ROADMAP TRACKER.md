@@ -2,14 +2,14 @@
 
 [Back to start](00%20-%20START%20HERE.md) · Previous: [07 - DEVELOPMENT ROADMAP](07%20-%20DEVELOPMENT%20ROADMAP.md) · Next: [09 - TASK TRACKER](09%20-%20TASK%20TRACKER.md)
 
-**Last checked:** 8 August 2026
+**Last checked:** 8 August 2026 (🟨 resolution pass via docs/tasks/12.md)
 
 ## Where everything stands
 
 | Status | How many |
 |---:|---|
-| ✅ Finished | 29 |
-| 🟨 Being worked on | 5 |
+| ✅ Finished | 34 |
+| 🟨 Being worked on | 0 |
 | ⭕ Not started | 0 |
 | ❌ Blocked | 0 |
 | 🔵 Already there | 0 |
@@ -27,8 +27,8 @@ The earlier tracker state recorded Phases 1–5 as completed. The source-code au
 | R-02 | Role-based access for the customer, the supplier, and the eight operational roles, managed by the Account Manager | ✅ | All 10 roles in `src/lib/auth/roles.ts`; RLS policies per table; role assignment RPC; RBAC page at /dashboard/roles; middleware; role-based sidebar filtering and landing pages. |
 | R-03 | One shared record foundation with consistent customer, vehicle, conversation, transaction, inspection, and staff information | ✅ | Phase 1 migration executed. All 6 tables (profiles, private.user_roles, customer_documents, audit_events, suppliers, supplier_documents) live with RLS. |
 | R-27 | Supplier registration and account management with staff-created accounts, Company or Individual, two primary valid IDs, and approval before sign-in | ✅ | suppliers and supplier_documents tables with RLS; createSupplier and approveSupplier server actions; controlled states. |
-| R-28 | Field checks on every form for numbers, lengths, kinds of information, required fields, and formats | 🟨 | Zod schemas in src/lib/validation/forms.ts; applied in auth forms. Remaining per-form integration spans later phases. |
-| R-29 | Automatic filling of forms from details already held | 🟨 | getProfileAutoFill() utility in src/lib/autofill/; needs integration in later phases. |
+| R-28 | Field checks on every form for numbers, lengths, kinds of information, required fields, and formats | ✅ | Zod schemas in src/lib/validation/ wired into auth, vehicles, transactions, buy/sell/request, inquiries, and Phase 6 actions. Verified with tsc, biome, and production build. |
+| R-29 | Automatic filling of forms from details already held | ✅ | getProfileAutoFill() wired into buy-details location and inquiry arrangement forms; arrangement autofill now uses the customer's registered address. |
 
 ## Phase 2 — Vehicles can be found and understood
 
@@ -37,7 +37,7 @@ The earlier tracker state recorded Phases 1–5 as completed. The source-code au
 | R-04 | Live vehicle inventory with make, model, year, price, condition, mileage, fuel, and availability | ✅ | CRUD at /dashboard/vehicles with TanStack table, search, filter, pagination; vehicle form. |
 | R-05 | Mechanic inspection reports with condition score, photographs, notes, and repair progress | ✅ | /dashboard/inspections with nested checklist form; repairs table with status tracking. |
 | R-06 | Browse, search, filters, vehicle details, and saved favourites | ✅ | Public showroom at /showroom with search, filter, sort, card grid, detail page; favourites toggle action. |
-| R-07 | 360-degree vehicle viewing limited to the active vehicle | 🟨 | Media table and upload action exist. 360° viewer is placeholder — requires format decisions. |
+| R-07 | 360-degree vehicle viewing limited to the active vehicle | ✅ | Image-sequence viewer (drag to rotate through 360_view frames) with gallery fallback; showroom-media storage bucket (migration 00023); staff upload/delete manager on vehicle edit page. Format decision: image sequence per the word list definition. |
 | R-08 | Landing-page content, promotions, featured vehicles, and chief-executive approval of a proposed price before posting | ✅ | /dashboard/content CRUD with publish; price proposal flow (Marketing→CEO) via server actions. |
 | R-30 | Warranty details, offers, condition, and a Negotiable or Fixed pricing type on every listing | ✅ | Fields in vehicle form, displayed on cards and detail page. |
 | R-31 | A nested mechanic checklist of vehicle systems, components, and parts | ✅ | Hierarchical checklist via inspection_checklist_nodes table with system/component/part levels. |
@@ -82,9 +82,9 @@ Planning is complete in [14 - PHASE 6 IMPLEMENTATION PLAN](14%20-%20PHASE%206%20
 |---|---|---|---|
 | R-20 | Daily time, late arrival, leave, overtime, performance, employee-record, and customer-account tracking with Head Accountant attendance cross-checking | ✅ | Attendance clock in/out + checking workflow, employee request submission/review, staff records and walk-in accounts. Performance reviews table exists; review UI pending. |
 | R-21 | Permitted vehicle-purchase and reconditioning disbursements, payment requests, financing, installment, cheque, invoice, case-expense, and financial reports | ✅ | Record-only ledger (revenue/expense/disbursement/adjustment) with verification, disbursement request → approve → release → receive → paid event flow, report submission/review. Q-04 boundary applied. |
-| R-22 | Chief executive dashboard with sales, revenue, inventory, pending work, staff performance, report and price approvals, employee announcements, and agreed recommendation measures | 🟨 | CEO operations overview (attendance, pending requests, payroll runs, field cases, disbursements, announcements) is source-backed; remaining CEO totals and drill-downs pending. |
+| R-22 | Chief executive dashboard with sales, revenue, inventory, pending work, staff performance, report and price approvals, employee announcements, and agreed recommendation measures | ✅ | Source-backed CEO totals added: completed sales, verified revenue, available inventory, pending report approvals; performance review UI on staff records; CEO price-approval queue on vehicle inventory; existing report approval queue. Every metric links to its source records. |
 | R-23 | Security photographs, sourcing, mechanic assignment, delivery, case expenses, and vehicle-recovery records within the agreed boundary | ✅ | Field case state/expense updates; security duty before/after image uploads to a private storage bucket (migration 00021) with completion requiring both images. |
-| R-26 | Payroll workflow covering attendance inputs, salary and deduction entry, report preparation, payslip approval, and salary-payment responsibility | 🟨 | Run creation from checked attendance × compensation, Head Accountant → CEO approval sequence, finalization, payslip items with calculation notes, printable payslips. Compensation entry UI pending. |
+| R-26 | Payroll workflow covering attendance inputs, salary and deduction entry, report preparation, payslip approval, and salary-payment responsibility | ✅ | Compensation entry UI (base salary + effective periods) feeds run generation; payslip payment status (pending/paid) with Head Accountant handoff (migration 00022); existing approval sequence and printable payslips. |
 | R-38 | Direct chief-executive-to-supplier communication channel | ⬜ | Q-23 provisionally answered **no**; page remains read-only, no messaging workflow built. |
 
 ## Phase 7 — Mobile use and acceptance are checked

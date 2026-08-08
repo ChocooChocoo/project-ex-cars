@@ -144,15 +144,15 @@ export function TransactionDetail({
                 <p className="text-muted-foreground text-sm">No status changes yet.</p>
               ) : (
                 <div className="flex flex-col gap-0">
-                  {history.map((entry, i) => {
+                  {history.map((entry, index) => {
                     const toState = entry.to_state as string;
                     const reason = entry.reason as string | null;
                     const changedAt = entry.changed_at as string;
                     return (
-                      <div key={i} className="flex gap-3">
+                      <div key={entry.id as string} className="flex gap-3">
                         <div className="flex flex-col items-center">
                           <div className="size-2.5 rounded-full border-2 border-primary" />
-                          {i < history.length - 1 && <div className="w-px flex-1 bg-border" />}
+                          {index < history.length - 1 && <div className="w-px flex-1 bg-border" />}
                         </div>
                         <div className="pb-5">
                           <p className="font-medium text-sm capitalize">{toState.replace(/_/g, " ")}</p>
@@ -345,8 +345,8 @@ export function TransactionDetail({
                 <CardTitle className="text-sm">Payments</CardTitle>
               </CardHeader>
               <CardContent className="flex flex-col gap-2">
-                {payments.map((p, i) => (
-                  <div key={i} className="flex items-center justify-between text-sm">
+                {payments.map((p) => (
+                  <div key={p.id as string} className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">{paymentMethodLabel(p.method as string)}</span>
                     <span className="font-medium">{formatCurrency(Number(p.amount))}</span>
                   </div>
@@ -377,8 +377,8 @@ export function TransactionDetail({
                 <DetailRow label="Status" value={(installmentAccount as Record<string, unknown>).state as string} />
                 {Array.isArray((installmentAccount as Record<string, unknown>).installments) &&
                   ((installmentAccount as Record<string, unknown>).installments as Record<string, unknown>[]).map(
-                    (inst, i) => (
-                      <div key={i} className="flex justify-between border-t pt-1 text-xs">
+                    (inst) => (
+                      <div key={inst.id as string} className="flex justify-between border-t pt-1 text-xs">
                         <span>
                           #{inst.sequence_no as number} · {inst.due_date as string}
                         </span>
@@ -424,8 +424,8 @@ export function TransactionDetail({
                 <CardTitle className="text-sm">Viewing Arrangements</CardTitle>
               </CardHeader>
               <CardContent className="flex flex-col gap-2">
-                {viewingArrangements.map((va, i) => (
-                  <div key={i} className="flex flex-col gap-1 text-sm">
+                {viewingArrangements.map((va) => (
+                  <div key={va.id as string} className="flex flex-col gap-1 text-sm">
                     <span className="font-medium capitalize">
                       {arrangementKindLabel(va.arrangement_kind as string)}
                     </span>
@@ -454,8 +454,8 @@ export function TransactionDetail({
                 <p className="text-muted-foreground text-xs">No documents uploaded.</p>
               ) : (
                 <div className="flex flex-col gap-2">
-                  {documents.map((doc, i) => (
-                    <div key={i} className="flex items-center gap-2 text-sm">
+                  {documents.map((doc) => (
+                    <div key={doc.id as string} className="flex items-center gap-2 text-sm">
                       <FileText className="size-4 text-muted-foreground" />
                       <span className="capitalize">{(doc.document_kind as string).replace(/_/g, " ")}</span>
                       <Badge variant="secondary" className="ml-auto text-xs">

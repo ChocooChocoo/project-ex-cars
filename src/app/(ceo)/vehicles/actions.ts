@@ -5,6 +5,13 @@ import { revalidatePath } from "next/cache";
 import { getCurrentRole } from "@/app/auth/actions";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
+import {
+  checklistAnswerSchema,
+  contentItemSchema,
+  inspectionSchema,
+  priceProposalSchema,
+  vehicleSchema,
+} from "@/lib/validation/vehicles";
 
 export async function createVehicle(formData: FormData) {
   const supabase = await createServerSupabase();
@@ -16,10 +23,12 @@ export async function createVehicle(formData: FormData) {
     return { error: "Not authorized" };
   }
 
-  const data = Object.fromEntries(formData) as Record<string, string>;
-  const price = data.current_price ? Number.parseFloat(data.current_price) : null;
-  const mileage = data.mileage ? Number.parseInt(data.mileage, 10) : null;
-  const year = Number.parseInt(data.year, 10);
+  const parsed = vehicleSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid vehicle details." };
+  }
+
+  const data = parsed.data;
 
   const { data: vehicle, error } = await supabase
     .from("vehicles")
@@ -28,9 +37,9 @@ export async function createVehicle(formData: FormData) {
       vin: data.vin || null,
       make: data.make,
       model: data.model,
-      year,
+      year: data.year,
       condition: data.condition,
-      mileage,
+      mileage: data.mileage ?? null,
       fuel_type: data.fuel_type || null,
       transmission: data.transmission || null,
       exterior_color: data.exterior_color || null,
@@ -38,7 +47,7 @@ export async function createVehicle(formData: FormData) {
       body_type: data.body_type || null,
       engine: data.engine || null,
       description: data.description || null,
-      current_price: price,
+      current_price: data.current_price ?? null,
       pricing_type: data.pricing_type || "negotiable",
       warranty_details: data.warranty_details || null,
       offer_details: data.offer_details || null,
@@ -62,11 +71,13 @@ export async function updateVehicle(formData: FormData) {
     return { error: "Not authorized" };
   }
 
-  const data = Object.fromEntries(formData) as Record<string, string>;
-  const id = data.id;
-  const price = data.current_price ? Number.parseFloat(data.current_price) : null;
-  const mileage = data.mileage ? Number.parseInt(data.mileage, 10) : null;
-  const year = Number.parseInt(data.year, 10);
+  const parsed = vehicleSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid vehicle details." };
+  }
+
+  const data = parsed.data;
+  const id = formData.get("id") as string;
 
   const { error } = await supabase
     .from("vehicles")
@@ -75,9 +86,9 @@ export async function updateVehicle(formData: FormData) {
       vin: data.vin || null,
       make: data.make,
       model: data.model,
-      year,
+      year: data.year,
       condition: data.condition,
-      mileage,
+      mileage: data.mileage ?? null,
       fuel_type: data.fuel_type || null,
       transmission: data.transmission || null,
       exterior_color: data.exterior_color || null,
@@ -85,7 +96,7 @@ export async function updateVehicle(formData: FormData) {
       body_type: data.body_type || null,
       engine: data.engine || null,
       description: data.description || null,
-      current_price: price,
+      current_price: data.current_price ?? null,
       pricing_type: data.pricing_type || "negotiable",
       warranty_details: data.warranty_details || null,
       offer_details: data.offer_details || null,
@@ -144,20 +155,21 @@ export async function proposePrice(formData: FormData) {
     return { error: "Not authorized" };
   }
 
-  const vehicleId = formData.get("vehicle_id") as string;
-  const amount = Number.parseFloat(formData.get("proposed_amount") as string);
-  const notes = formData.get("notes") as string | null;
+  const parsed = priceProposalSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid price proposal." };
+  }
 
   const { error } = await supabase.from("vehicle_price_proposals").insert({
-    vehicle_id: vehicleId,
-    proposed_amount: amount,
+    vehicle_id: parsed.data.vehicle_id,
+    proposed_amount: parsed.data.proposed_amount,
     proposer_id: user.user.id,
-    notes,
+    notes: parsed.data.notes || null,
   });
 
   if (error) return { error: error.message };
 
-  await supabase.from("vehicles").update({ listing_state: "awaiting_price_approval" }).eq("id", vehicleId);
+  await supabase.from("vehicles").update({ listing_state: "awaiting_price_approval" }).eq("id", parsed.data.vehicle_id);
 
   revalidatePath("/dashboard/vehicles");
   return { success: true };
@@ -219,6 +231,78 @@ export async function approvePrice(formData: FormData) {
   return { success: true };
 }
 
+export async function uploadVehicleMedia(formData: FormData) {
+  const supabase = await createServerSupabase();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+
+  const role = await getCurrentRole();
+  if (!role || !["ceo", "sales_manager", "marketing_specialist", "account_manager"].includes(role)) {
+    return { error: "Not authorized to upload media" };
+  }
+
+  const vehicleId = formData.get("vehicle_id") as string;
+  const mediaKind = formData.get("media_kind") as string;
+  const file = formData.get("file") as File | null;
+
+  if (!vehicleId || !file || file.size === 0) return { error: "Vehicle and file are required" };
+  if (!["photo", "360_view"].includes(mediaKind)) return { error: "Invalid media kind" };
+
+  const fileExt = file.name.split(".").pop() ?? "bin";
+  const storagePath = `${vehicleId}/${mediaKind}-${Date.now()}.${fileExt}`;
+
+  const { error: uploadError } = await supabase.storage.from("showroom-media").upload(storagePath, file, {
+    cacheControl: "3600",
+    contentType: file.type || "image/jpeg",
+  });
+  if (uploadError) return { error: uploadError.message };
+
+  const { data: maxOrder } = await supabase
+    .from("vehicle_media")
+    .select("display_order")
+    .eq("vehicle_id", vehicleId)
+    .eq("media_kind", mediaKind)
+    .order("display_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const { error: dbError } = await supabase.from("vehicle_media").insert({
+    vehicle_id: vehicleId,
+    media_kind: mediaKind,
+    storage_path: storagePath,
+    display_order: ((maxOrder?.display_order as number) ?? -1) + 1,
+    public_state: true,
+    uploaded_by: user.user.id,
+  });
+  if (dbError) return { error: dbError.message };
+
+  revalidatePath(`/dashboard/vehicles/${vehicleId}`);
+  return { success: true };
+}
+
+export async function deleteVehicleMedia(mediaId: string) {
+  const supabase = await createServerSupabase();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+
+  const role = await getCurrentRole();
+  if (!role || !["ceo", "sales_manager", "marketing_specialist", "account_manager"].includes(role)) {
+    return { error: "Not authorized to delete media" };
+  }
+
+  const { data: row } = await supabase.from("vehicle_media").select("storage_path").eq("id", mediaId).single();
+  if (!row) return { error: "Media not found" };
+
+  const { error: storageError } = await supabase.storage.from("showroom-media").remove([row.storage_path as string]);
+  if (storageError) return { error: storageError.message };
+
+  const { error: dbError } = await supabase.from("vehicle_media").delete().eq("id", mediaId);
+  if (dbError) return { error: dbError.message };
+
+  revalidatePath("/dashboard/vehicles");
+  return { success: true };
+}
+
 export async function toggleFavourite(vehicleId: string) {
   const supabase = await createServerSupabase();
   const { data: user } = await supabase.auth.getUser();
@@ -268,17 +352,19 @@ export async function createInspection(formData: FormData) {
     return { error: "Not authorized" };
   }
 
-  const vehicleId = formData.get("vehicle_id") as string;
-  const score = formData.get("condition_score") ? Number.parseInt(formData.get("condition_score") as string, 10) : null;
+  const parsed = inspectionSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid inspection details." };
+  }
 
   const { data: inspection, error } = await supabase
     .from("vehicle_inspections")
     .insert({
-      vehicle_id: vehicleId,
+      vehicle_id: parsed.data.vehicle_id,
       mechanic_id: user.user.id,
-      condition_score: score,
-      findings: formData.get("findings") as string | null,
-      recommendation: formData.get("recommendation") as string | null,
+      condition_score: parsed.data.condition_score ?? null,
+      findings: parsed.data.findings || null,
+      recommendation: parsed.data.recommendation || null,
     })
     .select()
     .single();
@@ -299,19 +385,21 @@ export async function submitChecklistAnswer(formData: FormData) {
     return { error: "Not authorized" };
   }
 
+  const parsed = checklistAnswerSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid checklist answer." };
+  }
+
   const inspectionId = formData.get("inspection_id") as string;
-  const entryId = formData.get("checklist_entry_id") as string;
-  const status = formData.get("status") as string;
-  const notes = formData.get("notes") as string | null;
 
   const { data: result, error } = await supabase
     .from("inspection_checklist_results")
     .upsert(
       {
         inspection_id: inspectionId,
-        checklist_entry_id: entryId,
-        status,
-        notes,
+        checklist_entry_id: parsed.data.checklist_entry_id,
+        status: parsed.data.status,
+        notes: parsed.data.notes || null,
       },
       { onConflict: "inspection_id,checklist_entry_id" },
     )
@@ -320,16 +408,14 @@ export async function submitChecklistAnswer(formData: FormData) {
 
   if (error) return { error: error.message };
 
-  if (status === "for_repair" || status === "for_replacement") {
-    const itemName = formData.get("item_name") as string;
-    if (itemName) {
-      const cost = formData.get("estimated_cost") ? Number.parseFloat(formData.get("estimated_cost") as string) : null;
+  if (parsed.data.status === "for_repair" || parsed.data.status === "for_replacement") {
+    if (parsed.data.item_name) {
       await supabase.from("part_replacements").upsert(
         {
           checklist_answer_id: result.id,
-          item_name: itemName,
-          brand: (formData.get("brand") as string) || null,
-          estimated_cost: cost,
+          item_name: parsed.data.item_name,
+          brand: parsed.data.brand || null,
+          estimated_cost: parsed.data.estimated_cost ?? null,
         },
         { onConflict: "checklist_answer_id" },
       );
@@ -350,13 +436,16 @@ export async function createContentItem(formData: FormData) {
     return { error: "Not authorized" };
   }
 
-  const data = Object.fromEntries(formData) as Record<string, string>;
+  const parsed = contentItemSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid content item." };
+  }
 
   const { error } = await supabase.from("content_items").insert({
-    content_kind: data.content_kind,
-    vehicle_id: data.vehicle_id || null,
-    title: data.title,
-    body: data.body || null,
+    content_kind: parsed.data.content_kind,
+    vehicle_id: parsed.data.vehicle_id || null,
+    title: parsed.data.title,
+    body: parsed.data.body || null,
     author_id: user.user.id,
   });
 

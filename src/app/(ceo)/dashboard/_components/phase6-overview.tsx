@@ -1,4 +1,15 @@
-import { Banknote, BriefcaseBusiness, CalendarClock, FileCheck2, Megaphone, Users } from "lucide-react";
+import {
+  Banknote,
+  BriefcaseBusiness,
+  CalendarClock,
+  Car,
+  CircleDollarSign,
+  FileCheck2,
+  Megaphone,
+  ShoppingCart,
+  Stamp,
+  Users,
+} from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,6 +17,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 
 export async function Phase6Overview() {
   const supabase = await createServerSupabase();
+  const today = new Date().toISOString().slice(0, 10);
 
   const [
     { count: attendanceToday },
@@ -14,11 +26,12 @@ export async function Phase6Overview() {
     { count: openCases },
     { count: activeDisbursements },
     { count: publishedAnnouncements },
+    { count: availableInventory },
+    { count: pendingApprovals },
+    { count: soldVehicles },
+    { data: revenueRows },
   ] = await Promise.all([
-    supabase
-      .from("attendance_entries")
-      .select("id", { count: "exact", head: true })
-      .eq("attendance_date", new Date().toISOString().slice(0, 10)),
+    supabase.from("attendance_entries").select("id", { count: "exact", head: true }).eq("attendance_date", today),
     supabase.from("employee_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
     supabase
       .from("payroll_runs")
@@ -30,9 +43,43 @@ export async function Phase6Overview() {
       .select("id", { count: "exact", head: true })
       .in("status", ["submitted", "approved", "released", "received"]),
     supabase.from("announcements").select("id", { count: "exact", head: true }).eq("status", "published"),
+    supabase.from("vehicles").select("id", { count: "exact", head: true }).eq("listing_state", "available"),
+    supabase.from("reports").select("id", { count: "exact", head: true }).eq("status", "submitted"),
+    supabase.from("transactions").select("id", { count: "exact", head: true }).eq("current_state", "completed"),
+    supabase
+      .from("financial_entries")
+      .select("amount_cents")
+      .eq("entry_kind", "revenue")
+      .not("verified_by", "is", null),
   ]);
 
+  const totalRevenueCents = (revenueRows ?? []).reduce((sum, row) => sum + Number(row.amount_cents ?? 0), 0);
+
   const metrics = [
+    {
+      label: "Completed Sales",
+      value: soldVehicles ?? 0,
+      icon: ShoppingCart,
+      href: "/dashboard/transactions?state=completed",
+    },
+    {
+      label: "Revenue (Verified)",
+      value: `₱${Math.round(totalRevenueCents / 100).toLocaleString()}`,
+      icon: CircleDollarSign,
+      href: "/dashboard/finance",
+    },
+    {
+      label: "Available Inventory",
+      value: availableInventory ?? 0,
+      icon: Car,
+      href: "/dashboard/vehicles",
+    },
+    {
+      label: "Pending Report Approvals",
+      value: pendingApprovals ?? 0,
+      icon: Stamp,
+      href: "/dashboard/reports",
+    },
     {
       label: "Attendance Today",
       value: attendanceToday ?? 0,

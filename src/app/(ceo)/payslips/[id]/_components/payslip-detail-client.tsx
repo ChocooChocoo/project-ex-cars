@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { Plus, Printer } from "lucide-react";
 import { toast } from "sonner";
 
-import { addPayslipItem } from "@/app/(ceo)/payroll/actions";
+import { addPayslipItem, markPayslipPaid } from "@/app/(ceo)/payroll/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,12 +29,14 @@ export interface PayslipItemRow {
 interface PayslipDetailClientProps {
   payslipId: string;
   status: "draft" | "finalized";
+  paymentStatus: "pending" | "paid";
   grossCents: number;
   deductionsCents: number;
   netCents: number;
   earnings: PayslipItemRow[];
   deductions: PayslipItemRow[];
   canEdit: boolean;
+  canPay: boolean;
   periodLabel: string;
   employeeLabel: string;
 }
@@ -42,12 +44,14 @@ interface PayslipDetailClientProps {
 export function PayslipDetailClient({
   payslipId,
   status,
+  paymentStatus,
   grossCents,
   deductionsCents,
   netCents,
   earnings,
   deductions,
   canEdit,
+  canPay,
   periodLabel,
   employeeLabel,
 }: PayslipDetailClientProps) {
@@ -59,6 +63,21 @@ export function PayslipDetailClient({
   const [calculationNote, setCalculationNote] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [paying, setPaying] = useState(false);
+
+  async function submitPaid() {
+    setPaying(true);
+    const fd = new FormData();
+    fd.set("payslip_id", payslipId);
+    const result = await markPayslipPaid(fd);
+    setPaying(false);
+    if ("error" in result && result.error) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success("Payslip marked as paid.");
+    router.refresh();
+  }
 
   async function submitItem() {
     setLoading(true);
@@ -94,6 +113,9 @@ export function PayslipDetailClient({
         </div>
         <div className="flex items-center gap-2">
           <Badge variant={status === "finalized" ? "default" : "secondary"}>{status}</Badge>
+          <Badge variant={paymentStatus === "paid" ? "default" : "outline"}>
+            {paymentStatus === "paid" ? "Paid" : "Payment Pending"}
+          </Badge>
           <Button variant="outline" size="sm" onClick={() => window.print()}>
             <Printer data-icon="inline-start" />
             Print
@@ -102,6 +124,11 @@ export function PayslipDetailClient({
             <Button size="sm" onClick={() => setItemOpen(true)}>
               <Plus data-icon="inline-start" />
               Add Item
+            </Button>
+          ) : null}
+          {canPay && status === "finalized" && paymentStatus === "pending" ? (
+            <Button size="sm" variant="outline" onClick={submitPaid} disabled={paying}>
+              {paying ? "Marking..." : "Mark as Paid"}
             </Button>
           ) : null}
         </div>

@@ -4,19 +4,25 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { z } from "zod";
+
 import { landingPath } from "@/lib/routing/paths";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { emailSchema, fullNameSchema, passwordSchema } from "@/lib/validation/forms";
 
 export async function signIn(formData: FormData) {
   const supabase = await createServerSupabase();
 
-  const credentials = {
-    email: formData.get("email") as string,
-    password: formData.get("password") as string,
-  };
+  const parsed = z.object({ email: emailSchema, password: passwordSchema }).safeParse({
+    email: formData.get("email"),
+    password: formData.get("password"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid credentials." };
+  }
 
-  const { data, error } = await supabase.auth.signInWithPassword(credentials);
+  const { data, error } = await supabase.auth.signInWithPassword(parsed.data);
 
   if (error) {
     return { error: error.message };
@@ -43,9 +49,16 @@ export async function signIn(formData: FormData) {
 export async function signUp(formData: FormData) {
   const supabase = await createServerSupabase();
 
-  const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
-  const fullName = formData.get("full_name") as string;
+  const parsed = z.object({ email: emailSchema, password: passwordSchema, full_name: fullNameSchema }).safeParse({
+    email: formData.get("email"),
+    password: formData.get("password"),
+    full_name: formData.get("full_name"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid registration details." };
+  }
+
+  const { email, password, full_name: fullName } = parsed.data;
 
   const { data, error } = await supabase.auth.signUp({
     email,
