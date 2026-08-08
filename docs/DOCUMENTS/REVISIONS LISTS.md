@@ -28,6 +28,8 @@
 
 ## 5. Supplier Registration and Account Management
 
+> **Implementation status (9 Aug 2026):** all bullet points below are implemented in the system. Supplier accounts are created by staff (CEO/Account Manager act as the procurement capability; see open question Q-19 — a dedicated Procurement Team role was not defined). KYC requires two verified primary valid IDs before approval, and suppliers cannot sign in until approved.
+
 - Improve the supplier registration process for both B2B and B2C transactions.
     
 - Instead of requiring suppliers to register themselves, the Procurement Team should be able to create the supplier account directly.

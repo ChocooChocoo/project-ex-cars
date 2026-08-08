@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 
+import { z } from "zod";
+
 import { getCurrentRole } from "@/app/auth/actions";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { disbursementEventSchema, disbursementRequestSchema, financialEntrySchema } from "@/lib/validation/phase6";
@@ -105,6 +107,60 @@ export async function createDisbursementRequest(formData: FormData): Promise<Pha
   return { success: true };
 }
 
+const purchaseFundSchema = z.object({
+  transaction_id: z.string().uuid(),
+  amount_cents: z.coerce.number().int().min(1),
+  notes: z.string().max(1000).optional().or(z.literal("")),
+});
+
+export async function requestPurchaseFunds(formData: FormData): Promise<Phase6ActionResult> {
+  const supabase = await createServerSupabase();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+
+  const role = await getCurrentRole();
+  if (!role || !["ceo", "account_manager"].includes(role)) {
+    return { error: "Not authorized to request purchase funds" };
+  }
+
+  const parsed = purchaseFundSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid fund request." };
+  }
+
+  const { data: tx } = await supabase
+    .from("transactions")
+    .select("id")
+    .eq("id", parsed.data.transaction_id)
+    .maybeSingle();
+  if (!tx) return { error: "Transaction not found." };
+
+  const { data: request, error } = await supabase
+    .from("disbursement_requests")
+    .insert({
+      title: "Car purchase fund",
+      amount_cents: Math.round(parsed.data.amount_cents),
+      purpose: `Release of funds for car purchase (transaction ${parsed.data.transaction_id})`,
+      status: "draft",
+      requested_by: user.user.id,
+      notes: parsed.data.notes || null,
+      purchase_transaction_id: parsed.data.transaction_id,
+    })
+    .select()
+    .single();
+  if (error) return { error: error.message };
+
+  await supabase.from("disbursement_events").insert({
+    disbursement_id: request.id,
+    event_kind: "submitted",
+    actor_id: user.user.id,
+    notes: "Purchase fund request created — awaiting Head Accountant release.",
+  });
+
+  revalidatePath("/dashboard/finance");
+  return { success: true };
+}
+
 export async function advanceDisbursement(formData: FormData): Promise<Phase6ActionResult> {
   const supabase = await createServerSupabase();
   const { data: user } = await supabase.auth.getUser();
@@ -123,10 +179,14 @@ export async function advanceDisbursement(formData: FormData): Promise<Phase6Act
 
   const { data: request } = await supabase
     .from("disbursement_requests")
-    .select("status")
+    .select("status, purchase_transaction_id")
     .eq("id", parsed.data.disbursement_id)
     .single();
   if (!request) return { error: "Disbursement not found." };
+
+  if (request.purchase_transaction_id && role !== "head_accountant") {
+    return { error: "Only the Head Accountant can approve or release car-purchase funds." };
+  }
 
   const nextStatus: Record<string, string> = {
     draft: "approved",

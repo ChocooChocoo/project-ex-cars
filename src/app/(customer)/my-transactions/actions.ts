@@ -2,6 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 
+import { z } from "zod";
+
+import { ACCEPTED_ID_TYPES } from "@/lib/auth/roles";
 import { createServerSupabase } from "@/lib/supabase/server";
 import {
   buyDetailsSchema,
@@ -9,6 +12,56 @@ import {
   requestCarSchema,
   sellVehicleSchema,
 } from "@/lib/validation/transactions";
+
+const uploadPurchaseDocumentSchema = z.object({
+  transaction_id: z.string().uuid(),
+  document_kind: z.enum(["valid_id", "proof_of_billing"]),
+  id_type: z.enum(ACCEPTED_ID_TYPES).optional().or(z.literal("")),
+});
+
+export async function uploadPurchaseDocument(formData: FormData) {
+  const supabase = await createServerSupabase();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+
+  const parsed = uploadPurchaseDocumentSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid document upload." };
+  }
+  const { transaction_id: transactionId, document_kind: documentKind, id_type: idType } = parsed.data;
+
+  const file = formData.get("file") as File | null;
+  if (!file?.size) return { error: "Select a file to upload." };
+  if (documentKind === "valid_id" && !idType) return { error: "Select the ID type." };
+
+  const { data: tx } = await supabase
+    .from("transactions")
+    .select("id, customer_id, transaction_kind")
+    .eq("id", transactionId)
+    .maybeSingle();
+  if (!tx || tx.customer_id !== user.user.id) return { error: "Transaction not found." };
+  if (tx.transaction_kind !== "buy") return { error: "Documents can only be uploaded for purchases." };
+
+  const fileExt = file.name.split(".").pop() ?? "bin";
+  const storagePath = `${transactionId}/${documentKind}-${Date.now()}.${fileExt}`;
+
+  const { error: uploadError } = await supabase.storage.from("transaction-documents").upload(storagePath, file);
+  if (uploadError) return { error: uploadError.message };
+
+  const { error: dbError } = await supabase.from("transaction_documents").insert({
+    transaction_id: transactionId,
+    document_kind: documentKind,
+    id_type: idType || null,
+    storage_path: storagePath,
+    uploader_id: user.user.id,
+    verification_state: "pending",
+  });
+  if (dbError) return { error: dbError.message };
+
+  revalidatePath(`/my-transactions/${transactionId}`);
+  revalidatePath(`/dashboard/transactions/${transactionId}`);
+  return { success: true };
+}
 
 export async function createBuyTransaction(formData: FormData) {
   const supabase = await createServerSupabase();

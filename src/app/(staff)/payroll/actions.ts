@@ -41,6 +41,10 @@ export async function saveCompensation(formData: FormData): Promise<Phase6Action
     base_salary_cents: parsed.data.base_salary_cents,
     effective_from: parsed.data.effective_from,
     effective_until: parsed.data.effective_until || null,
+    sss_contribution_cents: parsed.data.sss_contribution_cents,
+    pagibig_contribution_cents: parsed.data.pagibig_contribution_cents,
+    philhealth_contribution_cents: parsed.data.philhealth_contribution_cents,
+    tin_number: parsed.data.tin_number || null,
     created_by: user.user.id,
   });
   if (error) return { error: error.message };
@@ -122,7 +126,9 @@ export async function createPayrollRun(formData: FormData): Promise<Phase6Action
 
   const { data: compensation } = await admin
     .from("staff_compensation")
-    .select("employee_id, base_salary_cents, effective_from, effective_until")
+    .select(
+      "employee_id, base_salary_cents, effective_from, effective_until, sss_contribution_cents, pagibig_contribution_cents, philhealth_contribution_cents",
+    )
     .lte("effective_from", parsed.data.period_end)
     .or(`effective_until.is.null,effective_until.gte.${parsed.data.period_start}`);
 
@@ -131,6 +137,11 @@ export async function createPayrollRun(formData: FormData): Promise<Phase6Action
     const employeeId = entry.employee_id as string;
     const worked = entry.status === "half_day" ? 0.5 : 1;
     workedDaysByEmployee.set(employeeId, (workedDaysByEmployee.get(employeeId) ?? 0) + worked);
+  }
+
+  const compensationByEmployee = new Map<string, Record<string, unknown>>();
+  for (const comp of compensation ?? []) {
+    compensationByEmployee.set(comp.employee_id as string, comp as Record<string, unknown>);
   }
 
   const dailyRateByEmployee = new Map<string, number>();
@@ -142,13 +153,26 @@ export async function createPayrollRun(formData: FormData): Promise<Phase6Action
   }
 
   let totalGross = 0;
+  let totalDeductions = 0;
 
   for (const [employeeId, workedDays] of workedDaysByEmployee) {
     const dailyRate = dailyRateByEmployee.get(employeeId);
     if (!dailyRate) continue;
 
     const gross = Math.round(dailyRate * workedDays);
+    const compRecord = compensationByEmployee.get(employeeId);
+
+    const statutoryDeductions = [
+      { label: "SSS contribution", cents: Number(compRecord?.sss_contribution_cents ?? 0) },
+      { label: "Pag-IBIG contribution", cents: Number(compRecord?.pagibig_contribution_cents ?? 0) },
+      { label: "PhilHealth contribution", cents: Number(compRecord?.philhealth_contribution_cents ?? 0) },
+    ].filter((item) => item.cents > 0);
+
+    const deductions = statutoryDeductions.reduce((sum, item) => sum + item.cents, 0);
+    const net = Math.max(0, gross - deductions);
+
     totalGross += gross;
+    totalDeductions += deductions;
 
     const { data: payslip, error: payslipError } = await supabase
       .from("payslips")
@@ -156,8 +180,8 @@ export async function createPayrollRun(formData: FormData): Promise<Phase6Action
         payroll_run_id: run.id,
         employee_id: employeeId,
         gross_cents: gross,
-        deductions_cents: 0,
-        net_cents: gross,
+        deductions_cents: deductions,
+        net_cents: net,
         status: "draft",
       })
       .select()
@@ -172,11 +196,26 @@ export async function createPayrollRun(formData: FormData): Promise<Phase6Action
       source_value: String(workedDays),
       calculation_note: `${workedDays} checked attendance day(s) × daily rate ₱${(dailyRate / 100).toFixed(2)} (base salary / 30)`,
     });
+
+    for (const item of statutoryDeductions) {
+      await supabase.from("payslip_items").insert({
+        payslip_id: payslip.id,
+        item_kind: "deduction",
+        label: item.label,
+        amount_cents: item.cents,
+        source_value: null,
+        calculation_note: "Auto-computed from the employee's compensation record.",
+      });
+    }
   }
 
   const { error: totalError } = await supabase
     .from("payroll_runs")
-    .update({ total_gross_cents: totalGross, total_net_cents: totalGross })
+    .update({
+      total_gross_cents: totalGross,
+      total_deductions_cents: totalDeductions,
+      total_net_cents: totalGross - totalDeductions,
+    })
     .eq("id", run.id);
   if (totalError) return { error: totalError.message };
 

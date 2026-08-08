@@ -46,7 +46,7 @@ const addDays = (d, n) => new Date(d.getTime() + n * 86400000);
 
 // Deterministic RNG so re-runs produce identical data.
 function mulberry32(seed) {
-  return function () {
+  return () => {
     seed |= 0;
     seed = (seed + 0x6d2b79f5) | 0;
     let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
@@ -240,15 +240,40 @@ const WIPE_TABLES = [
 async function seedSuppliers(users) {
   const created = [];
   const defs = [
-    { kind: "company", name: "Northland Auto Trading", contact: "Ramon Delgado", state: "approved", route: "staff-created" },
-    { kind: "company", name: "Metro Motors Supply", contact: "Liza Marcelo", state: "approved", route: "staff-created" },
+    {
+      kind: "company",
+      name: "Northland Auto Trading",
+      contact: "Ramon Delgado",
+      state: "approved",
+      route: "staff-created",
+    },
+    {
+      kind: "company",
+      name: "Metro Motors Supply",
+      contact: "Liza Marcelo",
+      state: "approved",
+      route: "staff-created",
+    },
     { kind: "individual", name: "Jose Ramirez", contact: "Jose Ramirez", state: "approved", route: "staff-created" },
-    { kind: "company", name: "Southern Fleet Dealers", contact: "Nestor Villar", state: "pending_approval", route: "staff-created" },
+    {
+      kind: "company",
+      name: "Southern Fleet Dealers",
+      contact: "Nestor Villar",
+      state: "pending_approval",
+      route: "staff-created",
+    },
     { kind: "individual", name: "Aileen Santos", contact: "Aileen Santos", state: "rejected", route: "staff-created" },
-    { kind: "company", name: "Cavite Auto Parts Corp", contact: "Melchor Tan", state: "suspended", route: "staff-created" },
+    {
+      kind: "company",
+      name: "Cavite Auto Parts Corp",
+      contact: "Melchor Tan",
+      state: "suspended",
+      route: "staff-created",
+    },
   ];
   for (const d of defs) {
-    const decision = d.state === "approved" || d.state === "suspended" ? "approved" : d.state === "rejected" ? "rejected" : "pending";
+    const decision =
+      d.state === "approved" || d.state === "suspended" ? "approved" : d.state === "rejected" ? "rejected" : "pending";
     const { data, error } = await admin
       .from("suppliers")
       .insert({
@@ -337,12 +362,36 @@ const VEHICLE_SPECS = [
 ];
 
 const LISTING_POOL = [
-  "available", "available", "available", "available", "available", "available",
-  "available", "available", "available", "available", "available", "available",
-  "reserved", "reserved", "reserved", "reserved",
-  "sold", "sold", "sold", "sold", "sold", "sold",
-  "draft", "draft", "draft", "draft",
-  "awaiting_price_approval", "inspecting", "repairing", "archived",
+  "available",
+  "available",
+  "available",
+  "available",
+  "available",
+  "available",
+  "available",
+  "available",
+  "available",
+  "available",
+  "available",
+  "available",
+  "reserved",
+  "reserved",
+  "reserved",
+  "reserved",
+  "sold",
+  "sold",
+  "sold",
+  "sold",
+  "sold",
+  "sold",
+  "draft",
+  "draft",
+  "draft",
+  "draft",
+  "awaiting_price_approval",
+  "inspecting",
+  "repairing",
+  "archived",
 ];
 const COLORS = ["White", "Black", "Silver", "Gray", "Red", "Blue", "Green", "Maroon", "Beige", "Orange"];
 
@@ -350,7 +399,11 @@ async function seedVehicles(users) {
   const rows = VEHICLE_SPECS.map((spec, i) => {
     const [make, model, year, mileage, condition, bodyType, fuel, transmission] = spec;
     const state = LISTING_POOL[i];
-    const pricePool = [548000, 1250000, 1180000, 1680000, 1180000, 798000, 1080000, 1580000, 698000, 1380000, 1280000, 698000, 898000, 1480000, 1780000, 748000, 1480000, 898000, 798000, 648000, 1180000, 1580000, 1680000, 1080000, 1180000, 980000, 598000, 998000, 1180000, 1280000];
+    const pricePool = [
+      548000, 1250000, 1180000, 1680000, 1180000, 798000, 1080000, 1580000, 698000, 1380000, 1280000, 698000, 898000,
+      1480000, 1780000, 748000, 1480000, 898000, 798000, 648000, 1180000, 1580000, 1680000, 1080000, 1180000, 980000,
+      598000, 998000, 1180000, 1280000,
+    ];
     const color = pick(COLORS);
     return {
       stock_code: `GCE-${String(i + 1).padStart(3, "0")}`,
@@ -367,7 +420,16 @@ async function seedVehicles(users) {
       body_type: bodyType,
       engine: pick(["1.3L", "1.5L", "1.6L", "2.0L", "2.4L", "2.5L", "2.8L", "3.0L"]),
       description: `${year} ${make} ${model} in ${condition.toLowerCase()} condition. ${bodyType} with ${transmission.toLowerCase()} transmission. Well-maintained and ready for the road.`,
-      current_price: state === "sold" || state === "reserved" ? pricePool[i] : state === "available" ? pricePool[i] : state === "awaiting_price_approval" ? null : state === "draft" ? null : pricePool[i],
+      current_price:
+        state === "sold" || state === "reserved"
+          ? pricePool[i]
+          : state === "available"
+            ? pricePool[i]
+            : state === "awaiting_price_approval"
+              ? null
+              : state === "draft"
+                ? null
+                : pricePool[i],
       pricing_type: i % 3 === 0 ? "fixed" : "negotiable",
       warranty_details: i % 2 === 0 ? "6-month powertrain warranty" : "1-year limited warranty",
       offer_details: i % 4 === 0 ? "Free 1-year comprehensive insurance" : null,
@@ -394,7 +456,10 @@ async function seedVehicles(users) {
         public_state: true,
         uploaded_by: users.marketing_specialist,
       });
-      uploads.push({ path, buf: makePng(640, 480, hueToRgb((hue + p * 20) % 360), hueToRgb((hue + p * 20 + 40) % 360)) });
+      uploads.push({
+        path,
+        buf: makePng(640, 480, hueToRgb((hue + p * 20) % 360), hueToRgb((hue + p * 20 + 40) % 360)),
+      });
     }
     if (i < 3) {
       for (let f = 0; f < 8; f++) {
@@ -407,7 +472,10 @@ async function seedVehicles(users) {
           public_state: true,
           uploaded_by: users.marketing_specialist,
         });
-        uploads.push({ path, buf: makePng(640, 480, hueToRgb((hue + f * 14) % 360), hueToRgb((hue + f * 14 + 30) % 360)) });
+        uploads.push({
+          path,
+          buf: makePng(640, 480, hueToRgb((hue + f * 14) % 360), hueToRgb((hue + f * 14 + 30) % 360)),
+        });
       }
     }
   }
@@ -520,12 +588,21 @@ async function seedInspections(users, vehicles, checklistNodes) {
         "Air conditioning needs recharging; electrical system OK.",
         "All systems within acceptable condition.",
       ]),
-      recommendation: pick(["Ready for listing", "Ready after minor repairs", "Requires suspension work", "Recommended for resale", "Needs detailing before listing"]),
+      recommendation: pick([
+        "Ready for listing",
+        "Ready after minor repairs",
+        "Requires suspension work",
+        "Recommended for resale",
+        "Needs detailing before listing",
+      ]),
       inspection_date: iso(daysAgo(randInt(3, 45))),
     });
     inspectionKey.push(key);
   }
-  const inserted = await insert("vehicle_inspections", inspectionRows.map(({ key, ...rest }) => rest));
+  const inserted = await insert(
+    "vehicle_inspections",
+    inspectionRows.map(({ key, ...rest }) => rest),
+  );
   log("P2", "vehicle_inspections", inserted.length);
 
   // Checklist results: answer each part node for each inspection.
@@ -538,7 +615,10 @@ async function seedInspections(users, vehicles, checklistNodes) {
         inspection_id: inspection.id,
         checklist_entry_id: part.id,
         status,
-        notes: status === "good" ? null : pick(["Needs replacement soon", "Light wear", "Minor issue", "Requires immediate attention"]),
+        notes:
+          status === "good"
+            ? null
+            : pick(["Needs replacement soon", "Light wear", "Minor issue", "Requires immediate attention"]),
       });
     }
   }
@@ -749,7 +829,20 @@ async function seedInquiries(users, vehicles) {
 async function seedTransactions(users, vehicles) {
   const created = [];
   const buyVehicles = vehicles.filter((v, i) => i >= 12).slice(0, 12);
-  const buyStates = ["pending", "under_review", "approved", "completed", "completed", "cancelled", "pending", "approved", "completed", "under_review", "approved", "pending"];
+  const buyStates = [
+    "pending",
+    "under_review",
+    "approved",
+    "completed",
+    "completed",
+    "cancelled",
+    "pending",
+    "approved",
+    "completed",
+    "under_review",
+    "approved",
+    "pending",
+  ];
 
   for (let i = 0; i < 12; i++) {
     const state = buyStates[i];
@@ -818,7 +911,8 @@ async function seedTransactions(users, vehicles) {
       completed: ["pending", "under_review", "approved", "completed"],
       cancelled: ["pending", "cancelled"],
     };
-    const seq = t.state === "completed" ? ["pending", "under_review", "approved", "completed"] : fromTo[t.state] ?? ["pending"];
+    const seq =
+      t.state === "completed" ? ["pending", "under_review", "approved", "completed"] : (fromTo[t.state] ?? ["pending"]);
     let prev = "pending";
     for (const s of seq) {
       if (s === prev && s !== "pending") continue;
@@ -827,7 +921,13 @@ async function seedTransactions(users, vehicles) {
         from_state: prev,
         to_state: s,
         actor_id: s === "completed" || s === "approved" ? users.sales_manager : users.customer,
-        reason: pick(["Created by customer", "Under staff review", "Approved after review", "Transaction completed", "Cancelled by customer"]),
+        reason: pick([
+          "Created by customer",
+          "Under staff review",
+          "Approved after review",
+          "Transaction completed",
+          "Cancelled by customer",
+        ]),
         changed_at: iso(daysAgo(randInt(1, 45))),
       });
       prev = s;
@@ -855,7 +955,8 @@ async function seedTransactions(users, vehicles) {
     transaction_id: t.id,
     offered_amount: randInt(300000, 1500000),
     valuation_amount: rand() < 0.6 ? randInt(280000, 1400000) : null,
-    review_notes: t.state === "under_review" || t.state === "approved" ? "Vehicle inspected; valuation within range." : null,
+    review_notes:
+      t.state === "under_review" || t.state === "approved" ? "Vehicle inspected; valuation within range." : null,
     decision: t.state === "approved" ? "accepted" : t.state === "rejected" ? "rejected" : null,
     decision_maker_id: t.state === "approved" || t.state === "rejected" ? users.sales_manager : null,
     decision_date: t.state === "approved" || t.state === "rejected" ? iso(daysAgo(randInt(1, 20))) : null,
@@ -908,7 +1009,7 @@ async function seedTransactions(users, vehicles) {
   for (const acc of accounts) {
     const count = randInt(6, 12);
     const per = Math.round(acc.balance / count);
-    let paidCount = randInt(0, count - 2);
+    const paidCount = randInt(0, count - 2);
     for (let s = 1; s <= count; s++) {
       const due = addDays(now, (s - count) * 30);
       const isPaid = s <= paidCount;
@@ -1041,15 +1142,60 @@ async function seedFavourites(users, vehicles) {
 
 async function seedContent(users, vehicles) {
   const rows = [
-    { content_kind: "hero", title: "Drive Home Your Dream Car", body: "Discover quality pre-owned vehicles at Global Car Exchange.", publication_state: "published" },
-    { content_kind: "hero", title: "Trusted Dealership. Verified Units.", body: "Every vehicle inspected by certified mechanics.", publication_state: "published" },
-    { content_kind: "hero", title: "Flexible Payment Terms", body: "Weekly and monthly plans available on select units.", publication_state: "draft" },
-    { content_kind: "promotion", title: "Free Insurance Promo", body: "Get 1-year comprehensive insurance on featured units.", publication_state: "published" },
-    { content_kind: "promotion", title: "Year-End Clearance Sale", body: "Up to 10% off on 2020 models while stocks last.", publication_state: "published" },
-    { content_kind: "promotion", title: "Trade-In Bonus", body: "Extra ₱20,000 trade-in value this month.", publication_state: "draft" },
-    { content_kind: "featured_vehicle", title: "2022 Toyota Hilux — Featured", body: "Excellent condition, diesel, low mileage.", publication_state: "published" },
-    { content_kind: "featured_vehicle", title: "2022 Honda Civic — Featured", body: "Top-rated fuel efficiency and performance.", publication_state: "published" },
-    { content_kind: "featured_vehicle", title: "2021 Mitsubishi Montero — Featured", body: "Family-ready SUV with flexible financing.", publication_state: "draft" },
+    {
+      content_kind: "hero",
+      title: "Drive Home Your Dream Car",
+      body: "Discover quality pre-owned vehicles at Global Car Exchange.",
+      publication_state: "published",
+    },
+    {
+      content_kind: "hero",
+      title: "Trusted Dealership. Verified Units.",
+      body: "Every vehicle inspected by certified mechanics.",
+      publication_state: "published",
+    },
+    {
+      content_kind: "hero",
+      title: "Flexible Payment Terms",
+      body: "Weekly and monthly plans available on select units.",
+      publication_state: "draft",
+    },
+    {
+      content_kind: "promotion",
+      title: "Free Insurance Promo",
+      body: "Get 1-year comprehensive insurance on featured units.",
+      publication_state: "published",
+    },
+    {
+      content_kind: "promotion",
+      title: "Year-End Clearance Sale",
+      body: "Up to 10% off on 2020 models while stocks last.",
+      publication_state: "published",
+    },
+    {
+      content_kind: "promotion",
+      title: "Trade-In Bonus",
+      body: "Extra ₱20,000 trade-in value this month.",
+      publication_state: "draft",
+    },
+    {
+      content_kind: "featured_vehicle",
+      title: "2022 Toyota Hilux — Featured",
+      body: "Excellent condition, diesel, low mileage.",
+      publication_state: "published",
+    },
+    {
+      content_kind: "featured_vehicle",
+      title: "2022 Honda Civic — Featured",
+      body: "Top-rated fuel efficiency and performance.",
+      publication_state: "published",
+    },
+    {
+      content_kind: "featured_vehicle",
+      title: "2021 Mitsubishi Montero — Featured",
+      body: "Family-ready SUV with flexible financing.",
+      publication_state: "draft",
+    },
   ];
   const rowsWithVehicle = rows.map((r, i) => ({
     ...r,
@@ -1170,7 +1316,13 @@ async function seedStaffRecords(users) {
       status: pick(["pending", "approved", "rejected"]),
       start_date: dateOnly(addDays(now, randInt(2, 30))),
       end_date: kind === "leave" ? dateOnly(addDays(now, randInt(3, 8))) : null,
-      reason: pick(["Family event", "Medical appointment", "Overtime for inventory week", "Schedule adjustment request", "Personal errand"]),
+      reason: pick([
+        "Family event",
+        "Medical appointment",
+        "Overtime for inventory week",
+        "Schedule adjustment request",
+        "Personal errand",
+      ]),
       reviewed_by: rand() < 0.6 ? users.account_manager : null,
       review_notes: rand() < 0.4 ? "Approved by Account Manager" : null,
       reviewed_at: rand() < 0.6 ? iso(daysAgo(randInt(1, 10))) : null,
@@ -1188,9 +1340,24 @@ async function seedStaffRecords(users) {
       review_period_start: dateOnly(addDays(now, -90)),
       review_period_end: dateOnly(addDays(now, -30)),
       rating: randInt(3, 5),
-      strengths: pick(["Reliable and consistent", "Excellent customer handling", "Strong technical skills", "Great team player"]),
-      areas_for_improvement: pick(["Needs faster turnaround", "Documentation could improve", "Time management", "None at this time"]),
-      goals: pick(["Complete certification this quarter", "Improve response times", "Mentor new staff", "Maintain quality rating"]),
+      strengths: pick([
+        "Reliable and consistent",
+        "Excellent customer handling",
+        "Strong technical skills",
+        "Great team player",
+      ]),
+      areas_for_improvement: pick([
+        "Needs faster turnaround",
+        "Documentation could improve",
+        "Time management",
+        "None at this time",
+      ]),
+      goals: pick([
+        "Complete certification this quarter",
+        "Improve response times",
+        "Mentor new staff",
+        "Maintain quality rating",
+      ]),
       status: pick(["draft", "submitted", "acknowledged"]),
       acknowledged_at: rand() < 0.3 ? iso(daysAgo(randInt(2, 15))) : null,
     });
@@ -1246,14 +1413,21 @@ async function seedFinance(users, transactions) {
   for (let i = 0; i < 10; i++) {
     const status = pick(["submitted", "approved", "released", "received", "paid", "rejected", "draft"]);
     disbRows.push({
-      title: pick(["Vehicle acquisition fund", "Reconditioning disbursement", "Field case allowance", "Delivery fuel allocation"]),
+      title: pick([
+        "Vehicle acquisition fund",
+        "Reconditioning disbursement",
+        "Field case allowance",
+        "Delivery fuel allocation",
+      ]),
       amount_cents: randInt(10000, 500000) * 100,
       purpose: "Approved disbursement for operations.",
       status,
       requested_by: pick([users.confidential_informant, users.account_manager]),
       approved_by: status !== "draft" && status !== "submitted" && status !== "rejected" ? users.head_accountant : null,
       released_by: ["released", "received", "paid"].includes(status) ? users.head_accountant : null,
-      received_by: ["received", "paid"].includes(status) ? pick([users.confidential_informant, users.account_manager]) : null,
+      received_by: ["received", "paid"].includes(status)
+        ? pick([users.confidential_informant, users.account_manager])
+        : null,
       notes: "Fund handoff recorded without online transfer.",
     });
   }
@@ -1262,7 +1436,16 @@ async function seedFinance(users, transactions) {
 
   const evtRows = [];
   for (const d of disb) {
-    const flow = { submitted: ["submitted"], approved: ["submitted", "approved"], released: ["submitted", "approved", "released"], received: ["submitted", "approved", "released", "received"], paid: ["submitted", "approved", "released", "received", "paid"], rejected: ["submitted", "rejected"], draft: [] }[d.status] ?? [];
+    const flow =
+      {
+        submitted: ["submitted"],
+        approved: ["submitted", "approved"],
+        released: ["submitted", "approved", "released"],
+        received: ["submitted", "approved", "released", "received"],
+        paid: ["submitted", "approved", "released", "received", "paid"],
+        rejected: ["submitted", "rejected"],
+        draft: [],
+      }[d.status] ?? [];
     for (const ev of flow) {
       evtRows.push({
         disbursement_id: d.id,
@@ -1292,18 +1475,44 @@ async function seedFinance(users, transactions) {
   log("P6", "reports", reports.length);
 
   const annRows = [
-    { title: "Company-wide: New Office Hours", body: "Starting next month, office hours are 8:00 AM to 5:00 PM.", status: "published" },
-    { title: "Year-End Inventory Week", body: "All hands on deck for the year-end inventory count.", status: "published" },
-    { title: "Holiday Schedule Announcement", body: "Please check the holiday calendar for upcoming closures.", status: "published" },
-    { title: "New Payroll Schedule", body: "Payslips will be released on the 15th and 30th of each month.", status: "draft" },
+    {
+      title: "Company-wide: New Office Hours",
+      body: "Starting next month, office hours are 8:00 AM to 5:00 PM.",
+      status: "published",
+    },
+    {
+      title: "Year-End Inventory Week",
+      body: "All hands on deck for the year-end inventory count.",
+      status: "published",
+    },
+    {
+      title: "Holiday Schedule Announcement",
+      body: "Please check the holiday calendar for upcoming closures.",
+      status: "published",
+    },
+    {
+      title: "New Payroll Schedule",
+      body: "Payslips will be released on the 15th and 30th of each month.",
+      status: "draft",
+    },
     { title: "Safety Reminder", body: "Always log duty checks before closing the lot.", status: "expired" },
-    { title: "Welcome Our New Mechanics", body: "Please welcome our two newest mechanics joining the team.", status: "published" },
+    {
+      title: "Welcome Our New Mechanics",
+      body: "Please welcome our two newest mechanics joining the team.",
+      status: "published",
+    },
   ];
   const annRowsFull = annRows.map((a) => ({
     ...a,
     author_id: users.ceo,
-    published_at: a.status === "published" ? iso(daysAgo(randInt(2, 20))) : a.status === "expired" ? iso(daysAgo(40)) : null,
-    expires_at: a.status === "expired" ? iso(daysAgo(10)) : a.status === "published" && rand() < 0.4 ? iso(addDays(now, 30)) : null,
+    published_at:
+      a.status === "published" ? iso(daysAgo(randInt(2, 20))) : a.status === "expired" ? iso(daysAgo(40)) : null,
+    expires_at:
+      a.status === "expired"
+        ? iso(daysAgo(10))
+        : a.status === "published" && rand() < 0.4
+          ? iso(addDays(now, 30))
+          : null,
   }));
   const announcements = await insert("announcements", annRowsFull);
   log("P6", "announcements", announcements.length);
@@ -1342,7 +1551,10 @@ async function seedPayroll(users) {
     });
     log("P6", "staff_compensation", staff.length);
   } catch (e) {
-    console.warn("  WARN: staff_compensation insert failed (private schema). Run manually:\n  npx supabase db query --linked --file " + sqlPath);
+    console.warn(
+      "  WARN: staff_compensation insert failed (private schema). Run manually:\n  npx supabase db query --linked --file " +
+        sqlPath,
+    );
     console.warn("  " + String(e.stderr ?? e.message).slice(0, 300));
   }
 
@@ -1398,14 +1610,38 @@ async function seedPayroll(users) {
       grossTotal += gross;
 
       const items = [
-        { item_kind: "earning", label: "Base salary", amount_cents: gross, source_value: String(s.salary * 100), calculation_note: `Monthly base salary ${s.salary.toLocaleString()}` },
-        { item_kind: "deduction", label: "SSS contribution", amount_cents: Math.round(gross * 0.04), source_value: "standard", calculation_note: "4% employee share" },
-        { item_kind: "deduction", label: "PhilHealth", amount_cents: Math.round(gross * 0.02), source_value: "standard", calculation_note: "2% employee share" },
-        { item_kind: "deduction", label: "Withholding tax", amount_cents: Math.round(gross * 0.02), source_value: "entered", calculation_note: "Entered by Account Manager" },
+        {
+          item_kind: "earning",
+          label: "Base salary",
+          amount_cents: gross,
+          source_value: String(s.salary * 100),
+          calculation_note: `Monthly base salary ${s.salary.toLocaleString()}`,
+        },
+        {
+          item_kind: "deduction",
+          label: "SSS contribution",
+          amount_cents: Math.round(gross * 0.04),
+          source_value: "standard",
+          calculation_note: "4% employee share",
+        },
+        {
+          item_kind: "deduction",
+          label: "PhilHealth",
+          amount_cents: Math.round(gross * 0.02),
+          source_value: "standard",
+          calculation_note: "2% employee share",
+        },
+        {
+          item_kind: "deduction",
+          label: "Withholding tax",
+          amount_cents: Math.round(gross * 0.02),
+          source_value: "entered",
+          calculation_note: "Entered by Account Manager",
+        },
       ];
-      const { error: itemErr } = await admin.from("payslip_items").insert(
-        items.map((it) => ({ ...it, payslip_id: data.id })),
-      );
+      const { error: itemErr } = await admin
+        .from("payslip_items")
+        .insert(items.map((it) => ({ ...it, payslip_id: data.id })));
       if (itemErr) throw itemErr;
     }
   }
@@ -1419,7 +1655,13 @@ async function seedPayroll(users) {
   for (const run of runs) {
     if (run.status === "approved" || run.status === "finalized") {
       approvalRows.push(
-        { payroll_run_id: run.id, sequence: 1, reviewer_id: users.head_accountant, decision: "approved", notes: "Reviewed by Head Accountant" },
+        {
+          payroll_run_id: run.id,
+          sequence: 1,
+          reviewer_id: users.head_accountant,
+          decision: "approved",
+          notes: "Reviewed by Head Accountant",
+        },
         { payroll_run_id: run.id, sequence: 2, reviewer_id: users.ceo, decision: "approved", notes: "Approved by CEO" },
       );
     }
@@ -1474,30 +1716,180 @@ async function seedOps(users, suppliers) {
   log("P6", "supplier_messages", messages.length);
 
   const roadmap = [
-    { kind: "initiative", title: "Customer Experience 2026", status: "in_progress", priority: "high", quarter: "Q2", year: 2026, team: "Platform" },
-    { kind: "epic", parent: 0, title: "Enhanced Vehicle Discovery", status: "in_progress", priority: "high", quarter: "Q2", year: 2026, team: "Platform" },
-    { kind: "feature", parent: 1, title: "360° vehicle viewer", status: "completed", priority: "high", quarter: "Q2", year: 2026, team: "Platform" },
-    { kind: "feature", parent: 1, title: "Advanced search filters", status: "in_progress", priority: "medium", quarter: "Q3", year: 2026, team: "Platform" },
-    { kind: "epic", parent: 0, title: "Smart Recommendations", status: "planned", priority: "medium", quarter: "Q3", year: 2026, team: "Data" },
-    { kind: "feature", parent: 4, title: "Budget-based ranking", status: "completed", priority: "medium", quarter: "Q3", year: 2026, team: "Data" },
-    { kind: "feature", parent: 4, title: "Accuracy feedback loop", status: "planned", priority: "low", quarter: "Q4", year: 2026, team: "Data" },
-    { kind: "initiative", title: "Operational Excellence", status: "planned", priority: "medium", quarter: "Q3", year: 2026, team: "Ops" },
-    { kind: "epic", parent: 7, title: "Payroll Automation", status: "in_progress", priority: "high", quarter: "Q3", year: 2026, team: "Finance" },
-    { kind: "feature", parent: 8, title: "Compensation entry UI", status: "completed", priority: "high", quarter: "Q3", year: 2026, team: "Finance" },
-    { kind: "feature", parent: 8, title: "Payslip payment tracking", status: "completed", priority: "high", quarter: "Q3", year: 2026, team: "Finance" },
-    { kind: "epic", parent: 7, title: "Field Operations Hub", status: "planned", priority: "medium", quarter: "Q4", year: 2026, team: "Ops" },
-    { kind: "feature", parent: 11, title: "Case expense tracking", status: "in_progress", priority: "medium", quarter: "Q4", year: 2026, team: "Ops" },
-    { kind: "initiative", title: "Supplier Ecosystem", status: "planned", priority: "medium", quarter: "Q4", year: 2026, team: "Sales" },
-    { kind: "epic", parent: 13, title: "Supplier Portal", status: "on_hold", priority: "low", quarter: "Q4", year: 2026, team: "Sales" },
-    { kind: "feature", parent: 14, title: "Supplier self-service dashboard", status: "on_hold", priority: "low", quarter: "Q4", year: 2026, team: "Sales" },
-    { kind: "feature", parent: 14, title: "CEO–supplier messaging", status: "completed", priority: "medium", quarter: "Q4", year: 2026, team: "Sales" },
+    {
+      kind: "initiative",
+      title: "Customer Experience 2026",
+      status: "in_progress",
+      priority: "high",
+      quarter: "Q2",
+      year: 2026,
+      team: "Platform",
+    },
+    {
+      kind: "epic",
+      parent: 0,
+      title: "Enhanced Vehicle Discovery",
+      status: "in_progress",
+      priority: "high",
+      quarter: "Q2",
+      year: 2026,
+      team: "Platform",
+    },
+    {
+      kind: "feature",
+      parent: 1,
+      title: "360° vehicle viewer",
+      status: "completed",
+      priority: "high",
+      quarter: "Q2",
+      year: 2026,
+      team: "Platform",
+    },
+    {
+      kind: "feature",
+      parent: 1,
+      title: "Advanced search filters",
+      status: "in_progress",
+      priority: "medium",
+      quarter: "Q3",
+      year: 2026,
+      team: "Platform",
+    },
+    {
+      kind: "epic",
+      parent: 0,
+      title: "Smart Recommendations",
+      status: "planned",
+      priority: "medium",
+      quarter: "Q3",
+      year: 2026,
+      team: "Data",
+    },
+    {
+      kind: "feature",
+      parent: 4,
+      title: "Budget-based ranking",
+      status: "completed",
+      priority: "medium",
+      quarter: "Q3",
+      year: 2026,
+      team: "Data",
+    },
+    {
+      kind: "feature",
+      parent: 4,
+      title: "Accuracy feedback loop",
+      status: "planned",
+      priority: "low",
+      quarter: "Q4",
+      year: 2026,
+      team: "Data",
+    },
+    {
+      kind: "initiative",
+      title: "Operational Excellence",
+      status: "planned",
+      priority: "medium",
+      quarter: "Q3",
+      year: 2026,
+      team: "Ops",
+    },
+    {
+      kind: "epic",
+      parent: 7,
+      title: "Payroll Automation",
+      status: "in_progress",
+      priority: "high",
+      quarter: "Q3",
+      year: 2026,
+      team: "Finance",
+    },
+    {
+      kind: "feature",
+      parent: 8,
+      title: "Compensation entry UI",
+      status: "completed",
+      priority: "high",
+      quarter: "Q3",
+      year: 2026,
+      team: "Finance",
+    },
+    {
+      kind: "feature",
+      parent: 8,
+      title: "Payslip payment tracking",
+      status: "completed",
+      priority: "high",
+      quarter: "Q3",
+      year: 2026,
+      team: "Finance",
+    },
+    {
+      kind: "epic",
+      parent: 7,
+      title: "Field Operations Hub",
+      status: "planned",
+      priority: "medium",
+      quarter: "Q4",
+      year: 2026,
+      team: "Ops",
+    },
+    {
+      kind: "feature",
+      parent: 11,
+      title: "Case expense tracking",
+      status: "in_progress",
+      priority: "medium",
+      quarter: "Q4",
+      year: 2026,
+      team: "Ops",
+    },
+    {
+      kind: "initiative",
+      title: "Supplier Ecosystem",
+      status: "planned",
+      priority: "medium",
+      quarter: "Q4",
+      year: 2026,
+      team: "Sales",
+    },
+    {
+      kind: "epic",
+      parent: 13,
+      title: "Supplier Portal",
+      status: "on_hold",
+      priority: "low",
+      quarter: "Q4",
+      year: 2026,
+      team: "Sales",
+    },
+    {
+      kind: "feature",
+      parent: 14,
+      title: "Supplier self-service dashboard",
+      status: "on_hold",
+      priority: "low",
+      quarter: "Q4",
+      year: 2026,
+      team: "Sales",
+    },
+    {
+      kind: "feature",
+      parent: 14,
+      title: "CEO–supplier messaging",
+      status: "completed",
+      priority: "medium",
+      quarter: "Q4",
+      year: 2026,
+      team: "Sales",
+    },
   ];
   const items = [];
   for (const r of roadmap) {
     const { data, error } = await admin
       .from("roadmap_items")
       .insert({
-        parent_id: r.parent !== undefined ? items[r.parent]?.id ?? null : null,
+        parent_id: r.parent !== undefined ? (items[r.parent]?.id ?? null) : null,
         kind: r.kind,
         title: r.title,
         description: `${r.title} — tracked on the product roadmap.`,

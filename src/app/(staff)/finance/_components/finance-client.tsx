@@ -12,6 +12,7 @@ import {
   advanceDisbursement,
   createDisbursementRequest,
   recordFinancialEntry,
+  requestPurchaseFunds,
   verifyFinancialEntry,
 } from "@/app/(staff)/finance/actions";
 import { Badge } from "@/components/ui/badge";
@@ -42,16 +43,27 @@ export interface DisbursementRow {
   purpose: string;
   status: string;
   notes: string | null;
+  requested_by: string;
+  purchase_transaction_id: string | null;
   created_at: string;
+}
+
+export interface PurchaseTransactionRow {
+  id: string;
+  customer_id: string;
+  transaction_kind: string;
 }
 
 interface FinanceClientProps {
   entries: FinancialEntryRow[];
   disbursements: DisbursementRow[];
+  purchaseTransactions: PurchaseTransactionRow[];
   canRecord: boolean;
   canVerify: boolean;
   canRequest: boolean;
   canAdvance: boolean;
+  canRequestPurchaseFunds: boolean;
+  isInformant: boolean;
 }
 
 const ENTRY_LABELS: Record<FinancialEntryKind, string> = {
@@ -83,10 +95,13 @@ const DISBURSEMENT_EVENT_LABELS: Record<string, string> = {
 export function FinanceClient({
   entries,
   disbursements,
+  purchaseTransactions,
   canRecord,
   canVerify,
   canRequest,
   canAdvance,
+  canRequestPurchaseFunds,
+  isInformant,
 }: FinanceClientProps) {
   const router = useRouter();
   const [entryOpen, setEntryOpen] = useState(false);
@@ -100,6 +115,11 @@ export function FinanceClient({
   const [requestPurpose, setRequestPurpose] = useState("");
   const [requestNotes, setRequestNotes] = useState("");
   const [requestError, setRequestError] = useState<string | null>(null);
+  const [fundOpen, setFundOpen] = useState(false);
+  const [fundTransactionId, setFundTransactionId] = useState("");
+  const [fundAmount, setFundAmount] = useState("");
+  const [fundNotes, setFundNotes] = useState("");
+  const [fundError, setFundError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const revenueTotal = entries.filter((e) => e.entry_kind === "revenue").reduce((sum, e) => sum + e.amount_cents, 0);
@@ -151,6 +171,27 @@ export function FinanceClient({
     router.refresh();
   }
 
+  async function submitFundRequest() {
+    setLoading(true);
+    setFundError(null);
+    const fd = new FormData();
+    fd.set("transaction_id", fundTransactionId);
+    fd.set("amount_cents", fundAmount);
+    fd.set("notes", fundNotes);
+    const result = await requestPurchaseFunds(fd);
+    setLoading(false);
+    if ("error" in result && result.error) {
+      setFundError(result.error);
+      return;
+    }
+    toast.success("Purchase fund request created. Awaiting Head Accountant release.");
+    setFundOpen(false);
+    setFundTransactionId("");
+    setFundAmount("");
+    setFundNotes("");
+    router.refresh();
+  }
+
   async function advance(disbursementId: string, eventKind: string) {
     const fd = new FormData();
     fd.set("disbursement_id", disbursementId);
@@ -198,8 +239,20 @@ export function FinanceClient({
               Request Disbursement
             </Button>
           ) : null}
+          {canRequestPurchaseFunds ? (
+            <Button variant="outline" onClick={() => setFundOpen(true)}>
+              <Banknote data-icon="inline-start" />
+              Request Purchase Funds
+            </Button>
+          ) : null}
         </div>
       </div>
+
+      {isInformant ? (
+        <div className="rounded-lg border border-amber-300/50 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-950/30 dark:text-amber-200">
+          You are viewing your own disbursement requests. New requests must be advanced by the CEO or Head Accountant.
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card>
@@ -483,6 +536,55 @@ export function FinanceClient({
               Cancel
             </Button>
             <Button type="button" onClick={submitRequest} disabled={loading}>
+              {loading ? "Submitting..." : "Submit Request"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={fundOpen} onOpenChange={setFundOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Request Purchase Funds</DialogTitle>
+          </DialogHeader>
+          <FieldGroup className="gap-4">
+            <Field>
+              <FieldLabel>Buy Transaction</FieldLabel>
+              <Select value={fundTransactionId} onValueChange={setFundTransactionId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select transaction" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {purchaseTransactions.map((tx) => (
+                      <SelectItem key={tx.id} value={tx.id}>
+                        {tx.id.slice(0, 8)}…
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field>
+              <FieldLabel>Amount (₱)</FieldLabel>
+              <Input
+                type="number"
+                min="0"
+                value={fundAmount}
+                onChange={(e) => setFundAmount(e.target.value)}
+                placeholder="0.00"
+              />
+            </Field>
+            <Field>
+              <FieldLabel>Notes (optional)</FieldLabel>
+              <Input value={fundNotes} onChange={(e) => setFundNotes(e.target.value)} />
+            </Field>
+            {fundError ? <p className="text-destructive text-sm">{fundError}</p> : null}
+          </FieldGroup>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setFundOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={submitFundRequest} disabled={loading || !fundTransactionId}>
               {loading ? "Submitting..." : "Submit Request"}
             </Button>
           </DialogFooter>

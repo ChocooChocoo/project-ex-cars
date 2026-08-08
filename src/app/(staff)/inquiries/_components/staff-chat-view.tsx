@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { Paperclip } from "lucide-react";
 
 import {
+  acceptHandoff,
   assignInquiry,
   handoffInquiry,
   markMessagesRead,
@@ -26,12 +27,14 @@ interface StaffChatViewProps {
   inquiry: Record<string, unknown>;
   messages: Record<string, unknown>[];
   arrangement: Record<string, unknown> | null;
+  userRole: string;
 }
 
 export function StaffChatView({
   inquiry,
   messages: initialMessages,
   arrangement: initialArrangement,
+  userRole,
 }: StaffChatViewProps) {
   const [msgs, setMsgs] = useState(initialMessages);
   const [arr, setArr] = useState(initialArrangement);
@@ -50,9 +53,12 @@ export function StaffChatView({
   const vehicles = inquiry.vehicles as Record<string, unknown> | undefined;
   const intention = inquiry.intention_kind as string;
   const state = inquiry.state as string;
+  const handoffState = (inquiry.handoff_state as string | null | undefined) ?? "none";
   const hasManager =
     (inquiry.assigned_account_manager as string | null | undefined) ||
     (inquiry.assigned_sales_manager as string | null | undefined);
+  const canRequestHandoff = ["ceo", "account_manager"].includes(userRole);
+  const canAcceptHandoff = ["ceo", "sales_manager"].includes(userRole);
 
   useEffect(() => {
     void markMessagesRead(inquiryId);
@@ -132,10 +138,20 @@ export function StaffChatView({
               Assign to Me
             </Button>
           )}
-          {state === "scheduled" && (
+          {state === "scheduled" && handoffState === "none" && canRequestHandoff && (
             <Button size="sm" variant="outline" onClick={() => handoffInquiry(inquiryId)}>
-              Handoff
+              Request Handoff
             </Button>
+          )}
+          {handoffState === "pending_handoff" && canAcceptHandoff && (
+            <Button size="sm" variant="outline" onClick={() => acceptHandoff(inquiryId)}>
+              Accept Handoff
+            </Button>
+          )}
+          {handoffState === "handed_off" && (
+            <Badge variant="secondary" className="text-xs">
+              Handed off to Sales Manager
+            </Badge>
           )}
           {hasManager && !arr && (
             <Button size="sm" variant="outline" onClick={() => setShowArrangement(!showArrangement)}>

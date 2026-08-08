@@ -81,6 +81,10 @@ export function PayrollClient({
   const [compSalary, setCompSalary] = useState("");
   const [compFrom, setCompFrom] = useState("");
   const [compUntil, setCompUntil] = useState("");
+  const [compSss, setCompSss] = useState("");
+  const [compPagibig, setCompPagibig] = useState("");
+  const [compPhilhealth, setCompPhilhealth] = useState("");
+  const [compTin, setCompTin] = useState("");
   const [compError, setCompError] = useState<string | null>(null);
   const [compLoading, setCompLoading] = useState(false);
 
@@ -117,6 +121,13 @@ export function PayrollClient({
     fd.set("base_salary_cents", String(Math.round(Number.parseFloat(compSalary) * 100)));
     fd.set("effective_from", compFrom);
     if (compUntil) fd.set("effective_until", compUntil);
+    fd.set("sss_contribution_cents", compSss ? String(Math.round(Number.parseFloat(compSss) * 100)) : "0");
+    fd.set("pagibig_contribution_cents", compPagibig ? String(Math.round(Number.parseFloat(compPagibig) * 100)) : "0");
+    fd.set(
+      "philhealth_contribution_cents",
+      compPhilhealth ? String(Math.round(Number.parseFloat(compPhilhealth) * 100)) : "0",
+    );
+    if (compTin) fd.set("tin_number", compTin);
     const result = await saveCompensation(fd);
     setCompLoading(false);
     if ("error" in result && result.error) {
@@ -129,6 +140,10 @@ export function PayrollClient({
     setCompSalary("");
     setCompFrom("");
     setCompUntil("");
+    setCompSss("");
+    setCompPagibig("");
+    setCompPhilhealth("");
+    setCompTin("");
     router.refresh();
   }
 
@@ -369,9 +384,48 @@ export function PayrollClient({
                 <Input type="date" value={compUntil} onChange={(e) => setCompUntil(e.target.value)} />
               </Field>
             </div>
+            <div className="grid grid-cols-3 gap-4">
+              <Field>
+                <FieldLabel>SSS / month (₱)</FieldLabel>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={compSss}
+                  onChange={(e) => setCompSss(e.target.value)}
+                  placeholder="0.00"
+                />
+              </Field>
+              <Field>
+                <FieldLabel>Pag-IBIG / month (₱)</FieldLabel>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={compPagibig}
+                  onChange={(e) => setCompPagibig(e.target.value)}
+                  placeholder="0.00"
+                />
+              </Field>
+              <Field>
+                <FieldLabel>PhilHealth / month (₱)</FieldLabel>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={compPhilhealth}
+                  onChange={(e) => setCompPhilhealth(e.target.value)}
+                  placeholder="0.00"
+                />
+              </Field>
+            </div>
+            <Field>
+              <FieldLabel>TIN Number (optional)</FieldLabel>
+              <Input value={compTin} onChange={(e) => setCompTin(e.target.value)} placeholder="123-456-789-000" />
+            </Field>
             <p className="text-muted-foreground text-xs">
-              Draft payslips compute the daily rate as base salary ÷ 30 working days. Leave the "until" date empty for
-              the current salary.
+              Statutory contributions are added automatically as deduction items on draft payslips. Draft payslips
+              compute the daily rate as base salary ÷ 30 working days.
             </p>
             {compError ? <p className="text-destructive text-sm">{compError}</p> : null}
           </FieldGroup>

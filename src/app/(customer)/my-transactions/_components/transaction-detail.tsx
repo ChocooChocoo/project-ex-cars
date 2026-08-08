@@ -1,15 +1,15 @@
 "use client";
 "use no memo";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { useRouter } from "next/navigation";
 
 import { format } from "date-fns";
-import { Calendar, FileText, XCircle } from "lucide-react";
+import { Calendar, FileText, ShieldCheck, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import { cancelTransaction, saveBuyDetails } from "@/app/(customer)/my-transactions/actions";
+import { cancelTransaction, saveBuyDetails, uploadPurchaseDocument } from "@/app/(customer)/my-transactions/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -60,6 +60,50 @@ export function TransactionDetail({
   const completedAt = transaction.completed_at as string | null;
 
   const [cancelling, setCancelling] = useState(false);
+
+  // Purchase document upload state
+  const [docKind, setDocKind] = useState("valid_id");
+  const [docIdType, setDocIdType] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const docFileRef = useRef<HTMLInputElement>(null);
+
+  const verifiedIdCount = documents.filter(
+    (d) => d.document_kind === "valid_id" && d.verification_state === "verified",
+  ).length;
+  const hasVerifiedBilling = documents.some(
+    (d) => d.document_kind === "proof_of_billing" && d.verification_state === "verified",
+  );
+
+  async function handleUploadDocument() {
+    const file = docFileRef.current?.files?.[0];
+    if (!file) {
+      toast.error("Select a file to upload.");
+      return;
+    }
+    if (docKind === "valid_id" && !docIdType) {
+      toast.error("Select the ID type.");
+      return;
+    }
+    setUploading(true);
+    const fd = new FormData();
+    fd.set("transaction_id", id);
+    fd.set("document_kind", docKind);
+    fd.set("id_type", docIdType);
+    fd.set("file", file);
+    const result = await uploadPurchaseDocument(fd);
+    setUploading(false);
+    if (result.error) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success(
+      docKind === "valid_id"
+        ? "Valid ID uploaded. GCE staff will verify it."
+        : "Proof of billing uploaded. GCE staff will verify it.",
+    );
+    if (docFileRef.current) docFileRef.current.value = "";
+    router.refresh();
+  }
 
   // Buy detail form state
   const [paymentMethod, setPaymentMethod] = useState((purchaseDetails?.payment_method as string) ?? "");
@@ -447,9 +491,81 @@ export function TransactionDetail({
           {/* Documents */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Documents</CardTitle>
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <FileText className="size-4" />
+                Documents
+              </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex flex-col gap-3">
+              {kind === "buy" && !isTerminal ? (
+                <>
+                  <div className="flex flex-wrap items-center gap-2 rounded-lg border p-3">
+                    <ShieldCheck className="size-4 text-muted-foreground" />
+                    <p className="text-xs text-muted-foreground">
+                      GCE requires two valid IDs and one proof of billing to complete your purchase.
+                    </p>
+                  </div>
+                  {kind === "buy" ? (
+                    <p className="text-xs">
+                      <span className="font-medium">{Math.min(verifiedIdCount, 2)}/2</span> valid IDs verified
+                      {hasVerifiedBilling ? " · proof of billing verified" : " · proof of billing pending"}
+                    </p>
+                  ) : null}
+                  <div className="flex flex-wrap items-end gap-2">
+                    <div className="flex flex-col gap-1">
+                      <Label htmlFor="cust-doc-kind" className="text-xs">
+                        Document
+                      </Label>
+                      <Select value={docKind} onValueChange={setDocKind}>
+                        <SelectTrigger id="cust-doc-kind" className="w-36">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            <SelectItem value="valid_id">Valid ID</SelectItem>
+                            <SelectItem value="proof_of_billing">Proof of Billing</SelectItem>
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {docKind === "valid_id" ? (
+                      <div className="flex flex-col gap-1">
+                        <Label htmlFor="cust-doc-id-type" className="text-xs">
+                          ID Type
+                        </Label>
+                        <Select value={docIdType} onValueChange={setDocIdType}>
+                          <SelectTrigger id="cust-doc-id-type" className="w-36">
+                            <SelectValue placeholder="Select ID" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectGroup>
+                              <SelectItem value="passport">Passport</SelectItem>
+                              <SelectItem value="drivers_license">Driver's License</SelectItem>
+                              <SelectItem value="umid">UMID</SelectItem>
+                              <SelectItem value="sss_id">SSS ID</SelectItem>
+                              <SelectItem value="gsis_id">GSIS ID</SelectItem>
+                              <SelectItem value="philhealth_id">PhilHealth ID</SelectItem>
+                              <SelectItem value="voters_id">Voter's ID</SelectItem>
+                              <SelectItem value="national_id">National ID</SelectItem>
+                              <SelectItem value="prc_id">PRC ID</SelectItem>
+                              <SelectItem value="postal_id">Postal ID</SelectItem>
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ) : null}
+                    <Input
+                      ref={docFileRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,application/pdf"
+                      className="w-44"
+                    />
+                    <Button size="sm" onClick={handleUploadDocument} disabled={uploading}>
+                      {uploading ? "Uploading..." : "Upload"}
+                    </Button>
+                  </div>
+                </>
+              ) : null}
               {documents.length === 0 ? (
                 <p className="text-muted-foreground text-xs">No documents uploaded.</p>
               ) : (
@@ -458,6 +574,11 @@ export function TransactionDetail({
                     <div key={doc.id as string} className="flex items-center gap-2 text-sm">
                       <FileText className="size-4 text-muted-foreground" />
                       <span className="capitalize">{(doc.document_kind as string).replace(/_/g, " ")}</span>
+                      {doc.id_type ? (
+                        <span className="text-muted-foreground text-xs capitalize">
+                          {(doc.id_type as string).replace(/_/g, " ")}
+                        </span>
+                      ) : null}
                       <Badge variant="secondary" className="ml-auto text-xs">
                         {doc.verification_state as string}
                       </Badge>

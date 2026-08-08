@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 
+import { getCurrentRole } from "@/app/auth/actions";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 import { StaffChatView } from "../_components/staff-chat-view";
@@ -30,11 +31,14 @@ export default async function StaffChatPage({ params }: { params: Promise<{ id: 
     .limit(1)
     .single();
 
+  const role = (await getCurrentRole()) ?? "customer";
+
   return (
     <StaffChatView
       inquiry={inquiry as Record<string, unknown>}
       messages={(messages as Record<string, unknown>[]) ?? []}
       arrangement={arrangement as Record<string, unknown> | null}
+      userRole={role}
     />
   );
 }
