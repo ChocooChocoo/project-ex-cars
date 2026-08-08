@@ -10,13 +10,13 @@ Every task here names where it came from. A task with no traceable origin is not
 
 | Status | How many |
 |---:|---|
-| ✅ Finished | 38 |
-| 🟨 Being worked on | 3 |
+| ✅ Finished | 43 |
+| 🟨 Being worked on | 7 |
 | ⭕ Not started | 0 |
 | ❌ Blocked | 0 |
 | 🔵 Already there | 0 |
 | ⬜ Dropped | 0 |
-| ❓ Unclear | 19 |
+| ❓ Unclear | 10 |
 | **Total** | **60** |
 
 The earlier task state recorded Phases 1–5 as completed. The source-code audit and prerequisite fix sequence are now documented in [14 - PHASE 6 IMPLEMENTATION PLAN](14%20-%20PHASE%206%20IMPLEMENTATION%20PLAN.md). Existing finished labels require evidence-based reconciliation through its Recovery Gates 0–3. Phase 6 planning is complete, but its implementation tasks remain unstarted/unclear.
@@ -44,10 +44,10 @@ The earlier task state recorded Phases 1–5 as completed. The source-code audit
 | T-17 | Create the Request-a-Car path from customer specifications through price discussion and sourcing | **GCE ADDITIONAL DOCUMENTS.docx**, page 2 | The third named transaction type | R-17 | ✅ |
 | T-18 | Apply the shared pending, under-review, approved, rejected, and completed states | **GCE ADDITIONAL DOCUMENTS.docx**, page 2 | The shared transaction status path | R-18 | ✅ |
 | T-19 | Keep purchase history, payment method, financing progress, invoice or receipt, and sold status without taking money online | **GCE FULL CHAPTER 1 - 3.docx**, pages 16 and 20; **GCE ADDITIONAL DOCUMENTS.docx**, page 2 | The required records and offline-payment boundary | R-19 | ✅ |
-| T-20 | Create daily time, leave, overtime, and performance records | **GCE ADDITIONAL DOCUMENTS.docx**, page 2 | The requested employee records | R-20 | ❓ Unclear |
-| T-21 | Create only the permitted payment, financing, cheque, invoice, expense, and financial reports | *Drawn from* **GCE FULL CHAPTER 1 - 3.docx**, pages 16–17, and **GCE ADDITIONAL DOCUMENTS.docx**, pages 1–2 | The finance requirements constrained by the no-payment and basic-record rules | R-21 | ❓ Unclear |
-| T-22 | Create the chief executive dashboard, approvals, and traceable business summaries | **GCE FULL CHAPTER 1 - 3.docx**, pages 18–21; **GCE ADDITIONAL DOCUMENTS.docx**, pages 1–2 | The management oversight promises | R-22 | ❓ Unclear |
-| T-23 | Create the agreed security, sourcing, delivery, and towing records | **GCE ADDITIONAL DOCUMENTS.docx**, pages 1 and 3 | The Head Security and confidential-informant duties | R-23 | ❓ Unclear |
+| T-20 | Create daily time, leave, overtime, and performance records | **GCE ADDITIONAL DOCUMENTS.docx**, page 2 | The requested employee records | R-20 | ✅ |
+| T-21 | Create only the permitted payment, financing, cheque, invoice, expense, and financial reports | *Drawn from* **GCE FULL CHAPTER 1 - 3.docx**, pages 16–17, and **GCE ADDITIONAL DOCUMENTS.docx**, pages 1–2 | The finance requirements constrained by the no-payment and basic-record rules | R-21 | ✅ |
+| T-22 | Create the chief executive dashboard, approvals, and traceable business summaries | **GCE FULL CHAPTER 1 - 3.docx**, pages 18–21; **GCE ADDITIONAL DOCUMENTS.docx**, pages 1–2 | The management oversight promises | R-22 | 🟨 |
+| T-23 | Create the agreed security, sourcing, delivery, and towing records | **GCE ADDITIONAL DOCUMENTS.docx**, pages 1 and 3 | The Head Security and confidential-informant duties | R-23 | ✅ |
 | T-24 | Make every completed customer and employee journey work in a responsive browser experience | **GCE FULL CHAPTER 1 - 3.docx**, pages 15–17 and 21 | The browser-based mobile requirement | R-24 | ❓ Unclear |
 | T-25 | Run and record user acceptance, usability, and satisfaction checks | **GCE FULL CHAPTER 1 - 3.docx**, pages 21–22 | The stated Technology Acceptance Model and user-experience measures | R-25 | ❓ Unclear |
 | T-60 | Build the Product Roadmap feature: a visual quarter timeline of initiatives, epics, and features with expandable hierarchy, status/priority/quarter/team filters, search, sorting, drill-down detail views, and CRUD backed by Supabase | **docs/tasks/11.md**, "Phase 6 Implementation: Building the Product Roadmap Feature" | Platform tooling work ordered by the task list; it is not part of the GCE business requirements | — | ✅ |
@@ -67,19 +67,19 @@ These tasks concern the academic manuscript rather than development work, so the
 
 | # | The task | Where it came from | What it refers to | Serves | Status |
 |---|---|---|---|---|---|
-| T-30 | Create chief-executive employee announcements and approval or rejection of payslip, disbursement, expense, revenue, price, and inventory reports | **GCE USERS LEVELS MODULES.md**, headings "CEO — 2." through "CEO — 3." | The chief executive's communication and approval duties | R-22 | ❓ Unclear |
+| T-30 | Create chief-executive employee announcements and approval or rejection of payslip, disbursement, expense, revenue, price, and inventory reports | **GCE USERS LEVELS MODULES.md**, headings "CEO — 2." through "CEO — 3." | The chief executive's communication and approval duties | R-22 | 🟨 |
 | T-31 | Route Buy Now to the Sales Manager, route Inquiry to the Account Manager, and hand scheduled GCE visits to the Sales Manager | **GCE USERS LEVELS MODULES.md**, headings "Account Manager — 2." and "Sales Manager — 1." | The named inquiry and sales ownership and the in-person handoff | R-10, R-15 | ✅ |
 | T-32 | Fill arrangement forms from registration details and change them for delivery, a CALABARZON meet-up, or a GCE visit | **GCE USERS LEVELS MODULES.md**, heading "Account Manager — 2." | The stated automatic form filling and arrangement choices | R-10, R-15 | ✅ |
 | T-33 | Let the Sales Manager create accounts for walk-in buyers and sellers and show those accounts to the clients | **GCE USERS LEVELS MODULES.md**, headings "Sales Manager — 3." through "Sales Manager — 4." | The walk-in account-creation rule | R-01, R-15, R-16 | ✅ |
 | T-34 | Require two valid IDs and proof of billing during the vehicle-purchase process | **GCE USERS LEVELS MODULES.md**, heading "Sales Manager — 2." | The purchase-document requirement that still applies after form autofill | R-15 | ✅ |
-| T-35 | Prepare payroll from attendance inputs and entered salary, late, absence, SSS, Pag-IBIG, TIN, and PhilHealth deduction amounts | **GCE USERS LEVELS MODULES.md**, heading "Account Manager — 4." | The Account Manager's payroll preparation and deduction-entry duties | R-26 | ❓ Unclear |
-| T-36 | Apply the final payslip approval and salary-payment handoff between the Account Manager, Head Accountant, and chief executive | *Drawn from* **GCE USERS LEVELS MODULES.md**, headings "CEO — 2.", "Account Manager — 4.", and "Head Accountant — 2." | The overlapping payroll approvals and the Head Accountant's salary-payment responsibility | R-26 | ❓ Unclear |
+| T-35 | Prepare payroll from attendance inputs and entered salary, late, absence, SSS, Pag-IBIG, TIN, and PhilHealth deduction amounts | **GCE USERS LEVELS MODULES.md**, heading "Account Manager — 4." | The Account Manager's payroll preparation and deduction-entry duties | R-26 | 🟨 |
+| T-36 | Apply the final payslip approval and salary-payment handoff between the Account Manager, Head Accountant, and chief executive | *Drawn from* **GCE USERS LEVELS MODULES.md**, headings "CEO — 2.", "Account Manager — 4.", and "Head Accountant — 2." | The overlapping payroll approvals and the Head Accountant's salary-payment responsibility | R-26 | 🟨 |
 | T-37 | Let the Account Manager manage access for the current employee and administrator roles | **GCE USERS LEVELS MODULES.md**, heading "Account Manager — 5." | The stated responsibility for role-based access control | R-02 | ✅ |
-| T-38 | Record and approve vehicle-acquisition and reconditioning disbursement requests and their fund handoffs | *Drawn from* **GCE USERS LEVELS MODULES.md**, headings "CEO — 2.", "Account Manager — 1.", "Head Accountant — 1.", and "Confidential Informant — 6." | The two described fund-request and release paths | R-21 | ❓ Unclear |
+| T-38 | Record and approve vehicle-acquisition and reconditioning disbursement requests and their fund handoffs | *Drawn from* **GCE USERS LEVELS MODULES.md**, headings "CEO — 2.", "Account Manager — 1.", "Head Accountant — 1.", and "Confidential Informant — 6." | The two described fund-request and release paths | R-21 | ✅ |
 | T-39 | Monitor installment due dates, notify the Account Manager, contact late buyers, and coordinate an authorized vehicle recovery | **GCE USERS LEVELS MODULES.md**, headings "Head Accountant — 5." and "Confidential Informant — 3." | The due-date escalation and recovery handoff | R-19, R-23 | ✅ |
 | T-40 | Show each mechanic's completed repairs and whether the vehicle is fixed or still pending | **GCE USERS LEVELS MODULES.md**, heading "Mechanic — 2." | The mechanic repair-progress requirement | R-05 | ✅ |
 | T-41 | Keep sales records linking each sold vehicle to its buyer and payment information, and handle the required sale and payment paperwork | **GCE USERS LEVELS MODULES.md**, headings "Sales Manager — 5." through "Sales Manager — 6." | The Sales Manager's record and paperwork duties | R-19 | ✅ |
-| T-42 | Let Head Security attach before-and-after photographs of locks and the building's security condition to a duty record | **GCE USERS LEVELS MODULES.md**, heading "Head Security — 2." | The required photographic proof of security checks | R-23 | ❓ Unclear |
+| T-42 | Let Head Security attach before-and-after photographs of locks and the building's security condition to a duty record | **GCE USERS LEVELS MODULES.md**, heading "Head Security — 2." | The required photographic proof of security checks | R-23 | ✅ |
 
 ## Tasks from the presentation revision list
 

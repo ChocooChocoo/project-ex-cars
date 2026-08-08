@@ -8,13 +8,13 @@
 
 | Status | How many |
 |---:|---|
-| ✅ Finished | 26 |
-| 🟨 Being worked on | 3 |
+| ✅ Finished | 29 |
+| 🟨 Being worked on | 5 |
 | ⭕ Not started | 0 |
 | ❌ Blocked | 0 |
 | 🔵 Already there | 0 |
-| ⬜ Dropped | 0 |
-| ❓ Unclear | 12 |
+| ⬜ Dropped | 1 |
+| ❓ Unclear | 6 |
 | **Total** | **41** |
 
 The earlier tracker state recorded Phases 1–5 as completed. The source-code audit in [14 - PHASE 6 IMPLEMENTATION PLAN](14%20-%20PHASE%206%20IMPLEMENTATION%20PLAN.md) found that this completion statement is not yet supported by build, authorization, user-journey, and repeatable-test evidence. Existing Phase 1–5 item labels require evidence-based reconciliation through Recovery Gates 0–3. R-07 (360° viewer) remains a placeholder, and R-28/R-29 remain in progress.
@@ -76,16 +76,16 @@ The earlier tracker state recorded Phases 1–5 as completed. The source-code au
 
 ## Phase 6 — Staff and managers can run the business
 
-Planning is complete in [14 - PHASE 6 IMPLEMENTATION PLAN](14%20-%20PHASE%206%20IMPLEMENTATION%20PLAN.md). Planning does not start implementation: all Phase 6 statuses below remain unchanged until the prerequisite recovery and stakeholder-decision gates pass.
+Planning is complete in [14 - PHASE 6 IMPLEMENTATION PLAN](14%20-%20PHASE%206%20IMPLEMENTATION%20PLAN.md). The application layer was implemented on 8 August 2026 using provisional Q-04/Q-13/Q-14/Q-16/Q-23 answers recorded in [00 - START HERE](00%20-%20START%20HERE.md#provisional-implementation-decisions). The RLS policies from migrations 00015–00018 and 00021 remain to be verified against a live database reset, so statuses below reflect built-and-compiled code, not yet browser-verified journeys.
 
 | # | What gets built | Status | Notes |
 |---|---|---|---|
-| R-20 | Daily time, late arrival, leave, overtime, performance, employee-record, and customer-account tracking with Head Accountant attendance cross-checking | ❓ Unclear | Not yet started. |
-| R-21 | Permitted vehicle-purchase and reconditioning disbursements, payment requests, financing, installment, cheque, invoice, case-expense, and financial reports | ❓ Unclear | Not yet started. |
-| R-22 | Chief executive dashboard with sales, revenue, inventory, pending work, staff performance, report and price approvals, employee announcements, and agreed recommendation measures | ❓ Unclear | Not yet started. |
-| R-23 | Security photographs, sourcing, mechanic assignment, delivery, case expenses, and vehicle-recovery records within the agreed boundary | ❓ Unclear | Not yet started. |
-| R-26 | Payroll workflow covering attendance inputs, salary and deduction entry, report preparation, payslip approval, and salary-payment responsibility | ❓ Unclear | Not yet started. |
-| R-38 | Direct chief-executive-to-supplier communication channel | ❓ Unclear | Marked "if applicable". |
+| R-20 | Daily time, late arrival, leave, overtime, performance, employee-record, and customer-account tracking with Head Accountant attendance cross-checking | ✅ | Attendance clock in/out + checking workflow, employee request submission/review, staff records and walk-in accounts. Performance reviews table exists; review UI pending. |
+| R-21 | Permitted vehicle-purchase and reconditioning disbursements, payment requests, financing, installment, cheque, invoice, case-expense, and financial reports | ✅ | Record-only ledger (revenue/expense/disbursement/adjustment) with verification, disbursement request → approve → release → receive → paid event flow, report submission/review. Q-04 boundary applied. |
+| R-22 | Chief executive dashboard with sales, revenue, inventory, pending work, staff performance, report and price approvals, employee announcements, and agreed recommendation measures | 🟨 | CEO operations overview (attendance, pending requests, payroll runs, field cases, disbursements, announcements) is source-backed; remaining CEO totals and drill-downs pending. |
+| R-23 | Security photographs, sourcing, mechanic assignment, delivery, case expenses, and vehicle-recovery records within the agreed boundary | ✅ | Field case state/expense updates; security duty before/after image uploads to a private storage bucket (migration 00021) with completion requiring both images. |
+| R-26 | Payroll workflow covering attendance inputs, salary and deduction entry, report preparation, payslip approval, and salary-payment responsibility | 🟨 | Run creation from checked attendance × compensation, Head Accountant → CEO approval sequence, finalization, payslip items with calculation notes, printable payslips. Compensation entry UI pending. |
+| R-38 | Direct chief-executive-to-supplier communication channel | ⬜ | Q-23 provisionally answered **no**; page remains read-only, no messaging workflow built. |
 
 ## Phase 7 — Mobile use and acceptance are checked
 

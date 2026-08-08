@@ -1,10 +1,9 @@
 import { redirect } from "next/navigation";
 
 import { getCurrentRole } from "@/app/auth/actions";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { createServerSupabase } from "@/lib/supabase/server";
+
+import { PayslipDetailClient, type PayslipItemRow } from "./_components/payslip-detail-client";
 
 export default async function PayslipDetailPage({ params }: { readonly params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -37,90 +36,24 @@ export default async function PayslipDetailPage({ params }: { readonly params: P
   const deductions = (items ?? []).filter((i) => i.item_kind === "deduction");
 
   const payrollRun = payslip.payroll_runs as Record<string, unknown> | null;
+  const periodLabel = payrollRun
+    ? `${new Date(payrollRun.period_start as string).toLocaleDateString()} — ${new Date(payrollRun.period_end as string).toLocaleDateString()}`
+    : "No period";
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6">
-      <div>
-        <h1 className="font-semibold text-3xl tracking-tight">Payslip</h1>
-        <p className="text-muted-foreground text-sm">
-          {payrollRun
-            ? `${new Date(payrollRun.period_start as string).toLocaleDateString()} — ${new Date(payrollRun.period_end as string).toLocaleDateString()}`
-            : "No period"}
-        </p>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Summary</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-2">
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Gross Pay</span>
-            <span>₱{((payslip.gross_cents as number) / 100).toLocaleString()}</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Deductions</span>
-            <span>₱{((payslip.deductions_cents as number) / 100).toLocaleString()}</span>
-          </div>
-          <Separator />
-          <div className="flex justify-between font-semibold">
-            <span>Net Pay</span>
-            <span>₱{((payslip.net_cents as number) / 100).toLocaleString()}</span>
-          </div>
-        </CardContent>
-      </Card>
-
-      {earnings.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Earnings</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Item</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {earnings.map((e) => (
-                  <TableRow key={e.id}>
-                    <TableCell>{e.label as string}</TableCell>
-                    <TableCell className="text-right">₱{((e.amount_cents as number) / 100).toLocaleString()}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
-
-      {deductions.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Deductions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Item</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {deductions.map((d) => (
-                  <TableRow key={d.id}>
-                    <TableCell>{d.label as string}</TableCell>
-                    <TableCell className="text-right">₱{((d.amount_cents as number) / 100).toLocaleString()}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
+      <PayslipDetailClient
+        payslipId={id}
+        status={(payslip.status as "draft" | "finalized") ?? "draft"}
+        grossCents={(payslip.gross_cents as number) ?? 0}
+        deductionsCents={(payslip.deductions_cents as number) ?? 0}
+        netCents={(payslip.net_cents as number) ?? 0}
+        earnings={(earnings as unknown as PayslipItemRow[]) ?? []}
+        deductions={(deductions as unknown as PayslipItemRow[]) ?? []}
+        canEdit={["ceo", "account_manager"].includes(role)}
+        periodLabel={periodLabel}
+        employeeLabel={isEmployee ? "You" : (payslip.employee_id as string).slice(0, 8)}
+      />
     </div>
   );
 }

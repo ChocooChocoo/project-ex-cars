@@ -1,7 +1,9 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getCurrentRole } from "@/app/auth/actions";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -45,12 +47,13 @@ export default async function PayslipsListPage() {
                 <TableHead>Gross</TableHead>
                 <TableHead>Net</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead />
               </TableRow>
             </TableHeader>
             <TableBody>
               {(payslips ?? []).length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground">
+                  <TableCell colSpan={5} className="text-center text-muted-foreground">
                     No payslips available.
                   </TableCell>
                 </TableRow>
@@ -68,6 +71,11 @@ export default async function PayslipsListPage() {
                     <TableCell>₱{((p.net_cents as number) / 100).toLocaleString()}</TableCell>
                     <TableCell>
                       <Badge variant={p.status === "finalized" ? "default" : "secondary"}>{p.status as string}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="sm" asChild>
+                        <Link href={`/dashboard/payslips/${p.id}`}>View</Link>
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))

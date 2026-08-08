@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation";
 
 import { getCurrentRole } from "@/app/auth/actions";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { createServerSupabase } from "@/lib/supabase/server";
+
+import { AttendanceClient, type AttendanceEntry } from "./_components/attendance-client";
+
+const ATTENDANCE_CHECKERS = ["ceo", "account_manager", "head_accountant"];
 
 export default async function AttendancePage() {
   const role = await getCurrentRole();
@@ -16,7 +17,7 @@ export default async function AttendancePage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/auth/v1/login");
 
-  const isStaff = ["ceo", "account_manager", "head_accountant"].includes(role);
+  const isStaff = ATTENDANCE_CHECKERS.includes(role);
   const query = supabase
     .from("attendance_entries")
     .select("*")
@@ -28,63 +29,22 @@ export default async function AttendancePage() {
 
   const { data: entries } = await query;
 
-  const statusBadge = (status: string) => {
-    const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-      present: "default",
-      absent: "destructive",
-      late: "secondary",
-      half_day: "secondary",
-      on_leave: "outline",
-    };
-    return <Badge variant={variants[status] ?? "secondary"}>{status}</Badge>;
-  };
+  const today = new Date().toISOString().slice(0, 10);
+  const typedEntries = (entries as unknown as AttendanceEntry[]) ?? [];
+  const todayEntry = typedEntries.find(
+    (entry) => entry.attendance_date === today && (entry as unknown as { employee_id: string }).employee_id === user.id,
+  );
 
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="font-semibold text-3xl tracking-tight">Attendance</h1>
         <p className="text-muted-foreground text-sm">
-          {isStaff ? "All employee attendance records." : "Your attendance history."}
+          {isStaff ? "Clock in, clock out, and review employee attendance records." : "Your attendance history."}
         </p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{isStaff ? "All Records" : "My Attendance"}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Time In</TableHead>
-                <TableHead>Time Out</TableHead>
-                <TableHead>Hours</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {(entries ?? []).length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground">
-                    No attendance records.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                (entries ?? []).map((e) => (
-                  <TableRow key={e.id}>
-                    <TableCell>{new Date(e.attendance_date as string).toLocaleDateString()}</TableCell>
-                    <TableCell>{e.time_in ? new Date(e.time_in as string).toLocaleTimeString() : "—"}</TableCell>
-                    <TableCell>{e.time_out ? new Date(e.time_out as string).toLocaleTimeString() : "—"}</TableCell>
-                    <TableCell>{e.hours_worked ? `${e.hours_worked}h` : "—"}</TableCell>
-                    <TableCell>{statusBadge(e.status as string)}</TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <AttendanceClient entries={typedEntries} canCheck={isStaff} todayEntry={todayEntry ?? null} />
     </div>
   );
 }
