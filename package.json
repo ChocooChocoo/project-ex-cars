@@ -12,6 +12,7 @@
     "check:fix": "biome check --write",
     "prepare": "husky",
     "generate:presets": "ts-node -P tsconfig.scripts.json src/scripts/generate-theme-presets.ts",
+    "seed:data": "node --env-file=.env.local scripts/seed-data.cjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test"
