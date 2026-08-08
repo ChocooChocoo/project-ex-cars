@@ -4,7 +4,84 @@
 
 ## Status and purpose
 
-This is a **proposed Supabase database schema**, not a record of an existing database. No database, source code, migration, or running system was supplied. Every implementation status therefore remains ❓ Unclear as recorded in [08 - ROADMAP TRACKER](08%20-%20ROADMAP%20TRACKER.md).
+This is a **Supabase database schema** — part planned, part built. Phases 1 through 5 are implemented. Phases 6 and 7 remain planned. No database, source code, migration, or running system was supplied at the time of writing; the plan was drawn from the project documents and then implemented phase by phase.
+
+**Last checked:** 8 August 2026
+
+### Table build status
+
+| Status | How many |
+|---:|---|
+| ✅ Built | 36 |
+| ⭕ Not yet built | 16 |
+| ❓ Conditional | 1 |
+| **Total** | **53** |
+
+| Table | Section | Phase | Status |
+|---|---|---|---|
+| `profiles` | A | 1 | ✅ |
+| `private.user_roles` | A | 1 | ✅ |
+| `customer_documents` | A | 1 | ✅ |
+| `audit_events` | A | 1 | ✅ |
+| `suppliers` | A | 1 | ✅ |
+| `supplier_documents` | A | 1 | ✅ |
+| `vehicles` | B | 2 | ✅ |
+| `vehicle_media` | B | 2 | ✅ |
+| `vehicle_inspections` | B | 2 | ✅ |
+| `repairs` | B | 2 | ✅ |
+| `vehicle_price_proposals` | B | 2 | ✅ |
+| `favourites` | B | 2 | ✅ |
+| `inspection_checklist_nodes` | B | 2 | ✅ |
+| `inspection_checklist_results` | B | 2 | ✅ |
+| `part_replacements` | B | 2 | ✅ |
+| `vehicle_document_items` | B | 2 | ✅ |
+| `content_items` | G | 2 | ✅ |
+| `inquiries` | C | 3 | ✅ |
+| `inquiry_messages` | C | 3 | ✅ |
+| `viewing_arrangements` | C | 3 | ✅ |
+| `message_attachments` | C | 3 | ✅ |
+| `message_reports` | C | 3 | ✅ |
+| `recommendation_runs` | H | 4 | ✅ |
+| `recommendation_results` | H | 4 | ✅ |
+| `recommendation_feedback` | H | 4 | ✅ |
+| `transactions` | D | 5 | ✅ |
+| `transaction_status_history` | D | 5 | ✅ |
+| `purchase_details` | D | 5 | ✅ |
+| `sell_details` | D | 5 | ✅ |
+| `vehicle_requests` | D | 5 | ✅ |
+| `transaction_documents` | D | 5 | ✅ |
+| `payment_records` | D | 5 | ✅ |
+| `installment_accounts` | D | 5 | ✅ |
+| `installments` | D | 5 | ✅ |
+| `collection_actions` | D | 5 | ✅ |
+| `field_cases` | D | 5 | ✅ |
+| `payment_terms` | D | 5 | ✅ |
+| `financial_entries` | E | 6 | ⭕ |
+| `disbursement_requests` | E | 6 | ⭕ |
+| `disbursement_events` | E | 6 | ⭕ |
+| `reports` | E | 6 | ⭕ |
+| `attendance_entries` | F | 6 | ⭕ |
+| `employee_requests` | F | 6 | ⭕ |
+| `private.staff_compensation` | F | 6 | ⭕ |
+| `payroll_runs` | F | 6 | ⭕ |
+| `payslips` | F | 6 | ⭕ |
+| `payslip_items` | F | 6 | ⭕ |
+| `payroll_approvals` | F | 6 | ⭕ |
+| `announcements` | G | 6 | ⭕ |
+| `security_duty_checks` | G | 6 | ⭕ |
+| `supplier_messages` | C | 6 | ❓ |
+| `acceptance_feedback` | A | 7 | ⭕ |
+
+### Status legend
+
+| Emoji | Means |
+|---|---|
+| ✅ | Built — migration exists, table is live |
+| ⭕ | Not yet built — waiting for its phase |
+| ❌ | Blocked — something is stopping it |
+| 🔵 | Already there — found in existing system, not created by this project |
+| ⬜ | Dropped — decided against, kept for the record |
+| ❓ | Conditional — depends on an open question being confirmed |
 
 The design is *drawn from* [02 - DOCUMENT FINDINGS](02%20-%20DOCUMENT%20FINDINGS.md), [05 - SYSTEM ARCHITECTURE](05%20-%20SYSTEM%20ARCHITECTURE.md), [07 - DEVELOPMENT ROADMAP](07%20-%20DEVELOPMENT%20ROADMAP.md), and [09 - TASK TRACKER](09%20-%20TASK%20TRACKER.md). It turns the documented work into a table-level plan for the Next.js and Supabase arrangement selected in conversation on 7 August 2026. Where the material is incomplete, the design keeps a safe place for the future answer without inventing the answer itself.
 

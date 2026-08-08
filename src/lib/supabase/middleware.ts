@@ -5,7 +5,14 @@ import { createServerClient } from "@supabase/ssr";
 import { GCE_ROLES } from "@/lib/auth/roles";
 import { isStaffRole, landingPath, resolveInternalPath } from "@/lib/routing/paths";
 
-const PROTECTED_PATHS = ["/showroom", "/inquiries", "/recommendations"];
+const PROTECTED_PATHS = [
+  "/showroom",
+  "/inquiries",
+  "/recommendations",
+  "/my-transactions",
+  "/request-a-car",
+  "/sell-vehicle",
+];
 const ROLE_SET = new Set<string>(GCE_ROLES);
 
 function getCookieRole(request: NextRequest): string | null {
