@@ -79,7 +79,6 @@ async function seed() {
 
   console.log(`\nUsers created with default "customer" role.`);
   console.log(`Run: npx supabase db query --linked --file scripts/seed-roles.sql`);
-  console.log(`Default password for all users: ${DEFAULT_PASSWORD}`);
 }
 
 seed();

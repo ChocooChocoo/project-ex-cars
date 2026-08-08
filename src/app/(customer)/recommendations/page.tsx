@@ -1,5 +1,5 @@
-import { getCurrentRole } from "@/app/auth/actions";
 import { CustomerHeader } from "@/app/(customer)/_components/customer-header";
+import { getCurrentRole } from "@/app/auth/actions";
 
 import { RecommendationPageClient } from "./_components/recommendation-page-client";
 

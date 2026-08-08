@@ -82,6 +82,11 @@ export async function recordPayment(formData: FormData) {
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
+  const role = await getCurrentRole();
+  if (!role || !["ceo", "sales_manager", "account_manager", "head_accountant"].includes(role)) {
+    return { error: "Not authorized" };
+  }
+
   const transactionId = formData.get("transaction_id") as string;
   const installmentId = (formData.get("installment_id") as string) || null;
   const amount = formData.get("amount") as string;
@@ -124,6 +129,11 @@ export async function verifyPayment(paymentId: string) {
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
+  const role = await getCurrentRole();
+  if (!role || !["ceo", "head_accountant"].includes(role)) {
+    return { error: "Not authorized" };
+  }
+
   const { error } = await supabase.from("payment_records").update({ verified_by: user.user.id }).eq("id", paymentId);
 
   if (error) return { error: error.message };
@@ -136,6 +146,11 @@ export async function createPaymentTerms(formData: FormData) {
   const supabase = await createServerSupabase();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
+
+  const role = await getCurrentRole();
+  if (!role || !["ceo", "sales_manager", "account_manager"].includes(role)) {
+    return { error: "Not authorized" };
+  }
 
   const purchaseTransactionId = formData.get("purchase_transaction_id") as string;
 
@@ -161,6 +176,11 @@ export async function approvePaymentTerms(termsId: string) {
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
+  const role = await getCurrentRole();
+  if (!role || !["ceo", "account_manager", "head_accountant"].includes(role)) {
+    return { error: "Not authorized" };
+  }
+
   const { error } = await supabase
     .from("payment_terms")
     .update({
@@ -185,6 +205,15 @@ export async function approvePaymentTerms(termsId: string) {
 }
 
 export async function activatePaymentTerms(termsId: string) {
+  const supabase = await createServerSupabase();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+
+  const role = await getCurrentRole();
+  if (!role || !["ceo", "account_manager"].includes(role)) {
+    return { error: "Not authorized" };
+  }
+
   const admin = await createAdminClient();
 
   const { data: terms } = await admin.from("payment_terms").select("*").eq("id", termsId).single();
@@ -249,6 +278,11 @@ export async function recordPaperwork(formData: FormData) {
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
+  const role = await getCurrentRole();
+  if (!role || !["ceo", "sales_manager", "account_manager"].includes(role)) {
+    return { error: "Not authorized" };
+  }
+
   const transactionId = formData.get("transaction_id") as string;
   const documentKind = formData.get("document_kind") as string;
   const file = formData.get("file") as File | null;
@@ -302,7 +336,9 @@ export async function reviewSellTransaction(formData: FormData) {
     return { error: "This action is not allowed for your role." };
   }
 
-  const { error } = await supabase
+  const admin = await createAdminClient();
+
+  const { error } = await admin
     .from("sell_details")
     .update({
       valuation_amount: parsed.valuation_amount,
@@ -315,9 +351,15 @@ export async function reviewSellTransaction(formData: FormData) {
 
   if (error) return { error: error.message };
 
-  await supabase.from("transactions").update({ current_state: newState }).eq("id", parsed.transaction_id);
+  await admin
+    .from("transactions")
+    .update({
+      current_state: newState,
+      completed_at: newState === "rejected" ? new Date().toISOString() : null,
+    })
+    .eq("id", parsed.transaction_id);
 
-  await supabase.from("transaction_status_history").insert({
+  await admin.from("transaction_status_history").insert({
     transaction_id: parsed.transaction_id,
     from_state: fromState,
     to_state: newState,
@@ -342,6 +384,11 @@ export async function assignInformant(formData: FormData) {
   const supabase = await createServerSupabase();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
+
+  const role = await getCurrentRole();
+  if (!role || !["ceo", "sales_manager"].includes(role)) {
+    return { error: "Not authorized" };
+  }
 
   const transactionId = formData.get("transaction_id") as string;
   const informantId = formData.get("informant_id") as string;
@@ -369,6 +416,11 @@ export async function markInstallmentWaived(installmentId: string) {
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
+  const role = await getCurrentRole();
+  if (!role || !["ceo", "account_manager", "head_accountant"].includes(role)) {
+    return { error: "Not authorized" };
+  }
+
   const { error } = await supabase.from("installments").update({ state: "waived" }).eq("id", installmentId);
 
   if (error) return { error: error.message };
@@ -389,6 +441,11 @@ export async function createWalkInTransaction(formData: FormData) {
   const supabase = await createServerSupabase();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
+
+  const role = await getCurrentRole();
+  if (!role || !["ceo", "sales_manager", "account_manager"].includes(role)) {
+    return { error: "Not authorized" };
+  }
 
   const customerId = formData.get("customer_id") as string;
   const kind = formData.get("transaction_kind") as string;

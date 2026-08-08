@@ -3,8 +3,9 @@ import type { ReactNode } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { getCurrentRole } from "@/app/auth/actions";
 import { AppSidebar } from "@/app/(ceo)/_components/sidebar/app-sidebar";
+import { getTotalUnreadCount } from "@/app/(customer)/my-inquiries/actions";
+import { getCurrentRole } from "@/app/auth/actions";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { SIDEBAR_COLLAPSIBLE_VALUES, SIDEBAR_VARIANT_VALUES } from "@/lib/preferences/layout";
@@ -28,10 +29,11 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
 
   const cookieStore = await cookies();
   const defaultOpen = cookieStore.get("sidebar_state")?.value !== "false";
-  const [variant, collapsible, role] = await Promise.all([
+  const [variant, collapsible, role, unreadCount] = await Promise.all([
     getPreference("sidebar_variant", SIDEBAR_VARIANT_VALUES, "inset"),
     getPreference("sidebar_collapsible", SIDEBAR_COLLAPSIBLE_VALUES, "icon"),
     getCurrentRole(),
+    getTotalUnreadCount().catch(() => 0),
   ]);
 
   return (
@@ -43,7 +45,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
         } as React.CSSProperties
       }
     >
-      <AppSidebar variant={variant} collapsible={collapsible} userRole={role} />
+      <AppSidebar variant={variant} collapsible={collapsible} userRole={role} unreadCount={unreadCount} />
       <SidebarInset
         className={cn(
           "[html[data-content-layout=centered]_&>*]:mx-auto",

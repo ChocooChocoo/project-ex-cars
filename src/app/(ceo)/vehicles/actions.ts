@@ -11,6 +11,11 @@ export async function createVehicle(formData: FormData) {
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
+  const role = await getCurrentRole();
+  if (!role || !["ceo", "sales_manager", "marketing_specialist"].includes(role)) {
+    return { error: "Not authorized" };
+  }
+
   const data = Object.fromEntries(formData) as Record<string, string>;
   const price = data.current_price ? Number.parseFloat(data.current_price) : null;
   const mileage = data.mileage ? Number.parseInt(data.mileage, 10) : null;
@@ -52,6 +57,11 @@ export async function updateVehicle(formData: FormData) {
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
+  const role = await getCurrentRole();
+  if (!role || !["ceo", "sales_manager", "marketing_specialist"].includes(role)) {
+    return { error: "Not authorized" };
+  }
+
   const data = Object.fromEntries(formData) as Record<string, string>;
   const id = data.id;
   const price = data.current_price ? Number.parseFloat(data.current_price) : null;
@@ -91,7 +101,27 @@ export async function updateVehicle(formData: FormData) {
 
 export async function publishVehicle(formData: FormData) {
   const supabase = await createServerSupabase();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+
+  const role = await getCurrentRole();
+  if (!role || !["ceo", "sales_manager", "marketing_specialist"].includes(role)) {
+    return { error: "Not authorized" };
+  }
+
   const id = formData.get("id") as string;
+
+  // Require an approved price proposal before publishing.
+  const { data: approved } = await supabase
+    .from("vehicle_price_proposals")
+    .select("id")
+    .eq("vehicle_id", id)
+    .eq("decision", "approved")
+    .single();
+
+  if (!approved) {
+    return { error: "Vehicle must have an approved price proposal before publishing." };
+  }
 
   const { error } = await supabase
     .from("vehicles")
@@ -108,6 +138,11 @@ export async function proposePrice(formData: FormData) {
   const supabase = await createServerSupabase();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
+
+  const role = await getCurrentRole();
+  if (!role || !["ceo", "marketing_specialist"].includes(role)) {
+    return { error: "Not authorized" };
+  }
 
   const vehicleId = formData.get("vehicle_id") as string;
   const amount = Number.parseFloat(formData.get("proposed_amount") as string);
@@ -132,6 +167,11 @@ export async function approvePrice(formData: FormData) {
   const supabase = await createServerSupabase();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
+
+  const role = await getCurrentRole();
+  if (!role || role !== "ceo") {
+    return { error: "Only the CEO can approve or reject price proposals." };
+  }
 
   const proposalId = formData.get("proposal_id") as string;
   const decision = formData.get("decision") as string;
@@ -204,10 +244,29 @@ export async function toggleFavourite(vehicleId: string) {
   return { success: true, favourited: true };
 }
 
+export async function getFavourites() {
+  const supabase = await createServerSupabase();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return [];
+
+  const { data } = await supabase.from("favourites").select("vehicle_id, vehicles(*)").eq("customer_id", user.user.id);
+
+  if (!data) return [];
+
+  return data
+    .map((row) => (row.vehicles as unknown) as Record<string, unknown> | null)
+    .filter((v): v is Record<string, unknown> => v !== null);
+}
+
 export async function createInspection(formData: FormData) {
   const supabase = await createServerSupabase();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
+
+  const role = await getCurrentRole();
+  if (!role || !["ceo", "mechanic"].includes(role)) {
+    return { error: "Not authorized" };
+  }
 
   const vehicleId = formData.get("vehicle_id") as string;
   const score = formData.get("condition_score") ? Number.parseInt(formData.get("condition_score") as string, 10) : null;
@@ -234,6 +293,11 @@ export async function submitChecklistAnswer(formData: FormData) {
   const supabase = await createServerSupabase();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
+
+  const role = await getCurrentRole();
+  if (!role || !["ceo", "mechanic"].includes(role)) {
+    return { error: "Not authorized" };
+  }
 
   const inspectionId = formData.get("inspection_id") as string;
   const entryId = formData.get("checklist_entry_id") as string;
@@ -281,6 +345,11 @@ export async function createContentItem(formData: FormData) {
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
+  const role = await getCurrentRole();
+  if (!role || !["ceo", "marketing_specialist"].includes(role)) {
+    return { error: "Not authorized" };
+  }
+
   const data = Object.fromEntries(formData) as Record<string, string>;
 
   const { error } = await supabase.from("content_items").insert({
@@ -299,6 +368,13 @@ export async function createContentItem(formData: FormData) {
 
 export async function publishContent(id: string) {
   const supabase = await createServerSupabase();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+
+  const role = await getCurrentRole();
+  if (!role || !["ceo", "marketing_specialist"].includes(role)) {
+    return { error: "Not authorized" };
+  }
 
   const { error } = await supabase
     .from("content_items")

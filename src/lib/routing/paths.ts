@@ -34,6 +34,7 @@ export function resolveInternalPath(role: string, segment: string): string {
   if (seg.startsWith("inquiries")) return seg.replace("inquiries", "/my-inquiries");
   if (seg.startsWith("my-inquiries")) return `/${seg}`;
   if (seg.startsWith("my-transactions")) return `/${seg}`;
+  if (seg.startsWith("favourites")) return `/${seg}`;
   if (seg.startsWith("recommendations")) return seg.replace("recommendations", "/recommendations");
   if (seg.startsWith("request-a-car")) return `/${seg}`;
   if (seg.startsWith("sell-vehicle")) return `/${seg}`;

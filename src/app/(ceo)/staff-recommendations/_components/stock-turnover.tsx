@@ -17,6 +17,8 @@ interface StockData {
   available: number;
   sold: number;
   reserved: number;
+  soldLast30?: number;
+  avgDaysToSell?: number;
   byCondition: { condition: string; count: number }[];
 }
 
@@ -41,11 +43,13 @@ export function StockTurnover() {
     );
   }
 
-  const kpis: { label: string; value: number; icon: LucideIcon }[] = [
+  const kpis: { label: string; value: number | string; icon: LucideIcon }[] = [
     { label: "Total Vehicles", value: data.total, icon: Package },
     { label: "Available", value: data.available, icon: Truck },
     { label: "Sold", value: data.sold, icon: CheckCircle },
     { label: "Reserved", value: data.reserved, icon: Clock },
+    { label: "Sold (Last 30d)", value: data.soldLast30 ?? "—", icon: CheckCircle },
+    { label: "Avg Days to Sell", value: data.avgDaysToSell ?? "—", icon: Clock },
   ];
 
   return (

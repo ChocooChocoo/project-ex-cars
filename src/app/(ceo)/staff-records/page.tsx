@@ -6,6 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { createServerSupabase } from "@/lib/supabase/server";
 
+import { WalkInForm } from "./_components/walk-in-form";
+
 export default async function StaffRecordsPage() {
   const role = await getCurrentRole();
   if (!role || !["ceo", "account_manager"].includes(role)) {
@@ -24,9 +26,12 @@ export default async function StaffRecordsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="font-semibold text-3xl tracking-tight">Staff Records</h1>
-        <p className="text-muted-foreground text-sm">Manage employee and customer accounts.</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="font-semibold text-3xl tracking-tight">Staff Records</h1>
+          <p className="text-muted-foreground text-sm">Manage employee and customer accounts.</p>
+        </div>
+        <WalkInForm />
       </div>
 
       <Card>

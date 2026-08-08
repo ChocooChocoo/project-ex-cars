@@ -22,6 +22,18 @@ export default async function LandingPage() {
   const featured = (content ?? []).filter((c) => c.content_kind === "featured_vehicle");
   const announcements = (content ?? []).filter((c) => c.content_kind === "announcement");
 
+  // Fetch vehicle details for featured vehicle content items.
+  const vehicleIds = featured.map((f) => f.vehicle_id as string | null).filter(Boolean) as string[];
+  const { data: vehiclesData } =
+    vehicleIds.length > 0
+      ? await supabase
+          .from("vehicles")
+          .select("id, make, model, year, current_price")
+          .in("id", vehicleIds)
+          .eq("listing_state", "available")
+      : { data: null };
+  const vehicleMap = new Map((vehiclesData ?? []).map((v) => [v.id, v]));
+
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-12 px-4 py-12">
       {/* Hero */}
@@ -68,16 +80,30 @@ export default async function LandingPage() {
         <section className="flex flex-col gap-4">
           <h2 className="font-semibold text-2xl">Featured Vehicles</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {featured.map((f) => (
-              <Card key={f.id}>
-                <CardHeader>
-                  <CardTitle className="text-lg">{f.title}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <CardDescription>{f.body}</CardDescription>
-                </CardContent>
-              </Card>
-            ))}
+            {featured.map((f) => {
+              const vehicle = f.vehicle_id ? vehicleMap.get(f.vehicle_id as string) : null;
+              return (
+                <Card key={f.id}>
+                  <CardHeader>
+                    <CardTitle className="text-lg">{f.title}</CardTitle>
+                    {vehicle && (
+                      <CardDescription>
+                        {vehicle.make} {vehicle.model} ({vehicle.year}) &middot; ₱
+                        {Number(vehicle.current_price).toLocaleString()}
+                      </CardDescription>
+                    )}
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-muted-foreground text-sm">{f.body}</p>
+                    {vehicle && (
+                      <Button asChild variant="link" className="mt-2 h-auto px-0 text-sm" size="sm">
+                        <Link href={`/showroom/${vehicle.id}`}>View Details</Link>
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </section>
       )}

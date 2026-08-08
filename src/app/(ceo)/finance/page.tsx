@@ -1,6 +1,9 @@
+import { redirect } from "next/navigation";
+
 import { format } from "date-fns";
 import { Download, RotateCw, Settings2 } from "lucide-react";
 
+import { getCurrentRole } from "@/app/auth/actions";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -13,7 +16,12 @@ import { TransactionsOverviewCard } from "./_components/transactions-overview-ca
 import { UpcomingTransactions } from "./_components/upcoming-transactions";
 import { Wallet } from "./_components/wallet";
 
-export default function Page() {
+export default async function Page() {
+  const role = await getCurrentRole();
+  if (!role || !["ceo", "head_accountant", "account_manager"].includes(role)) {
+    redirect("/unauthorized");
+  }
+
   const formattedDate = format(new Date(), "EEEE, do MMMM yyyy");
 
   return (

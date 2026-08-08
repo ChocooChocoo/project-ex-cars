@@ -11,6 +11,7 @@ import {
   Forklift,
   Gauge,
   GraduationCap,
+  Heart,
   Kanban,
   LayoutDashboard,
   ListTodo,
@@ -146,6 +147,12 @@ export const sidebarItems: NavGroup[] = [
         icon: Eye,
       },
       {
+        id: "favourites",
+        title: "Favourites",
+        url: "/favourites",
+        icon: Heart,
+      },
+      {
         id: "content",
         title: "Content",
         url: "/content",
@@ -174,6 +181,12 @@ export const sidebarItems: NavGroup[] = [
         title: "Transactions",
         url: "/transactions",
         icon: ReceiptText,
+      },
+      {
+        id: "suppliers",
+        title: "Suppliers",
+        url: "/suppliers",
+        icon: ScanFace,
       },
     ],
   },

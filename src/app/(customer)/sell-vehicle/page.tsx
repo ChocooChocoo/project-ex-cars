@@ -1,10 +1,6 @@
-import { getProfileAutoFill } from "@/lib/autofill";
-
 import { SellVehicleForm } from "./_components/sell-vehicle-form";
 
 export default async function SellVehiclePage() {
-  const autofill = await getProfileAutoFill();
-
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
@@ -14,7 +10,7 @@ export default async function SellVehiclePage() {
         </p>
       </div>
       <div className="max-w-xl">
-        <SellVehicleForm autofill={autofill} />
+        <SellVehicleForm />
       </div>
     </div>
   );
