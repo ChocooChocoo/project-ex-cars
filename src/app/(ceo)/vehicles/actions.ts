@@ -254,7 +254,7 @@ export async function getFavourites() {
   if (!data) return [];
 
   return data
-    .map((row) => (row.vehicles as unknown) as Record<string, unknown> | null)
+    .map((row) => row.vehicles as unknown as Record<string, unknown> | null)
     .filter((v): v is Record<string, unknown> => v !== null);
 }
 

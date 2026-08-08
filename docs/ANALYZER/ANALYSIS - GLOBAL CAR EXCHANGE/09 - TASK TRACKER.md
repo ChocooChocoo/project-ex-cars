@@ -10,14 +10,14 @@ Every task here names where it came from. A task with no traceable origin is not
 
 | Status | How many |
 |---:|---|
-| ✅ Finished | 37 |
+| ✅ Finished | 38 |
 | 🟨 Being worked on | 3 |
 | ⭕ Not started | 0 |
 | ❌ Blocked | 0 |
 | 🔵 Already there | 0 |
 | ⬜ Dropped | 0 |
 | ❓ Unclear | 19 |
-| **Total** | **59** |
+| **Total** | **60** |
 
 The earlier task state recorded Phases 1–5 as completed. The source-code audit and prerequisite fix sequence are now documented in [14 - PHASE 6 IMPLEMENTATION PLAN](14%20-%20PHASE%206%20IMPLEMENTATION%20PLAN.md). Existing finished labels require evidence-based reconciliation through its Recovery Gates 0–3. Phase 6 planning is complete, but its implementation tasks remain unstarted/unclear.
 
@@ -50,6 +50,7 @@ The earlier task state recorded Phases 1–5 as completed. The source-code audit
 | T-23 | Create the agreed security, sourcing, delivery, and towing records | **GCE ADDITIONAL DOCUMENTS.docx**, pages 1 and 3 | The Head Security and confidential-informant duties | R-23 | ❓ Unclear |
 | T-24 | Make every completed customer and employee journey work in a responsive browser experience | **GCE FULL CHAPTER 1 - 3.docx**, pages 15–17 and 21 | The browser-based mobile requirement | R-24 | ❓ Unclear |
 | T-25 | Run and record user acceptance, usability, and satisfaction checks | **GCE FULL CHAPTER 1 - 3.docx**, pages 21–22 | The stated Technology Acceptance Model and user-experience measures | R-25 | ❓ Unclear |
+| T-60 | Build the Product Roadmap feature: a visual quarter timeline of initiatives, epics, and features with expandable hierarchy, status/priority/quarter/team filters, search, sorting, drill-down detail views, and CRUD backed by Supabase | **docs/tasks/11.md**, "Phase 6 Implementation: Building the Product Roadmap Feature" | Platform tooling work ordered by the task list; it is not part of the GCE business requirements | — | ✅ |
 
 ## Tasks that serve no roadmap item
 
