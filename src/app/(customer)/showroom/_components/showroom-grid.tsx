@@ -8,7 +8,7 @@ import Link from "next/link";
 import { Car, Filter, Heart, Search } from "lucide-react";
 import { toast } from "sonner";
 
-import { toggleFavourite } from "@/app/(ceo)/vehicles/actions";
+import { toggleFavourite } from "@/app/(staff)/vehicles/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";

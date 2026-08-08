@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 
-import { getFavourites } from "@/app/(ceo)/vehicles/actions";
 import { CustomerHeader } from "@/app/(customer)/_components/customer-header";
 import { ShowroomGrid } from "@/app/(customer)/showroom/_components/showroom-grid";
+import { getFavourites } from "@/app/(staff)/vehicles/actions";
 import { getCurrentRole } from "@/app/auth/actions";
 
 export default async function FavouritesPage() {
