@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { getCurrentRole } from "@/app/(main)/auth/actions";
+import { getCurrentRole } from "@/app/(auth)/actions";
 import { landingPath } from "@/lib/routing/paths";
 
 export default async function Home() {

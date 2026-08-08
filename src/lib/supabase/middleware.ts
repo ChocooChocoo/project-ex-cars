@@ -65,8 +65,11 @@ export async function updateSession(request: NextRequest) {
 
   // Auth pages → redirect to role landing
   if (isAuthPage) {
-    url.pathname = role ? landingPath(role) : "/auth/v1/login";
-    return NextResponse.redirect(url);
+    if (role) {
+      url.pathname = landingPath(role);
+      return NextResponse.redirect(url);
+    }
+    return supabaseResponse;
   }
 
   // Root → redirect to role landing
