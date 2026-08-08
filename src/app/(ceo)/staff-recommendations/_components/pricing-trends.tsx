@@ -19,9 +19,11 @@ export function PricingTrends() {
   } | null>(null);
 
   useEffect(() => {
-    getPricingTrends().then((res) => {
-      if (res.success && "byMake" in res) setData(res as unknown as typeof data);
-    });
+    getPricingTrends()
+      .then((res) => {
+        if (res.success && "byMake" in res) setData(res as unknown as typeof data);
+      })
+      .catch(console.error);
   }, []);
 
   if (!data) {
@@ -38,7 +40,7 @@ export function PricingTrends() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
         <TrendingUp className="size-5 text-primary" />
-        <h2 className="text-lg font-semibold tracking-tight">Pricing Trends</h2>
+        <h2 className="font-semibold text-lg tracking-tight">Pricing Trends</h2>
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">

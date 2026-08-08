@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 
-import { createAdminClient } from "@/lib/supabase/admin";
+import { landingPath } from "@/lib/routing/paths";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export async function GET(request: NextRequest) {
@@ -14,35 +14,26 @@ export async function GET(request: NextRequest) {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      let landing = "/dashboard/default";
 
       if (user) {
-        const admin = createAdminClient();
-        const { data: roles } = await admin.rpc("get_user_roles");
+        const { data: roles } = await supabase.rpc("get_user_roles");
         const roleRecord = (roles as { account_id: string; role: string }[] | null)?.find(
           (r) => r.account_id === user.id,
         );
         const role = roleRecord?.role ?? "customer";
-
-        if (role === "customer" || role === "supplier") {
-          landing = "/showroom";
-        } else if (role === "mechanic") {
-          landing = "/dashboard/inspections";
-        } else if (role === "marketing_specialist") {
-          landing = "/dashboard/vehicles";
-        }
+        const landing = landingPath(role);
 
         const response = NextResponse.redirect(`${origin}${landing}`);
         response.cookies.set("gce-role", role, {
           path: "/",
-          httpOnly: false,
+          httpOnly: true,
           sameSite: "lax",
           maxAge: 60 * 60 * 24 * 7,
         });
         return response;
       }
 
-      return NextResponse.redirect(`${origin}${landing}`);
+      return NextResponse.redirect(`${origin}/dashboard`);
     }
   }
 

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { getCurrentRole } from "@/app/(auth)/actions";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -307,5 +308,41 @@ export async function publishContent(id: string) {
   if (error) return { error: error.message };
 
   revalidatePath("/dashboard/content");
+  return { success: true };
+}
+
+export async function archiveVehicle(vehicleId: string) {
+  const supabase = await createServerSupabase();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+
+  const role = await getCurrentRole();
+  if (!role || !["ceo", "sales_manager", "marketing_specialist"].includes(role)) {
+    return { error: "Not authorized" };
+  }
+
+  const { error } = await supabase.from("vehicles").update({ listing_state: "archived" }).eq("id", vehicleId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/dashboard/vehicles");
+  return { success: true };
+}
+
+export async function deleteVehicle(vehicleId: string) {
+  const supabase = await createServerSupabase();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+
+  const role = await getCurrentRole();
+  if (!role || !["ceo"].includes(role)) {
+    return { error: "Not authorized" };
+  }
+
+  const { error } = await supabase.from("vehicles").delete().eq("id", vehicleId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/dashboard/vehicles");
   return { success: true };
 }

@@ -24,9 +24,11 @@ export function StockTurnover() {
   const [data, setData] = useState<StockData | null>(null);
 
   useEffect(() => {
-    getStockTurnover().then((res) => {
-      if (res.success && "total" in res) setData(res as unknown as StockData);
-    });
+    getStockTurnover()
+      .then((res) => {
+        if (res.success && "total" in res) setData(res as unknown as StockData);
+      })
+      .catch(console.error);
   }, []);
 
   if (!data) {
@@ -50,7 +52,7 @@ export function StockTurnover() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
         <Package className="size-5 text-primary" />
-        <h2 className="text-lg font-semibold tracking-tight">Stock Turnover</h2>
+        <h2 className="font-semibold text-lg tracking-tight">Stock Turnover</h2>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -58,7 +60,7 @@ export function StockTurnover() {
           <Card key={kpi.label}>
             <CardContent className="flex flex-col items-center gap-1 py-4">
               <kpi.icon className="size-5 text-muted-foreground" />
-              <span className="text-2xl font-bold">{kpi.value}</span>
+              <span className="font-bold text-2xl">{kpi.value}</span>
               <span className="text-muted-foreground text-xs">{kpi.label}</span>
             </CardContent>
           </Card>

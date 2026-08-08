@@ -1,7 +1,7 @@
 // Pure installment schedule generator (R-19, R-37).
 // No I/O, no server imports.
 
-import { addDays, addMonths, addWeeks } from "date-fns";
+import { addMonths, addWeeks } from "date-fns";
 
 export type PaymentFrequency = "weekly" | "biweekly" | "monthly" | "quarterly";
 

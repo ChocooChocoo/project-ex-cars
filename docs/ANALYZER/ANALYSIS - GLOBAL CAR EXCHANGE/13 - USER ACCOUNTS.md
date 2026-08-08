@@ -4,7 +4,7 @@
 
 **Last updated:** 8 August 2026
 
-All test accounts share the same password: **`GCEtest123!@#`**
+All test accounts share the same password. Set via `SEED_USER_PASSWORD` environment variable. See `scripts/seed-users.cjs`.
 
 ---
 
@@ -15,7 +15,7 @@ All test accounts share the same password: **`GCEtest123!@#`**
 | Field | Value |
 |---|---|
 | Email | `customer@gce.local` |
-| Password | `GCEtest123!@#` |
+| Password | `[env: SEED_USER_PASSWORD]` |
 | Role | `customer` |
 | Landing page | `/showroom` |
 | Job function | Browse vehicles, inquire about listings, receive recommendations |
@@ -199,4 +199,4 @@ All accounts are created by `scripts/seed-users.cjs` using the Supabase Admin AP
 3. Updates the `profiles` table
 4. Assigns roles via `assign_user_role` PostgreSQL RPC
 
-Default password for all: `GCEtest123!@#`
+Default password for all: set via `SEED_USER_PASSWORD` environment variable

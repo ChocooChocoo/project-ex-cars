@@ -41,6 +41,8 @@ The revision list then adds a further layer of required work. Suppliers return a
 | [10 - WORD LIST](10%20-%20WORD%20LIST.md) | Plain meanings for unavoidable project terms |
 | [11 - TECH STACK](11%20-%20TECH%20STACK.md) | The proposed Next.js and Supabase technology choices and boundaries |
 | [12 - DATABASE SCHEMA](12%20-%20DATABASE%20SCHEMA.md) | The proposed tables, relationships, files, access rules, and build order |
+| [13 - USER ACCOUNTS](13%20-%20USER%20ACCOUNTS.md) | The current test-account roles, intended access, and navigation reference |
+| [14 - PHASE 6 IMPLEMENTATION PLAN](14%20-%20PHASE%206%20IMPLEMENTATION%20PLAN.md) | The Phase 1–5 code audit, mandatory recovery gates, and Phase 6 implementation handoff |
 
 ## Not made this time
 
@@ -51,7 +53,7 @@ The revision list then adds a further layer of required work. Suppliers return a
 
 ## How to read this
 
-Start with [01 - OVERVIEW](01%20-%20OVERVIEW.md) for the quickest explanation. Read [02 - DOCUMENT FINDINGS](02%20-%20DOCUMENT%20FINDINGS.md) for the evidence and disagreements. Use [05 - SYSTEM ARCHITECTURE](05%20-%20SYSTEM%20ARCHITECTURE.md) and [06 - DIAGRAMS](06%20-%20DIAGRAMS.md) to see how the proposed parts fit together. Go to [07 - DEVELOPMENT ROADMAP](07%20-%20DEVELOPMENT%20ROADMAP.md) for the build order and [08 - ROADMAP TRACKER](08%20-%20ROADMAP%20TRACKER.md) for the current, unverified status. Read [11 - TECH STACK](11%20-%20TECH%20STACK.md) for the proposed implementation choices and [12 - DATABASE SCHEMA](12%20-%20DATABASE%20SCHEMA.md) for the table-level plan.
+Start with [01 - OVERVIEW](01%20-%20OVERVIEW.md) for the quickest explanation. Read [02 - DOCUMENT FINDINGS](02%20-%20DOCUMENT%20FINDINGS.md) for the evidence and disagreements. Use [05 - SYSTEM ARCHITECTURE](05%20-%20SYSTEM%20ARCHITECTURE.md) and [06 - DIAGRAMS](06%20-%20DIAGRAMS.md) to see how the proposed parts fit together. Go to [07 - DEVELOPMENT ROADMAP](07%20-%20DEVELOPMENT%20ROADMAP.md) for the build order and [08 - ROADMAP TRACKER](08%20-%20ROADMAP%20TRACKER.md) for the current, unverified status. Read [11 - TECH STACK](11%20-%20TECH%20STACK.md) for the proposed implementation choices, [12 - DATABASE SCHEMA](12%20-%20DATABASE%20SCHEMA.md) for the table-level plan, and [14 - PHASE 6 IMPLEMENTATION PLAN](14%20-%20PHASE%206%20IMPLEMENTATION%20PLAN.md) before any Phase 6 code work.
 
 ## Status legend
 
@@ -111,6 +113,7 @@ These numbers remain fixed. They are kept here so older links and references sti
 
 | Date | What changed |
 |---|---|
+| 8 August 2026 | Added the Phase 6 implementation plan. Its source-code audit found that the earlier Phase 1–5 completion statement is not yet supported by build, authorization, user-journey, and repeatable-test evidence. The plan makes credential/build/security recovery, automated verification, and incomplete Phase 1–5 journeys mandatory prerequisites; keeps Phase 6 implementation unstarted; and blocks unresolved finance, payroll, recovery, and optional supplier-chat behavior on recorded stakeholder decisions. This was a documentation-only planning update and did not rotate credentials or change application, migration, configuration, or test files. |
 | 7 August 2026 | Phase 4 implementation completed. Created database migration (00006) with recommendation_runs, recommendation_results, and recommendation_feedback tables with RLS policies. Built ranking engine (src/lib/recommendations/engine.ts) applying five weighted criteria: budget (0.35), condition (0.25), fuel efficiency (0.15), resale/demand (0.15), and mileage (0.10). Created customer-facing recommendation page at /recommendations with budget input, preference form, ranked vehicle results, and per-criterion score breakdowns with feedback collection. Built management decision views at /dashboard/recommendations with tabs: Pricing Trends, Stock Turnover, Buying Patterns, Market Insights, and Accuracy Tracking — all derived from existing platform data. R-12 through R-14 and T-12 through T-14 marked finished. |
 | 7 August 2026 | Phase 3 implementation completed. Created Phase 3 database migration with 5 tables (inquiries, inquiry_messages, viewing_arrangements, message_attachments, message_reports) with RLS policies. Built customer chat at /inquiries (real-time chat with Supabase Realtime, vehicle-linked conversations, message history). Built staff queue at /dashboard/inquiries (role-filtered Inquiry/Buy Now queues, staff assignment, arrangement form with GCE visit/meetup/delivery scheduling, handoff workflow). Added word filter (src/lib/word-filter.ts). Added message reporting with staff review at /dashboard/inquiries/reports. Added Inquire/Buy Now buttons on showroom vehicle detail page. R-09 through R-11 and R-35 through R-36 marked finished. |
 | 7 August 2026 | Phase 2 implementation completed. 11 tables (vehicles through vehicle_documents) with RLS. Staff vehicle CRUD at /dashboard/vehicles, public showroom at /showroom, content management at /dashboard/content, mechanic inspections at /dashboard/inspections. R-04 through R-34 finished except R-07. |

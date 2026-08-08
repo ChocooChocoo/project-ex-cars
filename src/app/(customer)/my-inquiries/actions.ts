@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { getProfileAutoFill } from "@/lib/autofill";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export async function createInquiry(formData: FormData) {
@@ -79,14 +80,21 @@ export async function scheduleArrangement(formData: FormData) {
   const inquiryId = formData.get("inquiry_id") as string;
   const kind = formData.get("arrangement_kind") as string;
   const schedule = formData.get("schedule") as string;
-  const location = formData.get("location") as string;
+  const location = (formData.get("location") as string) || null;
   const notes = formData.get("notes") as string | null;
+
+  // Autofill location from user's profile if not provided.
+  let resolvedLocation = location;
+  if (!resolvedLocation) {
+    const autofill = await getProfileAutoFill();
+    resolvedLocation = autofill?.address ?? null;
+  }
 
   const { error } = await supabase.from("viewing_arrangements").insert({
     inquiry_id: inquiryId,
     arrangement_kind: kind,
     schedule: new Date(schedule).toISOString(),
-    location: location || null,
+    location: resolvedLocation,
     notes,
   });
 
@@ -126,6 +134,21 @@ export async function markMessagesRead(inquiryId: string) {
 
   revalidatePath("/inquiries");
   revalidatePath("/dashboard/inquiries");
+}
+
+export async function getUnreadCount(inquiryId: string): Promise<number> {
+  const supabase = await createServerSupabase();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return 0;
+
+  const { count } = await supabase
+    .from("inquiry_messages")
+    .select("*", { count: "exact", head: true })
+    .eq("inquiry_id", inquiryId)
+    .neq("sender_id", user.user.id)
+    .is("read_at", null);
+
+  return count ?? 0;
 }
 
 export async function reportMessage(inquiryId: string, messageId: string, reason: string) {

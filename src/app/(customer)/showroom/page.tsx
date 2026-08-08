@@ -10,11 +10,21 @@ import { ShowroomGrid } from "./_components/showroom-grid";
 export default async function ShowroomPage() {
   const supabase = await createServerSupabase();
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   const { data: vehicles } = await supabase
     .from("vehicles")
     .select("*")
     .in("listing_state", ["available", "reserved"])
     .order("posted_at", { ascending: false });
+
+  let favouriteIds: string[] = [];
+  if (user) {
+    const { data: favs } = await supabase.from("favourites").select("vehicle_id").eq("customer_id", user.id);
+    favouriteIds = (favs ?? []).map((f) => f.vehicle_id as string);
+  }
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4">
@@ -30,7 +40,7 @@ export default async function ShowroomPage() {
           </Link>
         </Button>
       </div>
-      <ShowroomGrid vehicles={(vehicles as Record<string, unknown>[]) ?? []} />
+      <ShowroomGrid vehicles={(vehicles as Record<string, unknown>[]) ?? []} favouriteIds={favouriteIds} />
     </div>
   );
 }

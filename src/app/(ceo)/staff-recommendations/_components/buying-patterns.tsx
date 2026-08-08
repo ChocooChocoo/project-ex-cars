@@ -23,9 +23,11 @@ export function BuyingPatterns() {
   const [data, setData] = useState<PatternsData | null>(null);
 
   useEffect(() => {
-    getBuyingPatterns().then((res) => {
-      if (res.success && "topMakes" in res) setData(res as unknown as PatternsData);
-    });
+    getBuyingPatterns()
+      .then((res) => {
+        if (res.success && "topMakes" in res) setData(res as unknown as PatternsData);
+      })
+      .catch(console.error);
   }, []);
 
   if (!data) {
@@ -42,7 +44,7 @@ export function BuyingPatterns() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
         <ShoppingCart className="size-5 text-primary" />
-        <h2 className="text-lg font-semibold tracking-tight">Buying Patterns</h2>
+        <h2 className="font-semibold text-lg tracking-tight">Buying Patterns</h2>
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -106,7 +108,7 @@ export function BuyingPatterns() {
                           <tspan
                             x={(viewBox as { cx: number }).cx}
                             dy="-0.5em"
-                            className="fill-foreground text-lg font-bold"
+                            className="fill-foreground font-bold text-lg"
                           >
                             {total}
                           </tspan>

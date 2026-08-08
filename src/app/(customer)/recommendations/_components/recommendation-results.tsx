@@ -127,7 +127,7 @@ export function RecommendationResults({ runId }: RecommendationResultsProps) {
       setResults(enriched);
       setLoading(false);
     }
-    load();
+    load().catch(console.error);
   }, [runId]);
 
   async function handleFeedback(vehicleId: string, helpful: boolean) {
@@ -165,7 +165,7 @@ export function RecommendationResults({ runId }: RecommendationResultsProps) {
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
         <Trophy className="size-5 text-amber-500" />
-        <h2 className="text-xl font-semibold tracking-tight">Ranked Recommendations</h2>
+        <h2 className="font-semibold text-xl tracking-tight">Ranked Recommendations</h2>
       </div>
 
       <ScrollArea className="max-h-[70vh]">
@@ -177,7 +177,7 @@ export function RecommendationResults({ runId }: RecommendationResultsProps) {
                   <div className="flex items-center gap-3">
                     <div
                       className={cn(
-                        "flex size-8 items-center justify-center rounded-full text-xs font-bold text-white",
+                        "flex size-8 items-center justify-center rounded-full font-bold text-white text-xs",
                         idx < 3 ? medalColors[idx] : "bg-muted-foreground/30",
                       )}
                     >
@@ -225,7 +225,7 @@ export function RecommendationResults({ runId }: RecommendationResultsProps) {
                           <div className="flex items-center justify-between text-sm">
                             <span className="font-medium">{c.label}</span>
                             <div className="flex items-center gap-2">
-                              <span className="text-xs text-muted-foreground">
+                              <span className="text-muted-foreground text-xs">
                                 Weight: {(c.weight * 100).toFixed(0)}%
                               </span>
                               <Badge variant="secondary" className="text-xs">
@@ -239,7 +239,7 @@ export function RecommendationResults({ runId }: RecommendationResultsProps) {
                               style={{ width: `${c.score}%` }}
                             />
                           </div>
-                          <p className="mt-1 text-xs text-muted-foreground">{c.detail}</p>
+                          <p className="mt-1 text-muted-foreground text-xs">{c.detail}</p>
                         </div>
                       ))}
                     </div>

@@ -4,7 +4,9 @@ import {
   Car,
   ChartBar,
   ClipboardList,
+  Clock,
   Eye,
+  FileText,
   Fingerprint,
   Forklift,
   Gauge,
@@ -18,7 +20,9 @@ import {
   Megaphone,
   MessageSquare,
   ReceiptText,
+  ScanFace,
   Server,
+  Shield,
   ShoppingBag,
   Sparkles,
   SquareArrowUpRight,
@@ -175,6 +179,72 @@ export const sidebarItems: NavGroup[] = [
   },
   {
     id: 3,
+    label: "Staff Management",
+    items: [
+      {
+        id: "staff-records",
+        title: "Staff Records",
+        url: "/staff-records",
+        icon: Users,
+      },
+      {
+        id: "attendance",
+        title: "Attendance",
+        url: "/attendance",
+        icon: Clock,
+      },
+      {
+        id: "employee-requests",
+        title: "Requests",
+        url: "/employee-requests",
+        icon: FileText,
+      },
+      {
+        id: "payroll",
+        title: "Payroll",
+        url: "/payroll",
+        icon: Banknote,
+      },
+      {
+        id: "payslips",
+        title: "Payslips",
+        url: "/payslips",
+        icon: ReceiptText,
+      },
+      {
+        id: "field-cases",
+        title: "Field Cases",
+        url: "/field-cases",
+        icon: Forklift,
+      },
+      {
+        id: "security-duty-checks",
+        title: "Security Checks",
+        url: "/security-duty-checks",
+        icon: Shield,
+      },
+      {
+        id: "reports",
+        title: "Reports",
+        url: "/reports",
+        icon: ChartBar,
+      },
+      {
+        id: "announcements",
+        title: "Announcements",
+        url: "/announcements",
+        icon: Megaphone,
+      },
+      {
+        id: "supplier-messages",
+        title: "Suppliers",
+        url: "/supplier-messages",
+        icon: ScanFace,
+      },
+    ],
+  },
+  {
+    id: 4,
     label: "Pages",
     items: [
       {
@@ -233,7 +303,7 @@ export const sidebarItems: NavGroup[] = [
     ],
   },
   {
-    id: 4,
+    id: 5,
     label: "Legacy",
     items: [
       {
@@ -249,7 +319,7 @@ export const sidebarItems: NavGroup[] = [
     ],
   },
   {
-    id: 5,
+    id: 6,
     label: "Misc",
     items: [
       {

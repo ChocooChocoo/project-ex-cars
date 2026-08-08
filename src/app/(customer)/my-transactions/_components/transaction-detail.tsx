@@ -6,7 +6,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { format } from "date-fns";
-import { Calendar, Clock, FileText, ReceiptText, XCircle } from "lucide-react";
+import { Calendar, FileText, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import { cancelTransaction, saveBuyDetails } from "@/app/(customer)/my-transactions/actions";
@@ -37,7 +37,7 @@ export function TransactionDetail({
   installmentAccount,
   paymentTerms,
   viewingArrangements,
-  autofill,
+  autofill: _autofill,
 }: {
   readonly transaction: Record<string, unknown>;
   readonly history: Record<string, unknown>[];
@@ -332,7 +332,7 @@ export function TransactionDetail({
               </CardHeader>
               <CardContent className="flex flex-col gap-2 text-sm">
                 <p className="font-medium">
-                  {vehicles.make} {vehicles.model} ({vehicles.year})
+                  {vehicles.make as string} {vehicles.model as string} ({vehicles.year as number})
                 </p>
               </CardContent>
             </Card>
@@ -380,7 +380,7 @@ export function TransactionDetail({
                     (inst, i) => (
                       <div key={i} className="flex justify-between border-t pt-1 text-xs">
                         <span>
-                          #{inst.sequence_no} · {inst.due_date as string}
+                          #{inst.sequence_no as number} · {inst.due_date as string}
                         </span>
                         <span>
                           ₱{Number(inst.amount_due).toLocaleString()} ·{" "}
@@ -429,13 +429,15 @@ export function TransactionDetail({
                     <span className="font-medium capitalize">
                       {arrangementKindLabel(va.arrangement_kind as string)}
                     </span>
-                    {va.schedule && (
+                    {(va.schedule as string) && (
                       <span className="flex items-center gap-1 text-muted-foreground text-xs">
                         <Calendar className="size-3" />
                         {format(new Date(va.schedule as string), "MMM d, yyyy 'at' h:mm a")}
                       </span>
                     )}
-                    {va.location && <span className="text-muted-foreground text-xs">{va.location as string}</span>}
+                    {(va.location as string) && (
+                      <span className="text-muted-foreground text-xs">{va.location as string}</span>
+                    )}
                   </div>
                 ))}
               </CardContent>

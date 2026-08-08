@@ -74,12 +74,39 @@ export async function getStockTurnover() {
     conditionGroups.set(cond, (conditionGroups.get(cond) ?? 0) + 1);
   }
 
+  // Time-based turnover: sold in last 30 days
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const { count: soldLast30 } = await supabase
+    .from("vehicles")
+    .select("*", { count: "exact", head: true })
+    .eq("listing_state", "sold")
+    .gte("updated_at", thirtyDaysAgo);
+
+  // Average days to sell for completed transactions
+  const { data: completedTxs } = await supabase
+    .from("transactions")
+    .select("opened_at, completed_at")
+    .eq("current_state", "completed")
+    .eq("transaction_kind", "buy")
+    .not("completed_at", "is", null);
+  let avgDaysToSell = 0;
+  if (completedTxs && completedTxs.length > 0) {
+    const totalDays = completedTxs.reduce((sum, tx) => {
+      const open = new Date(tx.opened_at as string).getTime();
+      const complete = new Date(tx.completed_at as string).getTime();
+      return sum + (complete - open) / (1000 * 60 * 60 * 24);
+    }, 0);
+    avgDaysToSell = Math.round(totalDays / completedTxs.length);
+  }
+
   return {
     success: true,
     total: total ?? 0,
     available: available ?? 0,
     sold: sold ?? 0,
     reserved: reserved ?? 0,
+    soldLast30: soldLast30 ?? 0,
+    avgDaysToSell,
     byCondition: Array.from(conditionGroups.entries()).map(([condition, count]) => ({ condition, count })),
   };
 }
@@ -87,27 +114,38 @@ export async function getStockTurnover() {
 export async function getBuyingPatterns() {
   const supabase = await createServerSupabase();
 
-  const { data: vehicles } = await supabase
-    .from("vehicles")
-    .select("make, model, body_type, fuel_type, condition, current_price");
+  // Derive buying patterns from completed buy transactions (not just inventory).
+  const { data: transactions } = await supabase
+    .from("transactions")
+    .select("vehicle_id")
+    .eq("current_state", "completed")
+    .eq("transaction_kind", "buy")
+    .not("vehicle_id", "is", null);
 
-  if (!vehicles) return { error: "No data" };
+  const soldVehicleIds = (transactions ?? []).map((t) => t.vehicle_id as string);
 
   const makeCount = new Map<string, number>();
   const bodyTypeCount = new Map<string, number>();
   const fuelCount = new Map<string, number>();
   const priceRanges = { budget: 0, mid: 0, premium: 0, luxury: 0 };
 
-  for (const v of vehicles) {
-    increment(makeCount, v.make as string);
-    increment(bodyTypeCount, v.body_type as string);
-    increment(fuelCount, v.fuel_type as string);
+  if (soldVehicleIds.length > 0) {
+    const { data: soldVehicles } = await supabase
+      .from("vehicles")
+      .select("make, model, body_type, fuel_type, condition, current_price")
+      .in("id", soldVehicleIds);
 
-    const price = (v.current_price as number) ?? 0;
-    if (price <= 300000) priceRanges.budget++;
-    else if (price <= 800000) priceRanges.mid++;
-    else if (price <= 2000000) priceRanges.premium++;
-    else priceRanges.luxury++;
+    for (const v of soldVehicles ?? []) {
+      increment(makeCount, v.make as string);
+      increment(bodyTypeCount, v.body_type as string);
+      increment(fuelCount, v.fuel_type as string);
+
+      const price = (v.current_price as number) ?? 0;
+      if (price <= 300000) priceRanges.budget++;
+      else if (price <= 800000) priceRanges.mid++;
+      else if (price <= 2000000) priceRanges.premium++;
+      else priceRanges.luxury++;
+    }
   }
 
   return {
@@ -211,7 +249,7 @@ export async function getAccuracyData() {
 }
 
 function increment(map: Map<string, number>, key: string | null | undefined) {
-  const k = key || "Other";
+  const k = key ?? "Other";
   map.set(k, (map.get(k) ?? 0) + 1);
 }
 

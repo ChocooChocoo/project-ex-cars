@@ -12,11 +12,21 @@ export default async function DashboardShowroomPage() {
   const supabase = await createServerSupabase();
   const role = (await getCurrentRole()) ?? "ceo";
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   const { data: vehicles } = await supabase
     .from("vehicles")
     .select("*")
     .in("listing_state", ["available", "reserved"])
     .order("posted_at", { ascending: false });
+
+  let favouriteIds: string[] = [];
+  if (user) {
+    const { data: favs } = await supabase.from("favourites").select("vehicle_id").eq("customer_id", user.id);
+    favouriteIds = (favs ?? []).map((f) => f.vehicle_id as string);
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -32,7 +42,7 @@ export default async function DashboardShowroomPage() {
           </Link>
         </Button>
       </div>
-      <ShowroomGrid vehicles={(vehicles as Record<string, unknown>[]) ?? []} />
+      <ShowroomGrid vehicles={(vehicles as Record<string, unknown>[]) ?? []} favouriteIds={favouriteIds} />
     </div>
   );
 }
