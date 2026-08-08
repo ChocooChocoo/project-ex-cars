@@ -47,13 +47,14 @@ export default async function PayslipsListPage() {
                 <TableHead>Gross</TableHead>
                 <TableHead>Net</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Payment</TableHead>
                 <TableHead />
               </TableRow>
             </TableHeader>
             <TableBody>
               {(payslips ?? []).length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center text-muted-foreground">
                     No payslips available.
                   </TableCell>
                 </TableRow>
@@ -71,6 +72,11 @@ export default async function PayslipsListPage() {
                     <TableCell>₱{((p.net_cents as number) / 100).toLocaleString()}</TableCell>
                     <TableCell>
                       <Badge variant={p.status === "finalized" ? "default" : "secondary"}>{p.status as string}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={(p.payment_status as string) === "paid" ? "default" : "outline"}>
+                        {(p.payment_status as string) === "paid" ? "Paid" : "Pending"}
+                      </Badge>
                     </TableCell>
                     <TableCell className="text-right">
                       <Button variant="ghost" size="sm" asChild>

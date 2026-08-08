@@ -263,8 +263,8 @@ export function StaffTransactionDetail({
                     <CardTitle className="text-base">Viewing Arrangements</CardTitle>
                   </CardHeader>
                   <CardContent className="flex flex-col gap-2">
-                    {viewingArrangements.map((va, i) => (
-                      <div key={i} className="flex items-center gap-3 text-sm">
+                    {viewingArrangements.map((va) => (
+                      <div key={va.id as string} className="flex items-center gap-3 text-sm">
                         <Calendar className="size-4 text-muted-foreground" />
                         <span className="capitalize">{arrangementKindLabel(va.arrangement_kind as string)}</span>
                         {(va.schedule as string) && (
@@ -427,11 +427,11 @@ export function StaffTransactionDetail({
                 <p className="text-muted-foreground text-sm">No status changes.</p>
               ) : (
                 <div className="flex flex-col gap-0">
-                  {history.map((entry, i) => (
-                    <div key={i} className="flex gap-3">
+                  {history.map((entry, index) => (
+                    <div key={entry.id as string} className="flex gap-3">
                       <div className="flex flex-col items-center">
                         <div className="size-2.5 rounded-full border-2 border-primary" />
-                        {i < history.length - 1 && <div className="w-px flex-1 bg-border" />}
+                        {index < history.length - 1 && <div className="w-px flex-1 bg-border" />}
                       </div>
                       <div className="pb-5">
                         <p className="font-medium text-sm capitalize">
@@ -469,8 +469,8 @@ export function StaffTransactionDetail({
                     </tr>
                   </thead>
                   <tbody>
-                    {payments.map((p, i) => (
-                      <tr key={i} className="border-b last:border-0">
+                    {payments.map((p) => (
+                      <tr key={p.id as string} className="border-b last:border-0">
                         <td className="px-3 py-2 font-medium">{formatCurrency(Number(p.amount))}</td>
                         <td className="px-3 py-2 capitalize">{paymentMethodLabel(p.method as string)}</td>
                         <td className="px-3 py-2">{p.settlement_date as string}</td>
@@ -519,8 +519,8 @@ export function StaffTransactionDetail({
                     </tr>
                   </thead>
                   <tbody>
-                    {insts.map((inst: Record<string, unknown>, i: number) => (
-                      <tr key={i} className="border-b last:border-0">
+                    {insts.map((inst: Record<string, unknown>) => (
+                      <tr key={inst.id as string} className="border-b last:border-0">
                         <td className="px-3 py-2">{inst.sequence_no as number}</td>
                         <td className="px-3 py-2">{inst.due_date as string}</td>
                         <td className="px-3 py-2 font-medium">{formatCurrency(Number(inst.amount_due))}</td>
@@ -565,8 +565,8 @@ export function StaffTransactionDetail({
                 <p className="text-muted-foreground text-sm">No documents.</p>
               ) : (
                 <div className="flex flex-col gap-2">
-                  {documents.map((doc, i) => (
-                    <div key={i} className="flex items-center gap-3 text-sm">
+                  {documents.map((doc) => (
+                    <div key={doc.id as string} className="flex items-center gap-3 text-sm">
                       <FileText className="size-4 text-muted-foreground" />
                       <span className="capitalize">{(doc.document_kind as string).replace(/_/g, " ")}</span>
                       <Badge variant="secondary" className="text-xs">

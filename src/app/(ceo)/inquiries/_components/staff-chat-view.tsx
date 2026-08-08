@@ -105,7 +105,7 @@ export function StaffChatView({
     fd.set("location", arrLocation);
     const result = await scheduleArrangement(fd);
     if (result.success) {
-      setArr({ arrangement_kind: arrKind, schedule: arrSchedule, location: arrLocation });
+      setArr({ arrangement_kind: arrKind, schedule: arrSchedule, location: result.location ?? arrLocation });
       setShowArrangement(false);
     }
   }

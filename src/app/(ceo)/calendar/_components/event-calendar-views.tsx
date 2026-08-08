@@ -186,9 +186,9 @@ export function EventCalendarViews({ views: userViews, ...restOptions }: EventCa
       dayHeaderContent={(info) =>
         !info.dayNumberText && !info.inPopover
           ? info.text
-          : info.textParts.map((textPart, i) => (
+          : info.textParts.map((textPart) => (
               <span
-                key={`${textPart.value}-${i}`}
+                key={`${textPart.type}-${textPart.value}`}
                 className={cn(
                   "whitespace-pre",
                   info.isNarrow ? "text-xs" : "text-sm",

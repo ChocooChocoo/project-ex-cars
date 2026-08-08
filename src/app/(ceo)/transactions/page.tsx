@@ -3,14 +3,25 @@ import { createServerSupabase } from "@/lib/supabase/server";
 
 import { TransactionsTable } from "./_components/transactions-table";
 
-export default async function TransactionsPage() {
+export default async function TransactionsPage({
+  searchParams,
+}: {
+  readonly searchParams: Promise<{ state?: string }>;
+}) {
   const supabase = await createServerSupabase();
   const role = (await getCurrentRole()) ?? "customer";
+  const { state } = await searchParams;
 
-  const { data: transactions } = await supabase
+  let query = supabase
     .from("transactions")
     .select("*, vehicles(make, model, year), purchase_details(*), sell_details(*), vehicle_requests(*)")
     .order("updated_at", { ascending: false });
+
+  if (state && ["pending", "under_review", "approved", "rejected", "completed", "cancelled"].includes(state)) {
+    query = query.eq("current_state", state);
+  }
+
+  const { data: transactions } = await query;
 
   // KPI counts
   const all = (transactions as Record<string, unknown>[]) ?? [];

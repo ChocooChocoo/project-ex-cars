@@ -1,16 +1,25 @@
 import { notFound } from "next/navigation";
 
+import { getCurrentRole } from "@/app/auth/actions";
 import { createServerSupabase } from "@/lib/supabase/server";
 import type { VehicleFormData } from "@/lib/validation/vehicles";
 
 import { VehicleForm } from "../_components/vehicle-form";
+import { type StaffMediaRow, VehicleMediaManager } from "./_components/vehicle-media-manager";
 
 export default async function EditVehiclePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createServerSupabase();
+  const role = (await getCurrentRole()) ?? null;
   const { data: vehicle } = await supabase.from("vehicles").select("*").eq("id", id).single();
 
   if (!vehicle) notFound();
+
+  const { data: media } = await supabase
+    .from("vehicle_media")
+    .select("id, media_kind, storage_path, display_order")
+    .eq("vehicle_id", id)
+    .order("display_order", { ascending: true });
 
   const defaults: VehicleFormData & { id: string } = {
     id: vehicle.id as string,
@@ -34,5 +43,12 @@ export default async function EditVehiclePage({ params }: { params: Promise<{ id
     offer_details: (vehicle.offer_details as string) ?? "",
   };
 
-  return <VehicleForm defaultValues={defaults} />;
+  return (
+    <div className="flex flex-col gap-6">
+      <VehicleForm defaultValues={defaults} />
+      {["ceo", "sales_manager", "marketing_specialist", "account_manager"].includes(role ?? "") ? (
+        <VehicleMediaManager vehicleId={id} media={(media as unknown as StaffMediaRow[]) ?? []} />
+      ) : null}
+    </div>
+  );
 }

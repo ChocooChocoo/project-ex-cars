@@ -4,21 +4,24 @@ import { revalidatePath } from "next/cache";
 
 import { getProfileAutoFill } from "@/lib/autofill";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { createInquirySchema, scheduleArrangementSchema, sendMessageSchema } from "@/lib/validation/inquiries";
 
 export async function createInquiry(formData: FormData) {
   const supabase = await createServerSupabase();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
-  const vehicleId = formData.get("vehicle_id") as string;
-  const intentionKind = (formData.get("intention_kind") as string) || "inquiry";
+  const parsed = createInquirySchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid inquiry." };
+  }
 
   const { data: inquiry, error } = await supabase
     .from("inquiries")
     .insert({
       customer_id: user.user.id,
-      vehicle_id: vehicleId,
-      intention_kind: intentionKind,
+      vehicle_id: parsed.data.vehicle_id,
+      intention_kind: parsed.data.intention_kind || "inquiry",
     })
     .select()
     .single();
@@ -35,8 +38,13 @@ export async function sendMessageWithAttachment(formData: FormData) {
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
-  const inquiryId = formData.get("inquiry_id") as string;
-  const text = formData.get("message_text") as string;
+  const parsed = sendMessageSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid message." };
+  }
+
+  const inquiryId = parsed.data.inquiry_id;
+  const text = parsed.data.message_text || "";
   const file = formData.get("file") as File | null;
 
   if (!text?.trim() && !file) return { error: "Message cannot be empty" };
@@ -79,8 +87,13 @@ export async function sendMessage(formData: FormData) {
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
-  const inquiryId = formData.get("inquiry_id") as string;
-  const text = formData.get("message_text") as string;
+  const parsed = sendMessageSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid message." };
+  }
+
+  const inquiryId = parsed.data.inquiry_id;
+  const text = parsed.data.message_text || "";
 
   if (!text?.trim()) return { error: "Message cannot be empty" };
 
@@ -138,17 +151,33 @@ export async function scheduleArrangement(formData: FormData) {
   );
   if (!hasRole) return { error: "Not authorized" };
 
-  const inquiryId = formData.get("inquiry_id") as string;
-  const kind = formData.get("arrangement_kind") as string;
-  const schedule = formData.get("schedule") as string;
-  const location = (formData.get("location") as string) || null;
-  const notes = formData.get("notes") as string | null;
+  const parsed = scheduleArrangementSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid arrangement." };
+  }
 
-  // Autofill location from user's profile if not provided.
+  const inquiryId = parsed.data.inquiry_id;
+  const kind = parsed.data.arrangement_kind;
+  const schedule = parsed.data.schedule;
+  const location = parsed.data.location || null;
+  const notes = parsed.data.notes || null;
+
+  // Autofill location from the customer's profile if not provided.
   let resolvedLocation = location;
   if (!resolvedLocation) {
-    const autofill = await getProfileAutoFill();
-    resolvedLocation = autofill?.address ?? null;
+    const { data: inquiryRow } = await supabase.from("inquiries").select("customer_id").eq("id", inquiryId).single();
+    if (inquiryRow?.customer_id) {
+      const { data: customerProfile } = await supabase
+        .from("profiles")
+        .select("address")
+        .eq("id", inquiryRow.customer_id as string)
+        .single();
+      resolvedLocation = (customerProfile?.address as string | null) ?? null;
+    }
+    if (!resolvedLocation) {
+      const autofill = await getProfileAutoFill();
+      resolvedLocation = autofill?.address ?? null;
+    }
   }
 
   const { error } = await supabase.from("viewing_arrangements").insert({
@@ -164,7 +193,7 @@ export async function scheduleArrangement(formData: FormData) {
   await supabase.from("inquiries").update({ state: "scheduled" }).eq("id", inquiryId);
 
   revalidatePath(`/dashboard/inquiries/${inquiryId}`);
-  return { success: true };
+  return { success: true, location: resolvedLocation };
 }
 
 export async function handoffInquiry(inquiryId: string) {

@@ -9,7 +9,12 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { generateInstallmentSchedule } from "@/lib/transactions/installments";
 import type { TransactionState } from "@/lib/transactions/state-machine";
 import { canTransition } from "@/lib/transactions/state-machine";
-import { reviewSellSchema } from "@/lib/validation/transactions";
+import {
+  paymentRecordSchema,
+  paymentTermsSchema,
+  reviewSellSchema,
+  transitionSchema,
+} from "@/lib/validation/transactions";
 
 export async function transitionTransaction(formData: FormData) {
   const supabase = await createServerSupabase();
@@ -19,9 +24,14 @@ export async function transitionTransaction(formData: FormData) {
   const role = await getCurrentRole();
   if (!role) return { error: "No role assigned" };
 
-  const id = formData.get("id") as string;
-  const toState = formData.get("to_state") as TransactionState;
-  const reason = (formData.get("reason") as string) || null;
+  const parsed = transitionSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid transition." };
+  }
+
+  const id = parsed.data.id;
+  const toState = parsed.data.to_state;
+  const reason = parsed.data.reason || null;
 
   const { data: tx } = await supabase
     .from("transactions")
@@ -87,28 +97,32 @@ export async function recordPayment(formData: FormData) {
     return { error: "Not authorized" };
   }
 
-  const transactionId = formData.get("transaction_id") as string;
-  const installmentId = (formData.get("installment_id") as string) || null;
-  const amount = formData.get("amount") as string;
-  const method = formData.get("method") as string;
-  const externalRef = (formData.get("external_reference") as string) || null;
-  const settlementDate = formData.get("settlement_date") as string;
+  const parsed = paymentRecordSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid payment record." };
+  }
+
+  const transactionId = parsed.data.transaction_id;
+  const installmentId = parsed.data.installment_id || null;
 
   const { error } = await supabase.from("payment_records").insert({
     transaction_id: transactionId,
     installment_id: installmentId ?? null,
-    amount: Number.parseFloat(amount),
-    method,
-    external_reference: externalRef,
+    amount: parsed.data.amount,
+    method: parsed.data.method,
+    external_reference: parsed.data.external_reference || null,
     recorded_by: user.user.id,
-    settlement_date: settlementDate,
+    settlement_date: parsed.data.settlement_date,
   });
 
   if (error) return { error: error.message };
 
   // Update installment state if linked.
   if (installmentId) {
-    await supabase.from("installments").update({ state: "paid", payment_date: settlementDate }).eq("id", installmentId);
+    await supabase
+      .from("installments")
+      .update({ state: "paid", payment_date: parsed.data.settlement_date })
+      .eq("id", installmentId);
   }
 
   await logAuditEvent({
@@ -116,7 +130,7 @@ export async function recordPayment(formData: FormData) {
     action: "payment_recorded",
     recordKind: "payment_records",
     recordId: transactionId,
-    summary: `Payment of ₱${amount} recorded for transaction ${transactionId}`,
+    summary: `Payment of ₱${parsed.data.amount} recorded for transaction ${transactionId}`,
   });
 
   revalidatePath(`/dashboard/transactions/${transactionId}`);
@@ -152,22 +166,25 @@ export async function createPaymentTerms(formData: FormData) {
     return { error: "Not authorized" };
   }
 
-  const purchaseTransactionId = formData.get("purchase_transaction_id") as string;
+  const parsed = paymentTermsSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid payment terms." };
+  }
 
   const { error } = await supabase.from("payment_terms").insert({
-    purchase_transaction_id: purchaseTransactionId,
-    arrangement_description: formData.get("arrangement_description") as string,
-    total_amount: Number.parseFloat(formData.get("total_amount") as string),
-    down_payment: Number.parseFloat(formData.get("down_payment") as string) || 0,
-    number_of_payments: Number.parseInt(formData.get("number_of_payments") as string, 10),
-    payment_frequency: formData.get("payment_frequency") as string,
-    first_due_date: formData.get("first_due_date") as string,
+    purchase_transaction_id: parsed.data.purchase_transaction_id,
+    arrangement_description: parsed.data.arrangement_description,
+    total_amount: parsed.data.total_amount,
+    down_payment: parsed.data.down_payment,
+    number_of_payments: parsed.data.number_of_payments,
+    payment_frequency: parsed.data.payment_frequency,
+    first_due_date: parsed.data.first_due_date,
     agreed_by: user.user.id,
   });
 
   if (error) return { error: error.message };
 
-  revalidatePath(`/dashboard/transactions/${purchaseTransactionId}`);
+  revalidatePath(`/dashboard/transactions/${parsed.data.purchase_transaction_id}`);
   return { success: true };
 }
 

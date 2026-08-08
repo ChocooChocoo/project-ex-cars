@@ -3,14 +3,24 @@
 import { revalidatePath } from "next/cache";
 
 import { createServerSupabase } from "@/lib/supabase/server";
-import { sellVehicleSchema } from "@/lib/validation/transactions";
+import {
+  buyDetailsSchema,
+  buyTransactionSchema,
+  requestCarSchema,
+  sellVehicleSchema,
+} from "@/lib/validation/transactions";
 
 export async function createBuyTransaction(formData: FormData) {
   const supabase = await createServerSupabase();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
-  const vehicleId = formData.get("vehicle_id") as string;
+  const parsed = buyTransactionSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid buy request." };
+  }
+
+  const vehicleId = parsed.data.vehicle_id;
 
   // Create the transaction record.
   const { data: transaction, error } = await supabase
@@ -55,19 +65,26 @@ export async function saveBuyDetails(formData: FormData) {
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
-  const transactionId = formData.get("transaction_id") as string;
-  const paymentMethod = formData.get("payment_method") as string;
-  const finalPrice = formData.get("final_price") as string;
-  const arrangementKind = formData.get("arrangement_kind") as string;
-  const schedule = formData.get("schedule") as string;
-  const location = formData.get("location") as string;
-  const notes = formData.get("notes") as string | null;
+  const parsed = buyDetailsSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid purchase details." };
+  }
+
+  const {
+    transaction_id: transactionId,
+    payment_method,
+    final_price,
+    arrangement_kind,
+    schedule,
+    location,
+    notes,
+  } = parsed.data;
 
   const { error } = await supabase.from("purchase_details").upsert({
     transaction_id: transactionId,
-    payment_method: paymentMethod,
-    final_price: finalPrice ? Number.parseFloat(finalPrice) : null,
-    arrangement_kind: arrangementKind || null,
+    payment_method,
+    final_price: final_price ?? null,
+    arrangement_kind: arrangement_kind || null,
   });
 
   if (error) return { error: error.message };
@@ -77,7 +94,7 @@ export async function saveBuyDetails(formData: FormData) {
     const { error: arrError } = await supabase.from("viewing_arrangements").insert({
       inquiry_id: null, // nullable — linked via purchase_transaction_id
       purchase_transaction_id: transactionId,
-      arrangement_kind: arrangementKind || "gce_visit",
+      arrangement_kind: arrangement_kind || "gce_visit",
       schedule: new Date(schedule).toISOString(),
       location: location || null,
       notes,
@@ -96,7 +113,12 @@ export async function submitSellVehicle(formData: FormData) {
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
-  const parsed = sellVehicleSchema.parse(Object.fromEntries(formData));
+  const parsed = sellVehicleSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid vehicle details." };
+  }
+
+  const data = parsed.data;
 
   // Create the sell transaction.
   const { data: transaction, error } = await supabase
@@ -114,23 +136,23 @@ export async function submitSellVehicle(formData: FormData) {
 
   const { error: detailError } = await supabase.from("sell_details").insert({
     transaction_id: transaction.id,
-    offered_amount: parsed.offered_amount,
+    offered_amount: data.offered_amount,
   });
 
   if (detailError) return { error: detailError.message };
 
   // Create a draft vehicle record for the offered vehicle.
-  const stockCode = `SELL-${parsed.make.slice(0, 3).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
+  const stockCode = `SELL-${data.make.slice(0, 3).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
   const { data: createdVehicle, error: vehicleError } = await supabase
     .from("vehicles")
     .insert({
       stock_code: stockCode,
-      make: parsed.make,
-      model: parsed.model,
-      year: parsed.year,
-      mileage: parsed.mileage,
-      condition: parsed.condition,
-      description: parsed.description ?? null,
+      make: data.make,
+      model: data.model,
+      year: data.year,
+      mileage: data.mileage,
+      condition: data.condition,
+      description: data.description ?? null,
       listing_state: "draft",
     })
     .select("id")
@@ -160,6 +182,11 @@ export async function submitRequestCar(formData: FormData) {
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
+  const parsed = requestCarSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid request details." };
+  }
+
   const { data: transaction, error } = await supabase
     .from("transactions")
     .insert({
@@ -175,12 +202,12 @@ export async function submitRequestCar(formData: FormData) {
 
   const { error: reqError } = await supabase.from("vehicle_requests").insert({
     transaction_id: transaction.id,
-    requested_make: formData.get("requested_make") as string,
-    requested_model: formData.get("requested_model") as string,
-    year_min: (formData.get("year_min") as string) ? Number.parseInt(formData.get("year_min") as string, 10) : null,
-    year_max: (formData.get("year_max") as string) ? Number.parseInt(formData.get("year_max") as string, 10) : null,
-    budget: (formData.get("budget") as string) ? Number.parseFloat(formData.get("budget") as string) : null,
-    other_preferences: (formData.get("other_preferences") as string) || null,
+    requested_make: parsed.data.requested_make,
+    requested_model: parsed.data.requested_model,
+    year_min: parsed.data.year_min ?? null,
+    year_max: parsed.data.year_max ?? null,
+    budget: parsed.data.budget,
+    other_preferences: parsed.data.other_preferences || null,
   });
 
   if (reqError) return { error: reqError.message };

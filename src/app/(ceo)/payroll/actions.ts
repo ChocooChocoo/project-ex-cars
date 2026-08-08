@@ -5,13 +5,81 @@ import { revalidatePath } from "next/cache";
 import { getCurrentRole } from "@/app/auth/actions";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { payrollApprovalSchema, payrollRunSchema, payslipItemSchema } from "@/lib/validation/phase6";
+import {
+  compensationSchema,
+  payrollApprovalSchema,
+  payrollRunSchema,
+  payslipItemSchema,
+} from "@/lib/validation/phase6";
 
 type Phase6ActionResult = { error: string } | { success: true };
 
 const PAYROLL_PREPARERS = ["ceo", "account_manager"];
 const PAYROLL_REVIEWERS = ["ceo", "head_accountant"];
 const WORKING_DAYS_PER_MONTH = 30;
+
+export async function saveCompensation(formData: FormData): Promise<Phase6ActionResult> {
+  const supabase = await createServerSupabase();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+
+  const role = await getCurrentRole();
+  if (!role || !PAYROLL_PREPARERS.includes(role)) {
+    return { error: "Not authorized to enter compensation" };
+  }
+
+  const raw = Object.fromEntries(formData) as Record<string, unknown>;
+  const parsed = compensationSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid compensation." };
+  }
+
+  const admin = createAdminClient();
+
+  const { error } = await admin.from("staff_compensation").insert({
+    employee_id: parsed.data.employee_id,
+    base_salary_cents: parsed.data.base_salary_cents,
+    effective_from: parsed.data.effective_from,
+    effective_until: parsed.data.effective_until || null,
+    created_by: user.user.id,
+  });
+  if (error) return { error: error.message };
+
+  revalidatePath("/dashboard/payroll");
+  return { success: true };
+}
+
+export async function markPayslipPaid(formData: FormData): Promise<Phase6ActionResult> {
+  const supabase = await createServerSupabase();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+
+  const role = await getCurrentRole();
+  if (!role || role !== "head_accountant") {
+    return { error: "Only the Head Accountant holds salary-payment responsibility" };
+  }
+
+  const payslipId = formData.get("payslip_id") as string;
+
+  const { data: payslip } = await supabase
+    .from("payslips")
+    .select("status, payment_status")
+    .eq("id", payslipId)
+    .single();
+  if (!payslip) return { error: "Payslip not found." };
+  if (payslip.status !== "finalized") return { error: "Only finalized payslips can be paid." };
+  if (payslip.payment_status === "paid") return { error: "This payslip is already marked paid." };
+
+  const { error: updateError } = await supabase
+    .from("payslips")
+    .update({ payment_status: "paid", paid_at: new Date().toISOString(), paid_by: user.user.id })
+    .eq("id", payslipId);
+  if (updateError) return { error: updateError.message };
+
+  revalidatePath("/dashboard/payslips");
+  revalidatePath(`/dashboard/payslips/${payslipId}`);
+  return { success: true };
+}
 
 export async function createPayrollRun(formData: FormData): Promise<Phase6ActionResult> {
   const supabase = await createServerSupabase();

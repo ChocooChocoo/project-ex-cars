@@ -45,12 +45,14 @@ export default async function PayslipDetailPage({ params }: { readonly params: P
       <PayslipDetailClient
         payslipId={id}
         status={(payslip.status as "draft" | "finalized") ?? "draft"}
+        paymentStatus={(payslip.payment_status as "pending" | "paid") ?? "pending"}
         grossCents={(payslip.gross_cents as number) ?? 0}
         deductionsCents={(payslip.deductions_cents as number) ?? 0}
         netCents={(payslip.net_cents as number) ?? 0}
         earnings={(earnings as unknown as PayslipItemRow[]) ?? []}
         deductions={(deductions as unknown as PayslipItemRow[]) ?? []}
         canEdit={["ceo", "account_manager"].includes(role)}
+        canPay={role === "head_accountant"}
         periodLabel={periodLabel}
         employeeLabel={isEmployee ? "You" : (payslip.employee_id as string).slice(0, 8)}
       />

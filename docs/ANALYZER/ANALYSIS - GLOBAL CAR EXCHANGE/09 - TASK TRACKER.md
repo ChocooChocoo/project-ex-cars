@@ -2,7 +2,7 @@
 
 [Back to start](00%20-%20START%20HERE.md) · Previous: [08 - ROADMAP TRACKER](08%20-%20ROADMAP%20TRACKER.md) · Next: [10 - WORD LIST](10%20-%20WORD%20LIST.md)
 
-**Last checked:** 8 August 2026
+**Last checked:** 8 August 2026 (🟨 resolution pass via docs/tasks/12.md)
 
 Every task here names where it came from. A task with no traceable origin is not on this list.
 
@@ -10,8 +10,8 @@ Every task here names where it came from. A task with no traceable origin is not
 
 | Status | How many |
 |---:|---|
-| ✅ Finished | 43 |
-| 🟨 Being worked on | 7 |
+| ✅ Finished | 50 |
+| 🟨 Being worked on | 0 |
 | ⭕ Not started | 0 |
 | ❌ Blocked | 0 |
 | 🔵 Already there | 0 |
@@ -31,7 +31,7 @@ The earlier task state recorded Phases 1–5 as completed. The source-code audit
 | T-04 | Create live vehicle inventory with the stated searchable details and availability | **GCE FULL CHAPTER 1 - 3.docx**, pages 12, 16, and 20–22; **GCE ADDITIONAL DOCUMENTS.docx**, page 2 | The live Virtual Showroom and filter fields | R-04 | ✅ |
 | T-05 | Create mechanic inspection reports with condition score, photographs, notes, and repair status | **GCE ADDITIONAL DOCUMENTS.docx**, pages 1 and 3 | The mechanic's inspection and recommendation input | R-05 | ✅ |
 | T-06 | Create vehicle browsing, search, filters, details, and favourites | **GCE FULL CHAPTER 1 - 3.docx**, pages 34–38; **GCE ADDITIONAL DOCUMENTS.docx**, page 2 | The described browsing and saved-vehicle journeys | R-06 | ✅ |
-| T-07 | Create 360-degree viewing for only the active vehicle | **GCE ADDITIONAL DOCUMENTS.docx**, page 2 | The Virtual Showroom loading rule | R-07 | 🟨 |
+| T-07 | Create 360-degree viewing for only the active vehicle | **GCE ADDITIONAL DOCUMENTS.docx**, page 2 | The Virtual Showroom loading rule | R-07 | ✅ |
 | T-08 | Create landing content, promotions, featured vehicles, proposed pricing, and the agreed approval path | **GCE ADDITIONAL DOCUMENTS.docx**, pages 1–3 | Marketing and chief executive content duties | R-08 | ✅ |
 | T-09 | Create real-time inquiry chat tied to a vehicle and able to carry images | **GCE FULL CHAPTER 1 - 3.docx**, pages 39–40; **GCE ADDITIONAL DOCUMENTS.docx**, page 2 | The vehicle-linked messaging journey | R-09 | ✅ |
 | T-10 | Create the Account Manager queue, inquiry assignment, viewing schedules, and communication record | **GCE ADDITIONAL DOCUMENTS.docx**, page 2 | The stated inquiry ownership and follow-up work | R-10 | ✅ |
@@ -46,7 +46,7 @@ The earlier task state recorded Phases 1–5 as completed. The source-code audit
 | T-19 | Keep purchase history, payment method, financing progress, invoice or receipt, and sold status without taking money online | **GCE FULL CHAPTER 1 - 3.docx**, pages 16 and 20; **GCE ADDITIONAL DOCUMENTS.docx**, page 2 | The required records and offline-payment boundary | R-19 | ✅ |
 | T-20 | Create daily time, leave, overtime, and performance records | **GCE ADDITIONAL DOCUMENTS.docx**, page 2 | The requested employee records | R-20 | ✅ |
 | T-21 | Create only the permitted payment, financing, cheque, invoice, expense, and financial reports | *Drawn from* **GCE FULL CHAPTER 1 - 3.docx**, pages 16–17, and **GCE ADDITIONAL DOCUMENTS.docx**, pages 1–2 | The finance requirements constrained by the no-payment and basic-record rules | R-21 | ✅ |
-| T-22 | Create the chief executive dashboard, approvals, and traceable business summaries | **GCE FULL CHAPTER 1 - 3.docx**, pages 18–21; **GCE ADDITIONAL DOCUMENTS.docx**, pages 1–2 | The management oversight promises | R-22 | 🟨 |
+| T-22 | Create the chief executive dashboard, approvals, and traceable business summaries | **GCE FULL CHAPTER 1 - 3.docx**, pages 18–21; **GCE ADDITIONAL DOCUMENTS.docx**, pages 1–2 | The management oversight promises | R-22 | ✅ |
 | T-23 | Create the agreed security, sourcing, delivery, and towing records | **GCE ADDITIONAL DOCUMENTS.docx**, pages 1 and 3 | The Head Security and confidential-informant duties | R-23 | ✅ |
 | T-24 | Make every completed customer and employee journey work in a responsive browser experience | **GCE FULL CHAPTER 1 - 3.docx**, pages 15–17 and 21 | The browser-based mobile requirement | R-24 | ❓ Unclear |
 | T-25 | Run and record user acceptance, usability, and satisfaction checks | **GCE FULL CHAPTER 1 - 3.docx**, pages 21–22 | The stated Technology Acceptance Model and user-experience measures | R-25 | ❓ Unclear |
@@ -67,13 +67,13 @@ These tasks concern the academic manuscript rather than development work, so the
 
 | # | The task | Where it came from | What it refers to | Serves | Status |
 |---|---|---|---|---|---|
-| T-30 | Create chief-executive employee announcements and approval or rejection of payslip, disbursement, expense, revenue, price, and inventory reports | **GCE USERS LEVELS MODULES.md**, headings "CEO — 2." through "CEO — 3." | The chief executive's communication and approval duties | R-22 | 🟨 |
+| T-30 | Create chief-executive employee announcements and approval or rejection of payslip, disbursement, expense, revenue, price, and inventory reports | **GCE USERS LEVELS MODULES.md**, headings "CEO — 2." through "CEO — 3." | The chief executive's communication and approval duties | R-22 | ✅ |
 | T-31 | Route Buy Now to the Sales Manager, route Inquiry to the Account Manager, and hand scheduled GCE visits to the Sales Manager | **GCE USERS LEVELS MODULES.md**, headings "Account Manager — 2." and "Sales Manager — 1." | The named inquiry and sales ownership and the in-person handoff | R-10, R-15 | ✅ |
 | T-32 | Fill arrangement forms from registration details and change them for delivery, a CALABARZON meet-up, or a GCE visit | **GCE USERS LEVELS MODULES.md**, heading "Account Manager — 2." | The stated automatic form filling and arrangement choices | R-10, R-15 | ✅ |
 | T-33 | Let the Sales Manager create accounts for walk-in buyers and sellers and show those accounts to the clients | **GCE USERS LEVELS MODULES.md**, headings "Sales Manager — 3." through "Sales Manager — 4." | The walk-in account-creation rule | R-01, R-15, R-16 | ✅ |
 | T-34 | Require two valid IDs and proof of billing during the vehicle-purchase process | **GCE USERS LEVELS MODULES.md**, heading "Sales Manager — 2." | The purchase-document requirement that still applies after form autofill | R-15 | ✅ |
-| T-35 | Prepare payroll from attendance inputs and entered salary, late, absence, SSS, Pag-IBIG, TIN, and PhilHealth deduction amounts | **GCE USERS LEVELS MODULES.md**, heading "Account Manager — 4." | The Account Manager's payroll preparation and deduction-entry duties | R-26 | 🟨 |
-| T-36 | Apply the final payslip approval and salary-payment handoff between the Account Manager, Head Accountant, and chief executive | *Drawn from* **GCE USERS LEVELS MODULES.md**, headings "CEO — 2.", "Account Manager — 4.", and "Head Accountant — 2." | The overlapping payroll approvals and the Head Accountant's salary-payment responsibility | R-26 | 🟨 |
+| T-35 | Prepare payroll from attendance inputs and entered salary, late, absence, SSS, Pag-IBIG, TIN, and PhilHealth deduction amounts | **GCE USERS LEVELS MODULES.md**, heading "Account Manager — 4." | The Account Manager's payroll preparation and deduction-entry duties | R-26 | ✅ |
+| T-36 | Apply the final payslip approval and salary-payment handoff between the Account Manager, Head Accountant, and chief executive | *Drawn from* **GCE USERS LEVELS MODULES.md**, headings "CEO — 2.", "Account Manager — 4.", and "Head Accountant — 2." | The overlapping payroll approvals and the Head Accountant's salary-payment responsibility | R-26 | ✅ |
 | T-37 | Let the Account Manager manage access for the current employee and administrator roles | **GCE USERS LEVELS MODULES.md**, heading "Account Manager — 5." | The stated responsibility for role-based access control | R-02 | ✅ |
 | T-38 | Record and approve vehicle-acquisition and reconditioning disbursement requests and their fund handoffs | *Drawn from* **GCE USERS LEVELS MODULES.md**, headings "CEO — 2.", "Account Manager — 1.", "Head Accountant — 1.", and "Confidential Informant — 6." | The two described fund-request and release paths | R-21 | ✅ |
 | T-39 | Monitor installment due dates, notify the Account Manager, contact late buyers, and coordinate an authorized vehicle recovery | **GCE USERS LEVELS MODULES.md**, headings "Head Accountant — 5." and "Confidential Informant — 3." | The due-date escalation and recovery handoff | R-19, R-23 | ✅ |
@@ -90,8 +90,8 @@ These come from the changes requested at the project's most recent presentation.
 | T-43 | Let the Procurement Team create a supplier account directly, for both business-to-business and business-to-customer work | **REVISIONS LISTS.md**, heading "5." | The reversal of supplier self-registration | R-27 | ✅ |
 | T-44 | Record whether a supplier is a Company or an Individual, publish the accepted valid IDs, and require two primary valid IDs | **REVISIONS LISTS.md**, heading "5." | The supplier identity requirements | R-27 | ✅ |
 | T-45 | Hold a supplier account closed until GCE approves it, and keep invitation evidence if a separate supplier portal is retained | **REVISIONS LISTS.md**, heading "5." | The approval gate and the portal alternative | R-27 | ✅ |
-| T-46 | Check every form field against its smallest and largest number, largest text length, allowed kind of information, required state, and valid format | **REVISIONS LISTS.md**, heading "8." | The missing checks on submitted information | R-28 | 🟨 |
-| T-47 | Fill forms automatically from details already held, everywhere repeated typing occurs | **REVISIONS LISTS.md**, heading "4." | The repeated data-entry complaint | R-29 | 🟨 |
+| T-46 | Check every form field against its smallest and largest number, largest text length, allowed kind of information, required state, and valid format | **REVISIONS LISTS.md**, heading "8." | The missing checks on submitted information | R-28 | ✅ |
+| T-47 | Fill forms automatically from details already held, everywhere repeated typing occurs | **REVISIONS LISTS.md**, heading "4." | The repeated data-entry complaint | R-29 | ✅ |
 | T-48 | Add warranty details, promotional or sale offers, vehicle condition, and a Negotiable or Fixed pricing choice to car listings | **REVISIONS LISTS.md**, heading "9." | The missing listing information | R-30 | ✅ |
 | T-49 | Organise the mechanic's checklist as vehicle systems, then components, then parts | **REVISIONS LISTS.md**, heading "11." | The requested nested checklist structure | R-31 | ✅ |
 | T-50 | Show replacement item name, brand, and estimated cost fields as soon as a part is marked for repair or replacement | **REVISIONS LISTS.md**, heading "12." | The extra information needed at the moment of the repair decision | R-32 | ✅ |

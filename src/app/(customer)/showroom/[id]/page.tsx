@@ -6,6 +6,7 @@ import { Separator } from "@/components/ui/separator";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 import { InquiryButtons } from "../_components/inquiry-buttons";
+import { type VehicleMediaItem, VehicleMediaViewer } from "../_components/vehicle-media-viewer";
 
 export default async function VehicleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -14,14 +15,19 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
 
   if (!vehicle) notFound();
 
+  const { data: media } = await supabase
+    .from("vehicle_media")
+    .select("id, media_kind, storage_path, display_order")
+    .eq("vehicle_id", id)
+    .eq("public_state", true)
+    .order("display_order", { ascending: true });
+
   const v = vehicle as Record<string, unknown>;
 
   return (
     <div className="flex flex-col gap-6">
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="flex aspect-[4/3] items-center justify-center rounded-lg bg-muted lg:col-span-2">
-          <p className="text-muted-foreground">Vehicle images coming soon</p>
-        </div>
+        <VehicleMediaViewer media={(media as unknown as VehicleMediaItem[]) ?? []} />
         <Card>
           <CardHeader>
             <CardTitle className="text-2xl">

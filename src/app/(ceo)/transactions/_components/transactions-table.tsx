@@ -239,13 +239,13 @@ export function TransactionsTable({
           </p>
           <Pagination>
             <PaginationPrevious onClick={() => table.previousPage()} aria-disabled={!table.getCanPreviousPage()} />
-            {Array.from({ length: Math.min(5, table.getPageCount()) }).map((_, i) => (
+            {Array.from({ length: Math.min(5, table.getPageCount()) }, (_, i) => i).map((page) => (
               <PaginationLink
-                key={`page-${i}`}
-                isActive={table.getState().pagination.pageIndex === i}
-                onClick={() => table.setPageIndex(i)}
+                key={`page-${page}`}
+                isActive={table.getState().pagination.pageIndex === page}
+                onClick={() => table.setPageIndex(page)}
               >
-                {i + 1}
+                {page + 1}
               </PaginationLink>
             ))}
             <PaginationNext onClick={() => table.nextPage()} aria-disabled={!table.getCanNextPage()} />
