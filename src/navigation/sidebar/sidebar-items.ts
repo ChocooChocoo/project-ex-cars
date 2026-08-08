@@ -20,6 +20,7 @@ import {
   Mail,
   Megaphone,
   MessageSquare,
+  Milestone,
   ReceiptText,
   ScanFace,
   Server,
@@ -181,6 +182,12 @@ export const sidebarItems: NavGroup[] = [
         title: "Transactions",
         url: "/transactions",
         icon: ReceiptText,
+      },
+      {
+        id: "roadmap",
+        title: "Roadmap",
+        url: "/roadmap",
+        icon: Milestone,
       },
       {
         id: "suppliers",
