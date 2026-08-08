@@ -6,17 +6,43 @@ import { useState } from "react";
 import Link from "next/link";
 
 import { Car, Filter, Heart, Search } from "lucide-react";
+import { toast } from "sonner";
 
+import { toggleFavourite } from "@/app/(ceo)/vehicles/actions";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Kbd } from "@/components/ui/kbd";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-export function ShowroomGrid({ vehicles }: { readonly vehicles: Record<string, unknown>[] }) {
+export function ShowroomGrid({
+  vehicles,
+  favouriteIds,
+}: {
+  readonly vehicles: Record<string, unknown>[];
+  readonly favouriteIds: string[];
+}) {
   const [search, setSearch] = useState("");
   const [makeFilter, setMakeFilter] = useState("all");
   const [priceSort, setPriceSort] = useState("newest");
+  const [favourites, setFavourites] = useState<Set<string>>(new Set(favouriteIds));
+
+  async function handleFavourite(vehicleId: string, e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const result = await toggleFavourite(vehicleId);
+    if (result.error) {
+      toast.error(result.error);
+      return;
+    }
+    setFavourites((prev) => {
+      const next = new Set(prev);
+      if (result.favourited) next.add(vehicleId);
+      else next.delete(vehicleId);
+      return next;
+    });
+  }
 
   const makes = [...new Set(vehicles.map((v) => v.make as string).filter(Boolean))];
 
@@ -109,6 +135,7 @@ export function ShowroomGrid({ vehicles }: { readonly vehicles: Record<string, u
             const transmission = v.transmission as string | null;
             const pricingType = v.pricing_type as string;
             const offer = v.offer_details as string | null;
+            const favourited = favourites.has(id);
 
             return (
               <Link key={id} href={`/showroom/${id}`} className="group">
@@ -130,7 +157,15 @@ export function ShowroomGrid({ vehicles }: { readonly vehicles: Record<string, u
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-lg">{price ? `₱${price.toLocaleString()}` : "Price TBA"}</span>
-                      <Heart className="size-4 text-muted-foreground" />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-7"
+                        onClick={(e) => handleFavourite(id, e)}
+                        aria-label={favourited ? "Remove from favourites" : "Add to favourites"}
+                      >
+                        <Heart className="size-4" fill={favourited ? "currentColor" : "none"} />
+                      </Button>
                     </div>
                     <div className="flex flex-wrap gap-1 text-muted-foreground text-xs">
                       {mileage && <span>{mileage.toLocaleString()} km</span>}

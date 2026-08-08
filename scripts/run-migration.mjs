@@ -8,8 +8,10 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const POOLER_IPS = ["54.255.219.82", "52.77.146.31", "52.74.252.201"];
-const DB_HOST = "db.nsdwyxwrsmtarrxgzeuj.supabase.co";
+const POOLER_IPS = process.env.SUPABASE_POOLER_IPS
+  ? process.env.SUPABASE_POOLER_IPS.split(",").map((s) => s.trim())
+  : ["54.255.219.82", "52.77.146.31", "52.74.252.201"];
+const DB_HOST = process.env.SUPABASE_DB_HOST || "db.nsdwyxwrsmtarrxgzeuj.supabase.co";
 let poolerIdx = 0;
 
 const origLookupFn = dns.lookup;

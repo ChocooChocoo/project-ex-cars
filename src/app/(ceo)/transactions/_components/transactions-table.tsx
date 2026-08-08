@@ -39,7 +39,7 @@ import {
   transactionKindLabel,
   transactionStatusBadgeVariant,
 } from "@/lib/transactions/labels";
-import { getAllowedTransitions, TRANSACTION_STATES, type TransactionState } from "@/lib/transactions/state-machine";
+import { getAllowedTransitions, type TransactionState } from "@/lib/transactions/state-machine";
 
 export function TransactionsTable({
   transactions,
@@ -168,7 +168,6 @@ export function TransactionsTable({
             <InputGroupAddon>
               <Search className="size-4" />
             </InputGroupAddon>
-            {/* biome-ignore lint: placeholder uses plain HTML input because InputGroup expects children */}
             <input
               className="h-9 w-48 bg-transparent text-sm outline-none"
               placeholder="Search vehicles..."
@@ -242,7 +241,7 @@ export function TransactionsTable({
             <PaginationPrevious onClick={() => table.previousPage()} aria-disabled={!table.getCanPreviousPage()} />
             {Array.from({ length: Math.min(5, table.getPageCount()) }).map((_, i) => (
               <PaginationLink
-                key={i}
+                key={`page-${i}`}
                 isActive={table.getState().pagination.pageIndex === i}
                 onClick={() => table.setPageIndex(i)}
               >

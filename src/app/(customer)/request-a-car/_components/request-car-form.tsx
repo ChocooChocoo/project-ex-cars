@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, type Resolver, useForm } from "react-hook-form";
 import { toast } from "sonner";
 
 import { submitRequestCar } from "@/app/(customer)/my-transactions/actions";
@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import type { ProfileAutoFill } from "@/lib/autofill";
 import { type RequestCarFormData, requestCarSchema } from "@/lib/validation/transactions";
 
-export function RequestCarForm({ autofill }: { readonly autofill: ProfileAutoFill | null }) {
+export function RequestCarForm({ autofill: _autofill }: { readonly autofill: ProfileAutoFill | null }) {
   const router = useRouter();
   const {
     register,
@@ -23,7 +23,7 @@ export function RequestCarForm({ autofill }: { readonly autofill: ProfileAutoFil
     control,
     formState: { errors, isSubmitting },
   } = useForm<RequestCarFormData>({
-    resolver: zodResolver(requestCarSchema),
+    resolver: zodResolver(requestCarSchema) as unknown as Resolver<RequestCarFormData>,
     defaultValues: {
       requested_make: "",
       requested_model: "",
@@ -61,12 +61,12 @@ export function RequestCarForm({ autofill }: { readonly autofill: ProfileAutoFil
             <Field data-invalid={!!errors.requested_make}>
               <FieldLabel>Make *</FieldLabel>
               <Input {...register("requested_make")} placeholder="e.g. Toyota" />
-              {errors.requested_make && <FieldError errors={[errors.requested_make.message ?? ""]} />}
+              {errors.requested_make && <FieldError errors={[{ message: errors.requested_make.message }]} />}
             </Field>
             <Field data-invalid={!!errors.requested_model}>
               <FieldLabel>Model *</FieldLabel>
               <Input {...register("requested_model")} placeholder="e.g. Hilux" />
-              {errors.requested_model && <FieldError errors={[errors.requested_model.message ?? ""]} />}
+              {errors.requested_model && <FieldError errors={[{ message: errors.requested_model.message }]} />}
             </Field>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -116,7 +116,7 @@ export function RequestCarForm({ autofill }: { readonly autofill: ProfileAutoFil
                 />
               )}
             />
-            {errors.budget && <FieldError errors={[errors.budget.message ?? ""]} />}
+            {errors.budget && <FieldError errors={[{ message: errors.budget.message }]} />}
           </Field>
           <Field>
             <FieldLabel>Other Preferences</FieldLabel>

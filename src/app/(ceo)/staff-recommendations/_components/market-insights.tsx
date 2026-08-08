@@ -24,9 +24,11 @@ export function MarketInsights() {
   const [data, setData] = useState<InsightsData | null>(null);
 
   useEffect(() => {
-    getMarketInsights().then((res) => {
-      if (res.success && "totalVehicles" in res) setData(res as unknown as InsightsData);
-    });
+    getMarketInsights()
+      .then((res) => {
+        if (res.success && "totalVehicles" in res) setData(res as unknown as InsightsData);
+      })
+      .catch(console.error);
   }, []);
 
   if (!data) {
@@ -73,7 +75,7 @@ export function MarketInsights() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
         <TrendingUp className="size-5 text-primary" />
-        <h2 className="text-lg font-semibold tracking-tight">Market Insights</h2>
+        <h2 className="font-semibold text-lg tracking-tight">Market Insights</h2>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -81,9 +83,9 @@ export function MarketInsights() {
           <Card key={insight.title}>
             <CardContent className="flex flex-col items-center gap-1 py-4">
               <insight.icon className="size-5 text-muted-foreground" />
-              <span className="text-2xl font-bold">{insight.value}</span>
+              <span className="font-bold text-2xl">{insight.value}</span>
               <span className="text-muted-foreground text-xs">{insight.title}</span>
-              <span className="text-muted-foreground text-[10px]">{insight.subtitle}</span>
+              <span className="text-[10px] text-muted-foreground">{insight.subtitle}</span>
             </CardContent>
           </Card>
         ))}

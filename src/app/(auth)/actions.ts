@@ -29,7 +29,7 @@ export async function signIn(formData: FormData) {
       const userRole = (roles as { account_id: string; role: string }[]).find((r) => r.account_id === userId);
       if (userRole) {
         const cookieStore = await cookies();
-        cookieStore.set("gce-role", userRole.role, { httpOnly: false, sameSite: "lax", maxAge: 604800, path: "/" });
+        cookieStore.set("gce-role", userRole.role, { httpOnly: true, sameSite: "lax", maxAge: 604800, path: "/" });
         revalidatePath("/", "layout");
         redirect(landingPath(userRole.role));
       }
@@ -64,7 +64,7 @@ export async function signUp(formData: FormData) {
     await admin.from("profiles").update({ full_name: fullName }).eq("id", data.user.id);
 
     const cookieStore = await cookies();
-    cookieStore.set("gce-role", "customer", { httpOnly: false, sameSite: "lax", maxAge: 604800, path: "/" });
+    cookieStore.set("gce-role", "customer", { httpOnly: true, sameSite: "lax", maxAge: 604800, path: "/" });
   }
 
   revalidatePath("/", "layout");

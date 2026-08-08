@@ -24,8 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   arrangementKindLabel,
@@ -74,7 +73,7 @@ export function StaffTransactionDetail({
   const [payAmount, setPayAmount] = useState("");
   const [payMethod, setPayMethod] = useState("cash");
   const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10));
-  const [payRef, setPayRef] = useState("");
+  const [payRef, _setPayRef] = useState("");
 
   // Sell review form
   const [valuation, setValuation] = useState(sellDetails?.valuation_amount ? String(sellDetails.valuation_amount) : "");
@@ -368,13 +367,15 @@ export function StaffTransactionDetail({
                         size="sm"
                         onClick={() => {
                           const ptId = (paymentTerms as Record<string, unknown>).id as string;
-                          activatePaymentTerms(ptId).then((r) => {
-                            if (r.error) toast.error(r.error);
-                            else {
-                              toast.success("Installments generated.");
-                              router.refresh();
-                            }
-                          });
+                          activatePaymentTerms(ptId)
+                            .then((r) => {
+                              if (r.error) toast.error(r.error);
+                              else {
+                                toast.success("Installments generated.");
+                                router.refresh();
+                              }
+                            })
+                            .catch(console.error);
                         }}
                       >
                         Activate & Generate Installments

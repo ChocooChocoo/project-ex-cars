@@ -1,13 +1,26 @@
 // @ts-nocheck
 const { createClient } = require("@supabase/supabase-js");
 
-const admin = createClient(
-  "https://nsdwyxwrsmtarrxgzeuj.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5zZHd5eHdyc210YXJyeGd6ZXVqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NjA1MDQ2OCwiZXhwIjoyMTAxNjI2NDY4fQ.gv21JF9-hatQZieEz58NoV_b2VCgqVUJoIg0U7m8JhQ",
-  { auth: { autoRefreshToken: false, persistSession: false } },
-);
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!supabaseUrl) {
+  console.error("NEXT_PUBLIC_SUPABASE_URL is not set");
+  process.exit(1);
+}
+if (!serviceRoleKey) {
+  console.error("SUPABASE_SERVICE_ROLE_KEY is not set");
+  process.exit(1);
+}
 
-const DEFAULT_PASSWORD = "GCEtest123!@#";
+const admin = createClient(supabaseUrl, serviceRoleKey, {
+  auth: { autoRefreshToken: false, persistSession: false },
+});
+
+const DEFAULT_PASSWORD = process.env.SEED_USER_PASSWORD;
+if (!DEFAULT_PASSWORD) {
+  console.error("SEED_USER_PASSWORD is not set");
+  process.exit(1);
+}
 
 const SEED_USERS = [
   { role: "customer", name: "Juan Dela Cruz", email: "customer@gce.local" },

@@ -44,7 +44,7 @@ function KpiCard({ label, value }: { readonly label: string; readonly value: num
   return (
     <div className="rounded-lg border p-3">
       <p className="text-muted-foreground text-xs">{label}</p>
-      <p className="text-2xl font-bold">{value}</p>
+      <p className="font-bold text-2xl">{value}</p>
     </div>
   );
 }

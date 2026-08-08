@@ -17,7 +17,7 @@
 | ❓ Unclear | 12 |
 | **Total** | **41** |
 
-Phases 1–5 completed. Phase 5 completed 8 August 2026. R-07 (360° viewer) remains placeholder; R-28/R-29 remain in-progress spanning later phases.
+The earlier tracker state recorded Phases 1–5 as completed. The source-code audit in [14 - PHASE 6 IMPLEMENTATION PLAN](14%20-%20PHASE%206%20IMPLEMENTATION%20PLAN.md) found that this completion statement is not yet supported by build, authorization, user-journey, and repeatable-test evidence. Existing Phase 1–5 item labels require evidence-based reconciliation through Recovery Gates 0–3. R-07 (360° viewer) remains a placeholder, and R-28/R-29 remain in progress.
 
 ## Phase 1 — One shared foundation
 
@@ -75,6 +75,8 @@ Phases 1–5 completed. Phase 5 completed 8 August 2026. R-07 (360° viewer) rem
 | R-37 | Flexible payment terms and payment arrangements recorded against a purchase | ✅ | payment_terms table; propose/approve/activate workflow; generateInstallmentSchedule from terms. |
 
 ## Phase 6 — Staff and managers can run the business
+
+Planning is complete in [14 - PHASE 6 IMPLEMENTATION PLAN](14%20-%20PHASE%206%20IMPLEMENTATION%20PLAN.md). Planning does not start implementation: all Phase 6 statuses below remain unchanged until the prerequisite recovery and stakeholder-decision gates pass.
 
 | # | What gets built | Status | Notes |
 |---|---|---|---|

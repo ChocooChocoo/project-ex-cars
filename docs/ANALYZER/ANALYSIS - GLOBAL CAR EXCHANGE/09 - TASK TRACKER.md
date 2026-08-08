@@ -19,7 +19,7 @@ Every task here names where it came from. A task with no traceable origin is not
 | ❓ Unclear | 19 |
 | **Total** | **59** |
 
-Phases 1–5 completed. Phase 5 completed 8 August 2026.
+The earlier task state recorded Phases 1–5 as completed. The source-code audit and prerequisite fix sequence are now documented in [14 - PHASE 6 IMPLEMENTATION PLAN](14%20-%20PHASE%206%20IMPLEMENTATION%20PLAN.md). Existing finished labels require evidence-based reconciliation through its Recovery Gates 0–3. Phase 6 planning is complete, but its implementation tasks remain unstarted/unclear.
 
 ## The tasks
 

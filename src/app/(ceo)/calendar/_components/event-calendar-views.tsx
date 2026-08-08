@@ -1,7 +1,6 @@
-import React from "react";
-
 import FullCalendar, { type CalendarOptions, type DayCellInfo, type DayHeaderInfo } from "@fullcalendar/react";
 import "@fullcalendar/react/skeleton.css";
+
 import { cn } from "@/lib/utils";
 
 const xxsTextClass = "text-[0.6875rem]/[1.090909]";
@@ -185,13 +184,11 @@ export function EventCalendarViews({ views: userViews, ...restOptions }: EventCa
         )
       }
       dayHeaderContent={(info) =>
-        !info.dayNumberText && !info.inPopover ? (
-          <>{info.text}</>
-        ) : (
-          <>
-            {info.textParts.map((textPart, i) => (
+        !info.dayNumberText && !info.inPopover
+          ? info.text
+          : info.textParts.map((textPart, i) => (
               <span
-                key={i}
+                key={`${textPart.value}-${i}`}
                 className={cn(
                   "whitespace-pre",
                   info.isNarrow ? "text-xs" : "text-sm",
@@ -201,10 +198,10 @@ export function EventCalendarViews({ views: userViews, ...restOptions }: EventCa
                         !info.isNarrow && "font-semibold",
                         info.isToday &&
                           !info.inPopover && [
-                            "mx-0.5 rounded-full justify-center bg-primary text-primary-foreground",
+                            "mx-0.5 justify-center rounded-full bg-primary text-primary-foreground",
                             info.isNarrow ? "size-6" : "size-8",
                             info.hasNavLink &&
-                              "group-hover:bg-primary/90 group-focus-visible:outline-3 outline-ring/50",
+                              "outline-ring/50 group-hover:bg-primary/90 group-focus-visible:outline-3",
                           ],
                       ]
                     : "text-muted-foreground",
@@ -212,9 +209,7 @@ export function EventCalendarViews({ views: userViews, ...restOptions }: EventCa
               >
                 {textPart.value}
               </span>
-            ))}
-          </>
-        )
+            ))
       }
       /* Day Cell
       ----------------------------------------------------------------------------------------- */

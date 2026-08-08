@@ -23,9 +23,11 @@ export function AccuracyTracking() {
   const [data, setData] = useState<AccuracyData | null>(null);
 
   useEffect(() => {
-    getAccuracyData().then((res) => {
-      if (res.success && "totalRuns" in res) setData(res as unknown as AccuracyData);
-    });
+    getAccuracyData()
+      .then((res) => {
+        if (res.success && "totalRuns" in res) setData(res as unknown as AccuracyData);
+      })
+      .catch(console.error);
   }, []);
 
   if (!data) {
@@ -44,35 +46,35 @@ export function AccuracyTracking() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
         <Target className="size-5 text-primary" />
-        <h2 className="text-lg font-semibold tracking-tight">Accuracy Tracking</h2>
+        <h2 className="font-semibold text-lg tracking-tight">Accuracy Tracking</h2>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Card>
           <CardContent className="flex flex-col items-center gap-1 py-4">
             <BarChart3 className="size-5 text-muted-foreground" />
-            <span className="text-2xl font-bold">{data.totalRuns}</span>
+            <span className="font-bold text-2xl">{data.totalRuns}</span>
             <span className="text-muted-foreground text-xs">Total Runs</span>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="flex flex-col items-center gap-1 py-4">
             <Target className="size-5 text-green-500" />
-            <span className="text-2xl font-bold">{data.accuracy}%</span>
+            <span className="font-bold text-2xl">{data.accuracy}%</span>
             <span className="text-muted-foreground text-xs">Accuracy</span>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="flex flex-col items-center gap-1 py-4">
             <ThumbsUp className="size-5 text-green-500" />
-            <span className="text-2xl font-bold">{data.helpful}</span>
+            <span className="font-bold text-2xl">{data.helpful}</span>
             <span className="text-muted-foreground text-xs">Helpful</span>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="flex flex-col items-center gap-1 py-4">
             <ThumbsDown className="size-5 text-red-500" />
-            <span className="text-2xl font-bold">{data.notHelpful}</span>
+            <span className="font-bold text-2xl">{data.notHelpful}</span>
             <span className="text-muted-foreground text-xs">Not Helpful</span>
           </CardContent>
         </Card>
@@ -102,7 +104,7 @@ export function AccuracyTracking() {
 
           {data.topRecommended.length > 0 && (
             <div className="mt-4 space-y-2">
-              <p className="text-muted-foreground text-xs font-medium">Most Frequently Recommended Vehicles</p>
+              <p className="font-medium text-muted-foreground text-xs">Most Frequently Recommended Vehicles</p>
               <div className="flex flex-wrap gap-2">
                 {data.topRecommended.map((v) => (
                   <Badge key={`${v.make}-${v.model}-${v.year}`} variant="secondary" className="text-xs">

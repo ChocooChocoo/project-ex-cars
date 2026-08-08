@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { createServerSupabase } from "@/lib/supabase/server";
+import { sellVehicleSchema } from "@/lib/validation/transactions";
 
 export async function createBuyTransaction(formData: FormData) {
   const supabase = await createServerSupabase();
@@ -95,13 +96,7 @@ export async function submitSellVehicle(formData: FormData) {
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
-  const make = formData.get("make") as string;
-  const model = formData.get("model") as string;
-  const year = formData.get("year") as string;
-  const mileage = formData.get("mileage") as string;
-  const condition = formData.get("condition") as string;
-  const offeredAmount = formData.get("offered_amount") as string;
-  const description = formData.get("description") as string | null;
+  const parsed = sellVehicleSchema.parse(Object.fromEntries(formData));
 
   // Create the sell transaction.
   const { data: transaction, error } = await supabase
@@ -119,25 +114,32 @@ export async function submitSellVehicle(formData: FormData) {
 
   const { error: detailError } = await supabase.from("sell_details").insert({
     transaction_id: transaction.id,
-    offered_amount: offeredAmount ? Number.parseFloat(offeredAmount) : null,
+    offered_amount: parsed.offered_amount,
   });
 
   if (detailError) return { error: detailError.message };
 
   // Create a draft vehicle record for the offered vehicle.
-  const stockCode = `SELL-${make?.slice(0, 3).toUpperCase() ?? "XXX"}-${Date.now().toString(36).toUpperCase()}`;
-  const { error: vehicleError } = await supabase.from("vehicles").insert({
-    stock_code: stockCode,
-    make,
-    model,
-    year: year ? Number.parseInt(year) : null,
-    mileage: mileage ? Number.parseInt(mileage) : null,
-    condition,
-    description,
-    listing_state: "draft",
-  });
+  const stockCode = `SELL-${parsed.make.slice(0, 3).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
+  const { data: createdVehicle, error: vehicleError } = await supabase
+    .from("vehicles")
+    .insert({
+      stock_code: stockCode,
+      make: parsed.make,
+      model: parsed.model,
+      year: parsed.year,
+      mileage: parsed.mileage,
+      condition: parsed.condition,
+      description: parsed.description ?? null,
+      listing_state: "draft",
+    })
+    .select("id")
+    .single();
 
-  if (vehicleError) return { error: vehicleError.message };
+  if (vehicleError || !createdVehicle) return { error: vehicleError?.message ?? "Failed to create vehicle" };
+
+  // Link the vehicle back to the transaction.
+  await supabase.from("transactions").update({ vehicle_id: createdVehicle.id }).eq("id", transaction.id);
 
   // Record status history.
   await supabase.from("transaction_status_history").insert({
@@ -175,8 +177,8 @@ export async function submitRequestCar(formData: FormData) {
     transaction_id: transaction.id,
     requested_make: formData.get("requested_make") as string,
     requested_model: formData.get("requested_model") as string,
-    year_min: (formData.get("year_min") as string) ? Number.parseInt(formData.get("year_min") as string) : null,
-    year_max: (formData.get("year_max") as string) ? Number.parseInt(formData.get("year_max") as string) : null,
+    year_min: (formData.get("year_min") as string) ? Number.parseInt(formData.get("year_min") as string, 10) : null,
+    year_max: (formData.get("year_max") as string) ? Number.parseInt(formData.get("year_max") as string, 10) : null,
     budget: (formData.get("budget") as string) ? Number.parseFloat(formData.get("budget") as string) : null,
     other_preferences: (formData.get("other_preferences") as string) || null,
   });

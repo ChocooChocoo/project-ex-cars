@@ -9,6 +9,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { generateInstallmentSchedule } from "@/lib/transactions/installments";
 import type { TransactionState } from "@/lib/transactions/state-machine";
 import { canTransition } from "@/lib/transactions/state-machine";
+import { reviewSellSchema } from "@/lib/validation/transactions";
 
 export async function transitionTransaction(formData: FormData) {
   const supabase = await createServerSupabase();
@@ -90,7 +91,7 @@ export async function recordPayment(formData: FormData) {
 
   const { error } = await supabase.from("payment_records").insert({
     transaction_id: transactionId,
-    installment_id: installmentId || null,
+    installment_id: installmentId ?? null,
     amount: Number.parseFloat(amount),
     method,
     external_reference: externalRef,
@@ -143,7 +144,7 @@ export async function createPaymentTerms(formData: FormData) {
     arrangement_description: formData.get("arrangement_description") as string,
     total_amount: Number.parseFloat(formData.get("total_amount") as string),
     down_payment: Number.parseFloat(formData.get("down_payment") as string) || 0,
-    number_of_payments: Number.parseInt(formData.get("number_of_payments") as string),
+    number_of_payments: Number.parseInt(formData.get("number_of_payments") as string, 10),
     payment_frequency: formData.get("payment_frequency") as string,
     first_due_date: formData.get("first_due_date") as string,
     agreed_by: user.user.id,
@@ -250,10 +251,21 @@ export async function recordPaperwork(formData: FormData) {
 
   const transactionId = formData.get("transaction_id") as string;
   const documentKind = formData.get("document_kind") as string;
+  const file = formData.get("file") as File | null;
+
+  let storagePath: string | null = null;
+
+  if (file && file.size > 0) {
+    const fileExt = file.name.split(".").pop() ?? "bin";
+    storagePath = `${transactionId}/${documentKind}-${Date.now()}.${fileExt}`;
+    const { error: uploadError } = await supabase.storage.from("transaction-documents").upload(storagePath, file);
+    if (uploadError) return { error: uploadError.message };
+  }
 
   const { error } = await supabase.from("transaction_documents").insert({
     transaction_id: transactionId,
     document_kind: documentKind,
+    storage_path: storagePath,
     uploader_id: user.user.id,
     verification_state: "verified",
   });
@@ -266,48 +278,62 @@ export async function recordPaperwork(formData: FormData) {
 }
 
 export async function reviewSellTransaction(formData: FormData) {
-  const admin = await createAdminClient();
-  const { data: user } = await (await createServerSupabase()).auth.getUser();
+  const supabase = await createServerSupabase();
+  const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
-  const transactionId = formData.get("transaction_id") as string;
-  const valuationAmount = formData.get("valuation_amount") as string;
-  const decision = formData.get("decision") as string;
-  const reviewNotes = (formData.get("review_notes") as string) || null;
+  const role = await getCurrentRole();
+  if (!role) return { error: "No role assigned" };
 
-  const { error } = await admin
+  const parsed = reviewSellSchema.parse(Object.fromEntries(formData));
+
+  const { data: tx } = await supabase
+    .from("transactions")
+    .select("current_state")
+    .eq("id", parsed.transaction_id)
+    .single();
+
+  if (!tx) return { error: "Transaction not found" };
+
+  const fromState = tx.current_state as TransactionState;
+  const newState = parsed.decision === "accepted" ? "approved" : "rejected";
+
+  if (!canTransition(fromState, newState as TransactionState, role)) {
+    return { error: "This action is not allowed for your role." };
+  }
+
+  const { error } = await supabase
     .from("sell_details")
     .update({
-      valuation_amount: Number.parseFloat(valuationAmount),
-      decision,
-      review_notes: reviewNotes,
+      valuation_amount: parsed.valuation_amount,
+      decision: parsed.decision,
+      review_notes: parsed.review_notes ?? null,
       decision_maker_id: user.user.id,
       decision_date: new Date().toISOString(),
     })
-    .eq("transaction_id", transactionId);
+    .eq("transaction_id", parsed.transaction_id);
 
   if (error) return { error: error.message };
 
-  const newState = decision === "accepted" ? "approved" : "rejected";
-  await admin.from("transactions").update({ current_state: newState }).eq("id", transactionId);
+  await supabase.from("transactions").update({ current_state: newState }).eq("id", parsed.transaction_id);
 
-  await admin.from("transaction_status_history").insert({
-    transaction_id: transactionId,
-    from_state: "under_review",
+  await supabase.from("transaction_status_history").insert({
+    transaction_id: parsed.transaction_id,
+    from_state: fromState,
     to_state: newState,
     actor_id: user.user.id,
-    reason: `Sell review: ${decision}. ${reviewNotes ?? ""}`,
+    reason: `Sell review: ${parsed.decision}. ${parsed.review_notes ?? ""}`,
   });
 
   await logAuditEvent({
     actorId: user.user.id,
-    action: decision === "accepted" ? "sell_accepted" : "sell_rejected",
+    action: parsed.decision === "accepted" ? "sell_accepted" : "sell_rejected",
     recordKind: "transactions",
-    recordId: transactionId,
-    summary: `Sell transaction ${transactionId} ${decision}`,
+    recordId: parsed.transaction_id,
+    summary: `Sell transaction ${parsed.transaction_id} ${parsed.decision}`,
   });
 
-  revalidatePath(`/dashboard/transactions/${transactionId}`);
+  revalidatePath(`/dashboard/transactions/${parsed.transaction_id}`);
   revalidatePath("/dashboard/transactions");
   return { success: true };
 }
@@ -374,7 +400,7 @@ export async function createWalkInTransaction(formData: FormData) {
     .insert({
       customer_id: customerId,
       transaction_kind: kind,
-      vehicle_id: vehicleId || null,
+      vehicle_id: vehicleId ?? null,
       current_state: "pending",
       created_by: user.user.id,
     })
