@@ -2,22 +2,22 @@
 
 [Back to start](00%20-%20START%20HERE.md) · Previous: [07 - DEVELOPMENT ROADMAP](07%20-%20DEVELOPMENT%20ROADMAP.md) · Next: [09 - TASK TRACKER](09%20-%20TASK%20TRACKER.md)
 
-**Last checked:** 7 August 2026
+**Last checked:** 8 August 2026
 
 ## Where everything stands
 
 | Status | How many |
 |---:|---|
-| ✅ Finished | 20 |
+| ✅ Finished | 26 |
 | 🟨 Being worked on | 3 |
 | ⭕ Not started | 0 |
 | ❌ Blocked | 0 |
 | 🔵 Already there | 0 |
 | ⬜ Dropped | 0 |
-| ❓ Unclear | 18 |
+| ❓ Unclear | 12 |
 | **Total** | **41** |
 
-Phases 1, 2, and 3 completed 7 August 2026. Phase 4 completed 7 August 2026. Role-based dashboards implemented as cross-phase infrastructure. R-07 (360° viewer) remains placeholder; R-28/R-29 remain in-progress spanning later phases.
+Phases 1–5 completed. Phase 5 completed 8 August 2026. R-07 (360° viewer) remains placeholder; R-28/R-29 remain in-progress spanning later phases.
 
 ## Phase 1 — One shared foundation
 
@@ -67,12 +67,12 @@ Phases 1, 2, and 3 completed 7 August 2026. Phase 4 completed 7 August 2026. Rol
 
 | # | What gets built | Status | Notes |
 |---|---|---|---|
-| R-15 | Buy path with Buy Now routing, registered or walk-in accounts, form autofill, two valid IDs, proof of billing, arrangement details, and cash, financing, cheque, or down-payment records | ❓ Unclear | Not yet started. |
-| R-16 | Sell path with registered or walk-in accounts, mechanic inspection, valuation, Sales Manager review, acceptance or rejection, acquisition, and repair progress | ❓ Unclear | Not yet started. |
-| R-17 | Request-a-Car path from customer specifications through price discussion and confidential-informant sourcing | ❓ Unclear | Not yet started. |
-| R-18 | Shared pending, under-review, approved, rejected, and completed states | ❓ Unclear | Not yet started. |
-| R-19 | Purchase history, payment-method record, financing and installment progress, due-date escalation, sales records, paperwork, invoice or receipt record, and automatic sold status | ❓ Unclear | Not yet started. |
-| R-37 | Flexible payment terms and payment arrangements recorded against a purchase | ❓ Unclear | Not yet started. |
+| R-15 | Buy path with Buy Now routing, registered or walk-in accounts, form autofill, two valid IDs, proof of billing, arrangement details, and cash, financing, cheque, or down-payment records | ✅ | Buy Now from showroom creates transaction; purchase details form; viewing arrangements; walk-in buy via createWalkInTransaction. |
+| R-16 | Sell path with registered or walk-in accounts, mechanic inspection, valuation, Sales Manager review, acceptance or rejection, acquisition, and repair progress | ✅ | Customer sell-vehicle form; draft vehicle; sell_details; Sales Manager reviewSellTransaction with valuation/decision. |
+| R-17 | Request-a-Car path from customer specifications through price discussion and confidential-informant sourcing | ✅ | Customer request-a-car form; vehicle_requests; informant assignment via assignInformant; field_cases for sourcing. |
+| R-18 | Shared pending, under-review, approved, rejected, and completed states | ✅ | State machine in src/lib/transactions/state-machine.ts; role-gated transitions; transaction_status_history; admin-client writes. |
+| R-19 | Purchase history, payment-method record, financing and installment progress, due-date escalation, sales records, paperwork, invoice or receipt record, and automatic sold status | ✅ | payment_records + verifyPayment; installment_accounts/installments with schedule generator; payment_terms; recordPaperwork; auto sold on buy completion; collection_actions. |
+| R-37 | Flexible payment terms and payment arrangements recorded against a purchase | ✅ | payment_terms table; propose/approve/activate workflow; generateInstallmentSchedule from terms. |
 
 ## Phase 6 — Staff and managers can run the business
 

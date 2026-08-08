@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 
-import { Car, MessageSquare, Sparkles } from "lucide-react";
+import { Car, MessageSquare, ReceiptText, Sparkles } from "lucide-react";
 
 import { rolePath } from "@/lib/routing/paths";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,7 @@ export function CustomerHeader({ userRole }: CustomerHeaderProps) {
     { href: rolePath(userRole, "/showroom"), label: "Showroom", icon: Car },
     { href: rolePath(userRole, "/inquiries"), label: "My Inquiries", icon: MessageSquare },
     { href: rolePath(userRole, "/recommendations"), label: "Find Your Car", icon: Sparkles },
+    { href: rolePath(userRole, "/my-transactions"), label: "Transactions", icon: ReceiptText },
   ];
 
   return (

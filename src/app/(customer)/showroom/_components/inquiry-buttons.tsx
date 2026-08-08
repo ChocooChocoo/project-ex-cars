@@ -9,6 +9,7 @@ import { MessageSquare, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
 
 import { createInquiry } from "@/app/(customer)/my-inquiries/actions";
+import { createBuyTransaction } from "@/app/(customer)/my-transactions/actions";
 import { Button } from "@/components/ui/button";
 
 export function InquiryButtons({ vehicleId }: { readonly vehicleId: string }) {
@@ -20,14 +21,25 @@ export function InquiryButtons({ vehicleId }: { readonly vehicleId: string }) {
     const fd = new FormData();
     fd.set("vehicle_id", vehicleId);
     fd.set("intention_kind", kind);
-    const result = await createInquiry(fd);
-    setLoading(null);
 
-    if (result.error) {
-      toast.error(result.error);
-    } else if (result.id) {
-      toast.success(kind === "buy_now" ? "Buy Now request sent!" : "Inquiry started!");
-      router.push(`/inquiries/${result.id}`);
+    if (kind === "buy_now") {
+      const result = await createBuyTransaction(fd);
+      setLoading(null);
+      if (result.error) {
+        toast.error(result.error);
+      } else if (result.id) {
+        toast.success("Buy Now request sent!");
+        router.push(`/my-transactions/${result.id}`);
+      }
+    } else {
+      const result = await createInquiry(fd);
+      setLoading(null);
+      if (result.error) {
+        toast.error(result.error);
+      } else if (result.id) {
+        toast.success("Inquiry started!");
+        router.push(`/inquiries/${result.id}`);
+      }
     }
   }
 

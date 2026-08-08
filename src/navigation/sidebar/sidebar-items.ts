@@ -165,6 +165,12 @@ export const sidebarItems: NavGroup[] = [
         url: "/staff-recommendations",
         icon: Sparkles,
       },
+      {
+        id: "transactions",
+        title: "Transactions",
+        url: "/transactions",
+        icon: ReceiptText,
+      },
     ],
   },
   {
