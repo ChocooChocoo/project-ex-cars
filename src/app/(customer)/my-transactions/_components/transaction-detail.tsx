@@ -37,7 +37,7 @@ export function TransactionDetail({
   installmentAccount,
   paymentTerms,
   viewingArrangements,
-  autofill: _autofill,
+  autofill,
 }: {
   readonly transaction: Record<string, unknown>;
   readonly history: Record<string, unknown>[];
@@ -66,7 +66,7 @@ export function TransactionDetail({
   const [finalPrice, setFinalPrice] = useState(purchaseDetails?.final_price ? String(purchaseDetails.final_price) : "");
   const [arrangementKind, setArrangementKind] = useState((purchaseDetails?.arrangement_kind as string) ?? "");
   const [schedule, setSchedule] = useState("");
-  const [location, setLocation] = useState("");
+  const [location, setLocation] = useState(autofill?.address ?? "");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
 

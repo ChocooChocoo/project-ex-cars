@@ -2,8 +2,8 @@ import Link from "next/link";
 
 import { Sparkles } from "lucide-react";
 
-import { getCurrentRole } from "@/app/auth/actions";
 import { ShowroomGrid } from "@/app/(customer)/showroom/_components/showroom-grid";
+import { getCurrentRole } from "@/app/auth/actions";
 import { Button } from "@/components/ui/button";
 import { rolePath } from "@/lib/routing/paths";
 import { createServerSupabase } from "@/lib/supabase/server";

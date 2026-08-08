@@ -12,10 +12,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import type { ProfileAutoFill } from "@/lib/autofill";
 import { type RequestCarFormData, requestCarSchema } from "@/lib/validation/transactions";
 
-export function RequestCarForm({ autofill: _autofill }: { readonly autofill: ProfileAutoFill | null }) {
+export function RequestCarForm() {
   const router = useRouter();
   const {
     register,

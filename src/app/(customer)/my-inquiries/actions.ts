@@ -30,6 +30,50 @@ export async function createInquiry(formData: FormData) {
   return { success: true, id: inquiry.id };
 }
 
+export async function sendMessageWithAttachment(formData: FormData) {
+  const supabase = await createServerSupabase();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+
+  const inquiryId = formData.get("inquiry_id") as string;
+  const text = formData.get("message_text") as string;
+  const file = formData.get("file") as File | null;
+
+  if (!text?.trim() && !file) return { error: "Message cannot be empty" };
+
+  const { data: message, error } = await supabase
+    .from("inquiry_messages")
+    .insert({
+      inquiry_id: inquiryId,
+      sender_id: user.user.id,
+      message_text: text || null,
+    })
+    .select("id")
+    .single();
+
+  if (error) return { error: error.message };
+
+  if (file && file.size > 0) {
+    const fileExt = file.name.split(".").pop() ?? "bin";
+    const storagePath = `${inquiryId}/${message.id}-${Date.now()}.${fileExt}`;
+
+    const { error: uploadError } = await supabase.storage.from("message-attachments").upload(storagePath, file);
+
+    if (!uploadError) {
+      await supabase.from("message_attachments").insert({
+        message_id: message.id,
+        storage_path: storagePath,
+        original_name: file.name,
+        mime_type: file.type || null,
+      });
+    }
+  }
+
+  revalidatePath(`/inquiries/${inquiryId}`);
+  revalidatePath(`/dashboard/inquiries/${inquiryId}`);
+  return { success: true };
+}
+
 export async function sendMessage(formData: FormData) {
   const supabase = await createServerSupabase();
   const { data: user } = await supabase.auth.getUser();
@@ -58,6 +102,17 @@ export async function assignInquiry(inquiryId: string, role: "account_manager" |
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
+  // Only account_manager or sales_manager may assign themselves to an inquiry.
+  if (role === "account_manager") {
+    const { data: roles } = await supabase.rpc("get_user_roles");
+    const hasRole = (roles as { role: string }[] | undefined)?.some((r) => r.role === "account_manager");
+    if (!hasRole) return { error: "Not authorized" };
+  } else if (role === "sales_manager") {
+    const { data: roles } = await supabase.rpc("get_user_roles");
+    const hasRole = (roles as { role: string }[] | undefined)?.some((r) => r.role === "sales_manager");
+    if (!hasRole) return { error: "Not authorized" };
+  }
+
   const update: Record<string, string> = {};
   if (role === "account_manager") update.assigned_account_manager = user.user.id;
   else update.assigned_sales_manager = user.user.id;
@@ -76,6 +131,12 @@ export async function scheduleArrangement(formData: FormData) {
   const supabase = await createServerSupabase();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
+
+  const { data: roles } = await supabase.rpc("get_user_roles");
+  const hasRole = (roles as { role: string }[] | undefined)?.some((r) =>
+    ["ceo", "account_manager", "sales_manager"].includes(r.role),
+  );
+  if (!hasRole) return { error: "Not authorized" };
 
   const inquiryId = formData.get("inquiry_id") as string;
   const kind = formData.get("arrangement_kind") as string;
@@ -108,6 +169,14 @@ export async function scheduleArrangement(formData: FormData) {
 
 export async function handoffInquiry(inquiryId: string) {
   const supabase = await createServerSupabase();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+
+  const { data: roles } = await supabase.rpc("get_user_roles");
+  const hasRole = (roles as { role: string }[] | undefined)?.some((r) =>
+    ["ceo", "account_manager", "sales_manager"].includes(r.role),
+  );
+  if (!hasRole) return { error: "Not authorized" };
 
   const { error } = await supabase
     .from("inquiries")
@@ -151,6 +220,26 @@ export async function getUnreadCount(inquiryId: string): Promise<number> {
   return count ?? 0;
 }
 
+export async function getTotalUnreadCount(): Promise<number> {
+  const supabase = await createServerSupabase();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return 0;
+
+  const { data: roles } = await supabase.rpc("get_user_roles");
+  const hasRole = (roles as { role: string }[] | undefined)?.some((r) =>
+    ["ceo", "account_manager", "sales_manager"].includes(r.role),
+  );
+  if (!hasRole) return 0;
+
+  const { count } = await supabase
+    .from("inquiry_messages")
+    .select("*", { count: "exact", head: true })
+    .neq("sender_id", user.user.id)
+    .is("read_at", null);
+
+  return count ?? 0;
+}
+
 export async function reportMessage(inquiryId: string, messageId: string, reason: string) {
   const supabase = await createServerSupabase();
   const { data: user } = await supabase.auth.getUser();
@@ -172,6 +261,10 @@ export async function reviewReport(reportId: string, decision: string) {
   const supabase = await createServerSupabase();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
+
+  const { data: roles } = await supabase.rpc("get_user_roles");
+  const hasRole = (roles as { role: string }[] | undefined)?.some((r) => ["ceo", "account_manager"].includes(r.role));
+  if (!hasRole) return { error: "Not authorized" };
 
   const { error } = await supabase
     .from("message_reports")

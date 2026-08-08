@@ -38,12 +38,14 @@ import type {
 
 interface NavMainProps {
   readonly items: readonly NavGroup[];
+  readonly unreadCount?: number;
 }
 interface NavItemProps {
   readonly item: NavMainItem;
   readonly isItemActive: (item: NavMainItem) => boolean;
   readonly isSubItemActive: (url: string) => boolean;
   readonly isSubmenuOpen: (item: NavMainParentItem) => boolean;
+  readonly unreadCount?: number;
 }
 
 interface NavLinkItemProps {
@@ -77,7 +79,7 @@ function hasSubItems(item: NavMainItem): item is NavMainParentItem {
   return Boolean(item.subItems?.length);
 }
 
-export function NavMain({ items }: NavMainProps) {
+export function NavMain({ items, unreadCount }: NavMainProps) {
   const path = usePathname();
 
   const isItemActive = (item: NavMainItem) => {
@@ -137,6 +139,7 @@ export function NavMain({ items }: NavMainProps) {
                   isItemActive={isItemActive}
                   isSubItemActive={isSubItemActive}
                   isSubmenuOpen={isSubmenuOpen}
+                  unreadCount={unreadCount}
                 />
               ))}
             </SidebarMenu>
@@ -147,12 +150,20 @@ export function NavMain({ items }: NavMainProps) {
   );
 }
 
-function NavItem({ item, isItemActive, isSubItemActive, isSubmenuOpen }: NavItemProps) {
+function NavItem({ item, isItemActive, isSubItemActive, isSubmenuOpen, unreadCount }: NavItemProps) {
   const { state, isMobile } = useSidebar();
   const isCollapsedDesktop = state === "collapsed" && !isMobile;
 
   if (!hasSubItems(item)) {
-    return <NavLinkItem item={item} isActive={isItemActive(item)} showIconFallback={isCollapsedDesktop} />;
+    const liveBadge = item.id === "inquiries" && unreadCount ? unreadCount : undefined;
+    return (
+      <NavLinkItem
+        item={item}
+        isActive={isItemActive(item)}
+        showIconFallback={isCollapsedDesktop}
+        liveBadge={liveBadge}
+      />
+    );
   }
 
   if (isCollapsedDesktop) {
@@ -169,7 +180,12 @@ function NavItem({ item, isItemActive, isSubItemActive, isSubmenuOpen }: NavItem
   );
 }
 
-function NavLinkItem({ item, isActive, showIconFallback }: NavLinkItemProps) {
+function NavLinkItem({
+  item,
+  isActive,
+  showIconFallback,
+  liveBadge,
+}: NavLinkItemProps & { readonly liveBadge?: string | number }) {
   const Icon = item.icon;
 
   return (
@@ -185,7 +201,7 @@ function NavLinkItem({ item, isActive, showIconFallback }: NavLinkItemProps) {
           <span>{item.title}</span>
         </Link>
       </SidebarMenuButton>
-      <NavItemBadge badge={item.badge} />
+      {liveBadge ? <LiveCountBadge count={liveBadge} /> : <NavItemBadge badge={item.badge} />}
     </SidebarMenuItem>
   );
 }
@@ -293,6 +309,14 @@ function NavItemBadge({ badge }: { badge?: NavBadge }) {
       )}
     >
       {badge}
+    </SidebarMenuBadge>
+  );
+}
+
+function LiveCountBadge({ count }: { count: string | number }) {
+  return (
+    <SidebarMenuBadge className="rounded-full bg-destructive px-1.5 py-0.5 font-medium text-[10px] text-destructive-foreground leading-none">
+      {Number(count) > 99 ? "99+" : String(count)}
     </SidebarMenuBadge>
   );
 }

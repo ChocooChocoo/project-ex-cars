@@ -3,12 +3,14 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { Paperclip } from "lucide-react";
+
 import {
   assignInquiry,
   handoffInquiry,
   markMessagesRead,
   scheduleArrangement,
-  sendMessage,
+  sendMessageWithAttachment,
 } from "@/app/(customer)/my-inquiries/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,12 +36,14 @@ export function StaffChatView({
   const [msgs, setMsgs] = useState(initialMessages);
   const [arr, setArr] = useState(initialArrangement);
   const [text, setText] = useState("");
+  const [file, setFile] = useState<File | null>(null);
   const [sending, setSending] = useState(false);
   const [showArrangement, setShowArrangement] = useState(false);
   const [arrKind, setArrKind] = useState("gce_visit");
   const [arrSchedule, setArrSchedule] = useState("");
   const [arrLocation, setArrLocation] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
 
   const inquiryId = inquiry.id as string;
@@ -74,13 +78,17 @@ export function StaffChatView({
   }, []);
 
   async function handleSend() {
-    if (!text.trim()) return;
+    if (!text.trim() && !file) return;
     setSending(true);
     const fd = new FormData();
     fd.set("inquiry_id", inquiryId);
     fd.set("message_text", text);
+    if (file) {
+      fd.set("file", file);
+      setFile(null);
+    }
     setText("");
-    await sendMessage(fd);
+    await sendMessageWithAttachment(fd);
     setSending(false);
   }
 
@@ -230,6 +238,21 @@ export function StaffChatView({
         </CardContent>
         <Separator />
         <div className="flex items-center gap-2 p-3">
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          />
+          <Button
+            size="icon"
+            variant="ghost"
+            className="size-8 shrink-0"
+            onClick={() => fileInputRef.current?.click()}
+            type="button"
+          >
+            <Paperclip className="size-4" />
+          </Button>
           <Input
             placeholder="Type a message..."
             value={text}
@@ -238,7 +261,7 @@ export function StaffChatView({
               if (e.key === "Enter") void handleSend();
             }}
           />
-          <Button size="sm" onClick={handleSend} disabled={sending || !text.trim()}>
+          <Button size="sm" onClick={handleSend} disabled={sending || (!text.trim() && !file)}>
             Send
           </Button>
         </div>

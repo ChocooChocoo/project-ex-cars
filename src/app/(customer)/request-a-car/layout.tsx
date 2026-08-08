@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
-import { getCurrentRole } from "@/app/auth/actions";
 import { CustomerHeader } from "@/app/(customer)/_components/customer-header";
+import { getCurrentRole } from "@/app/auth/actions";
 
 export default async function RequestCarLayout({ children }: Readonly<{ children: ReactNode }>) {
   const role = (await getCurrentRole()) ?? "customer";

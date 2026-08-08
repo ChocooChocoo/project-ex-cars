@@ -108,6 +108,14 @@ interface AssignRoleParams {
 }
 
 export async function assignRole(params: AssignRoleParams) {
+  const supabase = await createServerSupabase();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const { data: roles } = await supabase.rpc("get_user_roles");
+  const hasRole = (roles as { role: string }[] | undefined)?.some((r) => ["ceo", "account_manager"].includes(r.role));
+  if (!hasRole) return { error: "Not authorized" };
+
   const admin = createAdminClient();
 
   const { error } = await admin.rpc("assign_user_role", {
@@ -139,6 +147,16 @@ interface CreateWalkInAccountParams {
 }
 
 export async function createWalkInAccount(params: CreateWalkInAccountParams) {
+  const supabase = await createServerSupabase();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const { data: roles } = await supabase.rpc("get_user_roles");
+  const hasRole = (roles as { role: string }[] | undefined)?.some((r) =>
+    ["ceo", "account_manager", "sales_manager"].includes(r.role),
+  );
+  if (!hasRole) return { error: "Not authorized" };
+
   const admin = createAdminClient();
 
   const { data, error } = await admin.auth.admin.createUser({
@@ -186,6 +204,14 @@ interface CreateSupplierParams {
 }
 
 export async function createSupplier(params: CreateSupplierParams) {
+  const supabase = await createServerSupabase();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const { data: roles } = await supabase.rpc("get_user_roles");
+  const hasRole = (roles as { role: string }[] | undefined)?.some((r) => ["ceo", "account_manager"].includes(r.role));
+  if (!hasRole) return { error: "Not authorized" };
+
   const admin = createAdminClient();
 
   const { data, error } = await admin
@@ -226,6 +252,14 @@ interface ApproveSupplierParams {
 }
 
 export async function approveSupplier(params: ApproveSupplierParams) {
+  const supabase = await createServerSupabase();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const { data: roles } = await supabase.rpc("get_user_roles");
+  const hasRole = (roles as { role: string }[] | undefined)?.some((r) => ["ceo", "account_manager"].includes(r.role));
+  if (!hasRole) return { error: "Not authorized" };
+
   const admin = createAdminClient();
 
   const { error } = await admin

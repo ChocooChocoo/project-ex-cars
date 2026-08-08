@@ -82,8 +82,8 @@ export const DOCUMENT_VERIFICATION_STATES = ["pending", "verified", "rejected"] 
 
 /** Nav item IDs each role may see. "all" grants access to every nav item. */
 export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
-  customer: new Set(["showroom", "inquiries"]),
-  supplier: new Set(["showroom", "inquiries"]),
+  customer: new Set(["showroom", "inquiries", "favourites"]),
+  supplier: new Set(["showroom", "inquiries", "favourites"]),
   ceo: new Set([
     "default",
     "vehicles",
@@ -95,6 +95,7 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
     "transactions",
     "roles",
     "users",
+    "suppliers",
     "staff-records",
     "attendance",
     "employee-requests",
@@ -115,6 +116,7 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
     "inquiries",
     "recommendations",
     "transactions",
+    "suppliers",
     "staff-records",
     "attendance",
     "employee-requests",
@@ -157,16 +159,16 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
   head_security: new Set(["default", "vehicles", "security-duty-checks"]),
 };
 
-/** Landing page path for each role after sign-in. */
+/** Landing page path for each role after sign-in (resolved to role-prefixed URL by {@link landingPath}). */
 export const ROLE_LANDING_PAGES: Record<GceRole, string> = {
   customer: "/showroom",
   supplier: "/showroom",
-  ceo: "/dashboard/default",
-  account_manager: "/dashboard/default",
-  head_accountant: "/dashboard/default",
-  marketing_specialist: "/dashboard/vehicles",
-  mechanic: "/dashboard/inspections",
-  sales_manager: "/dashboard/vehicles",
-  confidential_informant: "/dashboard/default",
-  head_security: "/dashboard/default",
+  ceo: "/dashboard",
+  account_manager: "/dashboard",
+  head_accountant: "/dashboard",
+  marketing_specialist: "/vehicles",
+  mechanic: "/inspections",
+  sales_manager: "/vehicles",
+  confidential_informant: "/dashboard",
+  head_security: "/dashboard",
 };
