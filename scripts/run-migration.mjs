@@ -75,9 +75,10 @@ async function run() {
     process.exit(1);
   }
   // Allow paths outside the migrations dir (e.g. ../scripts/seed-roles.sql).
-  const sqlPath = migrationFile.includes("/") || migrationFile.includes("\\")
-    ? resolve(__dirname, migrationFile)
-    : join(__dirname, "..", "supabase", "migrations", migrationFile);
+  const sqlPath =
+    migrationFile.includes("/") || migrationFile.includes("\\")
+      ? resolve(__dirname, migrationFile)
+      : join(__dirname, "..", "supabase", "migrations", migrationFile);
   const sql = readFileSync(sqlPath, "utf8");
 
   console.log(`Running migration: ${migrationFile}`);

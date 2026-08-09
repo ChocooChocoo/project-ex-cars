@@ -13,6 +13,8 @@ import {
   sellVehicleSchema,
 } from "@/lib/validation/transactions";
 
+import { randomUUID } from "node:crypto";
+
 const uploadPurchaseDocumentSchema = z.object({
   transaction_id: z.string().uuid(),
   document_kind: z.enum(["valid_id", "proof_of_billing"]),
@@ -198,26 +200,26 @@ export async function submitSellVehicle(formData: FormData) {
   if (detailError) return { error: detailError.message };
 
   // Create a draft vehicle record for the offered vehicle.
+  // The ID is generated here because INSERT ... RETURNING is subject to the
+  // SELECT RLS policies, which do not allow customers to read draft vehicles.
+  const vehicleId = randomUUID();
   const stockCode = `SELL-${data.make.slice(0, 3).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
-  const { data: createdVehicle, error: vehicleError } = await supabase
-    .from("vehicles")
-    .insert({
-      stock_code: stockCode,
-      make: data.make,
-      model: data.model,
-      year: data.year,
-      mileage: data.mileage,
-      condition: data.condition,
-      description: data.description ?? null,
-      listing_state: "draft",
-    })
-    .select("id")
-    .single();
+  const { error: vehicleError } = await supabase.from("vehicles").insert({
+    id: vehicleId,
+    stock_code: stockCode,
+    make: data.make,
+    model: data.model,
+    year: data.year,
+    mileage: data.mileage,
+    condition: data.condition,
+    description: data.description ?? null,
+    listing_state: "draft",
+  });
 
-  if (vehicleError || !createdVehicle) return { error: vehicleError?.message ?? "Failed to create vehicle" };
+  if (vehicleError) return { error: vehicleError.message };
 
   // Link the vehicle back to the transaction.
-  await supabase.from("transactions").update({ vehicle_id: createdVehicle.id }).eq("id", transaction.id);
+  await supabase.from("transactions").update({ vehicle_id: vehicleId }).eq("id", transaction.id);
 
   // Record status history.
   await supabase.from("transaction_status_history").insert({
