@@ -1,13 +1,12 @@
 import { redirect } from "next/navigation";
 
 import { getCurrentRole } from "@/app/auth/actions";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { STAFF_ROLES } from "@/lib/auth/roles";
 import { createServerSupabase } from "@/lib/supabase/server";
 
-import { AccountActionsCell } from "./_components/account-actions-cell";
 import { type PerformanceReviewRow, PerformanceReviews } from "./_components/performance-reviews";
+import { type StaffRecordAccount, StaffRecordsTable } from "./_components/staff-records-table";
 import { WalkInForm } from "./_components/walk-in-form";
 
 export default async function StaffRecordsPage() {
@@ -17,9 +16,15 @@ export default async function StaffRecordsPage() {
   }
 
   const supabase = await createServerSupabase();
-  const { data: profiles } = await supabase.from("profiles").select("*").order("full_name", { ascending: true });
+  const { data: profiles, error: profilesError } = await supabase
+    .from("profiles")
+    .select("*")
+    .order("full_name", { ascending: true });
 
-  const { data: roles } = await supabase.rpc("get_all_user_roles");
+  const { data: roles, error: rolesError } = await supabase.rpc("get_all_user_roles");
+  const { data: schedules, error: schedulesError } = await supabase
+    .from("employee_work_schedules")
+    .select("employee_id, workdays, start_time, end_time, grace_minutes");
 
   const roleMap = new Map<string, string>();
   for (const r of (roles as { account_id: string; role: string }[]) ?? []) {
@@ -27,16 +32,34 @@ export default async function StaffRecordsPage() {
   }
 
   const staffRoleIds = (roles as { account_id: string; role: string }[] | null)
-    ?.filter((r) => !["customer", "supplier"].includes(r.role))
+    ?.filter((r) => (STAFF_ROLES as readonly string[]).includes(r.role))
     .map((r) => r.account_id);
 
   const staffProfiles = (profiles ?? []).filter((p) => staffRoleIds?.includes(p.id as string));
   const employeeOptions = staffProfiles.map((p) => ({ id: p.id as string, full_name: p.full_name as string | null }));
+  const accounts: StaffRecordAccount[] = (profiles ?? []).map((profile) => {
+    const schedule = (schedules as Record<string, unknown>[] | null)?.find((item) => item.employee_id === profile.id);
+    const workdays = schedule?.workdays;
+    return {
+      id: profile.id as string,
+      fullName: (profile.full_name as string | null) ?? null,
+      phone: (profile.phone as string | null) ?? null,
+      address: (profile.address as string | null) ?? null,
+      role: roleMap.get(profile.id as string) ?? null,
+      accountState: profile.account_state as string,
+      workdays: Array.isArray(workdays) ? workdays.filter((day): day is number => typeof day === "number") : null,
+      startTime: typeof schedule?.start_time === "string" ? schedule.start_time : null,
+      endTime: typeof schedule?.end_time === "string" ? schedule.end_time : null,
+      graceMinutes: typeof schedule?.grace_minutes === "number" ? schedule.grace_minutes : null,
+    };
+  });
 
-  const { data: reviews } = await supabase
+  const { data: reviews, error: reviewsError } = await supabase
     .from("performance_reviews")
     .select("*, profiles(full_name)")
     .order("created_at", { ascending: false });
+
+  const recordsError = profilesError ?? rolesError ?? schedulesError;
 
   return (
     <div className="flex flex-col gap-6">
@@ -52,55 +75,35 @@ export default async function StaffRecordsPage() {
         <CardHeader>
           <CardTitle>All Accounts</CardTitle>
         </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {(profiles ?? []).map((p) => (
-                <TableRow key={p.id}>
-                  <TableCell className="font-medium">{p.full_name as string}</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">{roleMap.get(p.id as string) ?? "none"}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={p.account_state === "active" ? "default" : "outline"}>
-                      {p.account_state as string}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-sm">
-                    {new Date(p.created_at as string).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell>
-                    <AccountActionsCell
-                      account={{
-                        id: p.id as string,
-                        full_name: (p.full_name as string | null) ?? null,
-                        phone: (p.phone as string | null) ?? null,
-                        address: (p.address as string | null) ?? null,
-                        account_state: p.account_state as string,
-                      }}
-                    />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+        <CardContent className="px-0">
+          {recordsError ? (
+            <p role="alert" className="px-6 py-4 text-destructive text-sm">
+              Staff records are temporarily unavailable. Please refresh and try again.
+            </p>
+          ) : (
+            <StaffRecordsTable accounts={accounts} />
+          )}
         </CardContent>
       </Card>
 
-      <PerformanceReviews
-        reviews={(reviews as unknown as PerformanceReviewRow[]) ?? []}
-        employees={employeeOptions}
-        canManage={["ceo", "account_manager"].includes(role)}
-      />
+      {reviewsError ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Performance Reviews</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p role="alert" className="text-destructive text-sm">
+              Performance reviews are temporarily unavailable. Please refresh and try again.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <PerformanceReviews
+          reviews={(reviews as unknown as PerformanceReviewRow[]) ?? []}
+          employees={employeeOptions}
+          canManage={["ceo", "account_manager"].includes(role)}
+        />
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import type { ComponentProps } from "react";
 
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { type EmployeeRequestRow, EmployeeRequestsClient } from "./employee-requests-client";
@@ -78,7 +78,7 @@ describe("EmployeeRequestsClient", () => {
     ]);
   });
 
-  it("applies page-local status badge treatments for every status", () => {
+  it("applies unfilled Tailwind outline badge treatments for every status", () => {
     renderRequests({
       requests: [
         request({ id: "approved", status: "approved" }),
@@ -88,10 +88,17 @@ describe("EmployeeRequestsClient", () => {
       ],
     });
 
-    expect(screen.getByText("approved")).toHaveClass("bg-emerald-500");
-    expect(screen.getByText("rejected")).toHaveClass("bg-destructive");
-    expect(screen.getByText("pending")).toHaveClass("bg-amber-500");
-    expect(screen.getByText("cancelled")).toHaveClass("bg-muted");
+    const badges = ["approved", "rejected", "pending", "cancelled"].map((status) => screen.getByText(status));
+
+    for (const badge of badges) {
+      expect(badge).toHaveAttribute("data-variant", "outline");
+      expect(badge.className.split(/\s+/).some((className) => className.startsWith("bg-"))).toBe(false);
+    }
+
+    expect(screen.getByText("approved")).toHaveClass("border-green-600/50", "text-green-700");
+    expect(screen.getByText("rejected")).toHaveClass("border-red-600/50", "text-red-700");
+    expect(screen.getByText("pending")).toHaveClass("border-yellow-600/50", "text-yellow-700");
+    expect(screen.getByText("cancelled")).toHaveClass("border-slate-400/50", "text-slate-600");
   });
 
   it("uses the shared empty-results state when no requests are returned", () => {
@@ -103,7 +110,15 @@ describe("EmployeeRequestsClient", () => {
   it("lets reviewers open a pending request and approve it", async () => {
     renderRequests({ canReview: true, requests: [request({ id: "review-target" })] });
 
-    await screen.getByRole("button", { name: /Review/ }).click();
+    const reviewTrigger = screen.getByRole("button", { name: "Open review actions" });
+    expect(reviewTrigger).not.toHaveTextContent("Review");
+    fireEvent.pointerDown(reviewTrigger);
+    fireEvent.mouseDown(reviewTrigger, { button: 0 });
+    fireEvent.mouseUp(reviewTrigger, { button: 0 });
+    fireEvent.click(reviewTrigger);
+    const reviewMenu = await screen.findByRole("menu");
+    expect(reviewMenu).toHaveClass("w-48");
+    fireEvent.click(within(reviewMenu).getByRole("menuitem", { name: "Review request" }));
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByText("Review request")).toBeInTheDocument();
 
