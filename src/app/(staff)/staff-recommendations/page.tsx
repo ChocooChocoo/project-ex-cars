@@ -1,10 +1,9 @@
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
-import { AccuracyTracking } from "./_components/accuracy-tracking";
-import { BuyingPatterns } from "./_components/buying-patterns";
-import { MarketInsights } from "./_components/market-insights";
-import { PricingTrends } from "./_components/pricing-trends";
-import { StockTurnover } from "./_components/stock-turnover";
+import { InventoryAllocation } from "./_components/inventory-allocation";
+import { InventoryStatus } from "./_components/inventory-status";
+import { KpiStrip } from "./_components/kpi-strip";
+import { MarketActivity } from "./_components/market-activity";
+import { SalesOverview } from "./_components/sales-overview";
+import { TopVehicles } from "./_components/top-vehicles";
 
 export default function RecommendationsDashboardPage() {
   return (
@@ -13,40 +12,32 @@ export default function RecommendationsDashboardPage() {
         <div className="flex flex-col gap-1">
           <h1 className="text-3xl leading-none tracking-tight">Recommendations & Insights</h1>
           <p className="text-muted-foreground text-sm">
-            Pricing trends, stock turnover, buying patterns, market insights, and recommendation accuracy.
+            Inventory, sales, customer demand, and market activity at a glance.
           </p>
         </div>
       </div>
 
-      <Tabs defaultValue="pricing" className="flex flex-col gap-4">
-        <TabsList className="gap-1">
-          <TabsTrigger value="pricing">Pricing Trends</TabsTrigger>
-          <TabsTrigger value="turnover">Stock Turnover</TabsTrigger>
-          <TabsTrigger value="buying">Buying Patterns</TabsTrigger>
-          <TabsTrigger value="market">Market Insights</TabsTrigger>
-          <TabsTrigger value="accuracy">Accuracy</TabsTrigger>
-        </TabsList>
+      <KpiStrip />
 
-        <TabsContent value="pricing">
-          <PricingTrends />
-        </TabsContent>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+        <div className="xl:col-span-7">
+          <SalesOverview />
+        </div>
+        <div className="xl:col-span-5">
+          <MarketActivity />
+        </div>
+      </div>
 
-        <TabsContent value="turnover">
-          <StockTurnover />
-        </TabsContent>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
+        <div className="xl:col-span-6">
+          <InventoryAllocation />
+        </div>
+        <div className="xl:col-span-6">
+          <InventoryStatus />
+        </div>
+      </div>
 
-        <TabsContent value="buying">
-          <BuyingPatterns />
-        </TabsContent>
-
-        <TabsContent value="market">
-          <MarketInsights />
-        </TabsContent>
-
-        <TabsContent value="accuracy">
-          <AccuracyTracking />
-        </TabsContent>
-      </Tabs>
+      <TopVehicles />
     </div>
   );
 }
