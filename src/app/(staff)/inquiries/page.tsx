@@ -1,4 +1,7 @@
+import { MessageSquare } from "lucide-react";
+
 import { InquiryList } from "@/app/(customer)/my-inquiries/_components/inquiry-list";
+import { Card, CardContent } from "@/components/ui/card";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export default async function StaffInquiriesPage() {
@@ -28,7 +31,20 @@ export default async function StaffInquiriesPage() {
             : "Customer inquiries waiting for response."}
         </p>
       </div>
-      <InquiryList inquiries={(inquiries as Record<string, unknown>[]) ?? []} baseUrl="/inquiries" />
+      {!inquiries || inquiries.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-4 py-12">
+            <MessageSquare className="size-12 text-muted-foreground/50" />
+            <p className="text-muted-foreground text-sm">No inquiries yet.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="overflow-hidden">
+          <CardContent className="flex flex-col gap-1 p-2">
+            <InquiryList inquiries={inquiries as Record<string, unknown>[]} baseUrl="/inquiries" />
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

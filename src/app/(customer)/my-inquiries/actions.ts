@@ -33,6 +33,37 @@ export async function createInquiry(formData: FormData) {
   return { success: true, id: inquiry.id };
 }
 
+export async function getInquiryThread(inquiryId: string) {
+  const supabase = await createServerSupabase();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+
+  const { data: inquiry } = await supabase
+    .from("inquiries")
+    .select("*, vehicles(make, model, year, stock_code)")
+    .eq("id", inquiryId)
+    .eq("customer_id", user.user.id)
+    .maybeSingle();
+
+  if (!inquiry) return { error: "Inquiry not found." };
+
+  const { data: messages } = await supabase
+    .from("inquiry_messages")
+    .select("*, message_attachments(*)")
+    .eq("inquiry_id", inquiryId)
+    .order("sent_at", { ascending: true });
+
+  const { data: arrangement } = await supabase
+    .from("viewing_arrangements")
+    .select("*")
+    .eq("inquiry_id", inquiryId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return { success: true, inquiry, messages: messages ?? [], arrangement };
+}
+
 export async function sendMessageWithAttachment(formData: FormData) {
   const supabase = await createServerSupabase();
   const { data: user } = await supabase.auth.getUser();
