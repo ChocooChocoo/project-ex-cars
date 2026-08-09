@@ -3,63 +3,142 @@
 
 import Link from "next/link";
 
-import { Car, MessageSquare, User } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { cn, getInitials } from "@/lib/utils";
+
+export type InquiryFilter = "all" | "active" | "open" | "closed";
+
+interface InquiryGroup {
+  key: string;
+  label: string;
+  matches: string[];
+}
+
+const GROUPS: InquiryGroup[] = [
+  { key: "active", label: "Active", matches: ["assigned", "scheduled", "handed_off"] },
+  { key: "open", label: "Open", matches: ["open"] },
+  { key: "closed", label: "Closed", matches: ["closed"] },
+];
+
+const ACTIVE_STATES = ["assigned", "scheduled", "handed_off"];
+
+function formatDate(value: string | null | undefined): string {
+  if (!value) return "";
+  const date = new Date(value);
+  const today = new Date();
+  if (date.toDateString() === today.toDateString()) {
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+  return date.toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+interface InquiryListProps {
+  readonly inquiries: Record<string, unknown>[];
+  readonly baseUrl?: string;
+  readonly selectedId?: string | null;
+  readonly onSelect?: (id: string) => void;
+  readonly filter?: InquiryFilter;
+  readonly unreadByInquiry?: Record<string, number>;
+}
 
 export function InquiryList({
   inquiries,
   baseUrl,
-}: {
-  readonly inquiries: Record<string, unknown>[];
-  readonly baseUrl: string;
-}) {
-  if (inquiries.length === 0) {
-    return (
-      <Card>
-        <CardContent className="flex flex-col items-center gap-4 py-12">
-          <MessageSquare className="size-12 text-muted-foreground/50" />
-          <p className="text-muted-foreground">No conversations yet. Browse the showroom to start one.</p>
-        </CardContent>
-      </Card>
-    );
-  }
+  selectedId,
+  onSelect,
+  filter = "all",
+  unreadByInquiry = {},
+}: InquiryListProps) {
+  const visible =
+    filter === "all"
+      ? inquiries
+      : inquiries.filter((inq) => {
+          const state = inq.state as string;
+          if (filter === "active") return ACTIVE_STATES.includes(state);
+          return state === filter;
+        });
+
+  const groups = GROUPS.map((group) => ({
+    ...group,
+    items: visible.filter((inq) => group.matches.includes(inq.state as string)),
+  })).filter((group) => group.items.length > 0);
 
   return (
-    <div className="flex flex-col gap-2">
-      {inquiries.map((inv) => {
-        const id = inv.id as string;
-        const vehicles = inv.vehicles as Record<string, unknown> | undefined;
-        const intention = inv.intention_kind as string;
-        const state = inv.state as string;
+    <div className="flex flex-col gap-1 px-2">
+      {groups.map(({ key, label, items }) => (
+        <Collapsible key={key} defaultOpen>
+          <CollapsibleTrigger className="flex w-full items-center justify-between gap-1 px-3 py-2 font-medium text-muted-foreground text-xs hover:text-foreground [&[data-state=open]>svg]:rotate-180">
+            {label}
+            <ChevronDown className="size-3 transition-transform" />
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="flex flex-col gap-1">
+              {items.map((inq) => {
+                const id = inq.id as string;
+                const vehicles = inq.vehicles as Record<string, unknown> | undefined;
+                const intention = inq.intention_kind as string;
+                const state = inq.state as string;
+                const updatedAt = inq.updated_at as string | null;
+                const name = vehicles ? `${vehicles.make} ${vehicles.model} (${vehicles.year})` : "Vehicle";
+                const unread = unreadByInquiry[id] ?? 0;
 
-        return (
-          <Link key={id} href={`${baseUrl}/${id}`}>
-            <Card className="transition-shadow hover:shadow-sm">
-              <CardContent className="flex items-center gap-4 p-4">
-                <div className="flex size-10 items-center justify-center rounded-lg bg-muted">
-                  <Car className="size-5 text-muted-foreground" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate font-medium">
-                      {vehicles ? `${vehicles.make} ${vehicles.model} (${vehicles.year})` : "Vehicle"}
-                    </span>
-                    <Badge variant={intention === "buy_now" ? "default" : "secondary"} className="text-xs capitalize">
-                      {intention === "buy_now" ? "Buy Now" : "Inquiry"}
-                    </Badge>
+                const content = (
+                  <div className="flex min-w-0 items-start gap-2.5">
+                    <Avatar className="shrink-0">
+                      <AvatarFallback className="text-foreground text-xs">{getInitials(name)}</AvatarFallback>
+                    </Avatar>
+                    <div className="w-0 flex-1 overflow-hidden">
+                      <div className="flex w-full items-center justify-between gap-2">
+                        <div className="truncate font-medium text-sm leading-5">{name}</div>
+                        <span className="text-nowrap text-muted-foreground text-xs leading-5">
+                          {formatDate(updatedAt)}
+                        </span>
+                      </div>
+                      <div className="flex min-w-0 items-end gap-2">
+                        <div className="w-0 flex-1 overflow-hidden">
+                          <div className="truncate font-medium text-foreground/90 text-xs leading-4">
+                            {intention === "buy_now" ? "Buy Now" : "Inquiry"}
+                          </div>
+                          <div className="truncate text-muted-foreground text-xs capitalize leading-4">
+                            {state.replace("_", " ")}
+                          </div>
+                        </div>
+                        {unread > 0 && (
+                          <div className="grid size-5 place-items-center rounded-full bg-primary/90 text-primary-foreground text-xs">
+                            {unread > 99 ? "99+" : unread}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 text-muted-foreground text-xs">
-                    <span className="capitalize">{state.replace("_", " ")}</span>
-                  </div>
-                </div>
-                <User className="size-4 text-muted-foreground" />
-              </CardContent>
-            </Card>
-          </Link>
-        );
-      })}
+                );
+
+                const itemClass = cn(
+                  "w-full overflow-hidden rounded-lg px-2.5 py-2.5 text-left ring-inset transition-colors",
+                  selectedId === id ? "bg-muted ring-1 ring-border" : "hover:bg-muted/75",
+                );
+
+                if (onSelect) {
+                  return (
+                    <button key={id} type="button" className={itemClass} onClick={() => onSelect(id)}>
+                      {content}
+                    </button>
+                  );
+                }
+
+                return (
+                  <Link key={id} href={`${baseUrl}/${id}`} className={itemClass}>
+                    {content}
+                  </Link>
+                );
+              })}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      ))}
     </div>
   );
 }

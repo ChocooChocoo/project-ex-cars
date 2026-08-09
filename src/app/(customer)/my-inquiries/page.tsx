@@ -1,6 +1,6 @@
 import { createServerSupabase } from "@/lib/supabase/server";
 
-import { InquiryList } from "./_components/inquiry-list";
+import { InquiryChat } from "./_components/inquiry-chat";
 
 export default async function InquiriesPage() {
   const supabase = await createServerSupabase();
@@ -13,13 +13,28 @@ export default async function InquiriesPage() {
     .eq("customer_id", user.user.id)
     .order("updated_at", { ascending: false });
 
+  const list = (inquiries as Record<string, unknown>[]) ?? [];
+  const ids = list.map((inq) => inq.id as string);
+
+  let unreadByInquiry: Record<string, number> = {};
+  if (ids.length > 0) {
+    const { data: unreadRows } = await supabase
+      .from("inquiry_messages")
+      .select("inquiry_id")
+      .in("inquiry_id", ids)
+      .neq("sender_id", user.user.id)
+      .is("read_at", null);
+
+    unreadByInquiry = {};
+    for (const row of unreadRows ?? []) {
+      const inquiryId = row.inquiry_id as string;
+      unreadByInquiry[inquiryId] = (unreadByInquiry[inquiryId] ?? 0) + 1;
+    }
+  }
+
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-3xl leading-none tracking-tight">My Inquiries</h1>
-        <p className="text-muted-foreground text-sm">Your conversations with GCE staff.</p>
-      </div>
-      <InquiryList inquiries={(inquiries as Record<string, unknown>[]) ?? []} baseUrl="/inquiries" />
+    <div data-content-padding="false" className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <InquiryChat inquiries={list} unreadByInquiry={unreadByInquiry} />
     </div>
   );
 }
