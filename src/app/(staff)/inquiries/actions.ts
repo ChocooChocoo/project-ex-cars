@@ -5,7 +5,7 @@ import { z } from "zod";
 import type { InquiryThreadData } from "@/components/inquiries/types";
 import { authorizeAction } from "@/lib/auth/action-guard";
 import { type ActionResult, failure, notFound, success } from "@/lib/auth/action-result";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const inquiryIdSchema = z.string().uuid();
 
@@ -16,7 +16,7 @@ export async function getStaffInquiryThread(inquiryId: string): Promise<ActionRe
   const parsedId = inquiryIdSchema.safeParse(inquiryId);
   if (!parsedId.success) return failure("validation_error", "Invalid inquiry.");
 
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   let inquiryQuery = supabase
     .from("inquiries")
     .select("*, vehicles(make, model, year, stock_code), profiles(full_name)")

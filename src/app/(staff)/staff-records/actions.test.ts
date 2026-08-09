@@ -5,7 +5,7 @@ const rpc = vi.fn();
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/app/auth/actions", () => ({ getCurrentRole: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({
-  createServerSupabase: vi.fn(async () => ({ rpc })),
+  createServerSupabaseClient: vi.fn(async () => ({ rpc })),
 }));
 
 import { saveStaffRecord, setAccountState } from "./actions";

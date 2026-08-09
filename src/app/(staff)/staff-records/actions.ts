@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { getCurrentRole } from "@/app/auth/actions";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { performanceReviewSchema } from "@/lib/validation/phase6";
 
 type StaffRecordResult = { error: string } | { success: true };
@@ -13,7 +13,7 @@ type StaffRecordResult = { error: string } | { success: true };
 const REVIEW_MANAGERS = ["ceo", "account_manager"];
 
 export async function submitPerformanceReview(formData: FormData): Promise<StaffRecordResult> {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -129,7 +129,7 @@ export async function saveStaffRecord(formData: FormData): Promise<StaffRecordRp
     : null;
   if (schedule && !schedule.success) return { error: schedule.error.issues[0]?.message ?? "Invalid work schedule." };
 
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase.rpc("save_staff_record", {
     account_id: parsed.data.accountId,
     full_name: parsed.data.fullName,
@@ -156,7 +156,7 @@ export async function setAccountState(formData: FormData): Promise<StaffRecordRp
   const parsed = updateAccountStateSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid account state." };
 
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase.rpc("set_account_state", {
     account_id: parsed.data.accountId,
     state: parsed.data.state,

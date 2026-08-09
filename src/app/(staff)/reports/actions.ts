@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { getCurrentRole } from "@/app/auth/actions";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { reportSchema } from "@/lib/validation/phase6";
 
 type Phase6ActionResult = { error: string } | { success: true };
@@ -12,7 +12,7 @@ const REPORT_CREATORS = ["ceo", "head_accountant", "account_manager"];
 const REPORT_REVIEWERS = ["ceo", "head_accountant"];
 
 export async function submitReport(formData: FormData): Promise<Phase6ActionResult> {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -43,7 +43,7 @@ export async function submitReport(formData: FormData): Promise<Phase6ActionResu
 }
 
 export async function reviewReport(formData: FormData): Promise<Phase6ActionResult> {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 

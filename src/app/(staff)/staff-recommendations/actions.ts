@@ -1,9 +1,9 @@
 "use server";
 
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export async function getPricingTrends() {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: vehicles, error } = await supabase
     .from("vehicles")
     .select("make, current_price, created_at")
@@ -45,7 +45,7 @@ export async function getPricingTrends() {
 }
 
 export async function getStockTurnover() {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
 
   const { count: total } = await supabase.from("vehicles").select("*", { count: "exact", head: true });
 
@@ -112,7 +112,7 @@ export async function getStockTurnover() {
 }
 
 export async function getBuyingPatterns() {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
 
   // Derive buying patterns from completed buy transactions (not just inventory).
   const { data: transactions } = await supabase
@@ -163,7 +163,7 @@ export async function getBuyingPatterns() {
 }
 
 export async function getMarketInsights() {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
 
   const { count: totalVehicles } = await supabase.from("vehicles").select("*", { count: "exact", head: true });
   const { count: availableVehicles } = await supabase
@@ -210,7 +210,7 @@ export async function getMarketInsights() {
 }
 
 export async function getAccuracyData() {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
 
   const { count: totalRuns } = await supabase.from("recommendation_runs").select("*", { count: "exact", head: true });
 

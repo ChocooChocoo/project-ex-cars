@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { z } from "zod";
 
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { ATTENDANCE_STATUSES, attendanceSchema } from "@/lib/validation/phase6";
 
 type AttendanceRow = {
@@ -57,7 +57,7 @@ function rpcRow(data: unknown): AttendanceRow | null {
 }
 
 export async function getMyAttendanceState(): Promise<AttendanceStateResult> {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase.rpc("get_my_attendance_state");
   if (error) return { error: error.message };
   const parsed = attendanceStateSchema.safeParse(data);
@@ -66,7 +66,7 @@ export async function getMyAttendanceState(): Promise<AttendanceStateResult> {
 }
 
 export async function clockIn(): Promise<Phase6ActionResult> {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase.rpc("clock_in_attendance");
   if (error) return { error: error.message };
 
@@ -78,7 +78,7 @@ export async function clockIn(): Promise<Phase6ActionResult> {
 }
 
 export async function clockOut(): Promise<Phase6ActionResult> {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase.rpc("clock_out_attendance");
   if (error) return { error: error.message };
 
@@ -98,7 +98,7 @@ export async function checkAttendance(formData: FormData): Promise<Phase6ActionR
   const entryId = z.string().uuid("Attendance entry id is required.").safeParse(raw.id);
   if (!entryId.success) return { error: entryId.error.issues[0]?.message ?? "Attendance entry id is required." };
 
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase.rpc("review_attendance", {
     entry_id: entryId.data,
     status: parsed.data.status,
