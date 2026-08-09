@@ -8,8 +8,13 @@ const ROLE_SET = new Set<string>(GCE_ROLES);
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
-  // Skip auth pages, API routes, and static files
-  if (pathname.startsWith("/auth") || pathname.startsWith("/api") || pathname.startsWith("/_next")) {
+  // Skip auth pages, template previews, API routes, and static files
+  if (
+    pathname.startsWith("/auth") ||
+    pathname.startsWith("/template") ||
+    pathname.startsWith("/api") ||
+    pathname.startsWith("/_next")
+  ) {
     return NextResponse.next();
   }
 
