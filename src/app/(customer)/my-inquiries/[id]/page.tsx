@@ -7,12 +7,17 @@ import { ChatView } from "../_components/chat-view";
 export default async function InquiryChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createServerSupabase();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) notFound();
 
   const { data: inquiry } = await supabase
     .from("inquiries")
     .select("*, vehicles(make, model, year, stock_code)")
     .eq("id", id)
-    .single();
+    .eq("customer_id", user.id)
+    .maybeSingle();
 
   if (!inquiry) notFound();
 
@@ -28,7 +33,7 @@ export default async function InquiryChatPage({ params }: { params: Promise<{ id
     .eq("inquiry_id", id)
     .order("created_at", { ascending: false })
     .limit(1)
-    .single();
+    .maybeSingle();
 
   return (
     <ChatView

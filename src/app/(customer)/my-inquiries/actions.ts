@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 
+import type { InquiryThreadData } from "@/components/inquiries/types";
+import { type ActionResult, failure, notAuthenticated, notFound } from "@/lib/auth/action-result";
 import { getProfileAutoFill } from "@/lib/autofill";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createInquirySchema, scheduleArrangementSchema, sendMessageSchema } from "@/lib/validation/inquiries";
@@ -33,35 +35,45 @@ export async function createInquiry(formData: FormData) {
   return { success: true, id: inquiry.id };
 }
 
-export async function getInquiryThread(inquiryId: string) {
+export async function getInquiryThread(inquiryId: string): Promise<ActionResult<InquiryThreadData>> {
   const supabase = await createServerSupabase();
   const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
+  if (!user.user) return notAuthenticated();
 
-  const { data: inquiry } = await supabase
+  const { data: inquiry, error: inquiryError } = await supabase
     .from("inquiries")
     .select("*, vehicles(make, model, year, stock_code)")
     .eq("id", inquiryId)
     .eq("customer_id", user.user.id)
     .maybeSingle();
 
-  if (!inquiry) return { error: "Inquiry not found." };
+  if (inquiryError) return failure("load_failed", "Could not load this inquiry.");
+  if (!inquiry) return notFound("Inquiry");
 
-  const { data: messages } = await supabase
+  const { data: messages, error: messagesError } = await supabase
     .from("inquiry_messages")
     .select("*, message_attachments(*)")
     .eq("inquiry_id", inquiryId)
     .order("sent_at", { ascending: true });
+  if (messagesError) return failure("load_failed", "Could not load this conversation.");
 
-  const { data: arrangement } = await supabase
+  const { data: arrangement, error: arrangementError } = await supabase
     .from("viewing_arrangements")
     .select("*")
     .eq("inquiry_id", inquiryId)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+  if (arrangementError) return failure("load_failed", "Could not load this conversation.");
 
-  return { success: true, inquiry, messages: messages ?? [], arrangement };
+  return {
+    ok: true,
+    data: {
+      inquiry: inquiry as Record<string, unknown>,
+      messages: (messages as Record<string, unknown>[]) ?? [],
+      arrangement: arrangement as Record<string, unknown> | null,
+    },
+  };
 }
 
 export async function sendMessageWithAttachment(formData: FormData) {
