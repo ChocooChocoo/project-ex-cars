@@ -56,8 +56,13 @@ function resolveItemUrl(item: NavMainItem, role: string): NavMainItem {
 export function AppSidebar({
   userRole,
   unreadCount,
+  showQuickCreate = true,
   ...props
-}: React.ComponentProps<typeof Sidebar> & { readonly userRole?: string | null; readonly unreadCount?: number }) {
+}: React.ComponentProps<typeof Sidebar> & {
+  readonly userRole?: string | null;
+  readonly unreadCount?: number;
+  readonly showQuickCreate?: boolean;
+}) {
   const { sidebarVariant, sidebarCollapsible, isSynced } = usePreferencesStore(
     useShallow((s) => ({
       sidebarVariant: s.sidebarVariant,
@@ -118,7 +123,7 @@ export function AppSidebar({
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={items} unreadCount={unreadCount} />
+        <NavMain items={items} unreadCount={unreadCount} showQuickCreate={showQuickCreate} />
       </SidebarContent>
       <SidebarFooter>
         <SidebarSupportCard />

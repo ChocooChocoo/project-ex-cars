@@ -38,7 +38,7 @@ export function InquiryButtons({ vehicleId }: { readonly vehicleId: string }) {
         toast.error(result.error);
       } else if (result.id) {
         toast.success("Inquiry started!");
-        router.push(`/inquiries/${result.id}`);
+        router.push(`/my-inquiries/${result.id}`);
       }
     }
   }

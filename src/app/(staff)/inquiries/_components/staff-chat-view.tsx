@@ -3,7 +3,10 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { useRouter } from "next/navigation";
+
 import { Paperclip } from "lucide-react";
+import { toast } from "sonner";
 
 import {
   acceptHandoff,
@@ -36,11 +39,13 @@ export function StaffChatView({
   arrangement: initialArrangement,
   userRole,
 }: StaffChatViewProps) {
+  const router = useRouter();
   const [msgs, setMsgs] = useState(initialMessages);
   const [arr, setArr] = useState(initialArrangement);
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [sending, setSending] = useState(false);
+  const [assigning, setAssigning] = useState(false);
   const [showArrangement, setShowArrangement] = useState(false);
   const [arrKind, setArrKind] = useState("gce_visit");
   const [arrSchedule, setArrSchedule] = useState("");
@@ -99,8 +104,17 @@ export function StaffChatView({
   }
 
   async function handleAssign() {
+    if (assigning) return;
+    setAssigning(true);
     const role = intention === "buy_now" ? "sales_manager" : "account_manager";
-    await assignInquiry(inquiryId, role);
+    const result = await assignInquiry(inquiryId, role);
+    setAssigning(false);
+    if (result.error) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success("Inquiry assigned to you.");
+    router.refresh();
   }
 
   async function handleSchedule() {
@@ -134,8 +148,8 @@ export function StaffChatView({
         </div>
         <div className="flex items-center gap-2">
           {!hasManager && (
-            <Button size="sm" onClick={handleAssign}>
-              Assign to Me
+            <Button size="sm" onClick={handleAssign} disabled={assigning}>
+              {assigning ? "Assigning..." : "Assign to Me"}
             </Button>
           )}
           {state === "scheduled" && handoffState === "none" && canRequestHandoff && (
