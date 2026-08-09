@@ -219,19 +219,13 @@ export function RoadmapTimeline({ initialItems, canWrite }: RoadmapTimelineProps
                   gridTemplateColumns: `minmax(15rem, 18rem) repeat(${quarterKeys.length}, minmax(12rem, 1fr))`,
                 }}
               >
-                <div className="sticky left-0 z-10 flex items-center gap-2 bg-background px-3 py-2">
+                <div className="sticky left-0 z-10 flex items-center justify-between gap-2 bg-background px-3 py-2">
                   <span className="font-medium text-sm">Initiative</span>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={expandInitiativesWithChildren}
-                      className="h-6 text-xs"
-                      type="button"
-                    >
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button variant="ghost" size="xs" onClick={expandInitiativesWithChildren} type="button">
                       Expand all
                     </Button>
-                    <Button variant="ghost" size="icon-sm" onClick={collapseAll} className="h-6 text-xs" type="button">
+                    <Button variant="ghost" size="xs" onClick={collapseAll} type="button">
                       Collapse
                     </Button>
                   </div>
