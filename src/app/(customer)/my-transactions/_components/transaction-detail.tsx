@@ -10,9 +10,20 @@ import { Calendar, FileText, ShieldCheck, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import { cancelTransaction, saveBuyDetails, uploadPurchaseDocument } from "@/app/(customer)/my-transactions/actions";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -28,6 +39,9 @@ import {
 } from "@/lib/transactions/labels";
 import type { TransactionState } from "@/lib/transactions/state-machine";
 import { formatCurrency } from "@/lib/utils";
+
+import type { TransactionPaperProps } from "./transaction-paper";
+import { TransactionPreview } from "./transaction-preview";
 
 export function TransactionDetail({
   transaction,
@@ -51,7 +65,6 @@ export function TransactionDetail({
   const router = useRouter();
   const id = transaction.id as string;
   const kind = transaction.transaction_kind as string;
-  const state = (transaction.current_state ?? "pending") as TransactionState;
   const vehicles = transaction.vehicles as Record<string, unknown> | undefined;
   const purchaseDetails = transaction.purchase_details as Record<string, unknown> | undefined;
   const sellDetails = transaction.sell_details as Record<string, unknown> | undefined;
@@ -59,6 +72,8 @@ export function TransactionDetail({
   const openedAt = transaction.opened_at as string;
   const completedAt = transaction.completed_at as string | null;
 
+  const [localState, setLocalState] = useState<TransactionState | null>(null);
+  const state = localState ?? ((transaction.current_state ?? "pending") as TransactionState);
   const [cancelling, setCancelling] = useState(false);
 
   // Purchase document upload state
@@ -118,7 +133,6 @@ export function TransactionDetail({
   const isTerminal = ["completed", "cancelled", "rejected"].includes(state);
 
   async function handleCancel() {
-    if (!confirm("Cancel this transaction? This cannot be undone.")) return;
     setCancelling(true);
     const fd = new FormData();
     fd.set("id", id);
@@ -128,6 +142,7 @@ export function TransactionDetail({
       toast.error(result.error);
     } else {
       toast.success("Transaction cancelled.");
+      setLocalState("cancelled");
       router.refresh();
     }
   }
@@ -152,74 +167,119 @@ export function TransactionDetail({
     }
   }
 
+  const make = (vehicles?.make as string) ?? "";
+  const model = (vehicles?.model as string) ?? "";
+  const year = (vehicles?.year as number) ?? 0;
+  const stockCode = (vehicles?.stock_code as string | null) ?? "";
+  const vehicleName = `${make} ${model} (${year})`.trim();
+
+  const paperItems: TransactionPaperProps["items"] = (() => {
+    if (kind === "buy") {
+      const unitPrice = Number(purchaseDetails?.final_price ?? vehicles?.current_price ?? 0);
+      return [
+        {
+          id: "vehicle",
+          description: `${vehicleName}${stockCode ? ` · ${stockCode}` : ""}`,
+          quantity: 1,
+          unitPrice,
+        },
+      ];
+    }
+    if (kind === "sell") {
+      return [
+        {
+          id: "vehicle",
+          description: `Vehicle sale — ${vehicleName || transactionKindLabel(kind as never)}`,
+          quantity: 1,
+          unitPrice: Number(sellDetails?.offered_amount ?? 0),
+        },
+      ];
+    }
+    return [
+      {
+        id: "request",
+        description: `Requested vehicle — ${(vehicleRequests?.requested_make as string) ?? ""} ${(vehicleRequests?.requested_model as string) ?? ""}`,
+        quantity: 1,
+        unitPrice: Number(vehicleRequests?.budget ?? 0),
+      },
+    ];
+  })();
+
+  const paper: TransactionPaperProps = {
+    reference: id.slice(0, 8).toUpperCase(),
+    issuedDate: format(new Date(openedAt), "yyyy-MM-dd"),
+    stateLabel: TRANSACTION_STATE_LABELS[state],
+    items: paperItems,
+    total: paperItems.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0),
+    from: {
+      name: "GCE Auto",
+      email: "sales@gceauto.ph",
+      website: "gceauto.ph",
+      addressLines: ["CALABARZON", "Philippines"],
+      issuerName: "GCE Auto Sales",
+    },
+    billTo: {
+      name: autofill?.full_name ?? "Customer",
+      email: autofill?.email ?? "",
+      addressLines: autofill?.address ? [autofill.address] : [],
+    },
+  };
+
   return (
     <>
       {/* Header */}
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex flex-col gap-1">
-          <h1 className="text-3xl leading-none tracking-tight">
-            {vehicles ? `${vehicles.make} ${vehicles.model} (${vehicles.year})` : transactionKindLabel(kind as never)}
-          </h1>
+          <h1 className="text-3xl leading-none tracking-tight">{vehicleName || transactionKindLabel(kind as never)}</h1>
           <p className="text-muted-foreground text-sm">
             Opened {format(new Date(openedAt), "MMM d, yyyy")}
             {completedAt ? ` · Completed ${format(new Date(completedAt), "MMM d, yyyy")}` : ""}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-3">
           <Badge variant={transactionStatusBadgeVariant(state)} className="text-sm">
             {TRANSACTION_STATE_LABELS[state]}
           </Badge>
           <Badge variant="outline" className="text-sm">
             {transactionKindLabel(kind as never)}
           </Badge>
+          {canCancel && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline">
+                  <XCircle className="mr-2 size-4" />
+                  Cancel Transaction
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogMedia>
+                    <XCircle className="text-destructive" />
+                  </AlertDialogMedia>
+                  <AlertDialogTitle>Cancel this transaction?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will cancel the transaction and cannot be undone. Are you sure you want to continue?
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Keep Transaction</AlertDialogCancel>
+                  <AlertDialogAction variant="destructive" onClick={handleCancel} disabled={cancelling}>
+                    {cancelling ? "Cancelling..." : "Yes, Cancel Transaction"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Main column */}
-        <div className="flex flex-col gap-6 lg:col-span-2">
-          {/* Status Timeline */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Status History</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {history.length === 0 ? (
-                <p className="text-muted-foreground text-sm">No status changes yet.</p>
-              ) : (
-                <div className="flex flex-col gap-0">
-                  {history.map((entry, index) => {
-                    const toState = entry.to_state as string;
-                    const reason = entry.reason as string | null;
-                    const changedAt = entry.changed_at as string;
-                    return (
-                      <div key={entry.id as string} className="flex gap-3">
-                        <div className="flex flex-col items-center">
-                          <div className="size-2.5 rounded-full border-2 border-primary" />
-                          {index < history.length - 1 && <div className="w-px flex-1 bg-border" />}
-                        </div>
-                        <div className="pb-5">
-                          <p className="font-medium text-sm capitalize">{toState.replace(/_/g, " ")}</p>
-                          {reason && <p className="text-muted-foreground text-xs">{reason}</p>}
-                          <p className="text-muted-foreground text-xs">
-                            {format(new Date(changedAt), "MMM d, yyyy 'at' h:mm a")}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Buy details form (only for buy transactions, before terminal state) */}
+      <div className="grid gap-5 xl:grid-cols-2">
+        {/* Form column */}
+        <div className="flex flex-col gap-4 rounded-xl border bg-card p-4">
           {kind === "buy" && !isTerminal && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Purchase Details</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-4">
+            <>
+              <section className="flex flex-col gap-4">
+                <h2 className="font-medium tracking-tight">Purchase Details</h2>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="payment_method">Payment Method</Label>
@@ -299,17 +359,46 @@ export function TransactionDetail({
                 <Button onClick={handleSaveBuyDetails} disabled={saving} className="self-start">
                   {saving ? "Saving..." : "Save Details"}
                 </Button>
-              </CardContent>
-            </Card>
+              </section>
+              <Separator />
+            </>
           )}
 
-          {/* Sell details */}
+          <section className="flex flex-col gap-3">
+            <h2 className="font-medium tracking-tight">Status History</h2>
+            {history.length === 0 ? (
+              <p className="text-muted-foreground text-sm">No status changes yet.</p>
+            ) : (
+              <div className="flex flex-col gap-0">
+                {history.map((entry, index) => {
+                  const toState = entry.to_state as string;
+                  const reason = entry.reason as string | null;
+                  const changedAt = entry.changed_at as string;
+                  return (
+                    <div key={entry.id as string} className="flex gap-3">
+                      <div className="flex flex-col items-center">
+                        <div className="size-2.5 rounded-full border-2 border-primary" />
+                        {index < history.length - 1 && <div className="w-px flex-1 bg-border" />}
+                      </div>
+                      <div className="pb-5">
+                        <p className="font-medium text-sm capitalize">{toState.replace(/_/g, " ")}</p>
+                        {reason && <p className="text-muted-foreground text-xs">{reason}</p>}
+                        <p className="text-muted-foreground text-xs">
+                          {format(new Date(changedAt), "MMM d, yyyy 'at' h:mm a")}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+          <Separator />
+
           {kind === "sell" && sellDetails && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Sell Details</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-3">
+            <>
+              <section className="flex flex-col gap-3">
+                <h2 className="font-medium tracking-tight">Sell Details</h2>
                 <DetailRow
                   label="Offered Amount"
                   value={sellDetails.offered_amount ? `₱${Number(sellDetails.offered_amount).toLocaleString()}` : "—"}
@@ -327,17 +416,15 @@ export function TransactionDetail({
                   value={sellDetails.decision ? String(sellDetails.decision).replace("_", " ") : "Pending"}
                 />
                 <DetailRow label="Review Notes" value={(sellDetails.review_notes as string) ?? "—"} />
-              </CardContent>
-            </Card>
+              </section>
+              <Separator />
+            </>
           )}
 
-          {/* Request-a-Car details */}
           {kind === "request_a_car" && vehicleRequests && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Request Details</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-3">
+            <>
+              <section className="flex flex-col gap-3">
+                <h2 className="font-medium tracking-tight">Request Details</h2>
                 <DetailRow label="Make" value={vehicleRequests.requested_make as string} />
                 <DetailRow label="Model" value={vehicleRequests.requested_model as string} />
                 <DetailRow
@@ -361,51 +448,118 @@ export function TransactionDetail({
                       : "Not yet agreed"
                   }
                 />
-              </CardContent>
-            </Card>
+              </section>
+              <Separator />
+            </>
           )}
-        </div>
 
-        {/* Sidebar */}
-        <div className="flex flex-col gap-4">
-          {/* Vehicle card */}
-          {vehicles && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm">Vehicle</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-2 text-sm">
-                <p className="font-medium">
-                  {vehicles.make as string} {vehicles.model as string} ({vehicles.year as number})
+          <section className="flex flex-col gap-3">
+            <h2 className="font-medium tracking-tight">Documents</h2>
+            {kind === "buy" && !isTerminal ? (
+              <>
+                <div className="flex flex-wrap items-center gap-2 rounded-lg border p-3">
+                  <ShieldCheck className="size-4 text-muted-foreground" />
+                  <p className="text-muted-foreground text-xs">
+                    GCE requires two valid IDs and one proof of billing to complete your purchase.
+                  </p>
+                </div>
+                <p className="text-xs">
+                  <span className="font-medium">{Math.min(verifiedIdCount, 2)}/2</span> valid IDs verified
+                  {hasVerifiedBilling ? " · proof of billing verified" : " · proof of billing pending"}
                 </p>
-              </CardContent>
-            </Card>
-          )}
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="flex flex-col gap-1">
+                    <Label htmlFor="cust-doc-kind" className="text-xs">
+                      Document
+                    </Label>
+                    <Select value={docKind} onValueChange={setDocKind}>
+                      <SelectTrigger id="cust-doc-kind" className="w-36">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectItem value="valid_id">Valid ID</SelectItem>
+                          <SelectItem value="proof_of_billing">Proof of Billing</SelectItem>
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {docKind === "valid_id" ? (
+                    <div className="flex flex-col gap-1">
+                      <Label htmlFor="cust-doc-id-type" className="text-xs">
+                        ID Type
+                      </Label>
+                      <Select value={docIdType} onValueChange={setDocIdType}>
+                        <SelectTrigger id="cust-doc-id-type" className="w-36">
+                          <SelectValue placeholder="Select ID" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            <SelectItem value="passport">Passport</SelectItem>
+                            <SelectItem value="drivers_license">Driver's License</SelectItem>
+                            <SelectItem value="umid">UMID</SelectItem>
+                            <SelectItem value="sss_id">SSS ID</SelectItem>
+                            <SelectItem value="gsis_id">GSIS ID</SelectItem>
+                            <SelectItem value="philhealth_id">PhilHealth ID</SelectItem>
+                            <SelectItem value="voters_id">Voter's ID</SelectItem>
+                            <SelectItem value="national_id">National ID</SelectItem>
+                            <SelectItem value="prc_id">PRC ID</SelectItem>
+                            <SelectItem value="postal_id">Postal ID</SelectItem>
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : null}
+                  <Input
+                    ref={docFileRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
+                    className="w-44"
+                  />
+                  <Button size="sm" onClick={handleUploadDocument} disabled={uploading}>
+                    {uploading ? "Uploading..." : "Upload"}
+                  </Button>
+                </div>
+              </>
+            ) : null}
+            {documents.length === 0 ? (
+              <p className="text-muted-foreground text-xs">No documents uploaded.</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {documents.map((doc) => (
+                  <div key={doc.id as string} className="flex items-center gap-2 text-sm">
+                    <FileText className="size-4 text-muted-foreground" />
+                    <span className="capitalize">{(doc.document_kind as string).replace(/_/g, " ")}</span>
+                    {doc.id_type ? (
+                      <span className="text-muted-foreground text-xs capitalize">
+                        {(doc.id_type as string).replace(/_/g, " ")}
+                      </span>
+                    ) : null}
+                    <Badge variant="secondary" className="ml-auto text-xs">
+                      {doc.verification_state as string}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+          <Separator />
 
-          {/* Payments */}
-          {payments.length > 0 && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm">Payments</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-2">
+          <section className="flex flex-col gap-3">
+            <h2 className="font-medium tracking-tight">Financial Summary</h2>
+            {payments.length > 0 && (
+              <div className="flex flex-col gap-2">
                 {payments.map((p) => (
                   <div key={p.id as string} className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">{paymentMethodLabel(p.method as string)}</span>
                     <span className="font-medium">{formatCurrency(Number(p.amount))}</span>
                   </div>
                 ))}
-              </CardContent>
-            </Card>
-          )}
+              </div>
+            )}
 
-          {/* Installments */}
-          {installmentAccount && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm">Installment Plan</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-2 text-sm">
+            {installmentAccount && (
+              <div className="flex flex-col gap-2 text-sm">
                 <DetailRow
                   label="Financed"
                   value={`₱${Number((installmentAccount as Record<string, unknown>).financed_total).toLocaleString()}`}
@@ -433,17 +587,11 @@ export function TransactionDetail({
                       </div>
                     ),
                   )}
-              </CardContent>
-            </Card>
-          )}
+              </div>
+            )}
 
-          {/* Payment Terms */}
-          {paymentTerms && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm">Payment Terms</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-2 text-sm">
+            {paymentTerms && (
+              <div className="flex flex-col gap-2 text-sm">
                 <DetailRow
                   label="Description"
                   value={(paymentTerms as Record<string, unknown>).arrangement_description as string}
@@ -457,17 +605,11 @@ export function TransactionDetail({
                   value={`${(paymentTerms as Record<string, unknown>).number_of_payments}x ${(paymentTerms as Record<string, unknown>).payment_frequency}`}
                 />
                 <DetailRow label="Status" value={(paymentTerms as Record<string, unknown>).state as string} />
-              </CardContent>
-            </Card>
-          )}
+              </div>
+            )}
 
-          {/* Viewing Arrangements */}
-          {viewingArrangements.length > 0 && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm">Viewing Arrangements</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-2">
+            {viewingArrangements.length > 0 && (
+              <div className="flex flex-col gap-2">
                 {viewingArrangements.map((va) => (
                   <div key={va.id as string} className="flex flex-col gap-1 text-sm">
                     <span className="font-medium capitalize">
@@ -484,119 +626,13 @@ export function TransactionDetail({
                     )}
                   </div>
                 ))}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Documents */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-sm">
-                <FileText className="size-4" />
-                Documents
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3">
-              {kind === "buy" && !isTerminal ? (
-                <>
-                  <div className="flex flex-wrap items-center gap-2 rounded-lg border p-3">
-                    <ShieldCheck className="size-4 text-muted-foreground" />
-                    <p className="text-xs text-muted-foreground">
-                      GCE requires two valid IDs and one proof of billing to complete your purchase.
-                    </p>
-                  </div>
-                  {kind === "buy" ? (
-                    <p className="text-xs">
-                      <span className="font-medium">{Math.min(verifiedIdCount, 2)}/2</span> valid IDs verified
-                      {hasVerifiedBilling ? " · proof of billing verified" : " · proof of billing pending"}
-                    </p>
-                  ) : null}
-                  <div className="flex flex-wrap items-end gap-2">
-                    <div className="flex flex-col gap-1">
-                      <Label htmlFor="cust-doc-kind" className="text-xs">
-                        Document
-                      </Label>
-                      <Select value={docKind} onValueChange={setDocKind}>
-                        <SelectTrigger id="cust-doc-kind" className="w-36">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            <SelectItem value="valid_id">Valid ID</SelectItem>
-                            <SelectItem value="proof_of_billing">Proof of Billing</SelectItem>
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    {docKind === "valid_id" ? (
-                      <div className="flex flex-col gap-1">
-                        <Label htmlFor="cust-doc-id-type" className="text-xs">
-                          ID Type
-                        </Label>
-                        <Select value={docIdType} onValueChange={setDocIdType}>
-                          <SelectTrigger id="cust-doc-id-type" className="w-36">
-                            <SelectValue placeholder="Select ID" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectGroup>
-                              <SelectItem value="passport">Passport</SelectItem>
-                              <SelectItem value="drivers_license">Driver's License</SelectItem>
-                              <SelectItem value="umid">UMID</SelectItem>
-                              <SelectItem value="sss_id">SSS ID</SelectItem>
-                              <SelectItem value="gsis_id">GSIS ID</SelectItem>
-                              <SelectItem value="philhealth_id">PhilHealth ID</SelectItem>
-                              <SelectItem value="voters_id">Voter's ID</SelectItem>
-                              <SelectItem value="national_id">National ID</SelectItem>
-                              <SelectItem value="prc_id">PRC ID</SelectItem>
-                              <SelectItem value="postal_id">Postal ID</SelectItem>
-                            </SelectGroup>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    ) : null}
-                    <Input
-                      ref={docFileRef}
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp,application/pdf"
-                      className="w-44"
-                    />
-                    <Button size="sm" onClick={handleUploadDocument} disabled={uploading}>
-                      {uploading ? "Uploading..." : "Upload"}
-                    </Button>
-                  </div>
-                </>
-              ) : null}
-              {documents.length === 0 ? (
-                <p className="text-muted-foreground text-xs">No documents uploaded.</p>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {documents.map((doc) => (
-                    <div key={doc.id as string} className="flex items-center gap-2 text-sm">
-                      <FileText className="size-4 text-muted-foreground" />
-                      <span className="capitalize">{(doc.document_kind as string).replace(/_/g, " ")}</span>
-                      {doc.id_type ? (
-                        <span className="text-muted-foreground text-xs capitalize">
-                          {(doc.id_type as string).replace(/_/g, " ")}
-                        </span>
-                      ) : null}
-                      <Badge variant="secondary" className="ml-auto text-xs">
-                        {doc.verification_state as string}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Cancel action */}
-          {canCancel && (
-            <Button variant="outline" className="w-full" onClick={handleCancel} disabled={cancelling}>
-              <XCircle className="mr-2 size-4" />
-              {cancelling ? "Cancelling..." : "Cancel Transaction"}
-            </Button>
-          )}
+              </div>
+            )}
+          </section>
         </div>
+
+        {/* Preview column */}
+        <TransactionPreview paper={paper} />
       </div>
     </>
   );
