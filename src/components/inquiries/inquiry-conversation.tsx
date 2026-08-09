@@ -1,0 +1,315 @@
+"use client";
+"use no memo";
+
+import { type ReactElement, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+
+import { format } from "date-fns";
+import { ArrowLeft, Paperclip } from "lucide-react";
+import { toast } from "sonner";
+
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import { createClient } from "@/lib/supabase/client";
+import { cn, getInitials } from "@/lib/utils";
+import { censorMessage } from "@/lib/word-filter";
+
+import type { InquiryRecord } from "./types";
+
+type InquiryAction = (formData: FormData) => Promise<unknown>;
+type MarkMessagesReadAction = (inquiryId: string) => Promise<unknown>;
+
+export interface InquiryConversationProps {
+  readonly inquiry: InquiryRecord;
+  readonly messages: InquiryRecord[];
+  readonly arrangement: InquiryRecord | null;
+  readonly perspective: "customer" | "staff";
+  readonly sendMessage: InquiryAction;
+  readonly markMessagesRead: MarkMessagesReadAction;
+  readonly headerActions?: ReactElement | null;
+  readonly beforeMessages?: ReactNode;
+  readonly fillHeight?: boolean;
+  readonly onBack?: () => void;
+}
+
+function getActionError(result: unknown): string | null {
+  if (!result || typeof result !== "object") return null;
+  if ("ok" in result && result.ok === false && "message" in result && typeof result.message === "string") {
+    return result.message;
+  }
+  if ("error" in result && typeof result.error === "string") return result.error;
+  return null;
+}
+
+export function InquiryConversation({
+  inquiry,
+  messages: initialMessages,
+  arrangement,
+  perspective,
+  sendMessage,
+  markMessagesRead,
+  headerActions,
+  beforeMessages,
+  fillHeight = false,
+  onBack,
+}: InquiryConversationProps) {
+  const [msgs, setMsgs] = useState(initialMessages);
+  const [text, setText] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [sending, setSending] = useState(false);
+  const [myInitials, setMyInitials] = useState("ME");
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const supabase = useMemo(() => createClient(), []);
+
+  const inquiryId = inquiry.id as string;
+  const vehicles = inquiry.vehicles as Record<string, unknown> | undefined;
+  const profile = inquiry.profiles as Record<string, unknown> | undefined;
+  const intention = inquiry.intention_kind as string;
+  const state = inquiry.state as string;
+  const vehicleName = vehicles ? `${vehicles.make} ${vehicles.model} (${vehicles.year})` : "Conversation";
+  const customerName = (profile?.full_name as string | null | undefined) || "Customer";
+  const dividerDate =
+    msgs.length > 0
+      ? format(new Date(msgs[0].sent_at as string), "MMM d, yyyy")
+      : format(new Date((inquiry.created_at as string) ?? Date.now()), "MMM d, yyyy");
+
+  useEffect(() => {
+    void markMessagesRead(inquiryId);
+
+    const channel = supabase
+      .channel(`inquiry-${inquiryId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "inquiry_messages", filter: `inquiry_id=eq.${inquiryId}` },
+        (payload) => {
+          setMsgs((prev) => {
+            const nextMessage = payload.new as InquiryRecord;
+            return prev.some((message) => message.id === nextMessage.id) ? prev : [...prev, nextMessage];
+          });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [inquiryId, markMessagesRead, supabase]);
+
+  // The message collection is the scroll trigger for initial and realtime messages.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: msgs intentionally triggers auto-scroll.
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [msgs]);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      const meta = data.user?.user_metadata as Record<string, unknown> | undefined;
+      const name = typeof meta?.full_name === "string" ? meta.full_name : data.user?.email;
+      setMyInitials(name ? getInitials(name) : "ME");
+    });
+  }, [supabase]);
+
+  async function handleSend() {
+    if (!text.trim() && !file) return;
+    setSending(true);
+    const fd = new FormData();
+    fd.set("inquiry_id", inquiryId);
+    fd.set("message_text", text);
+    if (file) fd.set("file", file);
+
+    try {
+      const result = await sendMessage(fd);
+      const error = getActionError(result);
+      if (error) {
+        toast.error(error);
+        return;
+      }
+
+      setText("");
+      setFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    } catch {
+      toast.error("Could not send this message.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div
+      className={cn("flex min-h-0 flex-col gap-3 py-3", fillHeight && "h-full")}
+      style={fillHeight ? undefined : { height: "calc(100dvh - var(--dashboard-header-height) - 3rem)" }}
+    >
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-4 px-2">
+          <div className="flex min-w-0 items-center gap-3">
+            {onBack && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="shrink-0 md:hidden"
+                aria-label="Back to conversations"
+                onClick={onBack}
+                type="button"
+              >
+                <ArrowLeft />
+              </Button>
+            )}
+            <Avatar className="size-8 shrink-0">
+              <AvatarFallback className="bg-background text-foreground">{getInitials(vehicleName)}</AvatarFallback>
+            </Avatar>
+            <div className="min-w-0">
+              <div className="truncate font-medium text-sm">{vehicleName}</div>
+              <div className="truncate text-muted-foreground text-xs capitalize leading-3">
+                {intention === "buy_now" ? "Buy Now" : "Inquiry"} · {state.replace("_", " ")}
+              </div>
+            </div>
+          </div>
+          {headerActions ? <div className="flex flex-wrap items-center justify-end gap-2">{headerActions}</div> : null}
+        </div>
+
+        <Separator />
+      </div>
+
+      {arrangement && (
+        <div className="px-2">
+          <Card>
+            <CardHeader className="py-2">
+              <CardTitle className="text-sm">
+                {arrangement.arrangement_kind === "gce_visit"
+                  ? "GCE Visit"
+                  : arrangement.arrangement_kind === "meetup"
+                    ? "CALABARZON Meet-Up"
+                    : "Delivery"}{" "}
+                — {new Date(arrangement.schedule as string).toLocaleString()}
+                {(arrangement.location as string) ? ` at ${arrangement.location as string}` : null}
+              </CardTitle>
+            </CardHeader>
+          </Card>
+        </div>
+      )}
+
+      {beforeMessages}
+
+      <ScrollArea
+        type="hover"
+        className="min-h-0 flex-1 [&_[data-orientation=vertical][data-slot=scroll-area-scrollbar]]:w-1.5"
+      >
+        <div className="flex flex-col gap-6 px-2 py-8">
+          <div className="flex items-center gap-2">
+            <div className="h-px flex-1 bg-border" />
+            <span className="rounded-full bg-muted px-3 py-1 text-muted-foreground text-xs">{dividerDate}</span>
+            <div className="h-px flex-1 bg-border" />
+          </div>
+
+          {msgs.length === 0 && (
+            <p className="py-8 text-center text-muted-foreground text-sm">No messages yet. Start the conversation.</p>
+          )}
+
+          {msgs.map((message) => {
+            const isCustomerMessage = (message.sender_id as string) === inquiry.customer_id;
+            const isOutbound = perspective === "customer" ? isCustomerMessage : !isCustomerMessage;
+            const senderInitials = isOutbound
+              ? perspective === "customer"
+                ? myInitials
+                : getInitials("GCE Auto")
+              : perspective === "customer"
+                ? getInitials("GCE Auto")
+                : getInitials(customerName);
+
+            return (
+              <div key={message.id as string} className={cn("flex items-end gap-2", isOutbound && "flex-row-reverse")}>
+                <Avatar className="shrink-0">
+                  <AvatarFallback
+                    className={cn(
+                      "bg-muted text-foreground text-xs",
+                      isOutbound && "bg-primary text-primary-foreground",
+                    )}
+                  >
+                    {senderInitials}
+                  </AvatarFallback>
+                </Avatar>
+
+                <div
+                  className={cn(
+                    "flex max-w-md flex-col gap-2 rounded-xl px-4 py-3 text-sm",
+                    isOutbound ? "bg-primary text-primary-foreground" : "bg-muted",
+                  )}
+                >
+                  <p className="leading-relaxed">
+                    {message.message_text ? censorMessage(message.message_text as string) : null}
+                  </p>
+                  {(message.message_attachments as InquiryRecord[] | undefined)?.map((attachment) => (
+                    <div key={attachment.id as string} className="text-xs opacity-70">
+                      {attachment.original_name as string}
+                    </div>
+                  ))}
+                  <div
+                    className={cn(
+                      "text-muted-foreground/75 text-xs",
+                      isOutbound && "text-right text-primary-foreground/75",
+                    )}
+                  >
+                    {new Date(message.sent_at as string).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                    {message.read_at ? " · Read" : ""}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          <div ref={bottomRef} />
+        </div>
+      </ScrollArea>
+
+      <div className="px-2">
+        <div className="rounded-md border">
+          <div className="flex items-center gap-2 p-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+            />
+            <Button
+              size="icon"
+              variant="ghost"
+              className="size-8 shrink-0"
+              onClick={() => fileInputRef.current?.click()}
+              type="button"
+              aria-label="Attach file"
+            >
+              <Paperclip className="size-4" />
+            </Button>
+            <Input
+              placeholder="Type a message..."
+              value={text}
+              onChange={(event) => setText(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") void handleSend();
+              }}
+            />
+            <Button size="sm" onClick={handleSend} disabled={sending || (!text.trim() && !file)}>
+              {sending ? "Sending..." : "Send"}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {file && (
+        <div className="px-2">
+          <Badge variant="secondary" className="max-w-full truncate text-xs">
+            {file.name}
+          </Badge>
+        </div>
+      )}
+    </div>
+  );
+}

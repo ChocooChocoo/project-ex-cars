@@ -8,12 +8,17 @@ import { StaffChatView } from "../_components/staff-chat-view";
 export default async function StaffChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createServerSupabase();
+  const role = await getCurrentRole();
+  if (!role || !["ceo", "account_manager", "sales_manager"].includes(role)) notFound();
 
-  const { data: inquiry } = await supabase
+  let inquiryQuery = supabase
     .from("inquiries")
-    .select("*, vehicles(make, model, year, stock_code)")
-    .eq("id", id)
-    .single();
+    .select("*, vehicles(make, model, year, stock_code), profiles(full_name)")
+    .eq("id", id);
+
+  if (role === "sales_manager") inquiryQuery = inquiryQuery.eq("intention_kind", "buy_now");
+
+  const { data: inquiry } = await inquiryQuery.maybeSingle();
 
   if (!inquiry) notFound();
 
@@ -29,9 +34,7 @@ export default async function StaffChatPage({ params }: { params: Promise<{ id: 
     .eq("inquiry_id", id)
     .order("created_at", { ascending: false })
     .limit(1)
-    .single();
-
-  const role = (await getCurrentRole()) ?? "customer";
+    .maybeSingle();
 
   return (
     <StaffChatView
