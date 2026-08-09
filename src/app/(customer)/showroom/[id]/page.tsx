@@ -3,10 +3,10 @@ import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { type VehicleMediaItem, VehicleMediaViewer } from "@/components/vehicle-media-viewer";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 import { InquiryButtons } from "../_components/inquiry-buttons";
-import { type VehicleMediaItem, VehicleMediaViewer } from "../_components/vehicle-media-viewer";
 
 export default async function VehicleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
