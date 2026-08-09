@@ -53,6 +53,16 @@ describe("rankVehicles", () => {
     expect(results).toHaveLength(1);
     expect(results[0].budgetScore).toBe(0);
   });
+
+  it("excludes vehicles priced more than 2x the budget", () => {
+    const vehicles = [
+      makeVehicle({ id: "within", current_price: 900_000, condition: "new" }),
+      makeVehicle({ id: "over", current_price: 1_200_000, condition: "new" }),
+    ];
+    const results = rankVehicles(vehicles, 500_000);
+    expect(results).toHaveLength(1);
+    expect(results[0].vehicleId).toBe("within");
+  });
 });
 
 describe("explainScores", () => {

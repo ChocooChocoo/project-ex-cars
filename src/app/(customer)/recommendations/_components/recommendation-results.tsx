@@ -171,7 +171,12 @@ export function RecommendationResults({ runId }: RecommendationResultsProps) {
       <ScrollArea className="max-h-[70vh]">
         <div className="flex flex-col gap-3">
           {results.map(({ scored, explanation, vehicle }, idx) => (
-            <Card key={scored.vehicleId} className={cn(idx === 0 && "ring-2 ring-amber-500/50")}>
+            <Card
+              key={scored.vehicleId}
+              className={cn(
+                idx === 0 && "border-amber-500/70 ring-2 ring-amber-500 ring-offset-2 ring-offset-background",
+              )}
+            >
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">

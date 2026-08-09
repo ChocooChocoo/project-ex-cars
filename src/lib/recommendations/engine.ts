@@ -86,6 +86,11 @@ function computeMileageScore(mileage: number | null): number {
 
 export function rankVehicles(vehicles: VehicleInput[], budget: number): ScoredVehicle[] {
   const scored = vehicles
+    .filter((v) => {
+      const price = v.current_price ?? 0;
+      if (price <= 0) return true;
+      return price <= budget * 2;
+    })
     .map((v) => {
       const price = v.current_price ?? 0;
       const budgetScore = computeBudgetScore(price, budget);
