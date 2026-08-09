@@ -1,18 +1,47 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
+import type { ColumnDef } from "@tanstack/react-table";
+import {
+  getCoreRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  type PaginationState,
+  type SortingState,
+  useReactTable,
+} from "@tanstack/react-table";
+import { Check, Eye, MoreHorizontal, Plus, ScanFace, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { approveSupplier, createSupplier, uploadSupplierDocument, verifySupplierDocument } from "@/app/auth/actions";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { DataTable } from "@/components/ui/data-table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Separator } from "@/components/ui/separator";
+import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ACCEPTED_ID_TYPES, ID_LABELS } from "@/lib/auth/roles";
 
 interface Supplier {
@@ -48,7 +77,7 @@ export function SupplierAdmin({
 }) {
   const [suppliers, setSuppliers] = useState(initialSuppliers);
   const [documents, setDocuments] = useState(initialDocuments);
-  const [open, setOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [businessName, setBusinessName] = useState("");
   const [supplierKind, setSupplierKind] = useState("company");
   const [contactName, setContactName] = useState("");
@@ -62,7 +91,21 @@ export function SupplierAdmin({
   const [uploadPrimary, setUploadPrimary] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const docsFor = (supplierId: string) => documents.filter((d) => d.supplier_id === supplierId);
+  const [approveTarget, setApproveTarget] = useState<{ supplier: Supplier; decision: "approved" | "rejected" } | null>(
+    null,
+  );
+  const [verifyTarget, setVerifyTarget] = useState<{
+    document: SupplierDocument;
+    decision: "verified" | "rejected";
+  } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 });
+
+  const docsFor = useMemo(
+    () => (supplierId: string) => documents.filter((d) => d.supplier_id === supplierId),
+    [documents],
+  );
   const verifiedPrimaryCount = (supplierId: string) =>
     docsFor(supplierId).filter((d) => d.is_primary_id && d.verification_state === "verified").length;
   const docsSupplier = suppliers.find((s) => s.id === docsSupplierId) ?? null;
@@ -104,21 +147,26 @@ export function SupplierAdmin({
       setContactName("");
       setContactEmail("");
       setContactPhone("");
-      setOpen(false);
+      setCreateOpen(false);
       toast.success("Supplier created. Upload two primary IDs before approving.");
     }
   }
 
-  async function handleDecision(supplierId: string, decision: string) {
-    const result = await approveSupplier({ supplierId, approvedBy: userId, decision });
+  async function handleDecision() {
+    if (!approveTarget) return;
+    const { supplier, decision } = approveTarget;
+    setSubmitting(true);
+    const result = await approveSupplier({ supplierId: supplier.id, approvedBy: userId, decision });
+    setSubmitting(false);
     if (result.error) {
       toast.error(result.error);
-    } else {
-      setSuppliers((prev) =>
-        prev.map((s) => (s.id === supplierId ? { ...s, state: decision === "approved" ? "approved" : "rejected" } : s)),
-      );
-      toast.success(`Supplier ${decision}.`);
+      return;
     }
+    setSuppliers((prev) =>
+      prev.map((s) => (s.id === supplier.id ? { ...s, state: decision === "approved" ? "approved" : "rejected" } : s)),
+    );
+    toast.success(`Supplier ${decision}.`);
+    setApproveTarget(null);
   }
 
   async function handleUpload() {
@@ -143,18 +191,23 @@ export function SupplierAdmin({
     }
   }
 
-  async function handleVerify(documentId: string, decision: "verified" | "rejected") {
-    const result = await verifySupplierDocument({ documentId, decision, verifiedBy: userId });
+  async function handleVerify() {
+    if (!verifyTarget) return;
+    const { document: doc, decision } = verifyTarget;
+    setSubmitting(true);
+    const result = await verifySupplierDocument({ documentId: doc.id, decision, verifiedBy: userId });
+    setSubmitting(false);
     if (result.error) {
       toast.error(result.error);
-    } else {
-      setDocuments((prev) =>
-        prev.map((d) =>
-          d.id === documentId ? { ...d, verification_state: decision, verified_at: new Date().toISOString() } : d,
-        ),
-      );
-      toast.success(`Document ${decision}.`);
+      return;
     }
+    setDocuments((prev) =>
+      prev.map((d) =>
+        d.id === doc.id ? { ...d, verification_state: decision, verified_at: new Date().toISOString() } : d,
+      ),
+    );
+    toast.success(`Document ${decision}.`);
+    setVerifyTarget(null);
   }
 
   const badgeVariant = (state: string) => {
@@ -169,248 +222,374 @@ export function SupplierAdmin({
     return "secondary";
   };
 
+  const columns: ColumnDef<Supplier>[] = [
+    {
+      accessorKey: "business_name",
+      header: "Business Name",
+      cell: ({ row }) => <span className="font-medium">{row.original.business_name}</span>,
+    },
+    {
+      accessorKey: "supplier_kind",
+      header: "Type",
+      cell: ({ row }) => <span className="capitalize">{row.original.supplier_kind}</span>,
+    },
+    {
+      accessorKey: "contact_name",
+      header: "Contact",
+      cell: ({ row }) => (
+        <div className="grid gap-0.5">
+          <span>{row.original.contact_name}</span>
+          <span className="text-muted-foreground text-xs">
+            {row.original.contact_email}
+            {row.original.contact_phone ? ` · ${row.original.contact_phone}` : ""}
+          </span>
+        </div>
+      ),
+    },
+    {
+      accessorKey: "state",
+      header: "State",
+      cell: ({ row }) => {
+        const supplier = row.original;
+        return (
+          <div className="flex flex-col items-start gap-1">
+            <Badge variant={badgeVariant(supplier.state)} className="capitalize">
+              {supplier.state.replace(/_/g, " ")}
+            </Badge>
+            {supplier.state === "pending_approval" && (
+              <span className="text-muted-foreground text-xs">
+                {verifiedPrimaryCount(supplier.id)}/2 primary IDs verified
+              </span>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      id: "actions",
+      header: () => <span className="sr-only">Actions</span>,
+      cell: ({ row }) => {
+        const supplier = row.original;
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="size-8">
+                <MoreHorizontal className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setDocsSupplierId(supplier.id)}>
+                <Eye className="mr-2 size-4" />
+                View Documents
+              </DropdownMenuItem>
+              {supplier.state === "pending_approval" ? (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    disabled={verifiedPrimaryCount(supplier.id) < 2}
+                    title={
+                      verifiedPrimaryCount(supplier.id) < 2
+                        ? "Two primary valid IDs must be verified before approval."
+                        : undefined
+                    }
+                    onClick={() => setApproveTarget({ supplier, decision: "approved" })}
+                  >
+                    <Check className="mr-2 size-4" />
+                    Approve
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onClick={() => setApproveTarget({ supplier, decision: "rejected" })}
+                  >
+                    <X className="mr-2 size-4" />
+                    Reject
+                  </DropdownMenuItem>
+                </>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        );
+      },
+    },
+  ];
+
+  const table = useReactTable({
+    data: suppliers,
+    columns,
+    state: { sorting, pagination },
+    getRowId: (row) => row.id,
+    autoResetPageIndex: false,
+    onSortingChange: setSorting,
+    onPaginationChange: setPagination,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
+
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-semibold text-3xl tracking-tight">Suppliers</h1>
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-3xl leading-none tracking-tight">Suppliers</h1>
           <p className="text-muted-foreground text-sm">Manage supplier accounts, KYC documents, and approvals.</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm">Create Supplier</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create Supplier</DialogTitle>
-            </DialogHeader>
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="supplier-kind">Type</Label>
-                <Select value={supplierKind} onValueChange={setSupplierKind}>
-                  <SelectTrigger id="supplier-kind">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectItem value="company">Company</SelectItem>
-                      <SelectItem value="individual">Individual</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="business-name">Business Name</Label>
-                <Input
-                  id="business-name"
-                  value={businessName}
-                  onChange={(e) => setBusinessName(e.target.value)}
-                  placeholder="ABC Auto Parts"
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="contact-name">Contact Name</Label>
-                <Input
-                  id="contact-name"
-                  value={contactName}
-                  onChange={(e) => setContactName(e.target.value)}
-                  placeholder="Juan Dela Cruz"
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="contact-email">Contact Email</Label>
-                <Input
-                  id="contact-email"
-                  type="email"
-                  value={contactEmail}
-                  onChange={(e) => setContactEmail(e.target.value)}
-                  placeholder="supplier@example.com"
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="contact-phone">Contact Phone</Label>
-                <Input
-                  id="contact-phone"
-                  value={contactPhone}
-                  onChange={(e) => setContactPhone(e.target.value)}
-                  placeholder="+63 912 345 6789"
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="ghost" onClick={() => setOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleCreate} disabled={creating}>
-                {creating ? "Creating..." : "Create Supplier"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <Button size="sm" className="self-start lg:self-auto" onClick={() => setCreateOpen(true)}>
+          <Plus className="size-4" />
+          Create Supplier
+        </Button>
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle>All Suppliers</CardTitle>
+        <CardHeader className="flex-row items-center justify-between space-y-0">
+          <CardTitle>
+            <div className="flex items-center gap-2">
+              <ScanFace className="size-5 text-muted-foreground" />
+              All Suppliers
+            </div>
+          </CardTitle>
+          <Badge variant="secondary" className="rounded-md">
+            {suppliers.length} suppliers
+          </Badge>
         </CardHeader>
-        <CardContent>
-          {suppliers.length === 0 ? (
-            <p className="text-muted-foreground text-sm">No suppliers registered.</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Business Name</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Contact</TableHead>
-                  <TableHead>State</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {suppliers.map((s) => (
-                  <TableRow key={s.id}>
-                    <TableCell className="font-medium">{s.business_name}</TableCell>
-                    <TableCell className="capitalize">{s.supplier_kind}</TableCell>
-                    <TableCell>
-                      <div className="text-sm">{s.contact_name}</div>
-                      <div className="text-muted-foreground text-xs">{s.contact_email}</div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col gap-1">
-                        <Badge variant={badgeVariant(s.state)}>{s.state.replace(/_/g, " ")}</Badge>
-                        {s.state === "pending_approval" && (
-                          <span className="text-muted-foreground text-xs">
-                            {verifiedPrimaryCount(s.id)}/2 primary IDs verified
-                          </span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="outline" onClick={() => setDocsSupplierId(s.id)}>
-                          Documents
-                        </Button>
-                        {s.state === "pending_approval" && (
-                          <>
-                            <Button
-                              size="sm"
-                              onClick={() => handleDecision(s.id, "approved")}
-                              disabled={verifiedPrimaryCount(s.id) < 2}
-                              title={
-                                verifiedPrimaryCount(s.id) < 2
-                                  ? "Two primary valid IDs must be verified before approval."
-                                  : undefined
-                              }
-                            >
-                              Approve
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => handleDecision(s.id, "rejected")}>
-                              Reject
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+        <CardContent className="px-0 pb-0">
+          <DataTable table={table} rowsPerPageId="suppliers-rows-per-page" />
         </CardContent>
       </Card>
 
-      <Dialog open={docsSupplierId !== null} onOpenChange={(v) => !v && setDocsSupplierId(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Supplier Documents — {docsSupplier?.business_name ?? ""}</DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-2">
-              {docsFor(docsSupplierId ?? "").length === 0 ? (
-                <p className="text-muted-foreground text-sm">No documents uploaded yet.</p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Document</TableHead>
-                      <TableHead>Primary ID</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+      <Sheet open={createOpen} onOpenChange={setCreateOpen}>
+        <SheetContent className="flex max-w-md flex-col gap-0 p-0 sm:max-w-md">
+          <SheetHeader className="border-b">
+            <SheetTitle>Create Supplier</SheetTitle>
+            <p className="text-muted-foreground text-sm">
+              Register a company or individual supplier. Upload two primary IDs before approval.
+            </p>
+          </SheetHeader>
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="supplier-kind">Type</Label>
+              <Select value={supplierKind} onValueChange={setSupplierKind}>
+                <SelectTrigger id="supplier-kind">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="company">Company</SelectItem>
+                    <SelectItem value="individual">Individual</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+            <Separator />
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="business-name">Business Name</Label>
+              <Input
+                id="business-name"
+                value={businessName}
+                onChange={(e) => setBusinessName(e.target.value)}
+                placeholder="ABC Auto Parts"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="contact-name">Contact Name</Label>
+              <Input
+                id="contact-name"
+                value={contactName}
+                onChange={(e) => setContactName(e.target.value)}
+                placeholder="Juan Dela Cruz"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="contact-email">Contact Email</Label>
+              <Input
+                id="contact-email"
+                type="email"
+                value={contactEmail}
+                onChange={(e) => setContactEmail(e.target.value)}
+                placeholder="supplier@example.com"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="contact-phone">Contact Phone</Label>
+              <Input
+                id="contact-phone"
+                value={contactPhone}
+                onChange={(e) => setContactPhone(e.target.value)}
+                placeholder="+63 912 345 6789"
+              />
+            </div>
+          </div>
+          <SheetFooter className="border-t">
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreate} disabled={creating}>
+              {creating ? "Creating..." : "Create Supplier"}
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={docsSupplierId !== null} onOpenChange={(v) => !v && setDocsSupplierId(null)}>
+        <SheetContent className="flex max-w-md flex-col gap-0 p-0 sm:max-w-md">
+          <SheetHeader className="border-b">
+            <SheetTitle>Supplier Documents</SheetTitle>
+            <p className="text-muted-foreground text-sm">{docsSupplier?.business_name ?? "—"}</p>
+          </SheetHeader>
+          <ScrollArea className="min-h-0 flex-1">
+            <div className="flex flex-col gap-4 p-4">
+              <div className="flex flex-col gap-2">
+                {docsFor(docsSupplierId ?? "").length === 0 ? (
+                  <p className="text-muted-foreground text-sm">No documents uploaded yet.</p>
+                ) : (
+                  <div className="flex flex-col gap-2">
                     {docsFor(docsSupplierId ?? "").map((d) => (
-                      <TableRow key={d.id}>
-                        <TableCell>{KIND_LABELS[d.document_kind] ?? d.document_kind}</TableCell>
-                        <TableCell>{d.is_primary_id ? "Yes" : "No"}</TableCell>
-                        <TableCell>
-                          <Badge variant={docBadgeVariant(d.verification_state)}>{d.verification_state}</Badge>
-                        </TableCell>
-                        <TableCell>
+                      <div key={d.id} className="flex flex-col gap-2 rounded-lg border p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium text-sm">{KIND_LABELS[d.document_kind] ?? d.document_kind}</span>
+                          <Badge variant={docBadgeVariant(d.verification_state)} className="capitalize">
+                            {d.verification_state}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-muted-foreground text-xs">
+                            {d.is_primary_id ? "Primary ID" : "General"}
+                            {d.verified_at ? ` · Reviewed ${new Date(d.verified_at).toLocaleDateString()}` : ""}
+                          </span>
                           {d.verification_state === "pending" ? (
-                            <div className="flex gap-2">
-                              <Button size="sm" onClick={() => handleVerify(d.id, "verified")}>
+                            <div className="flex items-center gap-2">
+                              <Button size="sm" onClick={() => setVerifyTarget({ document: d, decision: "verified" })}>
                                 Verify
                               </Button>
-                              <Button size="sm" variant="outline" onClick={() => handleVerify(d.id, "rejected")}>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setVerifyTarget({ document: d, decision: "rejected" })}
+                              >
                                 Reject
                               </Button>
                             </div>
-                          ) : (
-                            <span className="text-muted-foreground text-xs">
-                              {d.verified_at ? `Reviewed ${new Date(d.verified_at).toLocaleDateString()}` : ""}
-                            </span>
-                          )}
-                        </TableCell>
-                      </TableRow>
+                          ) : null}
+                        </div>
+                      </div>
                     ))}
-                  </TableBody>
-                </Table>
-              )}
-            </div>
-            <div className="flex flex-col gap-3 rounded-lg border p-4">
-              <p className="text-sm font-medium">Upload Document</p>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="doc-kind">Document Type</Label>
-                <Select value={uploadKind} onValueChange={setUploadKind}>
-                  <SelectTrigger id="doc-kind">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      {ACCEPTED_ID_TYPES.map((kind) => (
-                        <SelectItem key={kind} value={kind}>
-                          {ID_LABELS[kind]}
-                        </SelectItem>
-                      ))}
-                      <SelectItem value="general">General Document</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
+                  </div>
+                )}
               </div>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={uploadPrimary}
-                  onChange={(e) => setUploadPrimary(e.target.checked)}
-                  className="size-4"
-                />
-                Counts as one of the two primary valid IDs
-              </label>
-              <Input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" />
-              <Button onClick={handleUpload} disabled={uploading}>
-                {uploading ? "Uploading..." : "Upload"}
-              </Button>
+              <Separator />
+              <div className="flex flex-col gap-3 rounded-lg border p-4">
+                <p className="font-medium text-sm">Upload Document</p>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="doc-kind">Document Type</Label>
+                  <Select value={uploadKind} onValueChange={setUploadKind}>
+                    <SelectTrigger id="doc-kind">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        {ACCEPTED_ID_TYPES.map((kind) => (
+                          <SelectItem key={kind} value={kind}>
+                            {ID_LABELS[kind]}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="general">General Document</SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={uploadPrimary}
+                    onChange={(e) => setUploadPrimary(e.target.checked)}
+                    className="size-4"
+                  />
+                  Counts as one of the two primary valid IDs
+                </label>
+                <Input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" />
+                <Button onClick={handleUpload} disabled={uploading}>
+                  {uploading ? "Uploading..." : "Upload"}
+                </Button>
+              </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setDocsSupplierId(null)}>
+          </ScrollArea>
+          <SheetFooter className="border-t">
+            <Button variant="outline" onClick={() => setDocsSupplierId(null)}>
               Close
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+
+      <AlertDialog
+        open={approveTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setApproveTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {approveTarget?.decision === "approved" ? "Approve this supplier?" : "Reject this supplier?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {approveTarget ? (
+                <>
+                  <span className="font-medium text-foreground">“{approveTarget.supplier.business_name}”</span>{" "}
+                  {approveTarget.decision === "approved"
+                    ? "will be approved and can start supplying parts and services."
+                    : "will be rejected and cannot supply parts or services."}{" "}
+                  This action cannot be undone.
+                </>
+              ) : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant={approveTarget?.decision === "rejected" ? "destructive" : "default"}
+              onClick={handleDecision}
+              disabled={submitting}
+            >
+              {submitting ? "Submitting..." : approveTarget?.decision === "approved" ? "Approve" : "Reject"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={verifyTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setVerifyTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {verifyTarget?.decision === "verified" ? "Verify this document?" : "Reject this document?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {verifyTarget ? (
+                <>
+                  <span className="font-medium text-foreground">
+                    {KIND_LABELS[verifyTarget.document.document_kind] ?? verifyTarget.document.document_kind}
+                  </span>{" "}
+                  will be marked as {verifyTarget.decision}. This action cannot be undone.
+                </>
+              ) : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant={verifyTarget?.decision === "rejected" ? "destructive" : "default"}
+              onClick={handleVerify}
+              disabled={submitting}
+            >
+              {submitting ? "Submitting..." : verifyTarget?.decision === "verified" ? "Verify" : "Reject"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

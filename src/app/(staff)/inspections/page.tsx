@@ -1,5 +1,6 @@
 import { createServerSupabase } from "@/lib/supabase/server";
 
+import type { InspectionRow } from "./_components/inspections-columns";
 import { InspectionsTable } from "./_components/inspections-table";
 
 export default async function InspectionsPage() {
@@ -18,7 +19,7 @@ export default async function InspectionsPage() {
           <p className="text-muted-foreground text-sm">View mechanic inspection reports and checklist results.</p>
         </div>
       </div>
-      <InspectionsTable inspections={(inspections as Record<string, unknown>[]) ?? []} />
+      <InspectionsTable inspections={(inspections as unknown as InspectionRow[]) ?? []} />
     </div>
   );
 }

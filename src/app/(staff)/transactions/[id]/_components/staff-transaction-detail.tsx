@@ -28,7 +28,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   arrangementKindLabel,
   paymentMethodLabel,
@@ -73,6 +73,9 @@ export function StaffTransactionDetail({
 
   const allowed = getAllowedTransitions(state, userRole);
   const [transitioning, setTransitioning] = useState(false);
+  const [activeSection, setActiveSection] = useState<
+    "overview" | "history" | "payments" | "installments" | "documents"
+  >("overview");
 
   // Payment record form
   const [payAmount, setPayAmount] = useState("");
@@ -214,16 +217,25 @@ export function StaffTransactionDetail({
         </div>
       </div>
 
-      <Tabs defaultValue="overview">
-        <TabsList variant="line">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="history">Status History</TabsTrigger>
-          <TabsTrigger value="payments">Payments</TabsTrigger>
-          <TabsTrigger value="installments">Installments</TabsTrigger>
-          <TabsTrigger value="documents">Documents</TabsTrigger>
-        </TabsList>
+      <ToggleGroup
+        type="single"
+        size="sm"
+        spacing={0}
+        variant="outline"
+        value={activeSection}
+        onValueChange={(value) => {
+          if (value) setActiveSection(value as typeof activeSection);
+        }}
+      >
+        <ToggleGroupItem value="overview">Overview</ToggleGroupItem>
+        <ToggleGroupItem value="history">Status History</ToggleGroupItem>
+        <ToggleGroupItem value="payments">Payments</ToggleGroupItem>
+        <ToggleGroupItem value="installments">Installments</ToggleGroupItem>
+        <ToggleGroupItem value="documents">Documents</ToggleGroupItem>
+      </ToggleGroup>
 
-        <TabsContent value="overview" className="mt-4">
+      {activeSection === "overview" ? (
+        <div className="mt-4">
           <div className="grid gap-6 lg:grid-cols-3">
             <div className="flex flex-col gap-6 lg:col-span-2">
               {/* Buy details */}
@@ -483,9 +495,11 @@ export function StaffTransactionDetail({
               )}
             </div>
           </div>
-        </TabsContent>
+        </div>
+      ) : null}
 
-        <TabsContent value="history" className="mt-4">
+      {activeSection === "history" ? (
+        <div className="mt-4">
           <Card>
             <CardContent className="py-4">
               {history.length === 0 ? (
@@ -515,9 +529,11 @@ export function StaffTransactionDetail({
               )}
             </CardContent>
           </Card>
-        </TabsContent>
+        </div>
+      ) : null}
 
-        <TabsContent value="payments" className="mt-4">
+      {activeSection === "payments" ? (
+        <div className="mt-4">
           <Card>
             <CardContent className="py-4">
               {payments.length === 0 ? (
@@ -565,14 +581,16 @@ export function StaffTransactionDetail({
               )}
             </CardContent>
           </Card>
-        </TabsContent>
+        </div>
+      ) : null}
 
-        <TabsContent value="installments" className="mt-4">
+      {activeSection === "installments" ? (
+        <div className="mt-4">
           <Card>
             <CardContent className="py-4">
               {userRole === "head_accountant" && hasDueOrOverdue ? (
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/40 bg-destructive/5 p-3">
-                  <p className="text-sm text-destructive">
+                  <p className="text-destructive text-sm">
                     This account has due or overdue installments. You may instruct a Confidential Informant to repossess
                     the vehicle.
                   </p>
@@ -632,9 +650,11 @@ export function StaffTransactionDetail({
               )}
             </CardContent>
           </Card>
-        </TabsContent>
+        </div>
+      ) : null}
 
-        <TabsContent value="documents" className="mt-4">
+      {activeSection === "documents" ? (
+        <div className="mt-4">
           <Card>
             <CardContent className="flex flex-col gap-4 py-4">
               {kind === "buy" ? (
@@ -746,8 +766,8 @@ export function StaffTransactionDetail({
               )}
             </CardContent>
           </Card>
-        </TabsContent>
-      </Tabs>
+        </div>
+      ) : null}
 
       <Dialog open={repoOpen} onOpenChange={setRepoOpen}>
         <DialogContent>

@@ -1,25 +1,20 @@
 "use client";
+"use no memo";
 
-import type { MouseEvent } from "react";
+// TanStack Table mutates a stable table instance; keep this renderer reactive under React Compiler.
 
 import { flexRender, type Table as TableType } from "@tanstack/react-table";
+import { ChevronLeftIcon, ChevronRightIcon, MoreHorizontalIcon } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import {
   Pagination,
   PaginationContent,
-  PaginationEllipsis,
   PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
 } from "@/components/ui/pagination";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-
-function preventPaginationNavigation(event: MouseEvent<HTMLAnchorElement>) {
-  event.preventDefault();
-}
 
 function getPageNumbers(currentPage: number, pageCount: number) {
   if (pageCount <= 3) {
@@ -118,50 +113,60 @@ export function DataTable<TData>({
         <Pagination className="mx-0 w-auto justify-start md:justify-end">
           <PaginationContent>
             <PaginationItem>
-              <PaginationPrevious
-                href="#"
-                text=""
-                className={!table.getCanPreviousPage() ? "pointer-events-none opacity-50" : undefined}
-                onClick={(event) => {
-                  preventPaginationNavigation(event);
-                  table.previousPage();
-                }}
-              />
+              <Button
+                variant="ghost"
+                size="default"
+                className="pl-1.5!"
+                disabled={!table.getCanPreviousPage()}
+                onClick={() => table.previousPage()}
+                aria-label="Go to previous page"
+              >
+                <ChevronLeftIcon data-icon="inline-start" />
+                <span className="hidden sm:block">Previous</span>
+              </Button>
             </PaginationItem>
             {pageNumbers[0] > 1 ? (
               <PaginationItem>
-                <PaginationEllipsis />
+                <Button variant="ghost" size="icon" disabled aria-hidden>
+                  <MoreHorizontalIcon />
+                </Button>
               </PaginationItem>
             ) : null}
-            {pageNumbers.map((pageNumber) => (
-              <PaginationItem key={`page-${pageNumber}`}>
-                <PaginationLink
-                  href="#"
-                  isActive={table.getState().pagination.pageIndex === pageNumber - 1}
-                  onClick={(event) => {
-                    preventPaginationNavigation(event);
-                    table.setPageIndex(pageNumber - 1);
-                  }}
-                >
-                  {pageNumber}
-                </PaginationLink>
-              </PaginationItem>
-            ))}
+            {pageNumbers.map((pageNumber) => {
+              const isActive = table.getState().pagination.pageIndex === pageNumber - 1;
+              return (
+                <PaginationItem key={`page-${pageNumber}`}>
+                  <Button
+                    variant={isActive ? "outline" : "ghost"}
+                    size="icon"
+                    onClick={() => table.setPageIndex(pageNumber - 1)}
+                    aria-current={isActive ? "page" : undefined}
+                    data-active={isActive}
+                  >
+                    {pageNumber}
+                  </Button>
+                </PaginationItem>
+              );
+            })}
             {pageNumbers[pageNumbers.length - 1] < pageCount ? (
               <PaginationItem>
-                <PaginationEllipsis />
+                <Button variant="ghost" size="icon" disabled aria-hidden>
+                  <MoreHorizontalIcon />
+                </Button>
               </PaginationItem>
             ) : null}
             <PaginationItem>
-              <PaginationNext
-                href="#"
-                text=""
-                className={!table.getCanNextPage() ? "pointer-events-none opacity-50" : undefined}
-                onClick={(event) => {
-                  preventPaginationNavigation(event);
-                  table.nextPage();
-                }}
-              />
+              <Button
+                variant="ghost"
+                size="default"
+                className="pr-1.5!"
+                disabled={!table.getCanNextPage()}
+                onClick={() => table.nextPage()}
+                aria-label="Go to next page"
+              >
+                <span className="hidden sm:block">Next</span>
+                <ChevronRightIcon data-icon="inline-end" />
+              </Button>
             </PaginationItem>
           </PaginationContent>
         </Pagination>
