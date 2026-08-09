@@ -133,12 +133,15 @@ export async function saveBuyDetails(formData: FormData) {
     notes,
   } = parsed.data;
 
-  const { error } = await supabase.from("purchase_details").upsert({
-    transaction_id: transactionId,
-    payment_method,
-    final_price: final_price ?? null,
-    arrangement_kind: arrangement_kind || null,
-  });
+  const { error } = await supabase.from("purchase_details").upsert(
+    {
+      transaction_id: transactionId,
+      payment_method,
+      final_price: final_price ?? null,
+      arrangement_kind: arrangement_kind || null,
+    },
+    { onConflict: "transaction_id" },
+  );
 
   if (error) return { error: error.message };
 
@@ -306,13 +309,15 @@ export async function cancelTransaction(formData: FormData) {
 
   if (error) return { error: error.message };
 
-  await supabase.from("transaction_status_history").insert({
+  const { error: historyError } = await supabase.from("transaction_status_history").insert({
     transaction_id: id,
     from_state: currentState,
     to_state: "cancelled",
     actor_id: user.user.id,
     reason: reason ?? "Cancelled by customer",
   });
+
+  if (historyError) return { error: historyError.message };
 
   revalidatePath(`/my-transactions/${id}`);
   revalidatePath("/my-transactions");
