@@ -13,7 +13,9 @@ export default async function MyTransactionDetailPage({ params }: { readonly par
 
   const { data: transaction } = await supabase
     .from("transactions")
-    .select("*, vehicles(make, model, year), purchase_details(*), sell_details(*), vehicle_requests(*)")
+    .select(
+      "*, vehicles(make, model, year, stock_code, current_price), purchase_details(*), sell_details(*), vehicle_requests(*)",
+    )
     .eq("id", id)
     .eq("customer_id", user.user.id)
     .single();
