@@ -46,6 +46,34 @@ interface ResultWithExplanation {
 
 const medalColors = ["bg-amber-500", "bg-slate-400", "bg-amber-700"];
 
+interface ScoreColor {
+  badgeClass: string;
+  dotClass: string;
+  barClass: string;
+}
+
+function getScoreColor(score: number): ScoreColor {
+  if (score >= 80) {
+    return {
+      badgeClass: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+      dotClass: "bg-emerald-500",
+      barClass: "bg-emerald-500",
+    };
+  }
+  if (score >= 50) {
+    return {
+      badgeClass: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+      dotClass: "bg-amber-500",
+      barClass: "bg-amber-500",
+    };
+  }
+  return {
+    badgeClass: "bg-destructive/10 text-destructive",
+    dotClass: "bg-destructive",
+    barClass: "bg-destructive",
+  };
+}
+
 export function RecommendationResults({ runId }: RecommendationResultsProps) {
   const [results, setResults] = useState<ResultWithExplanation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -171,12 +199,7 @@ export function RecommendationResults({ runId }: RecommendationResultsProps) {
       <ScrollArea className="max-h-[70vh]">
         <div className="flex flex-col gap-3">
           {results.map(({ scored, explanation, vehicle }, idx) => (
-            <Card
-              key={scored.vehicleId}
-              className={cn(
-                idx === 0 && "border-amber-500/70 ring-2 ring-amber-500 ring-offset-2 ring-offset-background",
-              )}
-            >
+            <Card key={scored.vehicleId}>
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
@@ -223,30 +246,35 @@ export function RecommendationResults({ runId }: RecommendationResultsProps) {
                       Score Breakdown
                     </Button>
                   </CollapsibleTrigger>
-                  <CollapsibleContent className="pt-2">
-                    <div className="space-y-2">
-                      {explanation.criteria.map((c) => (
-                        <div key={c.label} className="rounded-md border p-2">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="font-medium">{c.label}</span>
-                            <div className="flex items-center gap-2">
-                              <span className="text-muted-foreground text-xs">
-                                Weight: {(c.weight * 100).toFixed(0)}%
+                  <CollapsibleContent className="pt-3">
+                    <div className="flex flex-col gap-3">
+                      {explanation.criteria.map((c) => {
+                        const color = getScoreColor(c.score);
+                        return (
+                          <div key={c.label} className="space-y-1.5">
+                            <div className="flex items-baseline justify-between gap-2">
+                              <span className="text-sm">
+                                <span className="font-medium">{c.label}</span>
+                                <span className="text-muted-foreground"> · {(c.weight * 100).toFixed(0)}%</span>
                               </span>
-                              <Badge variant="secondary" className="text-xs">
+                              <Badge
+                                variant="secondary"
+                                className={cn("gap-1.5 rounded-sm px-1.5 py-0.5", color.badgeClass)}
+                              >
+                                <span className={cn("size-1.5 rounded-full", color.dotClass)} />
                                 {c.score.toFixed(1)}
                               </Badge>
                             </div>
+                            <div className="h-1.5 overflow-hidden rounded-full bg-muted-foreground/20">
+                              <div
+                                className={cn("block h-full rounded-full", color.barClass)}
+                                style={{ width: `${c.score}%` }}
+                              />
+                            </div>
+                            <p className="text-muted-foreground text-xs">{c.detail}</p>
                           </div>
-                          <div className="mt-1 h-1.5 w-full rounded-full bg-muted">
-                            <div
-                              className="h-1.5 rounded-full bg-primary transition-all"
-                              style={{ width: `${c.score}%` }}
-                            />
-                          </div>
-                          <p className="mt-1 text-muted-foreground text-xs">{c.detail}</p>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </CollapsibleContent>
                 </Collapsible>
