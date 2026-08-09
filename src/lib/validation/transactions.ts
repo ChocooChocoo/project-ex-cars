@@ -2,19 +2,15 @@ import { z } from "zod";
 
 export const buyTransactionSchema = z.object({
   vehicle_id: z.string().uuid(),
-  payment_method: z.enum(["cash", "financing", "cheque", "down_payment"]),
-  final_price: z.coerce.number().min(0, "Price cannot be negative.").optional(),
-  arrangement_kind: z.enum(["delivery", "meetup", "gce_visit"]).optional().or(z.literal("")),
-  schedule: z.string().optional().or(z.literal("")),
-  location: z.string().max(500).optional().or(z.literal("")),
-  notes: z.string().max(500).optional().or(z.literal("")),
 });
 
 export type BuyTransactionFormData = z.infer<typeof buyTransactionSchema>;
 
 export const buyDetailsSchema = z.object({
   transaction_id: z.string().uuid(),
-  payment_method: z.enum(["cash", "financing", "cheque", "down_payment"]),
+  payment_method: z.enum(["cash", "financing", "cheque", "down_payment"], {
+    error: "Select a payment method.",
+  }),
   final_price: z.coerce.number().min(0, "Price cannot be negative.").optional(),
   arrangement_kind: z.enum(["delivery", "meetup", "gce_visit"]).optional().or(z.literal("")),
   schedule: z.string().optional().or(z.literal("")),

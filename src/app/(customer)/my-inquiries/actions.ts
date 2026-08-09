@@ -136,7 +136,8 @@ export async function assignInquiry(inquiryId: string, role: "account_manager" |
 
   await supabase.from("inquiries").update({ state: "assigned" }).eq("id", inquiryId).eq("state", "open");
 
-  revalidatePath("/dashboard/inquiries");
+  revalidatePath(`/inquiries/${inquiryId}`);
+  revalidatePath("/inquiries");
   return { success: true };
 }
 
