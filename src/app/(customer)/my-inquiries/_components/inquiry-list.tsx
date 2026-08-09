@@ -83,12 +83,15 @@ export function InquiryList({
                 const state = inq.state as string;
                 const updatedAt = inq.updated_at as string | null;
                 const name = vehicles ? `${vehicles.make} ${vehicles.model} (${vehicles.year})` : "Vehicle";
+                const initialsName = vehicles ? `${vehicles.make} ${vehicles.model}` : "Vehicle";
                 const unread = unreadByInquiry[id] ?? 0;
 
                 const content = (
                   <div className="flex min-w-0 items-start gap-2.5">
                     <Avatar className="shrink-0">
-                      <AvatarFallback className="text-foreground text-xs">{getInitials(name)}</AvatarFallback>
+                      <AvatarFallback className="text-foreground text-xs">
+                        {getInitials(initialsName).slice(0, 1)}
+                      </AvatarFallback>
                     </Avatar>
                     <div className="w-0 flex-1 overflow-hidden">
                       <div className="flex w-full items-center justify-between gap-2">
