@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { getCurrentRole } from "@/app/auth/actions";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { securityDutyCheckSchema, securityDutyCompleteSchema } from "@/lib/validation/phase6";
 
 type Phase6ActionResult = { error: string } | { success: true };
@@ -34,7 +34,7 @@ async function uploadEvidence(userId: string, file: File): Promise<UploadResult>
 }
 
 export async function startDutyCheck(formData: FormData): Promise<Phase6ActionResult> {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -60,7 +60,7 @@ export async function startDutyCheck(formData: FormData): Promise<Phase6ActionRe
 }
 
 export async function uploadDutyEvidence(formData: FormData): Promise<Phase6ActionResult> {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -88,7 +88,7 @@ export async function uploadDutyEvidence(formData: FormData): Promise<Phase6Acti
 }
 
 export async function completeDutyCheck(formData: FormData): Promise<Phase6ActionResult> {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 

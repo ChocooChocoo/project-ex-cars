@@ -3,13 +3,13 @@
 import { revalidatePath } from "next/cache";
 
 import { getCurrentRole } from "@/app/auth/actions";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { announcementSchema } from "@/lib/validation/phase6";
 
 type Phase6ActionResult = { error: string } | { success: true };
 
 export async function createAnnouncement(formData: FormData): Promise<Phase6ActionResult> {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -36,7 +36,7 @@ export async function createAnnouncement(formData: FormData): Promise<Phase6Acti
 }
 
 export async function publishAnnouncement(formData: FormData): Promise<Phase6ActionResult> {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -55,7 +55,7 @@ export async function publishAnnouncement(formData: FormData): Promise<Phase6Act
 }
 
 export async function expireAnnouncement(formData: FormData): Promise<Phase6ActionResult> {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -71,7 +71,7 @@ export async function expireAnnouncement(formData: FormData): Promise<Phase6Acti
 }
 
 export async function archiveAnnouncement(formData: FormData): Promise<Phase6ActionResult> {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 

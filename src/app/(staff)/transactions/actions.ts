@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getCurrentRole } from "@/app/auth/actions";
 import { logAuditEvent } from "@/lib/auth/audit";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { generateInstallmentSchedule } from "@/lib/transactions/installments";
 import type { TransactionState } from "@/lib/transactions/state-machine";
 import { canTransition } from "@/lib/transactions/state-machine";
@@ -17,7 +17,7 @@ import {
 } from "@/lib/validation/transactions";
 
 export async function transitionTransaction(formData: FormData) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -111,7 +111,7 @@ export async function transitionTransaction(formData: FormData) {
 }
 
 export async function recordPayment(formData: FormData) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -162,7 +162,7 @@ export async function recordPayment(formData: FormData) {
 }
 
 export async function verifyPayment(paymentId: string) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -180,7 +180,7 @@ export async function verifyPayment(paymentId: string) {
 }
 
 export async function createPaymentTerms(formData: FormData) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -212,7 +212,7 @@ export async function createPaymentTerms(formData: FormData) {
 }
 
 export async function approvePaymentTerms(termsId: string) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -245,7 +245,7 @@ export async function approvePaymentTerms(termsId: string) {
 }
 
 export async function activatePaymentTerms(termsId: string) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -299,7 +299,7 @@ export async function activatePaymentTerms(termsId: string) {
   // Update terms state.
   await admin.from("payment_terms").update({ state: "active" }).eq("id", termsId);
 
-  const userResult = await (await createServerSupabase()).auth.getUser();
+  const userResult = await (await createServerSupabaseClient()).auth.getUser();
   await logAuditEvent({
     actorId: userResult.data.user?.id ?? "unknown",
     action: "payment_terms_activated",
@@ -314,7 +314,7 @@ export async function activatePaymentTerms(termsId: string) {
 }
 
 export async function recordPaperwork(formData: FormData) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -358,7 +358,7 @@ export async function recordPaperwork(formData: FormData) {
 }
 
 export async function verifyTransactionDocument(formData: FormData) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -428,7 +428,7 @@ export async function verifyTransactionDocument(formData: FormData) {
 }
 
 export async function reviewSellTransaction(formData: FormData) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -497,7 +497,7 @@ export async function reviewSellTransaction(formData: FormData) {
 }
 
 export async function assignInformant(formData: FormData) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -528,7 +528,7 @@ export async function assignInformant(formData: FormData) {
 }
 
 export async function markInstallmentWaived(installmentId: string) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -554,7 +554,7 @@ export async function markInstallmentWaived(installmentId: string) {
 }
 
 export async function createWalkInTransaction(formData: FormData) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -602,7 +602,7 @@ export async function createWalkInTransaction(formData: FormData) {
 }
 
 export async function createFieldCase(formData: FormData) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -667,7 +667,7 @@ export async function createFieldCase(formData: FormData) {
 }
 
 export async function assignMechanic(formData: FormData) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -706,7 +706,7 @@ export async function assignMechanic(formData: FormData) {
 }
 
 export async function instructRepossession(formData: FormData) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 

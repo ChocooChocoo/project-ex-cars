@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { ACCEPTED_ID_TYPES } from "@/lib/auth/roles";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
   buyDetailsSchema,
   buyTransactionSchema,
@@ -22,7 +22,7 @@ const uploadPurchaseDocumentSchema = z.object({
 });
 
 export async function uploadPurchaseDocument(formData: FormData) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -66,7 +66,7 @@ export async function uploadPurchaseDocument(formData: FormData) {
 }
 
 export async function createBuyTransaction(formData: FormData) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -116,7 +116,7 @@ export async function createBuyTransaction(formData: FormData) {
 }
 
 export async function saveBuyDetails(formData: FormData) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -167,7 +167,7 @@ export async function saveBuyDetails(formData: FormData) {
 }
 
 export async function submitSellVehicle(formData: FormData) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -236,7 +236,7 @@ export async function submitSellVehicle(formData: FormData) {
 }
 
 export async function submitRequestCar(formData: FormData) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -284,7 +284,7 @@ export async function submitRequestCar(formData: FormData) {
 }
 
 export async function cancelTransaction(formData: FormData) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 

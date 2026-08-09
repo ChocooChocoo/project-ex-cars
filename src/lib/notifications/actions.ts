@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export interface NotificationRow {
   id: string;
@@ -68,7 +68,7 @@ export async function checkAndNotifyDueInstallments(): Promise<void> {
 }
 
 export async function getNotifications(role: string): Promise<NotificationRow[]> {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data } = await supabase
     .from("notifications")
     .select("*")
@@ -79,7 +79,7 @@ export async function getNotifications(role: string): Promise<NotificationRow[]>
 }
 
 export async function getUnreadNotificationCount(role: string): Promise<number> {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { count } = await supabase
     .from("notifications")
     .select("id", { count: "exact", head: true })
@@ -89,7 +89,7 @@ export async function getUnreadNotificationCount(role: string): Promise<number> 
 }
 
 export async function markNotificationRead(notificationId: string) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

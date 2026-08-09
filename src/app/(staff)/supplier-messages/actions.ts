@@ -3,13 +3,13 @@
 import { revalidatePath } from "next/cache";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { supplierMessageSchema } from "@/lib/validation/phase6";
 
 type SupplierMessageResult = { error: string } | { success: true };
 
 export async function sendSupplierMessage(formData: FormData): Promise<SupplierMessageResult> {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

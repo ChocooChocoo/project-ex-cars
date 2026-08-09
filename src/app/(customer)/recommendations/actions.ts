@@ -3,12 +3,12 @@
 import { revalidatePath } from "next/cache";
 
 import { rankVehicles, type VehicleInput } from "@/lib/recommendations/engine";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const CRITERIA_VERSION = "1.0";
 
 export async function runRecommendation(budget: number, _preferences: Record<string, string>) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -100,7 +100,7 @@ export async function runRecommendation(budget: number, _preferences: Record<str
 }
 
 export async function getRecommendationRun(runId: string) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -127,7 +127,7 @@ export async function getRecommendationRun(runId: string) {
 }
 
 export async function getCustomerRuns() {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -145,7 +145,7 @@ export async function getCustomerRuns() {
 }
 
 export async function submitFeedback(runId: string, selectedVehicleId: string, helpful: boolean, outcome?: string) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

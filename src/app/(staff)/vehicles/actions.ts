@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { getCurrentRole } from "@/app/auth/actions";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
   checklistAnswerSchema,
   contentItemSchema,
@@ -14,7 +14,7 @@ import {
 } from "@/lib/validation/vehicles";
 
 export async function createVehicle(formData: FormData) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -62,7 +62,7 @@ export async function createVehicle(formData: FormData) {
 }
 
 export async function updateVehicle(formData: FormData) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -111,7 +111,7 @@ export async function updateVehicle(formData: FormData) {
 }
 
 export async function publishVehicle(formData: FormData) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -146,7 +146,7 @@ export async function publishVehicle(formData: FormData) {
 }
 
 export async function proposePrice(formData: FormData) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -176,7 +176,7 @@ export async function proposePrice(formData: FormData) {
 }
 
 export async function approvePrice(formData: FormData) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -232,7 +232,7 @@ export async function approvePrice(formData: FormData) {
 }
 
 export async function uploadVehicleMedia(formData: FormData) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -281,7 +281,7 @@ export async function uploadVehicleMedia(formData: FormData) {
 }
 
 export async function deleteVehicleMedia(mediaId: string) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -304,7 +304,7 @@ export async function deleteVehicleMedia(mediaId: string) {
 }
 
 export async function toggleFavourite(vehicleId: string) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -329,7 +329,7 @@ export async function toggleFavourite(vehicleId: string) {
 }
 
 export async function getFavourites() {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return [];
 
@@ -343,7 +343,7 @@ export async function getFavourites() {
 }
 
 export async function createInspection(formData: FormData) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -376,7 +376,7 @@ export async function createInspection(formData: FormData) {
 }
 
 export async function submitChecklistAnswer(formData: FormData) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -427,7 +427,7 @@ export async function submitChecklistAnswer(formData: FormData) {
 }
 
 export async function createContentItem(formData: FormData) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -456,7 +456,7 @@ export async function createContentItem(formData: FormData) {
 }
 
 export async function publishContent(id: string) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -477,7 +477,7 @@ export async function publishContent(id: string) {
 }
 
 export async function archiveVehicle(vehicleId: string) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -495,7 +495,7 @@ export async function archiveVehicle(vehicleId: string) {
 }
 
 export async function deleteVehicle(vehicleId: string) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 

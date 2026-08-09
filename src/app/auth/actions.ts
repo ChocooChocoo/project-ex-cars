@@ -9,11 +9,11 @@ import { z } from "zod";
 import { ACCEPTED_ID_TYPES } from "@/lib/auth/roles";
 import { landingPath } from "@/lib/routing/paths";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { emailSchema, fullNameSchema, passwordSchema } from "@/lib/validation/forms";
 
 export async function signIn(formData: FormData) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
 
   const parsed = z.object({ email: emailSchema, password: passwordSchema }).safeParse({
     email: formData.get("email"),
@@ -69,7 +69,7 @@ export async function signIn(formData: FormData) {
 }
 
 export async function signUp(formData: FormData) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
 
   const parsed = z.object({ email: emailSchema, password: passwordSchema, full_name: fullNameSchema }).safeParse({
     email: formData.get("email"),
@@ -107,14 +107,14 @@ export async function signUp(formData: FormData) {
 }
 
 export async function signOut() {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   await supabase.auth.signOut();
   revalidatePath("/", "layout");
   redirect("/auth/v1/login");
 }
 
 export async function getCurrentUser() {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -122,7 +122,7 @@ export async function getCurrentUser() {
 }
 
 export async function getCurrentRole(): Promise<string | null> {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -143,7 +143,7 @@ interface AssignRoleParams {
 }
 
 export async function assignRole(params: AssignRoleParams) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated" };
 
@@ -182,7 +182,7 @@ interface CreateWalkInAccountParams {
 }
 
 export async function createWalkInAccount(params: CreateWalkInAccountParams) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated" };
 
@@ -254,7 +254,7 @@ export async function createSupplier(params: CreateSupplierParams) {
   }
   const { supplierKind, businessName, contactName, contactEmail, contactPhone, createdBy } = parsed.data;
 
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated" };
 
@@ -314,7 +314,7 @@ export async function approveSupplier(params: ApproveSupplierParams) {
   }
   const { supplierId, approvedBy, decision } = parsed.data;
 
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated" };
 
@@ -371,7 +371,7 @@ export async function approveSupplier(params: ApproveSupplierParams) {
 }
 
 export async function uploadSupplierDocument(formData: FormData) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -437,7 +437,7 @@ export async function verifySupplierDocument(params: VerifySupplierDocumentParam
   if (!parsed.success) return { error: "Invalid verification request." };
   const { documentId, decision, verifiedBy } = parsed.data;
 
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated" };
 
@@ -472,7 +472,7 @@ export async function verifySupplierDocument(params: VerifySupplierDocumentParam
 }
 
 export async function uploadCustomerDocument(formData: FormData) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

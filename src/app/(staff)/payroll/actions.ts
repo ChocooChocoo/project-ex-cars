@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { getCurrentRole } from "@/app/auth/actions";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
   compensationSchema,
   payrollApprovalSchema,
@@ -19,7 +19,7 @@ const PAYROLL_REVIEWERS = ["ceo", "head_accountant"];
 const WORKING_DAYS_PER_MONTH = 30;
 
 export async function saveCompensation(formData: FormData): Promise<Phase6ActionResult> {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -54,7 +54,7 @@ export async function saveCompensation(formData: FormData): Promise<Phase6Action
 }
 
 export async function markPayslipPaid(formData: FormData): Promise<Phase6ActionResult> {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -86,7 +86,7 @@ export async function markPayslipPaid(formData: FormData): Promise<Phase6ActionR
 }
 
 export async function createPayrollRun(formData: FormData): Promise<Phase6ActionResult> {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -225,7 +225,7 @@ export async function createPayrollRun(formData: FormData): Promise<Phase6Action
 }
 
 export async function reviewPayrollRun(formData: FormData): Promise<Phase6ActionResult> {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -311,7 +311,7 @@ export async function reviewPayrollRun(formData: FormData): Promise<Phase6Action
 }
 
 export async function finalizePayrollRun(formData: FormData): Promise<Phase6ActionResult> {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -345,7 +345,7 @@ export async function finalizePayrollRun(formData: FormData): Promise<Phase6Acti
 }
 
 export async function addPayslipItem(formData: FormData): Promise<Phase6ActionResult> {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 

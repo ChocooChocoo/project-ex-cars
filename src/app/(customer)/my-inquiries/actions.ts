@@ -5,11 +5,11 @@ import { revalidatePath } from "next/cache";
 import type { InquiryThreadData } from "@/components/inquiries/types";
 import { type ActionResult, failure, notAuthenticated, notFound } from "@/lib/auth/action-result";
 import { getProfileAutoFill } from "@/lib/autofill";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createInquirySchema, scheduleArrangementSchema, sendMessageSchema } from "@/lib/validation/inquiries";
 
 export async function createInquiry(formData: FormData) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -36,7 +36,7 @@ export async function createInquiry(formData: FormData) {
 }
 
 export async function getInquiryThread(inquiryId: string): Promise<ActionResult<InquiryThreadData>> {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return notAuthenticated();
 
@@ -77,7 +77,7 @@ export async function getInquiryThread(inquiryId: string): Promise<ActionResult<
 }
 
 export async function sendMessageWithAttachment(formData: FormData) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -126,7 +126,7 @@ export async function sendMessageWithAttachment(formData: FormData) {
 }
 
 export async function sendMessage(formData: FormData) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -154,7 +154,7 @@ export async function sendMessage(formData: FormData) {
 }
 
 export async function assignInquiry(inquiryId: string, role: "account_manager" | "sales_manager") {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -185,7 +185,7 @@ export async function assignInquiry(inquiryId: string, role: "account_manager" |
 }
 
 export async function scheduleArrangement(formData: FormData) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -241,7 +241,7 @@ export async function scheduleArrangement(formData: FormData) {
 }
 
 export async function handoffInquiry(inquiryId: string) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -274,7 +274,7 @@ export async function handoffInquiry(inquiryId: string) {
 }
 
 export async function acceptHandoff(inquiryId: string) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -304,7 +304,7 @@ export async function acceptHandoff(inquiryId: string) {
 }
 
 export async function markMessagesRead(inquiryId: string) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return;
 
@@ -320,7 +320,7 @@ export async function markMessagesRead(inquiryId: string) {
 }
 
 export async function getUnreadCount(inquiryId: string): Promise<number> {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return 0;
 
@@ -335,7 +335,7 @@ export async function getUnreadCount(inquiryId: string): Promise<number> {
 }
 
 export async function getTotalUnreadCount(): Promise<number> {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return 0;
 
@@ -355,7 +355,7 @@ export async function getTotalUnreadCount(): Promise<number> {
 }
 
 export async function reportMessage(inquiryId: string, messageId: string, reason: string) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -372,7 +372,7 @@ export async function reportMessage(inquiryId: string, messageId: string, reason
 }
 
 export async function reviewReport(reportId: string, decision: string) {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 

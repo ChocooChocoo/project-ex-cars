@@ -3,19 +3,19 @@
 import { revalidatePath } from "next/cache";
 
 import { getCurrentRole } from "@/app/auth/actions";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { roadmapItemSchema } from "@/lib/validation/roadmap";
 
 const ROADMAP_WRITER_ROLES = ["ceo", "account_manager", "sales_manager"];
 
 type RoadmapActionResult = { error: string } | { success: true; id?: string };
 
-type ServerSupabase = Awaited<ReturnType<typeof createServerSupabase>>;
+type ServerSupabase = Awaited<ReturnType<typeof createServerSupabaseClient>>;
 
 type WriterContext = { ok: true; supabase: ServerSupabase; userId: string } | { ok: false; error: string };
 
 async function assertRoadmapWriter(): Promise<WriterContext> {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { ok: false, error: "Not authenticated" };
 

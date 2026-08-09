@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { getCurrentRole } from "@/app/auth/actions";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { disbursementEventSchema, disbursementRequestSchema, financialEntrySchema } from "@/lib/validation/phase6";
 
 type Phase6ActionResult = { error: string } | { success: true };
@@ -16,7 +16,7 @@ const DISBURSEMENT_REQUESTERS = ["ceo", "account_manager", "confidential_informa
 const DISBURSEMENT_ADVANCERS = ["ceo", "head_accountant"];
 
 export async function recordFinancialEntry(formData: FormData): Promise<Phase6ActionResult> {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -46,7 +46,7 @@ export async function recordFinancialEntry(formData: FormData): Promise<Phase6Ac
 }
 
 export async function verifyFinancialEntry(formData: FormData): Promise<Phase6ActionResult> {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -67,7 +67,7 @@ export async function verifyFinancialEntry(formData: FormData): Promise<Phase6Ac
 }
 
 export async function createDisbursementRequest(formData: FormData): Promise<Phase6ActionResult> {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -114,7 +114,7 @@ const purchaseFundSchema = z.object({
 });
 
 export async function requestPurchaseFunds(formData: FormData): Promise<Phase6ActionResult> {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
@@ -162,7 +162,7 @@ export async function requestPurchaseFunds(formData: FormData): Promise<Phase6Ac
 }
 
 export async function advanceDisbursement(formData: FormData): Promise<Phase6ActionResult> {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
