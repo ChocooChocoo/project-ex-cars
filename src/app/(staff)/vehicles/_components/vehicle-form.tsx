@@ -82,25 +82,17 @@ export function VehicleForm({ defaultValues }: VehicleFormProps) {
   }
 
   return (
-    <form noValidate onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-5">
-      <div className="flex items-center justify-between">
+    <form noValidate onSubmit={form.handleSubmit(onSubmit)} className="flex w-full max-w-3xl flex-col gap-5">
+      <div>
         <div>
           <h1 className="text-3xl leading-none tracking-tight">{isEdit ? "Edit Vehicle" : "Add Vehicle"}</h1>
           <p className="text-muted-foreground text-sm">
             {isEdit ? "Update vehicle details." : "Add a new vehicle to inventory."}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button type="button" variant="outline" onClick={() => router.back()}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={loading}>
-            {loading ? "Saving..." : isEdit ? "Update Vehicle" : "Create Vehicle"}
-          </Button>
-        </div>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-2">
+      <div className="flex flex-col gap-5">
         <div className="flex flex-col gap-5">
           <div className="rounded-lg border p-5">
             <h2 className="mb-4 font-semibold text-sm">Basic Information</h2>
@@ -127,7 +119,7 @@ export function VehicleForm({ defaultValues }: VehicleFormProps) {
                   </Field>
                 )}
               />
-              <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-4">
                 <Controller
                   control={form.control}
                   name="make"
@@ -151,7 +143,7 @@ export function VehicleForm({ defaultValues }: VehicleFormProps) {
                   )}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-4">
                 <Controller
                   control={form.control}
                   name="year"
@@ -192,7 +184,7 @@ export function VehicleForm({ defaultValues }: VehicleFormProps) {
           <div className="rounded-lg border p-5">
             <h2 className="mb-4 font-semibold text-sm">Specifications</h2>
             <FieldGroup className="gap-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-4">
                 <Controller
                   control={form.control}
                   name="mileage"
@@ -232,7 +224,7 @@ export function VehicleForm({ defaultValues }: VehicleFormProps) {
                   )}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-4">
                 <Controller
                   control={form.control}
                   name="transmission"
@@ -293,7 +285,7 @@ export function VehicleForm({ defaultValues }: VehicleFormProps) {
                   </Field>
                 )}
               />
-              <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-4">
                 <Controller
                   control={form.control}
                   name="exterior_color"
@@ -331,7 +323,7 @@ export function VehicleForm({ defaultValues }: VehicleFormProps) {
                 render={({ field, fieldState }) => (
                   <Field data-invalid={fieldState.invalid}>
                     <FieldLabel>Price</FieldLabel>
-                    <InputGroup>
+                    <InputGroup className="[&>[data-slot=input-group-addon]]:absolute [&>[data-slot=input-group-addon]]:inset-y-0 [&>[data-slot=input-group-addon]]:left-0 [&>[data-slot=input-group-addon]]:z-10 [&>[data-slot=input-group-control]]:pl-8">
                       <InputGroupAddon align="inline-start">₱</InputGroupAddon>
                       <InputGroupInput {...field} type="number" placeholder="500000" />
                     </InputGroup>
@@ -403,6 +395,15 @@ export function VehicleForm({ defaultValues }: VehicleFormProps) {
             />
           </div>
         </div>
+      </div>
+
+      <div className="flex items-center justify-end gap-2">
+        <Button type="button" variant="outline" onClick={() => router.back()}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={loading}>
+          {loading ? "Saving..." : isEdit ? "Update Vehicle" : "Create Vehicle"}
+        </Button>
       </div>
     </form>
   );

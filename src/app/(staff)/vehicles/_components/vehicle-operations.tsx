@@ -23,6 +23,7 @@ export function VehicleOperations({
         size="sm"
         spacing={0}
         variant="outline"
+        aria-label="Vehicle inventory view"
         value={segment}
         onValueChange={(value) => {
           if (value === "pending" || value === "vehicles") setSegment(value);
