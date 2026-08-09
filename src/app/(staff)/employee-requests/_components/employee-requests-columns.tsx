@@ -2,10 +2,16 @@
 "use no memo";
 
 import type { ColumnDef } from "@tanstack/react-table";
-import { CalendarClock, Check, X } from "lucide-react";
+import { CalendarClock, Check, MoreHorizontal, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { REQUEST_KINDS, type RequestKind } from "@/lib/validation/phase6";
 
 const KIND_LABELS: Record<RequestKind, string> = {
@@ -19,10 +25,22 @@ const STATUS_STYLES: Record<
   EmployeeRequestRow["status"],
   { variant: "default" | "secondary" | "destructive" | "outline"; className: string }
 > = {
-  approved: { variant: "default", className: "bg-emerald-500 text-white hover:bg-emerald-500/90" },
-  rejected: { variant: "destructive", className: "bg-destructive text-destructive-foreground" },
-  pending: { variant: "secondary", className: "bg-amber-500 text-white hover:bg-amber-500/90" },
-  cancelled: { variant: "outline", className: "bg-muted text-muted-foreground" },
+  approved: {
+    variant: "outline",
+    className: "border-green-600/50 text-green-700 dark:border-green-500/40 dark:text-green-400",
+  },
+  rejected: {
+    variant: "outline",
+    className: "border-red-600/50 text-red-700 dark:border-red-500/40 dark:text-red-400",
+  },
+  pending: {
+    variant: "outline",
+    className: "border-yellow-600/50 text-yellow-700 dark:border-yellow-500/40 dark:text-yellow-400",
+  },
+  cancelled: {
+    variant: "outline",
+    className: "border-slate-400/50 text-slate-600 dark:border-slate-500/50 dark:text-slate-400",
+  },
 };
 
 export interface EmployeeRequestRow {
@@ -109,10 +127,19 @@ export function createEmployeeRequestColumns({
         const request = row.original;
         if (canReview && request.status === "pending") {
           return (
-            <Button variant="ghost" size="sm" onClick={() => onReview(request)}>
-              <Check data-icon="inline-start" />
-              Review
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="size-8" aria-label="Open review actions">
+                  <MoreHorizontal className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={() => onReview(request)}>
+                  <Check data-icon="inline-start" />
+                  Review request
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           );
         }
         if (!canReview && request.status === "pending") {

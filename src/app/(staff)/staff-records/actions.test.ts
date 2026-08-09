@@ -1,0 +1,123 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const rpc = vi.fn();
+
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("@/app/auth/actions", () => ({ getCurrentRole: vi.fn() }));
+vi.mock("@/lib/supabase/server", () => ({
+  createServerSupabase: vi.fn(async () => ({ rpc })),
+}));
+
+import { saveStaffRecord, setAccountState } from "./actions";
+
+const employeeId = "11111111-1111-4111-8111-111111111111";
+
+function saveForm() {
+  const form = new FormData();
+  form.set("accountId", employeeId);
+  form.set("fullName", "Ada Staff");
+  form.set("phone", "09170000000");
+  form.set("address", "Manila");
+  form.set("workdays", "1,2,3,4,5");
+  form.set("startTime", "08:00");
+  form.set("endTime", "17:00");
+  form.set("graceMinutes", "10");
+  return form;
+}
+
+function stateForm() {
+  const form = new FormData();
+  form.set("accountId", employeeId);
+  form.set("state", "suspended");
+  return form;
+}
+
+describe("staff RPC action response validation", () => {
+  beforeEach(() => rpc.mockReset());
+
+  it("rejects a malformed save payload instead of returning success", async () => {
+    rpc.mockResolvedValue({
+      data: { profile: { id: "not-a-uuid", account_state: "active" }, schedule: null },
+      error: null,
+    });
+
+    await expect(saveStaffRecord(saveForm())).resolves.toEqual({ error: "Staff record returned invalid shape." });
+  });
+
+  it("rejects a malformed schedule payload instead of returning success", async () => {
+    rpc.mockResolvedValue({
+      data: {
+        profile: {
+          id: employeeId,
+          account_state: "active",
+          full_name: "Ada Staff",
+          phone: "09170000000",
+          address: "Manila",
+        },
+        schedule: { id: "55555555-5555-4555-8555-555555555555", timezone: "Asia/Manila" },
+      },
+      error: null,
+    });
+
+    await expect(saveStaffRecord(saveForm())).resolves.toEqual({ error: "Staff record returned invalid shape." });
+  });
+
+  it("returns a structurally valid saved profile and schedule", async () => {
+    rpc.mockResolvedValue({
+      data: {
+        profile: {
+          id: employeeId,
+          account_state: "active",
+          full_name: "Ada Staff",
+          phone: "09170000000",
+          address: "Manila",
+        },
+        schedule: {
+          id: "55555555-5555-4555-8555-555555555555",
+          employee_id: employeeId,
+          workdays: [1, 2, 3, 4, 5],
+          start_time: "08:00:00",
+          end_time: "17:00:00",
+          grace_minutes: 10,
+          timezone: "Asia/Manila",
+        },
+      },
+      error: null,
+    });
+
+    const result = await saveStaffRecord(saveForm());
+    expect(result).toMatchObject({ success: true, row: { id: employeeId }, schedule: { timezone: "Asia/Manila" } });
+  });
+
+  it("rejects a schedule returned for a different account", async () => {
+    rpc.mockResolvedValue({
+      data: {
+        profile: {
+          id: employeeId,
+          account_state: "active",
+          full_name: "Ada Staff",
+          phone: "09170000000",
+          address: "Manila",
+        },
+        schedule: {
+          id: "55555555-5555-4555-8555-555555555555",
+          employee_id: "22222222-2222-4222-8222-222222222222",
+          workdays: [1, 2, 3, 4, 5],
+          start_time: "08:00:00",
+          end_time: "17:00:00",
+          grace_minutes: 10,
+          timezone: "Asia/Manila",
+        },
+      },
+      error: null,
+    });
+
+    await expect(saveStaffRecord(saveForm())).resolves.toEqual({ error: "Staff record returned invalid shape." });
+  });
+
+  it("rejects a malformed account-state payload instead of returning success", async () => {
+    rpc.mockResolvedValue({ data: { id: employeeId, account_state: "not-a-state" }, error: null });
+
+    await expect(setAccountState(stateForm())).resolves.toEqual({ error: "Account state returned invalid shape." });
+  });
+});

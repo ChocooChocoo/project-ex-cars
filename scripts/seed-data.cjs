@@ -42,6 +42,18 @@ const now = new Date();
 const daysAgo = (n) => new Date(now.getTime() - n * 86400000);
 const iso = (d) => d.toISOString();
 const dateOnly = (d) => d.toISOString().slice(0, 10);
+const phtDateOnly = (d) => {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Manila",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(d);
+  const values = new Map(parts.map((part) => [part.type, part.value]));
+  return `${values.get("year")}-${values.get("month")}-${values.get("day")}`;
+};
+const phtTimestamp = (d, hour, minute = 0) =>
+  `${phtDateOnly(d)}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00+08:00`;
 const addDays = (d, n) => new Date(d.getTime() + n * 86400000);
 
 // Deterministic RNG so re-runs produce identical data.
@@ -196,6 +208,7 @@ const WIPE_TABLES = [
   "performance_reviews",
   "employee_requests",
   "attendance_entries",
+  "employee_work_schedules",
   "supplier_messages",
   "roadmap_items",
   "payment_records",
@@ -1275,13 +1288,31 @@ async function seedRecommendations(users, vehicles) {
 // ---------------------------------------------------------------------------
 async function seedStaffRecords(users) {
   const staff = [
+    { role: "ceo", id: users.ceo },
     { role: "mechanic", id: users.mechanic },
     { role: "sales_manager", id: users.sales_manager },
     { role: "marketing_specialist", id: users.marketing_specialist },
     { role: "account_manager", id: users.account_manager },
     { role: "head_accountant", id: users.head_accountant },
     { role: "confidential_informant", id: users.confidential_informant },
+    { role: "head_security", id: users.head_security },
   ];
+
+  const schedules = await insert(
+    "employee_work_schedules",
+    staff.map((person) => ({
+      employee_id: person.id,
+      workdays: [1, 2, 3, 4, 5, 6, 7],
+      start_time: "08:00:00",
+      end_time: "17:00:00",
+      grace_minutes: 10,
+      timezone: "Asia/Manila",
+      created_by: users.account_manager,
+      updated_by: users.account_manager,
+    })),
+  );
+  log("P6", "employee_work_schedules", schedules.length);
+
   const attRows = [];
   for (const person of staff) {
     for (let d = 24; d >= 1; d--) {
@@ -1303,19 +1334,73 @@ async function seedStaffRecords(users) {
     }
   }
   const att = await insert("attendance_entries", attRows);
-  log("P6", "attendance_entries", att.length);
+  const deterministicAttendance = await insert("attendance_entries", [
+    {
+      employee_id: users.ceo,
+      attendance_date: phtDateOnly(now),
+      time_in: phtTimestamp(now, 8),
+      time_out: phtTimestamp(now, 17),
+      status: "present",
+      notes: "Deterministic Task 18 present fixture",
+      checked_by: null,
+      checked_at: null,
+    },
+    {
+      employee_id: users.account_manager,
+      attendance_date: phtDateOnly(now),
+      time_in: phtTimestamp(now, 8, 20),
+      time_out: phtTimestamp(now, 17),
+      status: "late",
+      notes: "Deterministic Task 18 late fixture",
+      checked_by: users.ceo,
+      checked_at: iso(now),
+    },
+    {
+      employee_id: users.head_accountant,
+      attendance_date: phtDateOnly(now),
+      time_in: null,
+      time_out: null,
+      status: "absent",
+      notes: "Deterministic Task 18 absent fixture",
+      checked_by: users.ceo,
+      checked_at: iso(now),
+    },
+    {
+      employee_id: users.marketing_specialist,
+      attendance_date: phtDateOnly(now),
+      time_in: phtTimestamp(now, 8),
+      time_out: phtTimestamp(now, 12),
+      status: "half_day",
+      notes: "Deterministic Task 18 half-day fixture",
+      checked_by: users.account_manager,
+      checked_at: iso(now),
+    },
+    {
+      employee_id: users.sales_manager,
+      attendance_date: phtDateOnly(now),
+      time_in: null,
+      time_out: null,
+      status: "on_leave",
+      notes: "Deterministic Task 18 leave fixture",
+      checked_by: users.account_manager,
+      checked_at: iso(now),
+    },
+  ]);
+  log("P6", "attendance_entries", att.length + deterministicAttendance.length);
 
   const reqRows = [];
   const reqKinds = ["leave", "overtime", "schedule_change", "other"];
   for (let i = 0; i < 15; i++) {
     const person = pick(staff);
     const kind = pick(reqKinds);
+    const startDate = addDays(now, randInt(2, 30));
+    const leaveDays = kind === "leave" ? randInt(0, 5) : 0;
     reqRows.push({
       employee_id: person.id,
       request_kind: kind,
       status: pick(["pending", "approved", "rejected"]),
-      start_date: dateOnly(addDays(now, randInt(2, 30))),
-      end_date: kind === "leave" ? dateOnly(addDays(now, randInt(3, 8))) : null,
+      start_date: dateOnly(startDate),
+      end_date: kind === "leave" ? dateOnly(addDays(startDate, leaveDays)) : null,
       reason: pick([
         "Family event",
         "Medical appointment",
@@ -1328,6 +1413,17 @@ async function seedStaffRecords(users) {
       reviewed_at: rand() < 0.6 ? iso(daysAgo(randInt(1, 10))) : null,
     });
   }
+  reqRows.push({
+    employee_id: users.mechanic,
+    request_kind: "leave",
+    status: "approved",
+    start_date: phtDateOnly(now),
+    end_date: phtDateOnly(now),
+    reason: "Deterministic Task 18 approved-leave fixture",
+    reviewed_by: users.account_manager,
+    review_notes: "Approved fixture",
+    reviewed_at: iso(now),
+  });
   const requests = await insert("employee_requests", reqRows);
   log("P6", "employee_requests", requests.length);
 
