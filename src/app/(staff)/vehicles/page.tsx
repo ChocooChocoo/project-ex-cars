@@ -1,8 +1,8 @@
 import { getCurrentRole } from "@/app/auth/actions";
 import { createServerSupabase } from "@/lib/supabase/server";
 
-import { PriceApprovals, type PriceProposalRow } from "./_components/price-approvals";
-import { VehicleTable } from "./_components/vehicles-table";
+import type { PriceProposalRow } from "./_components/price-approvals";
+import { VehicleOperations } from "./_components/vehicle-operations";
 
 export default async function VehiclesPage() {
   const supabase = await createServerSupabase();
@@ -27,8 +27,10 @@ export default async function VehiclesPage() {
           <p className="text-muted-foreground text-sm">Manage vehicle listings, pricing, and publishing.</p>
         </div>
       </div>
-      {isCeo ? <PriceApprovals proposals={(proposals as unknown as PriceProposalRow[]) ?? []} /> : null}
-      <VehicleTable vehicles={(vehicles as Record<string, unknown>[]) ?? []} />
+      <VehicleOperations
+        proposals={(proposals as unknown as PriceProposalRow[]) ?? []}
+        vehicles={(vehicles as Record<string, unknown>[]) ?? []}
+      />
     </div>
   );
 }

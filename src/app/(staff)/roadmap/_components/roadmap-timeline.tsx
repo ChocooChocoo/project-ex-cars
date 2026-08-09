@@ -197,82 +197,89 @@ export function RoadmapTimeline({ initialItems, canWrite }: RoadmapTimelineProps
 
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
         <TabsContent value="timeline" className="m-0 min-h-full data-active:flex data-active:flex-col">
-          <div className="flex min-h-64 flex-1 items-center justify-center p-6">
-            <Empty>
-              <EmptyMedia variant="icon">
-                <AlertCircle />
-              </EmptyMedia>
-              <EmptyHeader>
-                <EmptyTitle>No initiatives on the timeline</EmptyTitle>
-                <EmptyDescription>
-                  Create an initiative to start planning, or adjust the active filters.
-                </EmptyDescription>
-              </EmptyHeader>
-            </Empty>
-          </div>
-          ) : (
-          <div className="scrollbar-thin min-w-0 overflow-x-auto [scrollbar-color:var(--border)_transparent] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar]:h-1.5">
-            <div
-              className="grid min-w-max gap-px bg-border"
-              style={{ gridTemplateColumns: `minmax(15rem, 18rem) repeat(${quarterKeys.length}, minmax(12rem, 1fr))` }}
-            >
-              <div className="sticky left-0 z-10 flex items-center gap-2 bg-background px-3 py-2">
-                <span className="font-medium text-sm">Initiative</span>
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={expandInitiativesWithChildren}
-                    className="h-6 text-xs"
-                    type="button"
-                  >
-                    Expand all
-                  </Button>
-                  <Button variant="ghost" size="icon-sm" onClick={collapseAll} className="h-6 text-xs" type="button">
-                    Collapse
-                  </Button>
-                </div>
-              </div>
-              {quarterKeys.map((key) => (
-                <div key={key} className="bg-muted/30 px-3 py-2 text-center font-medium text-muted-foreground text-xs">
-                  {key === "unscheduled" ? "Unscheduled" : key.replace("-", " ")}
-                </div>
-              ))}
-
-              {initiatives.map((node) => (
-                <RoadmapSwimlane
-                  key={node.item.id}
-                  node={node}
-                  quarterKeys={quarterKeys}
-                  expanded={expanded.has(node.item.id)}
-                  expandedEpics={expandedEpics}
-                  onToggle={() => {
-                    setExpanded((current) => {
-                      const next = new Set(current);
-                      if (next.has(node.item.id)) {
-                        next.delete(node.item.id);
-                      } else {
-                        next.add(node.item.id);
-                      }
-                      return next;
-                    });
-                  }}
-                  onToggleEpic={(epicId) => {
-                    setExpandedEpics((current) => {
-                      const next = new Set(current);
-                      if (next.has(epicId)) {
-                        next.delete(epicId);
-                      } else {
-                        next.add(epicId);
-                      }
-                      return next;
-                    });
-                  }}
-                  onSelect={setSelectedItem}
-                />
-              ))}
+          {initiatives.length === 0 ? (
+            <div className="flex min-h-64 flex-1 items-center justify-center p-6">
+              <Empty>
+                <EmptyMedia variant="icon">
+                  <AlertCircle />
+                </EmptyMedia>
+                <EmptyHeader>
+                  <EmptyTitle>No initiatives on the timeline</EmptyTitle>
+                  <EmptyDescription>
+                    Create an initiative to start planning, or adjust the active filters.
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
             </div>
-          </div>
+          ) : (
+            <div className="scrollbar-thin min-w-0 overflow-x-auto [scrollbar-color:var(--border)_transparent] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar]:h-1.5">
+              <div
+                className="grid min-w-max gap-px bg-border"
+                style={{
+                  gridTemplateColumns: `minmax(15rem, 18rem) repeat(${quarterKeys.length}, minmax(12rem, 1fr))`,
+                }}
+              >
+                <div className="sticky left-0 z-10 flex items-center gap-2 bg-background px-3 py-2">
+                  <span className="font-medium text-sm">Initiative</span>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={expandInitiativesWithChildren}
+                      className="h-6 text-xs"
+                      type="button"
+                    >
+                      Expand all
+                    </Button>
+                    <Button variant="ghost" size="icon-sm" onClick={collapseAll} className="h-6 text-xs" type="button">
+                      Collapse
+                    </Button>
+                  </div>
+                </div>
+                {quarterKeys.map((key) => (
+                  <div
+                    key={key}
+                    className="bg-muted/30 px-3 py-2 text-center font-medium text-muted-foreground text-xs"
+                  >
+                    {key === "unscheduled" ? "Unscheduled" : key.replace("-", " ")}
+                  </div>
+                ))}
+
+                {initiatives.map((node) => (
+                  <RoadmapSwimlane
+                    key={node.item.id}
+                    node={node}
+                    quarterKeys={quarterKeys}
+                    expanded={expanded.has(node.item.id)}
+                    expandedEpics={expandedEpics}
+                    onToggle={() => {
+                      setExpanded((current) => {
+                        const next = new Set(current);
+                        if (next.has(node.item.id)) {
+                          next.delete(node.item.id);
+                        } else {
+                          next.add(node.item.id);
+                        }
+                        return next;
+                      });
+                    }}
+                    onToggleEpic={(epicId) => {
+                      setExpandedEpics((current) => {
+                        const next = new Set(current);
+                        if (next.has(epicId)) {
+                          next.delete(epicId);
+                        } else {
+                          next.add(epicId);
+                        }
+                        return next;
+                      });
+                    }}
+                    onSelect={setSelectedItem}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="board" className="m-0 min-h-full data-active:flex data-active:flex-col">

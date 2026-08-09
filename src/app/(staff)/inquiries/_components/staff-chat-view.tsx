@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { useRouter } from "next/navigation";
 
-import { Paperclip } from "lucide-react";
+import { ArrowLeft, Paperclip } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { createClient } from "@/lib/supabase/client";
+import { cn } from "@/lib/utils";
 import { censorMessage } from "@/lib/word-filter";
 
 interface StaffChatViewProps {
@@ -31,6 +32,8 @@ interface StaffChatViewProps {
   messages: Record<string, unknown>[];
   arrangement: Record<string, unknown> | null;
   userRole: string;
+  fillHeight?: boolean;
+  onBack?: () => void;
 }
 
 export function StaffChatView({
@@ -38,6 +41,8 @@ export function StaffChatView({
   messages: initialMessages,
   arrangement: initialArrangement,
   userRole,
+  fillHeight = false,
+  onBack,
 }: StaffChatViewProps) {
   const router = useRouter();
   const [msgs, setMsgs] = useState(initialMessages);
@@ -131,19 +136,29 @@ export function StaffChatView({
   }
 
   return (
-    <div className="flex flex-col gap-4" style={{ height: "calc(100dvh - var(--dashboard-header-height) - 3rem)" }}>
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl leading-none tracking-tight">
-            {vehicles ? `${vehicles.make} ${vehicles.model} (${vehicles.year})` : "Conversation"}
-          </h1>
-          <div className="mt-1 flex items-center gap-2">
-            <Badge variant={intention === "buy_now" ? "default" : "secondary"} className="text-xs capitalize">
-              {intention === "buy_now" ? "Buy Now" : "Inquiry"}
-            </Badge>
-            <Badge variant="outline" className="text-xs capitalize">
-              {state.replace("_", " ")}
-            </Badge>
+    <div
+      className={cn("flex min-h-0 flex-col gap-4", fillHeight ? "h-full" : "")}
+      style={fillHeight ? undefined : { height: "calc(100dvh - var(--dashboard-header-height) - 3rem)" }}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-start gap-2">
+          {onBack ? (
+            <Button variant="ghost" size="icon-sm" className="shrink-0 md:hidden" onClick={onBack} type="button">
+              <ArrowLeft className="size-4" />
+            </Button>
+          ) : null}
+          <div className="min-w-0">
+            <h1 className="truncate text-xl leading-none tracking-tight">
+              {vehicles ? `${vehicles.make} ${vehicles.model} (${vehicles.year})` : "Conversation"}
+            </h1>
+            <div className="mt-1 flex items-center gap-2">
+              <Badge variant={intention === "buy_now" ? "default" : "secondary"} className="text-xs capitalize">
+                {intention === "buy_now" ? "Buy Now" : "Inquiry"}
+              </Badge>
+              <Badge variant="outline" className="text-xs capitalize">
+                {state.replace("_", " ")}
+              </Badge>
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2">

@@ -1,8 +1,6 @@
-import { MessageSquare } from "lucide-react";
-
-import { InquiryList } from "@/app/(customer)/my-inquiries/_components/inquiry-list";
-import { Card, CardContent } from "@/components/ui/card";
 import { createServerSupabase } from "@/lib/supabase/server";
+
+import { StaffInquiryChat } from "./_components/staff-inquiry-chat";
 
 export default async function StaffInquiriesPage() {
   const supabase = await createServerSupabase();
@@ -11,7 +9,7 @@ export default async function StaffInquiriesPage() {
 
   const { data: roleRow } = await supabase.rpc("get_user_roles");
   const roles = (roleRow as { account_id: string; role: string }[] | null) ?? [];
-  const myRole = roles.find((r) => r.account_id === user.user.id)?.role;
+  const myRole = roles.find((r) => r.account_id === user.user.id)?.role ?? "";
 
   let query = supabase.from("inquiries").select("*, vehicles(make, model, year)");
 
@@ -23,28 +21,7 @@ export default async function StaffInquiriesPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-3xl leading-none tracking-tight">Inquiries Queue</h1>
-        <p className="text-muted-foreground text-sm">
-          {myRole === "sales_manager"
-            ? "Buy Now requests assigned to you."
-            : "Customer inquiries waiting for response."}
-        </p>
-      </div>
-      {!inquiries || inquiries.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center gap-4 py-12">
-            <MessageSquare className="size-12 text-muted-foreground/50" />
-            <p className="text-muted-foreground text-sm">No inquiries yet.</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card className="overflow-hidden">
-          <CardContent className="flex flex-col gap-1 p-2">
-            <InquiryList inquiries={inquiries as Record<string, unknown>[]} baseUrl="/inquiries" />
-          </CardContent>
-        </Card>
-      )}
+      <StaffInquiryChat inquiries={(inquiries as Record<string, unknown>[]) ?? []} userRole={myRole} />
     </div>
   );
 }

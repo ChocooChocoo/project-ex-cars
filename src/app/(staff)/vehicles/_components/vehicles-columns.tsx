@@ -1,10 +1,9 @@
 "use client";
-"use no memo";
 
 import Link from "next/link";
 
 import type { ColumnDef } from "@tanstack/react-table";
-import { MoreHorizontal, Pencil } from "lucide-react";
+import { MoreHorizontal, Pencil, Send } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -31,6 +30,13 @@ export const listingStateMeta: Record<
 
 export function createColumns(onPublish: (id: string) => void): ColumnDef<Record<string, unknown>>[] {
   return [
+    {
+      id: "search",
+      accessorFn: (row) =>
+        `${row.stock_code ?? ""} ${row.make ?? ""} ${row.model ?? ""} ${row.year ?? ""} ${row.vin ?? ""}`,
+      filterFn: "includesString",
+      enableHiding: true,
+    },
     {
       accessorKey: "stock_code",
       header: "Stock Code",
@@ -103,6 +109,7 @@ export function createColumns(onPublish: (id: string) => void): ColumnDef<Record
     },
     {
       id: "actions",
+      header: () => <span className="sr-only">Actions</span>,
       cell: ({ row }) => {
         const vehicle = row.original;
         const id = vehicle.id as string;
@@ -122,7 +129,12 @@ export function createColumns(onPublish: (id: string) => void): ColumnDef<Record
                   Edit
                 </Link>
               </DropdownMenuItem>
-              {state === "draft" && <DropdownMenuItem onClick={() => onPublish(id)}>Publish</DropdownMenuItem>}
+              {state === "draft" && (
+                <DropdownMenuItem onClick={() => onPublish(id)}>
+                  <Send className="mr-2 size-4" />
+                  Publish
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         );

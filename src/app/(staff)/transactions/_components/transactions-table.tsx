@@ -9,30 +9,42 @@ import { useRouter } from "next/navigation";
 import {
   type ColumnDef,
   type ColumnFiltersState,
-  flexRender,
   getCoreRowModel,
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
+  type PaginationState,
   type SortingState,
   useReactTable,
+  type VisibilityState,
 } from "@tanstack/react-table";
-import { Eye, MoreHorizontal, Search } from "lucide-react";
+import { Eye, MoreHorizontal, ReceiptText, Search } from "lucide-react";
 import { toast } from "sonner";
 
 import { transitionTransaction } from "@/app/(staff)/transactions/actions";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DataTable } from "@/components/ui/data-table";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { InputGroup, InputGroupAddon } from "@/components/ui/input-group";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Kbd } from "@/components/ui/kbd";
-import { Pagination, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   TRANSACTION_STATE_LABELS,
@@ -40,6 +52,25 @@ import {
   transactionStatusBadgeVariant,
 } from "@/lib/transactions/labels";
 import { getAllowedTransitions, type TransactionState } from "@/lib/transactions/state-machine";
+
+const KIND_FILTER_OPTIONS = ["All", "buy", "sell", "request_a_car"];
+const STATUS_FILTER_OPTIONS: ("All" | TransactionState)[] = [
+  "All",
+  "pending",
+  "under_review",
+  "approved",
+  "rejected",
+  "completed",
+  "cancelled",
+];
+const TRANSACTION_ACTION_LABELS: Record<TransactionState, string> = {
+  pending: "Pending",
+  under_review: "Under Review",
+  approved: "Approve",
+  rejected: "Reject",
+  completed: "Complete",
+  cancelled: "Cancel",
+};
 
 export function TransactionsTable({
   transactions,
@@ -51,40 +82,68 @@ export function TransactionsTable({
   const router = useRouter();
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [kindFilter, setKindFilter] = useState("all");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({ search: false });
+  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 });
+  const [transitionTarget, setTransitionTarget] = useState<{ id: string; to: TransactionState } | null>(null);
+  const [transitioning, setTransitioning] = useState(false);
 
-  const filtered = transactions.filter((t) => {
-    if (kindFilter !== "all" && t.transaction_kind !== kindFilter) return false;
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      const vehicles = t.vehicles as Record<string, unknown> | undefined;
-      const label = [vehicles?.make, vehicles?.model].filter(Boolean).join(" ").toLowerCase();
-      if (!label.includes(q)) return false;
+  async function handleTransition() {
+    if (!transitionTarget) return;
+    setTransitioning(true);
+    const fd = new FormData();
+    fd.set("id", transitionTarget.id);
+    fd.set("to_state", transitionTarget.to);
+    const result = await transitionTransaction(fd);
+    setTransitioning(false);
+    if (result.error) {
+      toast.error(result.error);
+      return;
     }
-    return true;
-  });
+    toast.success(`Transaction marked ${transitionTarget.to.replace(/_/g, " ")}.`);
+    setTransitionTarget(null);
+    router.refresh();
+  }
 
   const columns: ColumnDef<Record<string, unknown>>[] = [
     {
+      id: "search",
+      accessorFn: (row) => {
+        const v = row.vehicles as Record<string, unknown> | undefined;
+        return `${v?.make ?? ""} ${v?.model ?? ""} ${v?.year ?? ""}`;
+      },
+      filterFn: "includesString",
+      enableHiding: true,
+    },
+    {
       accessorKey: "transaction_kind",
       header: "Kind",
+      filterFn: "equalsString",
       cell: ({ row }) => {
         const kind = row.original.transaction_kind as string;
         return <Badge variant="outline">{transactionKindLabel(kind as never)}</Badge>;
       },
     },
     {
-      accessorKey: "vehicle",
+      id: "vehicle",
       header: "Vehicle",
       cell: ({ row }) => {
         const v = row.original.vehicles as Record<string, unknown> | undefined;
-        return v ? `${v.make} ${v.model} (${v.year})` : "—";
+        return v ? (
+          <div className="grid gap-0.5">
+            <span className="font-medium">
+              {v.make as string} {v.model as string}
+            </span>
+            <span className="text-muted-foreground text-xs">{v.year as string}</span>
+          </div>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        );
       },
     },
     {
       accessorKey: "current_state",
       header: "State",
+      filterFn: "equalsString",
       cell: ({ row }) => {
         const state = (row.original.current_state ?? "pending") as TransactionState;
         return <Badge variant={transactionStatusBadgeVariant(state)}>{TRANSACTION_STATE_LABELS[state]}</Badge>;
@@ -95,163 +154,183 @@ export function TransactionsTable({
       header: "Opened",
       cell: ({ row }) => {
         const d = row.original.opened_at as string;
-        return new Date(d).toLocaleDateString();
+        return <span className="text-muted-foreground text-sm">{new Date(d).toLocaleDateString()}</span>;
       },
     },
     {
       id: "actions",
+      header: () => <span className="sr-only">Actions</span>,
       cell: ({ row }) => {
         const t = row.original;
         const id = t.id as string;
         const state = (t.current_state ?? "pending") as TransactionState;
         const allowed = getAllowedTransitions(state, userRole);
 
-        async function doTransition(to: TransactionState) {
-          const fd = new FormData();
-          fd.set("id", id);
-          fd.set("to_state", to);
-          const result = await transitionTransaction(fd);
-          if (result.error) {
-            toast.error(result.error);
-          } else {
-            toast.success(`Transaction marked ${to.replace(/_/g, " ")}.`);
-            router.refresh();
-          }
-        }
-
         return (
-          <div className="flex items-center gap-1">
-            {allowed.map((to) => (
-              <Button key={to} variant="outline" size="sm" onClick={() => doTransition(to)}>
-                {to.replace(/_/g, " ")}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="size-8" aria-label="Open transaction actions">
+                <MoreHorizontal className="size-4" />
               </Button>
-            ))}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="size-8">
-                  <MoreHorizontal className="size-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem asChild>
-                  <Link href={`/dashboard/transactions/${id}`}>
-                    <Eye className="mr-2 size-4" />
-                    View Details
-                  </Link>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem asChild>
+                <Link href={`/dashboard/transactions/${id}`}>
+                  <Eye className="mr-2 size-4" />
+                  View Details
+                </Link>
+              </DropdownMenuItem>
+              {allowed.length > 0 ? <DropdownMenuSeparator /> : null}
+              {allowed.map((to) => (
+                <DropdownMenuItem
+                  key={to}
+                  variant={to === "cancelled" || to === "rejected" ? "destructive" : "default"}
+                  onClick={() => setTransitionTarget({ id, to })}
+                >
+                  {TRANSACTION_ACTION_LABELS[to]}
                 </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         );
       },
     },
   ];
 
   const table = useReactTable({
-    data: filtered,
+    data: transactions,
     columns,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
+    state: { sorting, columnFilters, columnVisibility, pagination },
+    getRowId: (row) => row.id as string,
+    autoResetPageIndex: false,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
-    state: { sorting, columnFilters },
-    initialState: { pagination: { pageSize: 15 } },
+    onColumnVisibilityChange: setColumnVisibility,
+    onPaginationChange: setPagination,
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    getSortedRowModel: getSortedRowModel(),
   });
 
+  const searchQuery = (table.getColumn("search")?.getFilterValue() as string) ?? "";
+  const kindFilter = (table.getColumn("transaction_kind")?.getFilterValue() as string) ?? "All";
+  const statusFilter = (table.getColumn("current_state")?.getFilterValue() as string) ?? "All";
+  function setColumnSelectFilter(columnId: string, value: string) {
+    table.getColumn(columnId)?.setFilterValue(value === "All" ? undefined : value);
+    table.setPageIndex(0);
+  }
+
   return (
-    <Card>
-      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2">
-          <InputGroup>
-            <InputGroupAddon>
-              <Search className="size-4" />
-            </InputGroupAddon>
-            <input
-              className="h-9 w-48 bg-transparent text-sm outline-none"
-              placeholder="Search vehicles..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-            <InputGroupAddon>
-              <Kbd>⌘K</Kbd>
-            </InputGroupAddon>
-          </InputGroup>
-          <Select value={kindFilter} onValueChange={setKindFilter}>
-            <SelectTrigger className="w-32">
-              <SelectValue placeholder="Kind" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="buy">Buy</SelectItem>
-                <SelectItem value="sell">Sell</SelectItem>
-                <SelectItem value="request_a_car">Request</SelectItem>
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              {table.getHeaderGroups().map((hg) => (
-                <tr key={hg.id} className="border-b">
-                  {hg.headers.map((h) => (
-                    <th key={h.id} className="px-4 py-3 text-left font-medium text-muted-foreground">
-                      {flexRender(h.column.columnDef.header, h.getContext())}
-                    </th>
-                  ))}
-                </tr>
-              ))}
-            </thead>
-            <tbody>
-              {table.getRowModel().rows.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-muted-foreground">
-                    No transactions found.
-                  </td>
-                </tr>
-              ) : (
-                table.getRowModel().rows.map((r) => (
-                  <tr key={r.id} className="border-b last:border-0 hover:bg-muted/50">
-                    {r.getVisibleCells().map((c) => (
-                      <td key={c.id} className="px-4 py-3">
-                        {flexRender(c.column.columnDef.cell, c.getContext())}
-                      </td>
+    <>
+      <Card>
+        <CardHeader className="border-b has-data-[slot=card-action]:grid-cols-1 md:has-data-[slot=card-action]:grid-cols-[1fr_auto]">
+          <CardTitle className="text-xl leading-none">Transactions</CardTitle>
+          <CardDescription className="max-w-sm leading-snug">
+            Manage buy, sell, and request-a-car transactions.
+          </CardDescription>
+          <CardAction className="col-start-1 row-start-auto flex w-full flex-wrap justify-start gap-2 justify-self-stretch md:col-start-2 md:row-span-2 md:row-start-1 md:w-auto md:flex-nowrap md:justify-end md:justify-self-end">
+            <InputGroup className="h-7 w-full md:w-64">
+              <InputGroupAddon align="inline-start">
+                <Search className="size-3.5" />
+              </InputGroupAddon>
+              <InputGroupInput
+                className="h-7"
+                placeholder="Search transactions..."
+                value={searchQuery}
+                onChange={(event) => {
+                  table.getColumn("search")?.setFilterValue(event.target.value || undefined);
+                  table.setPageIndex(0);
+                }}
+              />
+              <InputGroupAddon align="inline-end">
+                <Kbd className="h-4 text-[10px]">⌘K</Kbd>
+              </InputGroupAddon>
+            </InputGroup>
+          </CardAction>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4 px-0">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <Select value={kindFilter} onValueChange={(value) => setColumnSelectFilter("transaction_kind", value)}>
+                <SelectTrigger size="sm">
+                  <span className="text-muted-foreground">Kind:</span>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent position="popper" align="start">
+                  <SelectGroup>
+                    {KIND_FILTER_OPTIONS.map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option === "request_a_car" ? "Request" : option === "All" ? "All" : option}
+                      </SelectItem>
                     ))}
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-        <div className="mt-4 flex items-center justify-between">
-          <p className="text-muted-foreground text-xs">
-            {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}–
-            {Math.min(
-              (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
-              filtered.length,
-            )}{" "}
-            of {filtered.length}
-          </p>
-          <Pagination>
-            <PaginationPrevious onClick={() => table.previousPage()} aria-disabled={!table.getCanPreviousPage()} />
-            {Array.from({ length: Math.min(5, table.getPageCount()) }, (_, i) => i).map((page) => (
-              <PaginationLink
-                key={`page-${page}`}
-                isActive={table.getState().pagination.pageIndex === page}
-                onClick={() => table.setPageIndex(page)}
-              >
-                {page + 1}
-              </PaginationLink>
-            ))}
-            <PaginationNext onClick={() => table.nextPage()} aria-disabled={!table.getCanNextPage()} />
-          </Pagination>
-        </div>
-      </CardContent>
-    </Card>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+
+              <Select value={statusFilter} onValueChange={(value) => setColumnSelectFilter("current_state", value)}>
+                <SelectTrigger size="sm">
+                  <span className="text-muted-foreground">Status:</span>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent position="popper" align="start">
+                  <SelectGroup>
+                    {STATUS_FILTER_OPTIONS.map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option === "All" ? "All" : TRANSACTION_STATE_LABELS[option]}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2 text-muted-foreground text-sm">
+              <ReceiptText className="size-4" />
+              {table.getFilteredRowModel().rows.length} transactions
+            </div>
+          </div>
+
+          <DataTable table={table} rowsPerPageId="staff-transactions-rows-per-page" />
+        </CardContent>
+      </Card>
+
+      <AlertDialog
+        open={transitionTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setTransitionTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="capitalize">
+              {transitionTarget ? TRANSACTION_ACTION_LABELS[transitionTarget.to] : ""} transaction?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {transitionTarget ? (
+                <>
+                  This will mark the transaction as{" "}
+                  <span className="font-medium text-foreground capitalize">
+                    {TRANSACTION_STATE_LABELS[transitionTarget.to]}
+                  </span>
+                  . This action cannot be undone.
+                </>
+              ) : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant={
+                transitionTarget?.to === "cancelled" || transitionTarget?.to === "rejected" ? "destructive" : "default"
+              }
+              onClick={handleTransition}
+              disabled={transitioning}
+            >
+              {transitioning ? "Updating..." : "Confirm"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
