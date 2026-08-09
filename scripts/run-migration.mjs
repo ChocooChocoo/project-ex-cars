@@ -2,7 +2,7 @@ import pg from "pg";
 
 import dns from "node:dns";
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -74,7 +74,10 @@ async function run() {
     console.error("Example: node run-migration.mjs 00035_combined_rls_fixes.sql");
     process.exit(1);
   }
-  const sqlPath = join(__dirname, "..", "supabase", "migrations", migrationFile);
+  // Allow paths outside the migrations dir (e.g. ../scripts/seed-roles.sql).
+  const sqlPath = migrationFile.includes("/") || migrationFile.includes("\\")
+    ? resolve(__dirname, migrationFile)
+    : join(__dirname, "..", "supabase", "migrations", migrationFile);
   const sql = readFileSync(sqlPath, "utf8");
 
   console.log(`Running migration: ${migrationFile}`);
