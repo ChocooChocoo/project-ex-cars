@@ -18,6 +18,7 @@ import { Cog, Download, Grid, Plus, Rows3, Search, SlidersHorizontal } from "luc
 
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DataTable } from "@/components/ui/data-table";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Kbd } from "@/components/ui/kbd";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -25,7 +26,6 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { filters, type UserRow } from "./data";
 import { usersColumns } from "./users-columns";
-import { UsersTable } from "./users-table";
 
 export function Users({ users }: { users: UserRow[] }) {
   const [rowSelection, setRowSelection] = React.useState({});
@@ -199,7 +199,7 @@ export function Users({ users }: { users: UserRow[] }) {
           </Tabs>
         </div>
 
-        <UsersTable table={table} />
+        <DataTable table={table} rowsPerPageId="users-rows-per-page" />
       </CardContent>
     </Card>
   );
