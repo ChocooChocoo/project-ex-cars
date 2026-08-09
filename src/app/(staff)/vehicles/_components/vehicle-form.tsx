@@ -21,16 +21,19 @@ import { type VehicleFormData, vehicleSchema } from "@/lib/validation/vehicles";
 
 interface VehicleFormProps {
   defaultValues?: VehicleFormData & { id?: string };
+  onSuccess?: () => void;
+  onCancel?: () => void;
 }
 
 const fuelTypes = ["Gasoline", "Diesel", "Hybrid", "Electric", "LPG"];
 const transmissions = ["Manual", "Automatic", "CVT", "DCT"];
 const bodyTypes = ["Sedan", "SUV", "Hatchback", "Coupe", "MPV", "Pickup", "Van", "Wagon", "Convertible"];
 
-export function VehicleForm({ defaultValues }: VehicleFormProps) {
+export function VehicleForm({ defaultValues, onSuccess, onCancel }: VehicleFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const isEdit = !!defaultValues?.id;
+  const isDialog = !!onSuccess || !!onCancel;
 
   const form = useForm<z.infer<typeof vehicleSchema>>({
     // biome-ignore lint/suspicious/noExplicitAny: zod coerce fields cause resolver type mismatch
@@ -76,25 +79,31 @@ export function VehicleForm({ defaultValues }: VehicleFormProps) {
       toast.error(result.error);
     } else {
       toast.success(isEdit ? "Vehicle updated." : "Vehicle created.");
-      router.push("/dashboard/vehicles");
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        router.push("/dashboard/vehicles");
+      }
       router.refresh();
     }
   }
 
   return (
     <form noValidate onSubmit={form.handleSubmit(onSubmit)} className="flex w-full max-w-3xl flex-col gap-5">
-      <div>
+      {!isDialog && (
         <div>
-          <h1 className="text-3xl leading-none tracking-tight">{isEdit ? "Edit Vehicle" : "Add Vehicle"}</h1>
-          <p className="text-muted-foreground text-sm">
-            {isEdit ? "Update vehicle details." : "Add a new vehicle to inventory."}
-          </p>
+          <div>
+            <h1 className="text-3xl leading-none tracking-tight">{isEdit ? "Edit Vehicle" : "Add Vehicle"}</h1>
+            <p className="text-muted-foreground text-sm">
+              {isEdit ? "Update vehicle details." : "Add a new vehicle to inventory."}
+            </p>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="flex flex-col gap-5">
         <div className="flex flex-col gap-5">
-          <div className="rounded-lg border p-5">
+          <div>
             <h2 className="mb-4 font-semibold text-sm">Basic Information</h2>
             <FieldGroup className="gap-4">
               <Controller
@@ -181,7 +190,7 @@ export function VehicleForm({ defaultValues }: VehicleFormProps) {
             </FieldGroup>
           </div>
 
-          <div className="rounded-lg border p-5">
+          <div>
             <h2 className="mb-4 font-semibold text-sm">Specifications</h2>
             <FieldGroup className="gap-4">
               <div className="flex flex-col gap-4">
@@ -314,7 +323,7 @@ export function VehicleForm({ defaultValues }: VehicleFormProps) {
         </div>
 
         <div className="flex flex-col gap-5">
-          <div className="rounded-lg border p-5">
+          <div>
             <h2 className="mb-4 font-semibold text-sm">Pricing & Listing</h2>
             <FieldGroup className="gap-4">
               <Controller
@@ -377,7 +386,7 @@ export function VehicleForm({ defaultValues }: VehicleFormProps) {
             </FieldGroup>
           </div>
 
-          <div className="rounded-lg border p-5">
+          <div>
             <h2 className="mb-4 font-semibold text-sm">Description</h2>
             <Controller
               control={form.control}
@@ -398,7 +407,14 @@ export function VehicleForm({ defaultValues }: VehicleFormProps) {
       </div>
 
       <div className="flex items-center justify-end gap-2">
-        <Button type="button" variant="outline" onClick={() => router.back()}>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => {
+            if (onCancel) onCancel();
+            else router.back();
+          }}
+        >
           Cancel
         </Button>
         <Button type="submit" disabled={loading}>

@@ -27,7 +27,7 @@ async function assertNoPageOverflow(page: Page) {
 test.describe("Task 17 CEO portal UI", () => {
   test.skip(!seedPassword, "SEED_USER_PASSWORD is required for the CEO portal UI regression.");
 
-  test("vehicle form is a constrained single-column flow and segmented navigation remains accessible", async ({
+  test("vehicle detail page renders the widget layout and segmented navigation remains accessible", async ({
     page,
   }) => {
     await signIn(page, "/ceo/vehicles");
@@ -49,34 +49,10 @@ test.describe("Task 17 CEO portal UI", () => {
     ]) {
       await page.setViewportSize(viewport);
       await page.goto(`/ceo/vehicles/${seededVehicleId}`);
-      await expect(page.getByRole("heading", { name: "Edit Vehicle", exact: true })).toBeVisible();
-
-      const form = page.locator("form").first();
-      const layout = await form.evaluate((element) => {
-        const fields = [...element.querySelectorAll("input, textarea, [role='combobox']")].map((field) => {
-          const rect = field.getBoundingClientRect();
-          return { left: rect.left, top: rect.top, bottom: rect.bottom };
-        });
-        const submit = element.querySelector("button[type='submit']")?.getBoundingClientRect();
-        const formRect = element.getBoundingClientRect();
-        return {
-          formWidth: formRect.width,
-          fieldRects: fields,
-          submitTop: submit?.top ?? 0,
-          pageOverflow: document.documentElement.scrollWidth > window.innerWidth,
-        };
-      });
-
-      expect(layout.formWidth).toBeLessThanOrEqual(800);
-      expect(layout.fieldRects.length).toBeGreaterThan(10);
-      for (const [index, field] of layout.fieldRects.entries()) {
-        const previous = layout.fieldRects[index - 1];
-        if (!previous) continue;
-        expect(Math.abs(field.left - previous.left)).toBeLessThanOrEqual(2);
-        expect(field.top).toBeGreaterThanOrEqual(previous.bottom - 1);
-      }
-      expect(layout.submitTop).toBeGreaterThan(layout.fieldRects.at(-1)?.bottom ?? 0);
-      expect(layout.pageOverflow).toBe(false);
+      await expect(page.getByRole("heading", { name: /^.+ .+$/ })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Description", exact: true }).first()).toBeVisible();
+      await expect(page.locator("[data-slot='card']").first()).toBeVisible();
+      await assertNoPageOverflow(page);
     }
   });
 

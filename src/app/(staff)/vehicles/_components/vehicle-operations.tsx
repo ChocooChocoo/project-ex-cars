@@ -21,14 +21,13 @@ export function VehicleOperations({
       <ToggleGroup
         type="single"
         size="sm"
-        spacing={0}
-        variant="outline"
+        spacing={1}
         aria-label="Vehicle inventory view"
         value={segment}
         onValueChange={(value) => {
           if (value === "pending" || value === "vehicles") setSegment(value);
         }}
-        className="self-start"
+        className="self-start bg-muted p-0.75 text-muted-foreground **:data-[slot=toggle-group-item]:rounded-md **:data-[slot=toggle-group-item]:border **:data-[slot=toggle-group-item]:border-transparent **:data-[slot=toggle-group-item]:text-foreground/60 **:data-[slot=toggle-group-item]:hover:text-foreground [&_[data-slot=toggle-group-item][data-state=on]]:bg-background [&_[data-slot=toggle-group-item][data-state=on]]:text-foreground [&_[data-slot=toggle-group-item][data-state=on]]:shadow-sm dark:[&_[data-slot=toggle-group-item][data-state=on]]:border-input dark:[&_[data-slot=toggle-group-item][data-state=on]]:bg-input/30"
       >
         <ToggleGroupItem value="pending">Pending</ToggleGroupItem>
         <ToggleGroupItem value="vehicles">Vehicles</ToggleGroupItem>
