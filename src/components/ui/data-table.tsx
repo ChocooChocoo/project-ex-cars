@@ -1,5 +1,4 @@
 "use client";
-"use no memo";
 
 import type { MouseEvent } from "react";
 
@@ -18,8 +17,6 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-import type { UserRow } from "./data";
-
 function preventPaginationNavigation(event: MouseEvent<HTMLAnchorElement>) {
   event.preventDefault();
 }
@@ -35,7 +32,13 @@ function getPageNumbers(currentPage: number, pageCount: number) {
   return [currentPage - 1, currentPage, currentPage + 1];
 }
 
-export function UsersTable({ table }: { table: TableType<UserRow> }) {
+export function DataTable<TData>({
+  table,
+  rowsPerPageId = "data-table-rows-per-page",
+}: {
+  table: TableType<TData>;
+  rowsPerPageId?: string;
+}) {
   const pageCount = Math.max(table.getPageCount(), 1);
   const currentPage = Math.min(table.getState().pagination.pageIndex + 1, pageCount);
   const pageNumbers = getPageNumbers(currentPage, pageCount);
@@ -93,7 +96,7 @@ export function UsersTable({ table }: { table: TableType<UserRow> }) {
               value={`${table.getState().pagination.pageSize}`}
               onValueChange={(value) => table.setPageSize(Number(value))}
             >
-              <SelectTrigger size="sm" className="w-20" id="users-rows-per-page">
+              <SelectTrigger size="sm" className="w-20" id={rowsPerPageId}>
                 <SelectValue placeholder={rowsPerPage} />
               </SelectTrigger>
               <SelectContent side="top">
