@@ -1,11 +1,12 @@
 "use client";
 "use no memo";
 
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { useRouter } from "next/navigation";
 
-import { CalendarClock, Check, Plus, X } from "lucide-react";
+import { getCoreRowModel, getPaginationRowModel, type PaginationState, useReactTable } from "@tanstack/react-table";
+import { Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -13,9 +14,9 @@ import {
   reviewEmployeeRequest,
   submitEmployeeRequest,
 } from "@/app/(staff)/employee-requests/actions";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DataTable } from "@/components/ui/data-table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -23,31 +24,9 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Textarea } from "@/components/ui/textarea";
 import { REQUEST_KINDS, type RequestKind } from "@/lib/validation/phase6";
 
-const KIND_LABELS: Record<RequestKind, string> = {
-  leave: "Leave",
-  overtime: "Overtime",
-  schedule_change: "Schedule Change",
-  other: "Other",
-};
+import { createEmployeeRequestColumns, type EmployeeRequestRow, KIND_LABELS } from "./employee-requests-columns";
 
-const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  pending: "secondary",
-  approved: "default",
-  rejected: "destructive",
-  cancelled: "outline",
-};
-
-export interface EmployeeRequestRow {
-  id: string;
-  employee_id: string;
-  request_kind: RequestKind;
-  status: "pending" | "approved" | "rejected" | "cancelled";
-  start_date: string;
-  end_date: string | null;
-  reason: string;
-  review_notes: string | null;
-  reviewed_at: string | null;
-}
+export type { EmployeeRequestRow } from "./employee-requests-columns";
 
 interface EmployeeRequestsClientProps {
   requests: EmployeeRequestRow[];
@@ -67,6 +46,7 @@ export function EmployeeRequestsClient({ requests, canReview, canSubmit }: Emplo
   const [reviewNotes, setReviewNotes] = useState("");
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 });
 
   async function submitForm() {
     setLoading(true);
@@ -109,27 +89,55 @@ export function EmployeeRequestsClient({ requests, canReview, canSubmit }: Emplo
     router.refresh();
   }
 
-  async function submitCancel(requestId: string) {
-    const fd = new FormData();
-    fd.set("request_id", requestId);
-    const result = await cancelEmployeeRequest(fd);
-    if ("error" in result && result.error) {
-      toast.error(result.error);
-      return;
-    }
-    toast.success("Request cancelled.");
-    router.refresh();
-  }
+  const submitCancel = useCallback(
+    async (requestId: string) => {
+      const fd = new FormData();
+      fd.set("request_id", requestId);
+      const result = await cancelEmployeeRequest(fd);
+      if ("error" in result && result.error) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Request cancelled.");
+      router.refresh();
+    },
+    [router],
+  );
+
+  const columns = useMemo(
+    () =>
+      createEmployeeRequestColumns({
+        canReview,
+        onCancel: submitCancel,
+        onReview: (request) => {
+          setReviewTarget(request);
+          setReviewNotes("");
+          setReviewError(null);
+        },
+      }),
+    [canReview, submitCancel],
+  );
+
+  const table = useReactTable({
+    data: requests,
+    columns,
+    state: { pagination },
+    getRowId: (row) => row.id,
+    autoResetPageIndex: false,
+    onPaginationChange: setPagination,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+  });
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h1 className="font-semibold text-3xl tracking-tight">Employee Requests</h1>
           <p className="text-muted-foreground text-sm">Leave, overtime, and schedule change requests.</p>
         </div>
         {canSubmit ? (
-          <Button onClick={() => setFormOpen(true)}>
+          <Button className="self-start sm:self-auto" onClick={() => setFormOpen(true)}>
             <Plus data-icon="inline-start" />
             New Request
           </Button>
@@ -140,77 +148,8 @@ export function EmployeeRequestsClient({ requests, canReview, canSubmit }: Emplo
         <CardHeader>
           <CardTitle>{canReview ? "All Requests" : "My Requests"}</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="px-2 py-2 font-medium">Type</th>
-                  <th className="px-2 py-2 font-medium">Start</th>
-                  <th className="px-2 py-2 font-medium">End</th>
-                  <th className="px-2 py-2 font-medium">Reason</th>
-                  <th className="px-2 py-2 font-medium">Status</th>
-                  {canReview ? <th className="px-2 py-2 font-medium">Reviewed</th> : null}
-                  <th className="px-2 py-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {requests.length === 0 ? (
-                  <tr>
-                    <td colSpan={canReview ? 7 : 6} className="px-2 py-6 text-center text-muted-foreground">
-                      No requests found.
-                    </td>
-                  </tr>
-                ) : (
-                  requests.map((request) => (
-                    <tr key={request.id} className="border-b last:border-0">
-                      <td className="px-2 py-2">
-                        <span className="flex items-center gap-1.5">
-                          <CalendarClock className="size-3.5 text-muted-foreground" />
-                          {KIND_LABELS[request.request_kind]}
-                        </span>
-                      </td>
-                      <td className="px-2 py-2">{new Date(request.start_date).toLocaleDateString()}</td>
-                      <td className="px-2 py-2">
-                        {request.end_date ? new Date(request.end_date).toLocaleDateString() : "—"}
-                      </td>
-                      <td className="max-w-64 truncate px-2 py-2 text-muted-foreground">{request.reason}</td>
-                      <td className="px-2 py-2">
-                        <Badge variant={STATUS_VARIANTS[request.status]}>{request.status}</Badge>
-                      </td>
-                      {canReview ? (
-                        <td className="px-2 py-2 text-muted-foreground">
-                          {request.reviewed_at ? new Date(request.reviewed_at).toLocaleDateString() : "—"}
-                        </td>
-                      ) : null}
-                      <td className="px-2 py-2 text-right">
-                        {canReview && request.status === "pending" ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setReviewTarget(request);
-                              setReviewNotes("");
-                              setReviewError(null);
-                            }}
-                          >
-                            <Check data-icon="inline-start" />
-                            Review
-                          </Button>
-                        ) : null}
-                        {!canReview && request.status === "pending" ? (
-                          <Button variant="ghost" size="sm" onClick={() => submitCancel(request.id)}>
-                            <X data-icon="inline-start" />
-                            Cancel
-                          </Button>
-                        ) : null}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+        <CardContent className="px-0 pb-0">
+          <DataTable table={table} rowsPerPageId="employee-requests-rows-per-page" />
         </CardContent>
       </Card>
 
@@ -228,9 +167,9 @@ export function EmployeeRequestsClient({ requests, canReview, canSubmit }: Emplo
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    {REQUEST_KINDS.map((k) => (
-                      <SelectItem key={k} value={k}>
-                        {KIND_LABELS[k]}
+                    {REQUEST_KINDS.map((requestKind) => (
+                      <SelectItem key={requestKind} value={requestKind}>
+                        {KIND_LABELS[requestKind]}
                       </SelectItem>
                     ))}
                   </SelectGroup>
@@ -240,18 +179,18 @@ export function EmployeeRequestsClient({ requests, canReview, canSubmit }: Emplo
             <div className="grid grid-cols-2 gap-4">
               <Field>
                 <FieldLabel>Start Date</FieldLabel>
-                <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
               </Field>
               <Field>
                 <FieldLabel>End Date</FieldLabel>
-                <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                <Input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
               </Field>
             </div>
             <Field>
               <FieldLabel>Reason</FieldLabel>
               <Textarea
                 value={reason}
-                onChange={(e) => setReason(e.target.value)}
+                onChange={(event) => setReason(event.target.value)}
                 rows={3}
                 placeholder="Why are you requesting this?"
               />
@@ -291,7 +230,7 @@ export function EmployeeRequestsClient({ requests, canReview, canSubmit }: Emplo
               </div>
               <Field>
                 <FieldLabel>Review Notes</FieldLabel>
-                <Textarea value={reviewNotes} onChange={(e) => setReviewNotes(e.target.value)} rows={3} />
+                <Textarea value={reviewNotes} onChange={(event) => setReviewNotes(event.target.value)} rows={3} />
               </Field>
               {reviewError ? <p className="text-destructive text-sm">{reviewError}</p> : null}
             </FieldGroup>
