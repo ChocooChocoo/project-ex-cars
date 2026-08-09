@@ -9,9 +9,7 @@ export default async function SellVehiclePage() {
           Submit your vehicle for evaluation. A mechanic will inspect it and a Sales Manager will review.
         </p>
       </div>
-      <div className="max-w-xl">
-        <SellVehicleForm />
-      </div>
+      <SellVehicleForm />
     </div>
   );
 }

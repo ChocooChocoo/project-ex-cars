@@ -7,9 +7,7 @@ export default async function RequestCarPage() {
         <h1 className="text-3xl leading-none tracking-tight">Request a Car</h1>
         <p className="text-muted-foreground text-sm">Tell us what you are looking for and we will find it for you.</p>
       </div>
-      <div className="max-w-xl">
-        <RequestCarForm />
-      </div>
+      <RequestCarForm />
     </div>
   );
 }
