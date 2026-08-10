@@ -2,16 +2,8 @@
 
 import { useMemo, useRef, useState } from "react";
 
-import type { ColumnDef } from "@tanstack/react-table";
-import {
-  getCoreRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  type PaginationState,
-  type SortingState,
-  useReactTable,
-} from "@tanstack/react-table";
-import { Check, Eye, MoreHorizontal, Plus, ScanFace, X } from "lucide-react";
+import { format, parseISO } from "date-fns";
+import { Plus, ScanFace } from "lucide-react";
 import { toast } from "sonner";
 
 import { approveSupplier, createSupplier, uploadSupplierDocument, verifySupplierDocument } from "@/app/auth/actions";
@@ -28,14 +20,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DataTable } from "@/components/ui/data-table";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -44,15 +29,8 @@ import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ACCEPTED_ID_TYPES, ID_LABELS } from "@/lib/auth/roles";
 
-interface Supplier {
-  id: string;
-  business_name: string;
-  supplier_kind: string;
-  state: string;
-  contact_name: string;
-  contact_email: string;
-  contact_phone: string;
-}
+import type { SupplierRow } from "./suppliers-table/schema";
+import { SuppliersTable } from "./suppliers-table/table";
 
 interface SupplierDocument {
   id: string;
@@ -66,12 +44,21 @@ interface SupplierDocument {
 
 const KIND_LABELS: Record<string, string> = { ...ID_LABELS, general: "General Document" };
 
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-muted-foreground text-xs">{label}</span>
+      <span className="break-words text-sm">{value}</span>
+    </div>
+  );
+}
+
 export function SupplierAdmin({
   suppliers: initialSuppliers,
   documents: initialDocuments,
   userId,
 }: {
-  readonly suppliers: Supplier[];
+  readonly suppliers: SupplierRow[];
   readonly documents: SupplierDocument[];
   readonly userId: string;
 }) {
@@ -91,16 +78,15 @@ export function SupplierAdmin({
   const [uploadPrimary, setUploadPrimary] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [approveTarget, setApproveTarget] = useState<{ supplier: Supplier; decision: "approved" | "rejected" } | null>(
-    null,
-  );
+  const [approveTarget, setApproveTarget] = useState<{
+    supplier: SupplierRow;
+    decision: "approved" | "rejected";
+  } | null>(null);
   const [verifyTarget, setVerifyTarget] = useState<{
     document: SupplierDocument;
     decision: "verified" | "rejected";
   } | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 });
 
   const docsFor = useMemo(
     () => (supplierId: string) => documents.filter((d) => d.supplier_id === supplierId),
@@ -140,6 +126,7 @@ export function SupplierAdmin({
           contact_name: contactName.trim(),
           contact_email: contactEmail.trim(),
           contact_phone: contactPhone.trim(),
+          created_at: new Date().toISOString(),
         },
         ...prev,
       ]);
@@ -222,110 +209,6 @@ export function SupplierAdmin({
     return "secondary";
   };
 
-  const columns: ColumnDef<Supplier>[] = [
-    {
-      accessorKey: "business_name",
-      header: "Business Name",
-      cell: ({ row }) => <span className="font-medium">{row.original.business_name}</span>,
-    },
-    {
-      accessorKey: "supplier_kind",
-      header: "Type",
-      cell: ({ row }) => <span className="capitalize">{row.original.supplier_kind}</span>,
-    },
-    {
-      accessorKey: "contact_name",
-      header: "Contact",
-      cell: ({ row }) => (
-        <div className="grid gap-0.5">
-          <span>{row.original.contact_name}</span>
-          <span className="text-muted-foreground text-xs">
-            {row.original.contact_email}
-            {row.original.contact_phone ? ` · ${row.original.contact_phone}` : ""}
-          </span>
-        </div>
-      ),
-    },
-    {
-      accessorKey: "state",
-      header: "State",
-      cell: ({ row }) => {
-        const supplier = row.original;
-        return (
-          <div className="flex flex-col items-start gap-1">
-            <Badge variant={badgeVariant(supplier.state)} className="capitalize">
-              {supplier.state.replace(/_/g, " ")}
-            </Badge>
-            {supplier.state === "pending_approval" && (
-              <span className="text-muted-foreground text-xs">
-                {verifiedPrimaryCount(supplier.id)}/2 primary IDs verified
-              </span>
-            )}
-          </div>
-        );
-      },
-    },
-    {
-      id: "actions",
-      header: () => <span className="sr-only">Actions</span>,
-      cell: ({ row }) => {
-        const supplier = row.original;
-        return (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="size-8">
-                <MoreHorizontal className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setDocsSupplierId(supplier.id)}>
-                <Eye className="mr-2 size-4" />
-                View Documents
-              </DropdownMenuItem>
-              {supplier.state === "pending_approval" ? (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    disabled={verifiedPrimaryCount(supplier.id) < 2}
-                    title={
-                      verifiedPrimaryCount(supplier.id) < 2
-                        ? "Two primary valid IDs must be verified before approval."
-                        : undefined
-                    }
-                    onClick={() => setApproveTarget({ supplier, decision: "approved" })}
-                  >
-                    <Check className="mr-2 size-4" />
-                    Approve
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    variant="destructive"
-                    onClick={() => setApproveTarget({ supplier, decision: "rejected" })}
-                  >
-                    <X className="mr-2 size-4" />
-                    Reject
-                  </DropdownMenuItem>
-                </>
-              ) : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        );
-      },
-    },
-  ];
-
-  const table = useReactTable({
-    data: suppliers,
-    columns,
-    state: { sorting, pagination },
-    getRowId: (row) => row.id,
-    autoResetPageIndex: false,
-    onSortingChange: setSorting,
-    onPaginationChange: setPagination,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-  });
-
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -352,7 +235,15 @@ export function SupplierAdmin({
           </Badge>
         </CardHeader>
         <CardContent className="px-0 pb-0">
-          <DataTable table={table} rowsPerPageId="suppliers-rows-per-page" />
+          <div className="p-4">
+            <SuppliersTable
+              data={suppliers}
+              onViewDetails={(supplier) => setDocsSupplierId(supplier.id)}
+              onApprove={(supplier) => setApproveTarget({ supplier, decision: "approved" })}
+              onReject={(supplier) => setApproveTarget({ supplier, decision: "rejected" })}
+              verifiedPrimaryCount={verifiedPrimaryCount}
+            />
+          </div>
         </CardContent>
       </Card>
 
@@ -433,11 +324,44 @@ export function SupplierAdmin({
         <SheetContent className="flex max-w-md flex-col gap-0 p-0 sm:max-w-md">
           <SheetHeader className="border-b">
             <SheetTitle>Supplier Documents</SheetTitle>
-            <p className="text-muted-foreground text-sm">{docsSupplier?.business_name ?? "—"}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-muted-foreground text-sm">{docsSupplier?.business_name ?? "—"}</p>
+              {docsSupplier ? (
+                <Badge variant={badgeVariant(docsSupplier.state)} className="capitalize">
+                  {docsSupplier.state.replace(/_/g, " ")}
+                </Badge>
+              ) : null}
+            </div>
           </SheetHeader>
           <ScrollArea className="min-h-0 flex-1">
             <div className="flex flex-col gap-4 p-4">
-              <div className="flex flex-col gap-2">
+              {docsSupplier ? (
+                <section className="flex flex-col gap-4 rounded-lg border bg-muted/20 p-4">
+                  <h3 className="font-semibold text-sm">Supplier Information</h3>
+                  <div className="grid gap-3">
+                    <DetailRow
+                      label="Type"
+                      value={docsSupplier.supplier_kind === "company" ? "Company" : "Individual"}
+                    />
+                    <DetailRow label="Contact name" value={docsSupplier.contact_name || "—"} />
+                    <DetailRow label="Email" value={docsSupplier.contact_email || "—"} />
+                    <DetailRow label="Phone" value={docsSupplier.contact_phone || "—"} />
+                    <DetailRow label="Created" value={format(parseISO(docsSupplier.created_at), "do MMMM yyyy")} />
+                    {docsSupplier.state === "pending_approval" ? (
+                      <DetailRow label="Verified primary IDs" value={`${verifiedPrimaryCount(docsSupplier.id)} of 2`} />
+                    ) : null}
+                    <DetailRow label="Supplier ID" value={`${docsSupplier.id.slice(0, 8)}…`} />
+                  </div>
+                </section>
+              ) : null}
+
+              <section className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-sm">Documents</h3>
+                  <Badge variant="secondary" className="rounded-md">
+                    {docsFor(docsSupplierId ?? "").length} uploaded
+                  </Badge>
+                </div>
                 {docsFor(docsSupplierId ?? "").length === 0 ? (
                   <p className="text-muted-foreground text-sm">No documents uploaded yet.</p>
                 ) : (
@@ -474,10 +398,12 @@ export function SupplierAdmin({
                     ))}
                   </div>
                 )}
-              </div>
+              </section>
+
               <Separator />
-              <div className="flex flex-col gap-3 rounded-lg border p-4">
-                <p className="font-medium text-sm">Upload Document</p>
+
+              <section className="flex flex-col gap-4 rounded-lg border p-4">
+                <h3 className="font-semibold text-sm">Upload Document</h3>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="doc-kind">Document Type</Label>
                   <Select value={uploadKind} onValueChange={setUploadKind}>
@@ -496,20 +422,30 @@ export function SupplierAdmin({
                     </SelectContent>
                   </Select>
                 </div>
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="doc-primary"
                     checked={uploadPrimary}
-                    onChange={(e) => setUploadPrimary(e.target.checked)}
-                    className="size-4"
+                    onCheckedChange={(value) => setUploadPrimary(!!value)}
                   />
-                  Counts as one of the two primary valid IDs
-                </label>
-                <Input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" />
-                <Button onClick={handleUpload} disabled={uploading}>
+                  <Label htmlFor="doc-primary" className="font-normal">
+                    Counts as one of the two primary valid IDs
+                  </Label>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="doc-file">File</Label>
+                  <Input
+                    ref={fileInputRef}
+                    id="doc-file"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
+                    className="h-9 text-sm"
+                  />
+                </div>
+                <Button onClick={handleUpload} disabled={uploading} className="self-start">
                   {uploading ? "Uploading..." : "Upload"}
                 </Button>
-              </div>
+              </section>
             </div>
           </ScrollArea>
           <SheetFooter className="border-t">
