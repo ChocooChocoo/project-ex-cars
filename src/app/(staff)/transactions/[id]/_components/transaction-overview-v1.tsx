@@ -70,84 +70,80 @@ export function TransactionOverviewV1({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <div className="min-w-0 space-y-2">
-          <div className="text-muted-foreground text-sm">Vehicle</div>
-          <div className="text-3xl tabular-nums tracking-tight sm:text-4xl">
-            {vehicles ? `${String(vehicles.make)} ${String(vehicles.model)}` : "—"}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Badge variant="outline" className="font-medium tabular-nums">
-              {vehicles?.year ? String(vehicles.year) : "No vehicle"}
-            </Badge>
-            <Badge variant="outline" className="font-medium tabular-nums">
-              #{id.slice(0, 8)}
-            </Badge>
-          </div>
-          <p className="text-muted-foreground text-sm">Transaction details for this record.</p>
+      <div className="min-w-0 space-y-2">
+        <div className="text-muted-foreground text-sm">Vehicle</div>
+        <div className="text-3xl tabular-nums tracking-tight sm:text-4xl">
+          {vehicles ? `${String(vehicles.make)} ${String(vehicles.model)}` : "—"}
         </div>
-
-        <div className="xl:col-span-2">
-          <Card className="shadow-xs">
-            <CardHeader className="px-4">
-              <CardTitle>Transaction summary</CardTitle>
-              <CardDescription>Key facts across the transaction record.</CardDescription>
-            </CardHeader>
-            <CardContent className="px-4">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <div className="min-w-0 space-y-1">
-                  <div className="text-muted-foreground text-sm">Customer</div>
-                  <div className="truncate font-semibold text-2xl tabular-nums">{customerName ?? "—"}</div>
-                  <div className="text-muted-foreground text-xs">customer profile</div>
-                </div>
-                <div className="min-w-0 space-y-1">
-                  <div className="text-muted-foreground text-sm">Amount</div>
-                  <div className="font-semibold text-2xl tabular-nums">
-                    {amount !== undefined ? formatCurrency(Number(amount)) : "—"}
-                  </div>
-                  <div className="text-muted-foreground text-xs">{amountLabel}</div>
-                </div>
-                <div className="min-w-0 space-y-1">
-                  <div className="text-muted-foreground text-sm">
-                    {kind === "buy" ? "Payment Method" : kind === "sell" ? "Valuation" : "Model"}
-                  </div>
-                  <div className="font-semibold text-2xl tabular-nums">
-                    {kind === "buy"
-                      ? purchaseDetails?.payment_method
-                        ? paymentMethodLabel(String(purchaseDetails.payment_method))
-                        : "—"
-                      : kind === "sell"
-                        ? sellDetails?.valuation_amount
-                          ? formatCurrency(Number(sellDetails.valuation_amount))
-                          : "—"
-                        : vehicleRequests?.requested_model
-                          ? String(vehicleRequests.requested_model)
-                          : "—"}
-                  </div>
-                </div>
-                <div className="min-w-0 space-y-1">
-                  <div className="text-muted-foreground text-sm">
-                    {kind === "buy" ? "Document Check" : kind === "sell" ? "Decision" : "Make"}
-                  </div>
-                  <div className="font-semibold text-2xl tabular-nums">
-                    {kind === "buy"
-                      ? purchaseDetails?.document_check_state
-                        ? String(purchaseDetails.document_check_state)
-                        : "—"
-                      : kind === "sell"
-                        ? sellDetails?.decision
-                          ? String(sellDetails.decision)
-                          : "Pending"
-                        : vehicleRequests?.requested_make
-                          ? String(vehicleRequests.requested_make)
-                          : "—"}
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="outline" className="font-medium tabular-nums">
+            {vehicles?.year ? String(vehicles.year) : "No vehicle"}
+          </Badge>
+          <Badge variant="outline" className="font-medium tabular-nums">
+            #{id.slice(0, 8)}
+          </Badge>
         </div>
+        <p className="text-muted-foreground text-sm">Transaction details for this record.</p>
       </div>
+
+      <Card className="shadow-xs">
+        <CardHeader className="px-4">
+          <CardTitle>Transaction summary</CardTitle>
+          <CardDescription>Key facts across the transaction record.</CardDescription>
+        </CardHeader>
+        <CardContent className="px-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="min-w-0 space-y-1">
+              <div className="text-muted-foreground text-sm">Customer</div>
+              <div className="truncate font-semibold text-2xl tabular-nums">{customerName ?? "—"}</div>
+              <div className="text-muted-foreground text-xs">customer profile</div>
+            </div>
+            <div className="min-w-0 space-y-1">
+              <div className="text-muted-foreground text-sm">Amount</div>
+              <div className="font-semibold text-2xl tabular-nums">
+                {amount !== undefined ? formatCurrency(Number(amount)) : "—"}
+              </div>
+              <div className="text-muted-foreground text-xs">{amountLabel}</div>
+            </div>
+            <div className="min-w-0 space-y-1">
+              <div className="text-muted-foreground text-sm">
+                {kind === "buy" ? "Payment Method" : kind === "sell" ? "Valuation" : "Model"}
+              </div>
+              <div className="font-semibold text-2xl tabular-nums">
+                {kind === "buy"
+                  ? purchaseDetails?.payment_method
+                    ? paymentMethodLabel(String(purchaseDetails.payment_method))
+                    : "—"
+                  : kind === "sell"
+                    ? sellDetails?.valuation_amount
+                      ? formatCurrency(Number(sellDetails.valuation_amount))
+                      : "—"
+                    : vehicleRequests?.requested_model
+                      ? String(vehicleRequests.requested_model)
+                      : "—"}
+              </div>
+            </div>
+            <div className="min-w-0 space-y-1">
+              <div className="text-muted-foreground text-sm">
+                {kind === "buy" ? "Document Check" : kind === "sell" ? "Decision" : "Make"}
+              </div>
+              <div className="font-semibold text-2xl tabular-nums">
+                {kind === "buy"
+                  ? purchaseDetails?.document_check_state
+                    ? String(purchaseDetails.document_check_state)
+                    : "—"
+                  : kind === "sell"
+                    ? sellDetails?.decision
+                      ? String(sellDetails.decision)
+                      : "Pending"
+                    : vehicleRequests?.requested_make
+                      ? String(vehicleRequests.requested_make)
+                      : "—"}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
