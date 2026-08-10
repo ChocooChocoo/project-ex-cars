@@ -77,10 +77,10 @@ SET search_path = ''
 AS $$
 BEGIN
   IF NOT EXISTS (
-    SELECT 1 FROM private.user_roles
-    WHERE account_id = auth.uid()
-      AND active = true
-      AND role IN ('ceo', 'account_manager')
+    SELECT 1 FROM private.user_roles ur
+    WHERE ur.account_id = auth.uid()
+      AND ur.active = true
+      AND ur.role IN ('ceo', 'account_manager')
   ) THEN
     RAISE EXCEPTION 'Permission denied: only CEO or Account Manager can list all roles';
   END IF;

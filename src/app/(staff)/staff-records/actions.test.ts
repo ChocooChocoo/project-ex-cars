@@ -1,14 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const rpc = vi.fn();
+const insert = vi.fn();
+const eq = vi.fn();
+const update = vi.fn(() => ({ eq }));
+const from = vi.fn(() => ({ update, insert }));
+const getUser = vi.fn(async () => ({ data: { user: { id: "33333333-3333-4333-8333-333333333333" } }, error: null }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("@/app/auth/actions", () => ({ getCurrentRole: vi.fn() }));
+vi.mock("@/app/auth/actions", () => ({ getCurrentRole: vi.fn(async () => "account_manager") }));
 vi.mock("@/lib/supabase/server", () => ({
-  createServerSupabaseClient: vi.fn(async () => ({ rpc })),
+  createServerSupabaseClient: vi.fn(async () => ({ rpc, from, auth: { getUser } })),
 }));
 
-import { saveStaffRecord, setAccountState } from "./actions";
+import { saveStaffRecord, setAccountState, submitPerformanceReview, updatePerformanceReview } from "./actions";
 
 const employeeId = "11111111-1111-4111-8111-111111111111";
 
@@ -119,5 +124,59 @@ describe("staff RPC action response validation", () => {
     rpc.mockResolvedValue({ data: { id: employeeId, account_state: "not-a-state" }, error: null });
 
     await expect(setAccountState(stateForm())).resolves.toEqual({ error: "Account state returned invalid shape." });
+  });
+});
+
+describe("performance review actions", () => {
+  beforeEach(() => {
+    insert.mockReset();
+    insert.mockResolvedValue({ error: null });
+    update.mockReset();
+    update.mockReturnValue({ eq });
+    eq.mockReset();
+    eq.mockResolvedValue({ error: null });
+  });
+
+  const reviewId = "44444444-4444-4444-8444-444444444444";
+
+  function reviewForm(overrides: Record<string, string> = {}) {
+    const form = new FormData();
+    form.set("review_id", reviewId);
+    form.set("employee_id", employeeId);
+    form.set("review_period_start", "2026-05-11");
+    form.set("review_period_end", "2026-07-10");
+    form.set("rating", "4");
+    form.set("strengths", "Good");
+    for (const [key, value] of Object.entries(overrides)) form.set(key, value);
+    return form;
+  }
+
+  it("submits a new performance review", async () => {
+    const result = await submitPerformanceReview(reviewForm());
+    expect(result).toEqual({ success: true });
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({ employee_id: employeeId, rating: 4, status: "submitted" }),
+    );
+  });
+
+  it("updates an existing performance review by id", async () => {
+    const result = await updatePerformanceReview(reviewForm());
+    expect(result).toEqual({ success: true });
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ employee_id: employeeId, rating: 4 }));
+    expect(eq).toHaveBeenCalledWith("id", reviewId);
+  });
+
+  it("rejects an update without a review id", async () => {
+    const form = reviewForm();
+    form.delete("review_id");
+    await expect(updatePerformanceReview(form)).resolves.toEqual({
+      error: expect.stringMatching(/invalid/i),
+    });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("surfaces a database error from an update", async () => {
+    eq.mockResolvedValue({ error: { message: "db exploded" } });
+    await expect(updatePerformanceReview(reviewForm())).resolves.toEqual({ error: "db exploded" });
   });
 });
