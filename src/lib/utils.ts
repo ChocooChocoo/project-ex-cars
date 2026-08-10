@@ -24,16 +24,25 @@ export function formatCurrency(
   opts?: {
     currency?: string;
     locale?: string;
+    currencyDisplay?: "code" | "symbol" | "narrowSymbol" | "name";
     minimumFractionDigits?: number;
     maximumFractionDigits?: number;
     noDecimals?: boolean;
   },
 ) {
-  const { currency = "USD", locale = "en-US", minimumFractionDigits, maximumFractionDigits, noDecimals } = opts ?? {};
+  const {
+    currency = "PHP",
+    locale = "en-PH",
+    currencyDisplay = "symbol",
+    minimumFractionDigits,
+    maximumFractionDigits,
+    noDecimals,
+  } = opts ?? {};
 
   const formatOptions: Intl.NumberFormatOptions = {
     style: "currency",
     currency,
+    currencyDisplay,
     minimumFractionDigits: noDecimals ? 0 : minimumFractionDigits,
     maximumFractionDigits: noDecimals ? 0 : maximumFractionDigits,
   };

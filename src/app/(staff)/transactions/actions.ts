@@ -153,7 +153,7 @@ export async function recordPayment(formData: FormData) {
     action: "payment_recorded",
     recordKind: "payment_records",
     recordId: transactionId,
-    summary: `Payment of ₱${parsed.data.amount} recorded for transaction ${transactionId}`,
+    summary: `Payment of PHP ${parsed.data.amount} recorded for transaction ${transactionId}`,
   });
 
   revalidatePath(`/dashboard/transactions/${transactionId}`);

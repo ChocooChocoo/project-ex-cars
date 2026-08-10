@@ -13,22 +13,10 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ACCEPTED_ID_TYPES, ID_LABELS } from "@/lib/auth/roles";
 import { arrangementKindLabel, TRANSACTION_STATE_LABELS } from "@/lib/transactions/labels";
 import type { TransactionState } from "@/lib/transactions/state-machine";
 import { formatCurrency } from "@/lib/utils";
-
-const ID_TYPES = [
-  "passport",
-  "drivers_license",
-  "umid",
-  "sss_id",
-  "gsis_id",
-  "philhealth_id",
-  "voters_id",
-  "national_id",
-  "prc_id",
-  "postal_id",
-] as const;
 
 export function TransactionDetailSidebarV1({
   kind,
@@ -242,9 +230,9 @@ export function TransactionDetailSidebarV1({
                       <SelectValue placeholder="ID type" />
                     </SelectTrigger>
                     <SelectContent>
-                      {ID_TYPES.map((t) => (
+                      {ACCEPTED_ID_TYPES.map((t) => (
                         <SelectItem key={t} value={t}>
-                          {t.replace(/_/g, " ")}
+                          {ID_LABELS[t]}
                         </SelectItem>
                       ))}
                     </SelectContent>
