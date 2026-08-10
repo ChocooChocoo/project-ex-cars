@@ -3,10 +3,25 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { saveStaffRecord, setAccountState } from "@/app/(staff)/staff-records/actions";
 
-import { type StaffRecordAccount, StaffRecordsTable } from "./staff-records-table";
+import type { StaffTableRow } from "./schema";
+import { StaffRecordsTable } from "./table";
+
+Element.prototype.hasPointerCapture = () => false;
+Element.prototype.releasePointerCapture = () => undefined;
+Element.prototype.setPointerCapture = () => undefined;
+Element.prototype.scrollIntoView = () => undefined;
+
+const { refreshMock, toastMock } = vi.hoisted(() => ({
+  refreshMock: vi.fn(),
+  toastMock: { success: vi.fn(), error: vi.fn() },
+}));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: vi.fn() }),
+  useRouter: () => ({ refresh: refreshMock }),
+}));
+
+vi.mock("sonner", () => ({
+  toast: toastMock,
 }));
 
 vi.mock("@/app/(staff)/staff-records/actions", () => ({
@@ -17,67 +32,167 @@ vi.mock("@/app/(staff)/staff-records/actions", () => ({
 const saveStaffRecordMock = vi.mocked(saveStaffRecord);
 const setAccountStateMock = vi.mocked(setAccountState);
 
-const staffAccount: StaffRecordAccount = {
+const staffAccount: StaffTableRow = {
   id: "00000000-0000-4000-8000-000000000001",
   fullName: "Ada Staff",
   phone: "09170000000",
   address: "Manila",
   role: "mechanic",
   accountState: "active",
+  joined: "2024-03-15T08:00:00.000Z",
+  schedule: null,
   workdays: [1, 2, 3, 4, 5],
   startTime: "09:00",
   endTime: "18:00",
   graceMinutes: 10,
 };
 
-const outOfRangeStaffAccount: StaffRecordAccount = {
+const outOfRangeStaffAccount: StaffTableRow = {
   ...staffAccount,
   id: "00000000-0000-4000-8000-000000000004",
   fullName: "Out of Range Staff",
   graceMinutes: 60,
 };
 
-const customerAccount: StaffRecordAccount = {
+const customerAccount: StaffTableRow = {
   id: "00000000-0000-4000-8000-000000000002",
   fullName: "Cora Customer",
   phone: null,
   address: null,
   role: "customer",
   accountState: "active",
+  joined: "2024-01-05T08:00:00.000Z",
+  schedule: null,
   workdays: null,
   startTime: null,
   endTime: null,
   graceMinutes: null,
 };
 
-const unassignedAccount: StaffRecordAccount = {
+const unassignedAccount: StaffTableRow = {
   id: "00000000-0000-4000-8000-000000000003",
   fullName: "Unassigned Account",
   phone: null,
   address: null,
   role: null,
   accountState: "active",
+  joined: "2024-02-10T08:00:00.000Z",
+  schedule: null,
   workdays: [1, 2, 3, 4, 5],
   startTime: "09:00",
   endTime: "18:00",
   graceMinutes: 10,
 };
 
+const suspendedAccount: StaffTableRow = {
+  ...customerAccount,
+  id: "00000000-0000-4000-8000-000000000005",
+  fullName: "Zed Suspended",
+  accountState: "suspended",
+};
+
 function renderTable(accounts = [staffAccount, customerAccount]) {
-  return render(<StaffRecordsTable accounts={accounts} />);
+  return render(<StaffRecordsTable data={accounts} />);
 }
 
-function openActions(name: string) {
-  const trigger = screen.getByRole("button", { name: `More actions for ${name}` });
+function openDropdown(trigger: HTMLElement) {
   fireEvent.pointerDown(trigger);
   fireEvent.mouseDown(trigger, { button: 0 });
   fireEvent.mouseUp(trigger, { button: 0 });
   fireEvent.click(trigger);
 }
 
+function openActions(name: string) {
+  openDropdown(screen.getByRole("button", { name: `More actions for ${name}` }));
+}
+
 describe("StaffRecordsTable", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("renders rows with name, role, status, and schedule", () => {
+    renderTable([staffAccount]);
+
+    expect(screen.getByText("Ada Staff")).toBeInTheDocument();
+    expect(screen.getByText("mechanic")).toBeInTheDocument();
+    expect(screen.getByText("active")).toBeInTheDocument();
+    expect(screen.getByText("Mon, Tue, Wed, Thu, Fri · 09:00–18:00")).toBeInTheDocument();
+  });
+
+  it("renders an em dash for accounts without a schedule", () => {
+    renderTable([customerAccount]);
+
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+  });
+
+  it("searches rows by name, role, and id, and clears the filter", () => {
+    renderTable();
+
+    const search = screen.getByPlaceholderText("Search staff...");
+    fireEvent.change(search, { target: { value: "Cora" } });
+    expect(screen.getByText("Cora Customer")).toBeInTheDocument();
+    expect(screen.queryByText("Ada Staff")).not.toBeInTheDocument();
+
+    fireEvent.change(search, { target: { value: "mechanic" } });
+    expect(screen.getByText("Ada Staff")).toBeInTheDocument();
+    expect(screen.queryByText("Cora Customer")).not.toBeInTheDocument();
+
+    fireEvent.change(search, { target: { value: "00000002" } });
+    expect(screen.getByText("Cora Customer")).toBeInTheDocument();
+    expect(screen.queryByText("Ada Staff")).not.toBeInTheDocument();
+
+    fireEvent.change(search, { target: { value: "" } });
+    expect(screen.getByText("Ada Staff")).toBeInTheDocument();
+    expect(screen.getByText("Cora Customer")).toBeInTheDocument();
+  });
+
+  it("filters rows by status", async () => {
+    renderTable([staffAccount, suspendedAccount]);
+
+    openDropdown(screen.getByRole("button", { name: "Status" }));
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: "suspended" }));
+
+    expect(screen.getByText("Zed Suspended")).toBeInTheDocument();
+    expect(screen.queryByText("Ada Staff")).not.toBeInTheDocument();
+  });
+
+  it("paginates with page buttons", () => {
+    const accounts = Array.from({ length: 25 }, (_, index) => ({
+      ...customerAccount,
+      id: `00000000-0000-4000-8000-${String(index + 10).padStart(12, "0")}`,
+      fullName: `Customer ${index + 1}`,
+    }));
+    renderTable(accounts);
+
+    expect(screen.getByText("Customer 1")).toBeInTheDocument();
+    expect(screen.queryByText("Customer 25")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Go to next page" }));
+    expect(screen.getByText("Customer 11")).toBeInTheDocument();
+    expect(screen.queryByText("Customer 1")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Go to last page" }));
+    expect(screen.getByText("Customer 25")).toBeInTheDocument();
+    expect(screen.getByText("Page 3 of 3")).toBeInTheDocument();
+  });
+
+  it("changes the rows per page size", async () => {
+    const accounts = Array.from({ length: 25 }, (_, index) => ({
+      ...customerAccount,
+      id: `00000000-0000-4000-8000-${String(index + 10).padStart(12, "0")}`,
+      fullName: `Customer ${index + 1}`,
+    }));
+    renderTable(accounts);
+
+    const rowsPerPage = screen.getByLabelText("Rows per page");
+    fireEvent.pointerDown(rowsPerPage);
+    fireEvent.click(rowsPerPage);
+    fireEvent.click(await screen.findByRole("option", { name: "20" }));
+
+    expect(screen.getByText("Customer 20")).toBeInTheDocument();
+    expect(screen.queryByText("Customer 21")).not.toBeInTheDocument();
+    expect(screen.getByText("Page 1 of 2")).toBeInTheDocument();
   });
 
   it("targets the selected account when opening an action Sheet", async () => {
@@ -172,6 +287,22 @@ describe("StaffRecordsTable", () => {
     expect(formData.get("graceMinutes")).toBeNull();
   });
 
+  it("submits the edit Sheet and shows a toast on success", async () => {
+    saveStaffRecordMock.mockResolvedValue({
+      success: true,
+      row: { id: staffAccount.id, account_state: "active" as const },
+    });
+    renderTable([staffAccount]);
+
+    openActions("Ada Staff");
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Edit" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(saveStaffRecordMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith("Account details updated."));
+    expect(refreshMock).toHaveBeenCalled();
+  });
+
   it("rejects a save response for the wrong account and keeps the edit Sheet open", async () => {
     saveStaffRecordMock.mockResolvedValue({
       success: true,
@@ -237,6 +368,8 @@ describe("StaffRecordsTable", () => {
     await waitFor(() =>
       expect(screen.queryByRole("heading", { name: "Change Account Status" })).not.toBeInTheDocument(),
     );
+    expect(toastMock.success).toHaveBeenCalledWith("Account suspended.");
+    expect(refreshMock).toHaveBeenCalled();
   });
 
   it("keeps action targeting stable after pagination", async () => {
