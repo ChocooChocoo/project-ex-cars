@@ -133,7 +133,7 @@ export function ChecklistForm({ inspectionId, checklist, existingResults }: Chec
       <CardHeader>
         <CardTitle className="text-lg">Inspection Checklist</CardTitle>
       </CardHeader>
-      <CardContent className="flex flex-col gap-2">
+      <CardContent className="flex flex-col gap-4">
         {checklist.length === 0 && (
           <p className="py-8 text-center text-muted-foreground text-sm">
             No checklist entries defined. Add systems, components, and parts to start inspecting.
@@ -142,7 +142,7 @@ export function ChecklistForm({ inspectionId, checklist, existingResults }: Chec
         {systems.map((system) => {
           const components = getChildren(system.id);
           return (
-            <div key={system.id} className="space-y-1">
+            <div key={system.id} className="space-y-2">
               <div className="flex items-center gap-2 rounded-md bg-muted/50 px-3 py-2 font-semibold text-sm">
                 {system.name}
               </div>
@@ -160,7 +160,7 @@ export function ChecklistForm({ inspectionId, checklist, existingResults }: Chec
                 />
               )}
               {components.map((comp) => (
-                <div key={comp.id}>
+                <div key={comp.id} className="space-y-2">
                   <div className="rounded-md bg-muted/30 px-3 py-1.5 font-medium text-muted-foreground text-xs">
                     {comp.name}
                   </div>
@@ -227,7 +227,7 @@ function ChecklistRow({
   const isLoading = submitting === entry.id;
 
   return (
-    <div className={`${levelIndent[entry.level]} space-y-2 rounded-md border px-3 py-2`}>
+    <div className={`${levelIndent[entry.level]} space-y-3 rounded-md border px-3.5 py-3`}>
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Badge
@@ -272,8 +272,8 @@ function ChecklistRow({
       </div>
 
       {current && current !== "good" && (
-        <FieldGroup className="gap-2">
-          <div className="grid grid-cols-3 gap-2">
+        <FieldGroup className="gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Field>
               <FieldLabel>Part Name</FieldLabel>
               <Input
