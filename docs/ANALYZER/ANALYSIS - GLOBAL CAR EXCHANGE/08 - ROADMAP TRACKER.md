@@ -17,7 +17,7 @@
 | ❓ Unclear | 6 |
 | **Total** | **41** |
 
-The earlier tracker state recorded Phases 1–5 as completed. The source-code audit in [14 - PHASE 6 IMPLEMENTATION PLAN](14%20-%20PHASE%206%20IMPLEMENTATION%20PLAN.md) found that this completion statement is not yet supported by build, authorization, user-journey, and repeatable-test evidence. Existing Phase 1–5 item labels require evidence-based reconciliation through Recovery Gates 0–3. R-07 (360° viewer) remains a placeholder, and R-28/R-29 remain in progress. **9 Aug 2026 audit pass:** R-38 (CEO↔supplier channel) moved from dropped to finished; R-27 notes refreshed with the full KYC flow.
+The earlier tracker state recorded Phases 1–5 as completed. The source-code audit in [14 - PHASE 6 IMPLEMENTATION PLAN](../../tasks/10.md) found that this completion statement is not yet supported by build, authorization, user-journey, and repeatable-test evidence. Existing Phase 1–5 item labels require evidence-based reconciliation through Recovery Gates 0–3. R-07 (360° viewer) remains a placeholder, and R-28/R-29 remain in progress. **9 Aug 2026 audit pass:** R-38 (CEO↔supplier channel) moved from dropped to finished; R-27 notes refreshed with the full KYC flow.
 
 ## Phase 1 — One shared foundation
 
@@ -76,7 +76,7 @@ The earlier tracker state recorded Phases 1–5 as completed. The source-code au
 
 ## Phase 6 — Staff and managers can run the business
 
-Planning is complete in [14 - PHASE 6 IMPLEMENTATION PLAN](14%20-%20PHASE%206%20IMPLEMENTATION%20PLAN.md). The application layer was implemented on 8 August 2026 using provisional Q-04/Q-13/Q-14/Q-16/Q-23 answers recorded in [00 - START HERE](00%20-%20START%20HERE.md#provisional-implementation-decisions). The RLS policies from migrations 00015–00018 and 00021 remain to be verified against a live database reset, so statuses below reflect built-and-compiled code, not yet browser-verified journeys.
+Planning is complete in [14 - PHASE 6 IMPLEMENTATION PLAN](../../tasks/10.md). The application layer was implemented on 8 August 2026 using provisional Q-04/Q-13/Q-14/Q-16/Q-23 answers recorded in [00 - START HERE](00%20-%20START%20HERE.md#provisional-implementation-decisions). The RLS policies from migrations 00015–00018 and 00021 remain to be verified against a live database reset, so statuses below reflect built-and-compiled code, not yet browser-verified journeys.
 
 | # | What gets built | Status | Notes |
 |---|---|---|---|

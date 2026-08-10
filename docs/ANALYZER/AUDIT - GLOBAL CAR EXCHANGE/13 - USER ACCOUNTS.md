@@ -1,6 +1,6 @@
 # 13 - USER ACCOUNTS
 
-[Back to start](00%20-%20START%20HERE.md) · Previous: [12 - DATABASE SCHEMA](12%20-%20DATABASE%20SCHEMA.md)
+[Back to start](../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/00%20-%20START%20HERE.md) · Previous: [12 - DATABASE SCHEMA](../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/12%20-%20DATABASE%20SCHEMA.md) · Next: [14 - AUDIT USER ROLES](14%20-%20AUDIT%20USER%20ROLES.md)
 
 **Last updated:** 8 August 2026 (roles, nav, and page access reconciled with the Phase 6 implementation)
 
@@ -189,7 +189,7 @@ All test accounts share one password. It is **not stored in this file** — it i
 | Announcements | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Supplier Messages | ✅ | — | — | — | — | — | — | — |
 
-Customers and suppliers use the customer-facing header navigation (Showroom, My Inquiries, Find Your Car) and do not see the dashboard sidebar. Every staff page listed above is also protected by an action-level role check and by Supabase RLS policies; see [12 - DATABASE SCHEMA](12%20-%20DATABASE%20SCHEMA.md).
+Customers and suppliers use the customer-facing header navigation (Showroom, My Inquiries, Find Your Car) and do not see the dashboard sidebar. Every staff page listed above is also protected by an action-level role check and by Supabase RLS policies; see [12 - DATABASE SCHEMA](../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/12%20-%20DATABASE%20SCHEMA.md).
 
 ---
 

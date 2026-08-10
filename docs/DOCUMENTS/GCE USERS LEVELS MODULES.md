@@ -68,7 +68,7 @@
 
 ## 5. Installment Accounts
 
-> **Implementation status (9 Aug 2026):** installment accounts are managed via `payment_terms` (approve/activate) and `installments` (verify, waive). The due-date notification to the Account Manager is implemented (automated notifications from the installment schedule), and the repossession instruction to the Confidential Informant is implemented via the "Instruct Repossession" action, which creates a recovery field case. See `docs/ANALYZER/ANALYSIS - GLOBAL CAR EXCHANGE/15 - SYSTEM STATUS.md`.
+> **Implementation status (9 Aug 2026):** installment accounts are managed via `payment_terms` (approve/activate) and `installments` (verify, waive). The due-date notification to the Account Manager is implemented (automated notifications from the installment schedule), and the repossession instruction to the Confidential Informant is implemented via the "Instruct Repossession" action, which creates a recovery field case. See `docs/ANALYZER/AUDIT - GLOBAL CAR EXCHANGE/15 - SYSTEM STATUS.md`.
 
 - The Head Accountant manages or monitors the accounts of customers who purchase vehicles through installment plans. These accounts identify the buyers whose vehicle payments are made on an installment basis.
 - When an installment payment reaches its due date, the Head Accountant notifies the Account Manager so the buyer can be contacted. This assigns the payment monitoring to the Head Accountant and the buyer-contact step to the Account Manager.
