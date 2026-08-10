@@ -19,7 +19,7 @@ Every task here names where it came from. A task with no traceable origin is not
 | ❓ Unclear | 9 |
 | **Total** | **60** |
 
-The earlier task state recorded Phases 1–5 as completed. The source-code audit and prerequisite fix sequence are now documented in [14 - PHASE 6 IMPLEMENTATION PLAN](14%20-%20PHASE%206%20IMPLEMENTATION%20PLAN.md). Existing finished labels require evidence-based reconciliation through its Recovery Gates 0–3. Phase 6 planning is complete, but its implementation tasks remain unstarted/unclear. **9 Aug 2026 audit pass:** T-56 (CEO↔supplier channel) moved to finished.
+The earlier task state recorded Phases 1–5 as completed. The source-code audit and prerequisite fix sequence are now documented in [14 - PHASE 6 IMPLEMENTATION PLAN](../../tasks/10.md). Existing finished labels require evidence-based reconciliation through its Recovery Gates 0–3. Phase 6 planning is complete, but its implementation tasks remain unstarted/unclear. **9 Aug 2026 audit pass:** T-56 (CEO↔supplier channel) moved to finished.
 
 ## The tasks
 

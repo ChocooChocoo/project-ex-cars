@@ -185,7 +185,7 @@ The same order appears as a picture in [06 - DIAGRAMS](06%20-%20DIAGRAMS.md#7-th
 
 **Why it comes here:** Staff and management summaries need the customer, vehicle, conversation, and transaction records created earlier.
 
-**Implementation plan:** [14 - PHASE 6 IMPLEMENTATION PLAN](14%20-%20PHASE%206%20IMPLEMENTATION%20PLAN.md) contains the source-code audit, mandatory Phase 1–5 recovery gates, stakeholder decision gates, Phase 6 workstreams, and verification evidence required before this phase can be marked started or finished. Phase 6 implementation remains unstarted.
+**Implementation plan:** [14 - PHASE 6 IMPLEMENTATION PLAN](../../tasks/10.md) contains the source-code audit, mandatory Phase 1–5 recovery gates, stakeholder decision gates, Phase 6 workstreams, and verification evidence required before this phase can be marked started or finished. Phase 6 implementation remains unstarted.
 
 **What gets built:**
 
