@@ -5,6 +5,10 @@
 /* Theme preset styles: these override CSS variables based on the selected data-theme-preset */
 @import "../styles/presets/teal.css";
 @import "../styles/presets/sky.css";
+@import "../styles/presets/lime.css";
+@import "../styles/presets/yellow.css";
+@import "../styles/presets/red.css";
+@import "../styles/presets/purple.css";
 
 @custom-variant dark (&:is(.dark *));
 

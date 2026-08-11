@@ -3,12 +3,15 @@ import type { ReactNode } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { AccountSwitcher } from "@/app/(staff)/_components/sidebar/account-switcher";
 import { AppSidebar } from "@/app/(staff)/_components/sidebar/app-sidebar";
 import { LayoutControls } from "@/app/(staff)/_components/sidebar/layout-controls";
+import { NotificationPopover } from "@/app/(staff)/_components/sidebar/notification-popover";
 import { ThemeSwitcher } from "@/app/(staff)/_components/sidebar/theme-switcher";
 import { getCurrentRole } from "@/app/auth/actions";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { getNotifications } from "@/lib/notifications/actions";
 import { SIDEBAR_COLLAPSIBLE_VALUES, SIDEBAR_VARIANT_VALUES } from "@/lib/preferences/layout";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
@@ -31,6 +34,7 @@ export default async function CustomerLayout({ children }: Readonly<{ children: 
     getPreference("sidebar_collapsible", SIDEBAR_COLLAPSIBLE_VALUES, "icon"),
     getCurrentRole(),
   ]);
+  const notifications = role ? await getNotifications(role) : [];
 
   return (
     <SidebarProvider
@@ -69,6 +73,8 @@ export default async function CustomerLayout({ children }: Readonly<{ children: 
             <div className="flex items-center gap-2">
               <LayoutControls />
               <ThemeSwitcher />
+              <NotificationPopover notifications={notifications} />
+              <AccountSwitcher />
             </div>
           </div>
         </header>

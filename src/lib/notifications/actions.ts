@@ -115,3 +115,27 @@ export async function markNotificationRead(notificationId: string) {
   revalidatePath("/dashboard");
   return { success: true };
 }
+
+export async function markAllNotificationsRead() {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const { data: roles } = await supabase.rpc("get_user_roles");
+  const userRole = (roles as { account_id: string; role: string }[] | undefined)?.find(
+    (r) => r.account_id === user.id,
+  )?.role;
+  if (!userRole) return { error: "No role assigned." };
+
+  const { error } = await supabase
+    .from("notifications")
+    .update({ is_read: true })
+    .eq("recipient_role", userRole)
+    .eq("is_read", false);
+  if (error) return { error: error.message };
+
+  revalidatePath("/dashboard");
+  return { success: true };
+}
