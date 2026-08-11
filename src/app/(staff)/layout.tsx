@@ -8,12 +8,15 @@ import { AppSidebar } from "@/app/(staff)/_components/sidebar/app-sidebar";
 import { getCurrentRole } from "@/app/auth/actions";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { getNotifications } from "@/lib/notifications/actions";
 import { SIDEBAR_COLLAPSIBLE_VALUES, SIDEBAR_VARIANT_VALUES } from "@/lib/preferences/layout";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 import { getPreference } from "@/server/server-actions";
 
+import { AccountSwitcher } from "./_components/sidebar/account-switcher";
 import { LayoutControls } from "./_components/sidebar/layout-controls";
+import { NotificationPopover } from "./_components/sidebar/notification-popover";
 import { SearchDialog } from "./_components/sidebar/search-dialog";
 import { ThemeSwitcher } from "./_components/sidebar/theme-switcher";
 
@@ -35,6 +38,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
     getCurrentRole(),
     getTotalUnreadCount().catch(() => 0),
   ]);
+  const notifications = role ? await getNotifications(role) : [];
 
   return (
     <SidebarProvider
@@ -75,6 +79,8 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
             <div className="flex items-center gap-2">
               <LayoutControls />
               <ThemeSwitcher />
+              <NotificationPopover notifications={notifications} />
+              <AccountSwitcher />
             </div>
           </div>
         </header>
