@@ -20,7 +20,7 @@ import {
 } from "./_components/vehicle-detail-widgets";
 import { type StaffMediaRow, VehicleMediaManager } from "./_components/vehicle-media-manager";
 
-const STAFF_ROLES = ["ceo", "sales_manager", "marketing_specialist", "account_manager"];
+const MEDIA_MANAGER_ROLES = ["marketing_specialist"];
 
 export default async function VehicleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -89,7 +89,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
 
       <VehicleDescriptionCard vehicle={v} />
 
-      {STAFF_ROLES.includes(role ?? "") ? (
+      {MEDIA_MANAGER_ROLES.includes(role ?? "") ? (
         <VehicleMediaManager vehicleId={id} media={(media as unknown as StaffMediaRow[]) ?? []} />
       ) : null}
     </div>

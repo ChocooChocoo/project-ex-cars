@@ -2,16 +2,29 @@ import { notFound } from "next/navigation";
 
 import { FileText, MessageSquareText } from "lucide-react";
 
+import { getCurrentRole } from "@/app/auth/actions";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { requireRole } from "@/lib/auth/guards";
+import type { GceRole } from "@/lib/auth/roles";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 import { type ChecklistEntry, ChecklistForm, type ChecklistResult } from "../_components/checklist-form";
 
+const INSPECTION_VIEWER_ROLES: GceRole[] = [
+  "ceo",
+  "account_manager",
+  "confidential_informant",
+  "mechanic",
+  "sales_manager",
+];
+
 export default async function InspectionDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  await requireRole(INSPECTION_VIEWER_ROLES);
   const { id } = await params;
   const supabase = await createServerSupabase();
+  const role = await getCurrentRole();
 
   const { data: inspection } = await supabase
     .from("vehicle_inspections")
@@ -50,11 +63,13 @@ export default async function InspectionDetailPage({ params }: { params: Promise
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <ChecklistForm
-            inspectionId={id}
-            checklist={(checklist as Record<string, unknown>[]).map((e) => e as unknown as ChecklistEntry)}
-            existingResults={(results as Record<string, unknown>[]).map((r) => r as unknown as ChecklistResult)}
-          />
+          {role === "mechanic" ? (
+            <ChecklistForm
+              inspectionId={id}
+              checklist={(checklist as Record<string, unknown>[]).map((e) => e as unknown as ChecklistEntry)}
+              existingResults={(results as Record<string, unknown>[]).map((r) => r as unknown as ChecklistResult)}
+            />
+          ) : null}
         </div>
         <Card className="h-fit">
           <CardHeader>

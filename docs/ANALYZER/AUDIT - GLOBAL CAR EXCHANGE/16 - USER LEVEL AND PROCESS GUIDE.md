@@ -76,10 +76,10 @@ Below is every item the sidebar can show, in the order it appears, with the page
 | Menu item | Opens | Explained in | Granted to |
 |---|---|---|---|
 | **Default** | Dashboard | [2.1](#21-dashboard) | All 8 staff roles |
-| **Finance** | Finance ledger and money requests | [2.23](#223-finance--a-page-the-documentation-does-not-describe) | **Nobody** — see the warning below |
+| **Finance** | Finance ledger and money requests | [2.23](#223-finance--a-page-the-documentation-does-not-describe) | CEO, Head Accountant, Account Manager, Informant |
 | CRM, Analytics, Productivity, E-commerce, Academy, Logistics, Infrastructure | Interface-template demo screens | — | Nobody |
 
-> **Finance is the important one.** A menu entry for it exists and points at the real GCE money page, but no role has been granted it, so it never appears for anyone. The page itself works and admits the CEO, Head Accountant, Account Manager, and Confidential Informant. It is reached only through a link on the CEO's dashboard or by typing the address. This is a granting oversight, not a missing page.
+> **Finance is the important one.** A menu entry for it exists and points at the real GCE money page. It is now granted to the CEO, Head Accountant, Account Manager, and Confidential Informant (who sees only their own requests), so it appears in those four menus. The page is still absent from the documentation and from the access table in `13 - USER ACCOUNTS`.
 
 ### Group 2 — "Operations"
 
@@ -104,15 +104,15 @@ Everything about people, money, field work, and reporting.
 
 | Menu item | Opens | Explained in | Granted to |
 |---|---|---|---|
-| **Staff Records** | Employee files, reviews, walk-in accounts | [2.11](#211-staff-records) | CEO, Account Manager |
-| **Attendance** | Clock in/out and checking | [2.12](#212-attendance) | CEO, Account Manager, Head Accountant |
-| **Requests** | Leave and overtime | [2.13](#213-employee-requests) | CEO, Account Manager |
+| **Staff Records** | Employee files, reviews, walk-in accounts | [2.11](#211-staff-records) | CEO, Account Manager, Sales Manager |
+| **Attendance** | Clock in/out and checking | [2.12](#212-attendance) | CEO, Account Manager, Head Accountant, Head Security |
+| **Requests** | Leave and overtime | [2.13](#213-employee-requests) | CEO, Account Manager, Head Security |
 | **Payroll** | Compensation, runs, approvals | [2.14](#214-payroll) | CEO, Account Manager, Head Accountant |
 | **Payslips** | Individual pay records | [2.15](#215-payslips) | CEO, Account Manager, Head Accountant |
 | **Field Cases** | Sourcing, acquisition, delivery, recovery | [2.16](#216-field-cases) | CEO, Account Manager, Informant, Mechanic, Sales Manager |
 | **Security Checks** | Before/after duty photographs | [2.17](#217-security-duty-checks) | CEO, Head Security |
 | **Reports** | Submit and review reports | [2.18](#218-reports) | CEO, Account Manager, Head Accountant |
-| **Announcements** | Company news | [2.19](#219-announcements) | CEO, Account Manager, Head Accountant, Informant, Marketing |
+| **Announcements** | Company news | [2.19](#219-announcements) | CEO, Account Manager, Head Accountant, Informant, Marketing, Mechanic, Sales Manager, Head Security |
 | **Suppliers** *(second item with this name)* | CEO ↔ supplier message thread | [2.20](#220-supplier-messages) | CEO |
 
 > **Two menu items are both labelled "Suppliers".** The CEO sees one under Operations (creating and approving suppliers) and a second under Staff Management (messaging them). Same word, two different jobs. Worth renaming the second to "Supplier Messages".
@@ -147,10 +147,10 @@ Shown to customers and suppliers. See [2.24](#224-customer-and-supplier-pages).
 
 Read down the column for the role you are interested in. This is the menu, in order, exactly as that person sees it.
 
-### CEO — 22 items (everything)
+### CEO — 23 items (everything)
 
 ```
-Dashboards        Default
+Dashboards        Default · Finance
 Operations        Vehicles · Showroom · Content · Inspections · Inquiries ·
                   Recommendations · Transactions · Roadmap · Suppliers
 Staff Management  Staff Records · Attendance · Requests · Payroll · Payslips ·
@@ -158,10 +158,10 @@ Staff Management  Staff Records · Attendance · Requests · Payroll · Payslips
 Pages             Users · Roles
 ```
 
-### Account Manager — 18 items
+### Account Manager — 19 items
 
 ```
-Dashboards        Default
+Dashboards        Default · Finance
 Operations        Vehicles · Inspections · Inquiries · Recommendations ·
                   Transactions · Roadmap · Suppliers
 Staff Management  Staff Records · Attendance · Requests · Payroll · Payslips ·
@@ -170,33 +170,32 @@ Pages             Users · Roles
 ```
 Missing compared with the CEO: Showroom, Content, Security Checks, Supplier Messages.
 
-### Head Accountant — 8 items
+### Head Accountant — 9 items
 
 ```
-Dashboards        Default
+Dashboards        Default · Finance
 Operations        Vehicles · Transactions
 Staff Management  Attendance · Payroll · Payslips · Reports · Announcements
 ```
-**Note:** no Finance item, no Field Cases item — yet releasing purchase funds and instructing repossession are both their exclusive duties. See findings A-3 and A-7.
+**Note:** Finance is now in the menu. Field Cases has no menu link, but the page itself admits them to view cases and create repossession cases (findings A-3 and A-7 resolved).
 
-### Sales Manager — 9 items
+### Sales Manager — 11 items
 
 ```
 Dashboards        Default
 Operations        Vehicles · Showroom · Inspections · Inquiries ·
                   Recommendations · Transactions · Roadmap
-Staff Management  Field Cases
+Staff Management  Field Cases · Staff Records · Announcements
 ```
-**Note:** no Announcements, no Reports, no Staff Records — although the documents give them an inventory report and walk-in account creation. See findings A-5 and A-9.
+**Note:** no Reports — the documented inventory report still has no owner here. Findings A-5 and A-9 resolved.
 
-### Confidential Informant — 6 items
+### Confidential Informant — 7 items
 
 ```
-Dashboards        Default
+Dashboards        Default · Finance
 Operations        Vehicles · Inspections · Transactions
 Staff Management  Field Cases · Announcements
 ```
-**Note:** no Finance item, although they may raise money requests and view their own. See finding A-7.
 
 ### Marketing Specialist — 5 items
 
@@ -206,23 +205,22 @@ Operations        Vehicles · Showroom · Content
 Staff Management  Announcements
 ```
 
-### Mechanic — 4 items
+### Mechanic — 5 items
 
 ```
 Dashboards        Default
 Operations        Vehicles · Inspections
-Staff Management  Field Cases
+Staff Management  Field Cases · Announcements
 ```
-**Note:** no Announcements. See finding A-5.
 
-### Head Security — 3 items
+### Head Security — 6 items
 
 ```
 Dashboards        Default
 Operations        Vehicles
-Staff Management  Security Checks
+Staff Management  Attendance · Requests · Security Checks · Announcements
 ```
-**Note:** the narrowest menu in the system. No Attendance and no Requests, although the documents describe Head Security using both. See finding A-6.
+**Note:** Attendance, Employee Requests, and Announcements are now in the menu (finding A-6 resolved).
 
 ### Customer and Supplier — 7 items each
 
@@ -248,8 +246,8 @@ Both outside roles are granted the identical seven. The documents describe a thr
 | Start a repossession | Transactions | Head Accountant only |
 | Send someone to collect or deliver a car | Field Cases | CEO, Informant, Sales Manager |
 | Send a mechanic along on a trip | Field Cases | CEO, Informant, Sales Manager |
-| Release money for a car purchase | Finance *(no menu link)* | Head Accountant only |
-| Ask for money for a case | Finance *(no menu link)* | CEO, Account Manager, Informant |
+| Release money for a car purchase | Finance | Head Accountant only |
+| Ask for money for a case | Finance | CEO, Account Manager, Informant |
 | Approve someone's leave | Requests | CEO, Account Manager |
 | Build the payroll | Payroll | CEO, Account Manager |
 | Pay the staff | Payslips | Head Accountant only |
@@ -274,13 +272,17 @@ The owner and top decision-maker. They do not run any single desk; they watch al
 Open the dashboard, look at how many cars sold, how much money came in, what is waiting for approval. Approve or reject the prices Marketing proposed so those cars can go live. Read the reports Finance and Admin submitted. Post an announcement when there is company news. Reply to a supplier if one wrote in.
 
 ### What the CEO can open
-Everything. Dashboard, Vehicles, Showroom, Content, Inspections, Inquiries, Recommendations, Transactions, Roadmap, Suppliers, Staff Records, Attendance, Employee Requests, Payroll, Payslips, Field Cases, Security Duty Checks, Reports, Announcements, Supplier Messages, Roles, Users.
+Everything. Dashboard, Finance, Vehicles, Showroom, Content, Inspections, Inquiries, Recommendations, Transactions, Roadmap, Suppliers, Staff Records, Attendance, Employee Requests, Payroll, Payslips, Field Cases, Security Duty Checks, Reports, Announcements, Supplier Messages, Roles, Users.
 
 ### What only the CEO can do
 - Approve or reject a proposed vehicle price. Nobody else can.
 - Create, publish, expire, and archive announcements.
 - Delete a vehicle record.
 - Message suppliers directly.
+
+### RBAC enforcement (Aug 2026)
+
+Operational CRUD is now assigned to the owning roles, not the CEO. Vehicle creation, editing, posting, and media stay with the Marketing Specialist; inspections, repairs, and checklist entry with the Mechanic; vehicle documents with the Sales Manager. The CEO keeps company-wide visibility, the approval/rejection authority on price proposals, reports, and disbursements, announcement publishing, and vehicle deletion. Page-level guards now match the sidebar, so no staff role can open a page by typing its address unless the menu grants it.
 
 ### Who they work with
 | Direction | Who | About what |
@@ -312,7 +314,7 @@ The office manager and HR person combined. First point of contact for customers 
 Answer customer inquiries in the chat. Set a viewing schedule when a customer wants to come to the lot. Hand the customer to the Sales Manager when they actually arrive. Check who clocked in. Approve leave and overtime requests. Once a period closes, build the payroll run and send it for review. Create accounts for walk-in customers. Change someone's role when their job changes.
 
 ### What they can open
-Dashboard, Roles, Users, Vehicles, Inspections, Inquiries, Recommendations, Transactions, Roadmap, Suppliers, Staff Records, Attendance, Employee Requests, Payroll, Payslips, Field Cases, Reports, Announcements.
+Dashboard, Finance, Roles, Users, Vehicles, Inspections, Inquiries, Recommendations, Transactions, Roadmap, Suppliers, Staff Records, Attendance, Employee Requests, Payroll, Payslips, Field Cases, Reports, Announcements.
 
 ### What only they (with the CEO) can do
 - Assign roles to staff — this is the access-control desk.
@@ -354,7 +356,7 @@ The finance lead. Signs off on money going out, pays the staff, watches the inst
 Look at what money was requested and release what is approved. Verify payments customers claim to have made. Check which installments fell due and make sure the Account Manager knows. If someone has stopped paying entirely, instruct a Confidential Informant to recover the vehicle. Review the payroll run the Account Manager prepared, finalise it after the CEO approves, then mark each payslip paid.
 
 ### What they can open
-Dashboard, Vehicles, Transactions, Attendance, Payroll, Payslips, Reports, Announcements. (Plus the Finance page — see the note in Part 2.23.)
+Dashboard, Finance, Vehicles, Transactions, Attendance, Payroll, Payslips, Reports, Announcements. (Plus the Field Cases page, which admits them to view cases and create repossession cases — see [2.16](#216-field-cases).)
 
 ### What only they can do
 - Release a purchase-fund disbursement.
@@ -396,7 +398,7 @@ The person who closes deals. Takes over from the Account Manager when the custom
 Work the "Buy Now" queue — those are people who have already decided. Accept handoffs from the Account Manager. For a walk-in with no account, create the account on the spot, then start the sale. Collect two valid IDs and a proof of billing. Move the transaction from pending to review to approved to completed. Record the paperwork.
 
 ### What they can open
-Dashboard, Vehicles, Showroom, Inspections, Inquiries, Recommendations, Transactions, Roadmap, Field Cases.
+Dashboard, Vehicles, Showroom, Inspections, Inquiries, Recommendations, Transactions, Roadmap, Staff Records, Field Cases, Announcements.
 
 ### What only they (with the CEO and Account Manager) can do
 - Create a walk-in customer account.
@@ -435,7 +437,7 @@ The field agent. Goes out to look at cars GCE might buy, brings them in, deliver
 Check assigned cases. Bring a mechanic along to inspect a car in someone's garage. Log travel and other costs against the case. Request money for something the case needs. Deliver a sold car. If instructed, go recover a vehicle.
 
 ### What they can open
-Dashboard, Vehicles, Inspections, Transactions, Field Cases, Announcements. (Plus their own requests on the Finance page — see Part 2.23.)
+Dashboard, Finance, Vehicles, Inspections, Transactions, Field Cases, Announcements.
 
 ### Who they work with
 | Direction | Who | About what |
@@ -498,7 +500,7 @@ The technician who says whether a car is sound, what is broken, and what it will
 Open the assigned inspection. Work down the checklist — system, then component, then part. Mark each item Good, For Repair, or For Replacement. When something needs replacing, record the part name, brand, and estimated cost. Finish, and the score feeds pricing and customer recommendations.
 
 ### What they can open
-Dashboard, Vehicles, Inspections, Field Cases.
+Dashboard, Vehicles, Inspections, Field Cases, Announcements.
 
 ### Who they work with
 | Direction | Who | About what |
@@ -529,13 +531,13 @@ The guard responsible for the building. The narrowest role in the system.
 Clock in. At the start of the shift, photograph the locks and the building. At the end, photograph them again. Submit. File leave or overtime requests like any other employee.
 
 ### What they can open
-Dashboard, Vehicles, Security Duty Checks.
+Dashboard, Vehicles, Attendance, Employee Requests, Security Duty Checks, Announcements.
 
 ### Documentation vs. system
 
 | Documentation says | System does | Verdict |
 |---|---|---|
-| Uses attendance for leave, overtime, time-in and time-out | Attendance and Employee Requests are open to all staff — but **neither appears in this role's menu**, so they must be reached another way | **Partly matches** |
+| Uses attendance for leave, overtime, time-in and time-out | Attendance and Employee Requests are open to all staff and both are now in this role's menu | **Matches** |
 | Provides before-and-after photos of the locks and building security | Duty check: start, upload before image, upload after image, complete. Both images are required to complete. | **Matches** |
 
 ---
@@ -773,7 +775,7 @@ Not every role sees the same dashboard. The CEO gets an extra operations overvie
 
 ## 2.11 Staff Records
 
-**Who opens it:** CEO and Account Manager only.
+**Who opens it:** CEO, Account Manager, and Sales Manager.
 **Purpose:** the employee file — who works here, their details, their status, and their performance reviews. It is also where a walk-in customer account gets created.
 **What you do:** view and edit a staff member's details, set their account status (invited, active, suspended, archived), write and update performance reviews, and create walk-in accounts.
 **Why it matters:** it is the human record behind payroll, attendance, and access. Suspending someone here is how you stop them using the system.
@@ -787,13 +789,13 @@ The CEO is not the one maintaining this page day to day; the Account Manager is.
 |---|---|---|
 | The Account Manager maintains employee records and customer account records | Present, reading real records, with edit and status management | **Matches** |
 | Staff attendance, leave, overtime, and **performance** records | Performance reviews are here | **Matches** |
-| The Sales Manager creates walk-in accounts | Walk-in creation is allowed for CEO, Account Manager, and Sales Manager — but the Sales Manager **cannot open this page**, so they must create accounts from elsewhere in their own flow | **Partly matches** |
+| The Sales Manager creates walk-in accounts | Walk-in creation is allowed for CEO, Account Manager, and Sales Manager, and Staff Records is now in the Sales Manager's menu (finding A-9 resolved) | **Matches** |
 
 ---
 
 ## 2.12 Attendance
 
-**Who opens it:** every staff role may use it; only CEO, Account Manager, and Head Accountant appear to have it in their menu and may check other people's records.
+**Who opens it:** every staff role may use it; it is in the menus of CEO, Account Manager, Head Accountant, and Head Security, and the first three may check other people's records.
 **Purpose:** who came in, when, and whether it counts.
 **What you do:** clock in and out; a checker reviews and confirms records.
 **Why it matters:** payroll is built from checked attendance. An unchecked day is an unpaid day.
@@ -803,19 +805,19 @@ The CEO is not the one maintaining this page day to day; the Account Manager is.
 |---|---|---|
 | Account Manager processes attendance, including late arrivals | Present, with schedule-based grace-period handling | **Matches** |
 | Head Accountant may view attendance to double-check payroll | Present with checking rights | **Matches** |
-| Head Security uses time-in and time-out | Clocking works for all staff, but Attendance is **not in the Head Security menu** | **Partly matches** |
+| Head Security uses time-in and time-out | Clocking works for all staff, and Attendance is now in the Head Security menu | **Matches** |
 
 ---
 
 ## 2.13 Employee Requests
 
-**Who opens it:** in the menus of CEO and Account Manager; the page itself is open to all staff so that anyone can file a request.
+**Who opens it:** in the menus of CEO, Account Manager, and Head Security; the page itself is open to all staff so that anyone can file a request.
 **Purpose:** leave and overtime.
 **What you do:** an employee submits or cancels a request; the CEO or Account Manager approves or rejects it.
 **Why it matters:** approved leave changes what attendance is expected and what payroll pays.
 **Before:** an employee needs time off. **After:** the decision feeds attendance and payroll.
 
-**Verdict: Matches**, with the same menu caveat as Attendance — Head Security is documented as a user of leave and overtime but has no link to the page.
+**Verdict: Matches.**
 
 ---
 
@@ -862,7 +864,7 @@ Head Accountant marks paid    →  paid
 
 ## 2.16 Field Cases
 
-**Who opens it (menu):** CEO, Account Manager, Confidential Informant, Mechanic, Sales Manager.
+**Who opens it (menu):** CEO, Account Manager, Confidential Informant, Mechanic, Sales Manager. The page itself also admits the Head Accountant (to view cases and create repossession cases), but they have no menu link to it.
 **Purpose:** the job sheet for work that happens away from the office — sourcing a car, acquiring it, delivering it, or recovering it.
 **What you do:** create a case of one of four kinds, assign an Informant, assign a Mechanic to come along, move it through assigned → accepted → in progress → completed, and record expenses.
 **Why it matters:** it is the only record of what field staff actually did and what it cost.
@@ -874,8 +876,8 @@ Head Accountant marks paid    →  paid
 | Acquisition, delivery, recovery, and sourcing work for the Informant | All four kinds exist and can be created | **Matches** |
 | Mechanic accompanies the Informant | Mechanic assignment exists on a case | **Matches** |
 | Case expenses | Recorded per case | **Matches** |
-| Head Security is a user of field cases | **Nowhere in the documents.** The page nevertheless admits Head Security. | **Does not match** — unexpected access (see Part 4). |
-| The Head Accountant instructs repossession | They can create the case, but **cannot open the Field Cases page** to see it | **Partly matches** — a conflict inside the system itself. |
+| Head Security is a user of field cases | **Nowhere in the documents.** Access was revoked under the least-privilege pass; Head Security can no longer open the page. | **Resolved** — unexpected access removed (finding A-4). |
+| The Head Accountant instructs repossession | They can create a repossession case and now open the Field Cases page to follow it, though it has no menu link for them | **Partly matches** — viewable, but reachable only by address (finding A-3 resolved). |
 
 ---
 
@@ -914,7 +916,7 @@ Head Accountant marks paid    →  paid
 | Documents | System | Verdict |
 |---|---|---|
 | The CEO creates announcements for GCE employees | CEO-only creation and publishing | **Matches** |
-| The access table in `13 - USER ACCOUNTS` shows Announcements available to **all eight** staff roles | The page is open to all staff, but the **menu link is missing** for the Mechanic, the Sales Manager, and Head Security | **Partly matches** — those three cannot find the page even though they are allowed in. |
+| The access table in `13 - USER ACCOUNTS` shows Announcements available to **all eight** staff roles | The page is open to all staff and every role now has the menu link | **Matches** |
 
 ---
 
@@ -943,7 +945,7 @@ Head Accountant marks paid    →  paid
 | Documents | System | Verdict |
 |---|---|---|
 | The Account Manager manages role-based access for employees and administrators | Role assignment is restricted to the CEO and Account Manager | **Matches** |
-| — | The **page itself has no role check.** Any signed-in staff member can open it by typing the address. The list of who holds which role is protected at the database level, so a non-authorised staff member sees names and account statuses but not roles, and cannot change anything. | **Does not match** — see Part 4. |
+| — | The page now carries a role guard matching the menu — CEO and Account Manager only. Other staff are redirected to an unauthorized screen before anything loads. | **Matches** |
 
 ---
 
@@ -965,13 +967,13 @@ Head Accountant marks paid    →  paid
 **What you do:** record an entry, verify an entry, raise a request for purchase funds, and advance a request through approval and release.
 **Why it matters:** this is where the Head Accountant's "release funds for a car purchase" duty and the Informant's "payment request" duty actually live.
 
-**The problem:** a menu entry for this page exists, but it has been granted to **no role**, so it never appears in anyone's sidebar. It is reached only through a link on the CEO's dashboard overview or by typing the address. It is also absent from the access table in `13 - USER ACCOUNTS`.
+**The problem:** the page was once granted to no role and reached only through a link on the CEO's dashboard overview or by typing the address. It is now in the menus of the CEO, Head Accountant, Account Manager, and Confidential Informant (who sees only their own requests), so the granting gap is closed. What remains is documentation: the page is still absent from the access table in `13 - USER ACCOUNTS`.
 
 | Documents | System | Verdict |
 |---|---|---|
 | The Head Accountant releases funds for a car purchase on the CEO's request | Built here | **Matches in behaviour** |
 | The Informant requests payment approval | Built here | **Partly matches** — no CEO-to-Informant cash handoff, by design |
-| — | The page exists but is undocumented and unnavigable | **Does not match** — the documentation has no entry for it, and no role's menu links to it. |
+| — | The page exists and is navigable, but still has no entry in the documentation | **Partly matches** — the access table in `13 - USER ACCOUNTS` has no Finance row. |
 
 ---
 
@@ -1193,29 +1195,29 @@ Supplier and CEO can message each other
 
 | # | What | Note |
 |---|---|---|
-| E-1 | The **Finance** page | Real, used by four roles, in no documentation and in no menu. |
+| E-1 | The **Finance** page | Real and now in the menus of four roles, but still in no documentation. |
 | E-2 | The **Roadmap** page | Recorded elsewhere as platform tooling, not a GCE business module. |
 | E-3 | The **Recommendations & Insights** staff dashboard | Broadly covered by the documented "management information" requirement, but never named as a page. |
 | E-4 | Supplier access to Sell Vehicle, Request a Car, and Favourites | The documents give suppliers five pages; the system gives seven. |
-| E-5 | Head Security access to Field Cases | No document gives Head Security any field-case duty. |
+| E-5 | Head Security access to Field Cases | No document gives Head Security any field-case duty. Access was revoked in the RBAC pass — resolved (see A-4). |
 | E-6 | A large set of unused template pages (CRM, Analytics, E-commerce, Academy, Logistics, Mail, Chat, Calendar, Kanban, Invoice and similar) inside the staff area | Not in any role's menu, but reachable by address. They are leftovers from the interface template, not GCE features. |
 
 ## 4.5 Unexpected access and conflicting responsibilities
 
 These are the findings that matter most for a capstone defence, because they are places where the system's own rules disagree with each other.
 
-| # | Finding | Effect |
-|---|---|---|
-| **A-1** | Several staff pages have **no role check on the page itself** — Vehicles, Content, Inspections, Transactions, Roles, staff Showroom, Recommendations, Roadmap, and the Dashboard. Any signed-in staff member can open them by typing the address, regardless of their menu. | The menu hides them; it does not block them. Actions inside are still restricted, and the database blocks the sensitive role list, so a Head Security user opening Roles sees names and account statuses but not roles and cannot change anything. Still, this is read access nobody granted. |
-| **A-2** | A **customer or supplier** who types an address that does not exist for them is sent to the **staff dashboard** rather than being refused. | Outside users can land on an internal screen. What data appears there was not confirmed in this review — it should be tested. |
-| **A-3** | The **Head Accountant** can create a field case (including the repossession they are supposed to instruct) but **cannot open the Field Cases page**. | They issue an instruction they can never see the result of. |
-| **A-4** | **Head Security** can open Field Cases, which no document assigns to them. | Unexpected access. |
-| **A-5** | The **Mechanic, Sales Manager, and Head Security** have no Announcements link, yet the documented access table says all staff have it and the page admits them. | Company announcements do not reach three of eight roles through normal use. |
-| **A-6** | **Head Security** has no Attendance or Employee Requests link, yet the documents specifically describe them using both. | Their documented duty is unreachable from their menu. |
-| **A-7** | The **Finance** page is in no menu at all. | The Head Accountant's fund-release duty and the Informant's money requests are only reachable by address or a single dashboard link. |
-| **A-8** | An approved **supplier** may use the CEO message thread but has no link to it. | Half of a documented feature is unusable from the supplier's side. |
-| **A-9** | The **Sales Manager** may create walk-in accounts but cannot open Staff Records, where the walk-in form lives. | The documented duty and the page that carries it are separated. |
-| **A-10** | Customers and suppliers see the **dashboard sidebar**, not the three-link header the documents describe. | Straight contradiction between `13 - USER ACCOUNTS` and the system. |
+| # | Finding | Effect | Status |
+|---|---|---|---|
+| **A-1** | Several staff pages have **no role check on the page itself** — Vehicles, Content, Inspections, Transactions, Roles, staff Showroom, Recommendations, Roadmap, and the Dashboard. Any signed-in staff member can open them by typing the address, regardless of their menu. | The menu hides them; it does not block them. Actions inside are still restricted, and the database blocks the sensitive role list, so a Head Security user opening Roles sees names and account statuses but not roles and cannot change anything. Still, this is read access nobody granted. | **Resolved (Aug 2026)** — page-level `requireRole` guards now match the sidebar access. |
+| **A-2** | A **customer or supplier** who types an address that does not exist for them is sent to the **staff dashboard** rather than being refused. | Outside users can land on an internal screen. What data appears there was not confirmed in this review — it should be tested. | Open |
+| **A-3** | The **Head Accountant** can create a field case (including the repossession they are supposed to instruct) but **cannot open the Field Cases page**. | They issue an instruction they can never see the result of. | **Resolved (Aug 2026)** — Head Accountant added to `FIELD_CASE_ROLES`; they can now view cases and create repossession cases (RLS SELECT/INSERT included). |
+| **A-4** | **Head Security** can open Field Cases, which no document assigns to them. | Unexpected access. | **Resolved (Aug 2026)** — Head Security removed from the page guard and from the RLS SELECT policy. |
+| **A-5** | The **Mechanic, Sales Manager, and Head Security** have no Announcements link, yet the documented access table says all staff have it and the page admits them. | Company announcements do not reach three of eight roles through normal use. | **Resolved (Aug 2026)** — Announcements added to all three menus. |
+| **A-6** | **Head Security** has no Attendance or Employee Requests link, yet the documents specifically describe them using both. | Their documented duty is unreachable from their menu. | **Resolved (Aug 2026)** — Attendance and Employee Requests added to the Head Security menu. |
+| **A-7** | The **Finance** page is in no menu at all. | The Head Accountant's fund-release duty and the Informant's money requests are only reachable by address or a single dashboard link. | **Resolved (Aug 2026)** — Finance added to the CEO, Head Accountant, Account Manager, and Confidential Informant menus. |
+| **A-8** | An approved **supplier** may use the CEO message thread but has no link to it. | Half of a documented feature is unusable from the supplier's side. | Open |
+| **A-9** | The **Sales Manager** may create walk-in accounts but cannot open Staff Records, where the walk-in form lives. | The documented duty and the page that carries it are separated. | **Resolved (Aug 2026)** — Staff Records added to the Sales Manager menu. |
+| **A-10** | Customers and suppliers see the **dashboard sidebar**, not the three-link header the documents describe. | Straight contradiction between `13 - USER ACCOUNTS` and the system. | Open |
 
 ## 4.6 Unclear or unverified
 
@@ -1258,7 +1260,7 @@ Measured against the documents, the system is in good shape on **substance** and
 
 - Every documented user level exists, and almost every documented duty is built and enforced — including the hard ones the earlier audit flagged as missing: supplier approval gating, the Head Accountant's money and recovery chain, the Informant's field and mechanic-assignment duties, and the two-ID purchase rule.
 - The genuine remaining behaviour gaps are small and specific: the CALABARZON meet-up limit, the Marketing-set delivery down payment, the five-month towing rule, the four named report streams, and the management recommendation views that were built and then replaced.
-- The larger cluster of problems is about **who can find and reach what**. Menus and permissions have drifted apart: pages that admit a role without linking it, a whole Finance module in nobody's menu, a supplier who cannot reach a channel they are allowed to use, several staff pages with no lock on the door at all, and outside users being routed to an internal screen.
-- The documentation itself has drifted in two places: the access table in `13 - USER ACCOUNTS` promises Announcements to three roles whose menus do not carry it, and describes a customer header bar the system does not use.
+- The August 2026 RBAC least-privilege pass closed the largest cluster: page-level guards now match the sidebar on every staff page, Finance is in the menus of the four roles that use it, Announcements, Attendance, Employee Requests, and Staff Records reached the roles that needed them, Head Security's field-case access was revoked, and operational CRUD (vehicles, inspections, repairs, checklist, content, vehicle documents) moved to the owning roles. What remains of the navigation cluster is narrower: a supplier who cannot reach a channel they are allowed to use, and outside users being routed to an internal screen.
+- The documentation itself has drifted in one place: it describes a customer header bar the system does not use.
 
 None of these were changed. This file records what is, not what should be.

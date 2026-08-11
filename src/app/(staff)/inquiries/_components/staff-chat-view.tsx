@@ -63,8 +63,8 @@ export function StaffChatView({
   const hasManager =
     (inquiry.assigned_account_manager as string | null | undefined) ||
     (inquiry.assigned_sales_manager as string | null | undefined);
-  const canRequestHandoff = ["ceo", "account_manager"].includes(userRole);
-  const canAcceptHandoff = ["ceo", "sales_manager"].includes(userRole);
+  const canRequestHandoff = userRole === "account_manager";
+  const canAcceptHandoff = userRole === "sales_manager";
 
   async function handleAssign() {
     if (assigning) return;
@@ -150,7 +150,7 @@ export function StaffChatView({
           Handed off to Sales Manager
         </Badge>
       )}
-      {hasManager && !arrangement && (
+      {hasManager && userRole !== "ceo" && !arrangement && (
         <Button size="sm" variant="outline" onClick={() => setShowArrangement((visible) => !visible)} type="button">
           Schedule
         </Button>

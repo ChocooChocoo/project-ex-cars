@@ -88,7 +88,13 @@ const sortOptions = [
   { value: "price-asc", label: "Price low to high" },
 ] as const;
 
-export function VehicleTable({ vehicles }: { readonly vehicles: Record<string, unknown>[] }) {
+export function VehicleTable({
+  vehicles,
+  canManage,
+}: {
+  readonly vehicles: Record<string, unknown>[];
+  readonly canManage: boolean;
+}) {
   const router = useRouter();
   const [rowSelection, setRowSelection] = React.useState({});
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
@@ -132,6 +138,7 @@ export function VehicleTable({ vehicles }: { readonly vehicles: Record<string, u
         if (vehicle) setPublishTarget(vehicle);
       },
       (vehicle: Record<string, unknown>) => setFormSheet({ mode: "edit", vehicle }),
+      canManage,
     ),
     state: {
       rowSelection,
@@ -175,10 +182,12 @@ export function VehicleTable({ vehicles }: { readonly vehicles: Record<string, u
           <CardTitle className="leading-none">{table.getFilteredRowModel().rows.length} Vehicles</CardTitle>
           <CardDescription>Vehicle listings with pricing and publishing status.</CardDescription>
           <CardAction>
-            <Button variant="outline" size="sm" onClick={() => setFormSheet({ mode: "add", vehicle: null })}>
-              <Plus />
-              Add Vehicle
-            </Button>
+            {canManage && (
+              <Button variant="outline" size="sm" onClick={() => setFormSheet({ mode: "add", vehicle: null })}>
+                <Plus />
+                Add Vehicle
+              </Button>
+            )}
           </CardAction>
         </CardHeader>
         <CardContent className="pt-0">

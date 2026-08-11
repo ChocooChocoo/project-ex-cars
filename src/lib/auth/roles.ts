@@ -102,6 +102,7 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
   ]),
   ceo: new Set([
     "default",
+    "finance",
     "vehicles",
     "showroom",
     "content",
@@ -126,6 +127,7 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
   ]),
   account_manager: new Set([
     "default",
+    "finance",
     "roles",
     "users",
     "vehicles",
@@ -146,6 +148,7 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
   ]),
   head_accountant: new Set([
     "default",
+    "finance",
     "vehicles",
     "transactions",
     "attendance",
@@ -156,6 +159,7 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
   ]),
   confidential_informant: new Set([
     "default",
+    "finance",
     "vehicles",
     "inspections",
     "transactions",
@@ -173,9 +177,18 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
     "transactions",
     "roadmap",
     "field-cases",
+    "staff-records",
+    "announcements",
   ]),
-  mechanic: new Set(["default", "vehicles", "inspections", "field-cases"]),
-  head_security: new Set(["default", "vehicles", "security-duty-checks"]),
+  mechanic: new Set(["default", "vehicles", "inspections", "field-cases", "announcements"]),
+  head_security: new Set([
+    "default",
+    "vehicles",
+    "attendance",
+    "employee-requests",
+    "security-duty-checks",
+    "announcements",
+  ]),
 };
 
 /** Landing page path for each role after sign-in (resolved to role-prefixed URL by {@link landingPath}). */

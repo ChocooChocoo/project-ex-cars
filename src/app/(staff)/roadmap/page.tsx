@@ -1,4 +1,5 @@
 import { getCurrentRole } from "@/app/auth/actions";
+import { requireRole } from "@/lib/auth/guards";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 import { sampleRoadmapItems } from "./_components/data";
@@ -11,9 +12,10 @@ import {
 import { RoadmapDashboardShell } from "./_components/roadmap-dashboard-shell";
 import type { RoadmapItem } from "./_components/roadmap-types";
 
-const ROADMAP_WRITER_ROLES = ["ceo", "account_manager", "sales_manager"];
+const ROADMAP_WRITER_ROLES = ["ceo"];
 
 export default async function RoadmapPage() {
+  await requireRole(["ceo", "account_manager", "sales_manager"]);
   const supabase = await createServerSupabase();
   const role = await getCurrentRole();
 

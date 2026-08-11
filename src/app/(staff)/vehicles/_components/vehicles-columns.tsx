@@ -17,6 +17,7 @@ import { listingStateLabel, listingStateVariant } from "@/lib/vehicles/labels";
 export function createColumns(
   onPublish: (id: string) => void,
   onEdit: (vehicle: Record<string, unknown>) => void,
+  canManage: boolean,
 ): ColumnDef<Record<string, unknown>>[] {
   return [
     {
@@ -136,30 +137,32 @@ export function createColumns(
 
         return (
           <div className="text-right">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  aria-label={`Open actions for ${(vehicle.stock_code as string) ?? ""}`}
-                  className="size-8 rounded-md text-muted-foreground hover:bg-muted/50"
-                  size="icon-sm"
-                  variant="ghost"
-                >
-                  <MoreHorizontal className="size-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => onEdit(vehicle)}>
-                  <Pencil className="mr-2 size-4" />
-                  Edit
-                </DropdownMenuItem>
-                {state === "draft" && (
-                  <DropdownMenuItem onClick={() => onPublish(id)}>
-                    <Send className="mr-2 size-4" />
-                    Publish
+            {canManage ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    aria-label={`Open actions for ${(vehicle.stock_code as string) ?? ""}`}
+                    className="size-8 rounded-md text-muted-foreground hover:bg-muted/50"
+                    size="icon-sm"
+                    variant="ghost"
+                  >
+                    <MoreHorizontal className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => onEdit(vehicle)}>
+                    <Pencil className="mr-2 size-4" />
+                    Edit
                   </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  {state === "draft" && (
+                    <DropdownMenuItem onClick={() => onPublish(id)}>
+                      <Send className="mr-2 size-4" />
+                      Publish
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
           </div>
         );
       },

@@ -19,7 +19,7 @@ export async function createVehicle(formData: FormData) {
   if (!user.user) return { error: "Not authenticated" };
 
   const role = await getCurrentRole();
-  if (!role || !["ceo", "sales_manager", "marketing_specialist"].includes(role)) {
+  if (!role || role !== "marketing_specialist") {
     return { error: "Not authorized" };
   }
 
@@ -67,7 +67,7 @@ export async function updateVehicle(formData: FormData) {
   if (!user.user) return { error: "Not authenticated" };
 
   const role = await getCurrentRole();
-  if (!role || !["ceo", "sales_manager", "marketing_specialist"].includes(role)) {
+  if (!role || role !== "marketing_specialist") {
     return { error: "Not authorized" };
   }
 
@@ -116,7 +116,7 @@ export async function publishVehicle(formData: FormData) {
   if (!user.user) return { error: "Not authenticated" };
 
   const role = await getCurrentRole();
-  if (!role || !["ceo", "sales_manager", "marketing_specialist"].includes(role)) {
+  if (!role || role !== "marketing_specialist") {
     return { error: "Not authorized" };
   }
 
@@ -151,7 +151,7 @@ export async function proposePrice(formData: FormData) {
   if (!user.user) return { error: "Not authenticated" };
 
   const role = await getCurrentRole();
-  if (!role || !["ceo", "marketing_specialist"].includes(role)) {
+  if (!role || role !== "marketing_specialist") {
     return { error: "Not authorized" };
   }
 
@@ -237,7 +237,7 @@ export async function uploadVehicleMedia(formData: FormData) {
   if (!user.user) return { error: "Not authenticated" };
 
   const role = await getCurrentRole();
-  if (!role || !["ceo", "sales_manager", "marketing_specialist", "account_manager"].includes(role)) {
+  if (!role || role !== "marketing_specialist") {
     return { error: "Not authorized to upload media" };
   }
 
@@ -286,7 +286,7 @@ export async function deleteVehicleMedia(mediaId: string) {
   if (!user.user) return { error: "Not authenticated" };
 
   const role = await getCurrentRole();
-  if (!role || !["ceo", "sales_manager", "marketing_specialist", "account_manager"].includes(role)) {
+  if (!role || role !== "marketing_specialist") {
     return { error: "Not authorized to delete media" };
   }
 
@@ -348,7 +348,7 @@ export async function createInspection(formData: FormData) {
   if (!user.user) return { error: "Not authenticated" };
 
   const role = await getCurrentRole();
-  if (!role || !["ceo", "mechanic"].includes(role)) {
+  if (!role || role !== "mechanic") {
     return { error: "Not authorized" };
   }
 
@@ -381,7 +381,7 @@ export async function submitChecklistAnswer(formData: FormData) {
   if (!user.user) return { error: "Not authenticated" };
 
   const role = await getCurrentRole();
-  if (!role || !["ceo", "mechanic"].includes(role)) {
+  if (!role || role !== "mechanic") {
     return { error: "Not authorized" };
   }
 
@@ -432,7 +432,7 @@ export async function createContentItem(formData: FormData) {
   if (!user.user) return { error: "Not authenticated" };
 
   const role = await getCurrentRole();
-  if (!role || !["ceo", "marketing_specialist"].includes(role)) {
+  if (!role || role !== "marketing_specialist") {
     return { error: "Not authorized" };
   }
 
@@ -461,7 +461,7 @@ export async function publishContent(id: string) {
   if (!user.user) return { error: "Not authenticated" };
 
   const role = await getCurrentRole();
-  if (!role || !["ceo", "marketing_specialist"].includes(role)) {
+  if (!role || role !== "marketing_specialist") {
     return { error: "Not authorized" };
   }
 
@@ -482,7 +482,7 @@ export async function archiveVehicle(vehicleId: string) {
   if (!user.user) return { error: "Not authenticated" };
 
   const role = await getCurrentRole();
-  if (!role || !["ceo", "sales_manager", "marketing_specialist"].includes(role)) {
+  if (!role || role !== "marketing_specialist") {
     return { error: "Not authorized" };
   }
 
