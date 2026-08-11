@@ -6,7 +6,7 @@ import { getCurrentRole } from "@/app/auth/actions";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { roadmapItemSchema } from "@/lib/validation/roadmap";
 
-const ROADMAP_WRITER_ROLES = ["ceo", "account_manager", "sales_manager"];
+const ROADMAP_WRITER_ROLES = ["ceo"];
 
 type RoadmapActionResult = { error: string } | { success: true; id?: string };
 

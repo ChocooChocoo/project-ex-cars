@@ -304,7 +304,7 @@ These are proposed policy outcomes, not SQL. “Own” means the row points to t
 
 ### Chief executive
 
-- Read the operational summaries and submitted reports needed for the executive dashboard.
+- Read the operational summaries and submitted reports needed for the executive dashboard, and read all content items.
 - Read and write the direct supplier conversation, if that channel is confirmed.
 - Decide the report, price, and fund requests assigned to the chief executive.
 - Create and publish employee announcements.
@@ -315,7 +315,7 @@ These are proposed policy outcomes, not SQL. “Own” means the row points to t
 
 - Maintain customer and employee profile records allowed by the final policy.
 - Create and assign roles through a protected server action; ordinary profile updates cannot change roles.
-- Read and manage inquiries, messages, viewing arrangements, attendance, employee requests, and payroll preparation records.
+- Read and manage inquiries, messages, and viewing arrangements assigned to them, plus attendance, employee requests, and payroll preparation records.
 - Create payroll runs, payslips, payslip items, and relevant reports, but cannot approve their own submission unless the final payroll rule explicitly permits it.
 - Contact buyers through installment collection work assigned to the role.
 
@@ -323,7 +323,7 @@ These are proposed policy outcomes, not SQL. “Own” means the row points to t
 
 - Read inventory and completed sales information needed for financial cross-checking.
 - Read attendance used for payroll checking and payroll records assigned for review.
-- Manage installment accounts, installments, payment records, financial entries, disbursement records, and financial reports.
+- Manage installment accounts, installments, payment records, financial entries, disbursement records, field cases, and financial reports.
 - Create collection actions and recovery instructions allowed by the final rule.
 - Cannot change customer identity files or vehicle prices merely because they can read financial evidence.
 
@@ -336,7 +336,7 @@ These are proposed policy outcomes, not SQL. “Own” means the row points to t
 
 ### Marketing Specialist
 
-- Create and change public content, promotions, featured-vehicle items, vehicle media, and price proposals.
+- Create and change vehicle listings, public content, promotions, featured-vehicle items, vehicle media, and price proposals.
 - Read the vehicle information needed to prepare a listing.
 - Cannot mark their own proposed price approved or publish a vehicle under an unapproved price.
 

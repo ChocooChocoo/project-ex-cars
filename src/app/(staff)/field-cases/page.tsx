@@ -10,8 +10,8 @@ const FIELD_CASE_ROLES = [
   "confidential_informant",
   "sales_manager",
   "mechanic",
-  "head_security",
   "account_manager",
+  "head_accountant",
 ];
 const FIELD_CASE_WORKERS = ["ceo", "confidential_informant", "mechanic", "sales_manager"];
 const FIELD_CASE_CREATORS = ["ceo", "confidential_informant", "sales_manager", "head_accountant"];

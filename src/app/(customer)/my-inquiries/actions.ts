@@ -191,7 +191,7 @@ export async function scheduleArrangement(formData: FormData) {
 
   const { data: roles } = await supabase.rpc("get_user_roles");
   const hasRole = (roles as { role: string }[] | undefined)?.some((r) =>
-    ["ceo", "account_manager", "sales_manager"].includes(r.role),
+    ["account_manager", "sales_manager"].includes(r.role),
   );
   if (!hasRole) return { error: "Not authorized" };
 
@@ -246,8 +246,8 @@ export async function handoffInquiry(inquiryId: string) {
   if (!user.user) return { error: "Not authenticated" };
 
   const { data: roles } = await supabase.rpc("get_user_roles");
-  const hasRole = (roles as { role: string }[] | undefined)?.some((r) => ["ceo", "account_manager"].includes(r.role));
-  if (!hasRole) return { error: "Only the CEO or Account Manager can request a handoff." };
+  const hasRole = (roles as { role: string }[] | undefined)?.some((r) => ["account_manager"].includes(r.role));
+  if (!hasRole) return { error: "Only the Account Manager can request a handoff." };
 
   const { data: inquiry } = await supabase
     .from("inquiries")
@@ -279,8 +279,8 @@ export async function acceptHandoff(inquiryId: string) {
   if (!user.user) return { error: "Not authenticated" };
 
   const { data: roles } = await supabase.rpc("get_user_roles");
-  const hasRole = (roles as { role: string }[] | undefined)?.some((r) => ["ceo", "sales_manager"].includes(r.role));
-  if (!hasRole) return { error: "Only the Sales Manager (or CEO) can accept a handoff." };
+  const hasRole = (roles as { role: string }[] | undefined)?.some((r) => ["sales_manager"].includes(r.role));
+  if (!hasRole) return { error: "Only the Sales Manager can accept a handoff." };
 
   const { data: inquiry } = await supabase.from("inquiries").select("handoff_state").eq("id", inquiryId).maybeSingle();
   if (!inquiry) return { error: "Inquiry not found." };

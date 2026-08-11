@@ -1,8 +1,10 @@
+import { requireRole } from "@/lib/auth/guards";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 import { RolesManager } from "./_components/roles-manager";
 
 export default async function Page() {
+  await requireRole(["ceo", "account_manager"]);
   const supabase = await createServerSupabase();
 
   const { data: profiles } = await supabase.from("profiles").select("id, full_name, account_state, created_at");

@@ -3,7 +3,7 @@
 > **Living reference** mapping every documented role responsibility to its implementation status.
 > Maintained alongside `14 - AUDIT USER ROLES.md`. Status key: ✅ Implemented · ⚠️ Partial / differs · ❌ Missing · 🗂️ Planned backlog.
 
-**Last updated:** 9 August 2026 (audit remediation pass)
+**Last updated:** 10 August 2026 (RBAC/least-privilege pass)
 
 ---
 
@@ -28,6 +28,8 @@
 | Announcements | ✅ | `announcements/actions.ts` CEO-only |
 | Approve cars for inventory | ✅ | Realized as `approvePrice` + `publishVehicle` (requires approved proposal) |
 | Supplier messages | ✅ | Read + send on `/supplier-messages` |
+| RBAC / least-privilege enforcement | ✅ | Migration `00038` (10 Aug 2026): vehicles INSERT/UPDATE + content/media → Marketing, DELETE → CEO; inspections/repairs/checklist results + part replacements/checklist nodes → Mechanic; vehicle_document_items → Sales Manager; roadmap_items → CEO; inquiries UPDATE + viewing arrangements → assigned managers; field_cases: Head Security removed, Head Accountant added (SELECT + INSERT); CEO keeps SELECT-all, price approval (`vehicle_price_proposals` UPDATE), announcements, `financial_entries`/`disbursement_requests` approval, reports, vehicle DELETE. Page guards added to Dashboard/Vehicles/Content/Inspections/Transactions/Roles/Showroom/Roadmap/Field Cases |
+| Menu / nav grants | ✅ | `ROLE_NAV_ACCESS` (10 Aug 2026): Finance added for CEO, Account Manager, Head Accountant, Confidential Informant; Staff Records + Announcements added for Sales Manager; Announcements added for Mechanic; Attendance + Employee Requests + Announcements added for Head Security |
 
 ## Account Manager
 
@@ -51,7 +53,7 @@
 | Inventory / sales monitoring | ✅ | `vehicles`, `transactions` nav |
 | Installment accounts (waive, verify, approve terms) | ✅ | `markInstallmentWaived`, `verifyPayment`, `approvePaymentTerms` |
 | Notify Account Manager at due date | ✅ | `checkAndNotifyDueInstallments` → Account Manager notifications |
-| Instruct Confidential Informant to repossess | ✅ | `instructRepossession` → creates `recovery` field case + `collection_action` |
+| Instruct Confidential Informant to repossess | ✅ | `instructRepossession` → creates `recovery` field case + `collection_action`; field-cases SELECT + INSERT for head_accountant granted by migration 00038 (10 Aug 2026) |
 
 ## Confidential Informant
 
@@ -59,7 +61,7 @@
 |---|---|---|
 | Car acquisition / delivery / sourcing / recovery | ✅ | `createFieldCase` (all four kinds) + `updateFieldCase` |
 | Mechanic assignment | ✅ | `assignMechanic` on field cases |
-| Payment request → CEO approval → funds | ⚠️ | Generalized disbursement ledger; Informant can view own requests on finance page (read-only) |
+| Payment request → CEO approval → funds | ⚠️ | Generalized disbursement ledger; Informant can view own requests on finance page (read-only; finance menu granted 10 Aug 2026) |
 | Case expenses | ✅ | `expenses_cents` per field case |
 
 ## Sales Manager
@@ -76,7 +78,7 @@
 
 | Responsibility | Status | Where / note |
 |---|---|---|
-| Vehicle posting + price approval | ✅ | `proposePrice` → CEO `approvePrice`; `publishVehicle` gated |
+| Vehicle posting + price approval | ✅ | `proposePrice`/`publishVehicle`/media marketing-only (10 Aug 2026, migration 00038) → CEO `approvePrice`; `publishVehicle` gated |
 | Content / showroom / 360° media | ✅ | `createContentItem`, `publishContent`, media manager |
 | Nested checklist inspection + repairs | ✅ | `inspection_checklist_nodes/results`, `part_replacements` |
 | Attendance + proof of duty (before/after photos) | ✅ | `attendance`, `security-duty-checks` (both images required) |

@@ -2,7 +2,7 @@
 
 [Back to start](../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/00%20-%20START%20HERE.md) · Previous: [12 - DATABASE SCHEMA](../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/12%20-%20DATABASE%20SCHEMA.md) · Next: [14 - AUDIT USER ROLES](14%20-%20AUDIT%20USER%20ROLES.md)
 
-**Last updated:** 8 August 2026 (roles, nav, and page access reconciled with the Phase 6 implementation)
+**Last updated:** 10 August 2026 (RBAC least-privilege enforcement — nav and page access reconciled)
 
 All test accounts share one password. It is **not stored in this file** — it is set via the `SEED_USER_PASSWORD` environment variable in `.env.local` (git-ignored). See [Seed Script](#seed-script) below.
 
@@ -51,8 +51,8 @@ All test accounts share one password. It is **not stored in this file** — it i
 | Role | `ceo` |
 | Landing page | `/ceo/dashboard` |
 | Job function | Oversee entire business, approve decisions, monitor performance |
-| Dashboard sidebar | Dashboards: Default. Operations: Vehicles, Showroom, Content, Inspections, Inquiries, Recommendations, Transactions, Roadmap, Suppliers. Staff: Staff Records, Attendance, Employee Requests, Payroll, Payslips, Field Cases, Security Duty Checks, Reports, Announcements, Supplier Messages. Pages: Roles, Users. |
-| Accessible pages | `/ceo/dashboard`, `/ceo/vehicles`, `/ceo/showroom`, `/ceo/content`, `/ceo/inspections`, `/ceo/inquiries`, `/ceo/recommendations`, `/ceo/transactions`, `/ceo/roadmap`, `/ceo/roles`, `/ceo/users`, `/ceo/suppliers`, `/ceo/staff-records`, `/ceo/attendance`, `/ceo/employee-requests`, `/ceo/payroll`, `/ceo/payslips`, `/ceo/field-cases`, `/ceo/security-duty-checks`, `/ceo/reports`, `/ceo/announcements`, `/ceo/supplier-messages` |
+| Dashboard sidebar | Dashboards: Default, Finance. Operations: Vehicles, Showroom, Content, Inspections, Inquiries, Recommendations, Transactions, Roadmap, Suppliers. Staff: Staff Records, Attendance, Employee Requests, Payroll, Payslips, Field Cases, Security Duty Checks, Reports, Announcements, Supplier Messages. Pages: Roles, Users. |
+| Accessible pages | `/ceo/dashboard`, `/ceo/finance`, `/ceo/vehicles`, `/ceo/showroom`, `/ceo/content`, `/ceo/inspections`, `/ceo/inquiries`, `/ceo/recommendations`, `/ceo/transactions`, `/ceo/roadmap`, `/ceo/roles`, `/ceo/users`, `/ceo/suppliers`, `/ceo/staff-records`, `/ceo/attendance`, `/ceo/employee-requests`, `/ceo/payroll`, `/ceo/payslips`, `/ceo/field-cases`, `/ceo/security-duty-checks`, `/ceo/reports`, `/ceo/announcements`, `/ceo/supplier-messages` |
 | System purpose | Chief executive oversees all platform areas. Reviews sales, revenue, inventory, pending work, staff performance, and approvals from the source-backed dashboard; approves price proposals and reports; publishes employee announcements; manages user roles and staff records. |
 
 ---
@@ -66,8 +66,8 @@ All test accounts share one password. It is **not stored in this file** — it i
 | Role | `account_manager` |
 | Landing page | `/account_manager/dashboard` |
 | Job function | Manage user accounts, roles, inquiries, vehicle inventory, attendance, payroll, and staff records |
-| Dashboard sidebar | Dashboards: Default. Operations: Vehicles, Inspections, Inquiries, Recommendations, Transactions, Roadmap, Suppliers. Staff: Staff Records, Attendance, Employee Requests, Payroll, Payslips, Field Cases, Reports, Announcements. Pages: Roles, Users. |
-| Accessible pages | `/account_manager/dashboard`, `/account_manager/roles`, `/account_manager/users`, `/account_manager/vehicles`, `/account_manager/inspections`, `/account_manager/inquiries`, `/account_manager/recommendations`, `/account_manager/transactions`, `/account_manager/roadmap`, `/account_manager/suppliers`, `/account_manager/staff-records`, `/account_manager/attendance`, `/account_manager/employee-requests`, `/account_manager/payroll`, `/account_manager/payslips`, `/account_manager/field-cases`, `/account_manager/reports`, `/account_manager/announcements` |
+| Dashboard sidebar | Dashboards: Default, Finance. Operations: Vehicles, Inspections, Inquiries, Recommendations, Transactions, Roadmap, Suppliers. Staff: Staff Records, Attendance, Employee Requests, Payroll, Payslips, Field Cases, Reports, Announcements. Pages: Roles, Users. |
+| Accessible pages | `/account_manager/dashboard`, `/account_manager/finance`, `/account_manager/roles`, `/account_manager/users`, `/account_manager/vehicles`, `/account_manager/inspections`, `/account_manager/inquiries`, `/account_manager/recommendations`, `/account_manager/transactions`, `/account_manager/roadmap`, `/account_manager/suppliers`, `/account_manager/staff-records`, `/account_manager/attendance`, `/account_manager/employee-requests`, `/account_manager/payroll`, `/account_manager/payslips`, `/account_manager/field-cases`, `/account_manager/reports`, `/account_manager/announcements` |
 | System purpose | Handles inquiry routing and assignment, manages viewing schedules, oversees vehicle inventory, processes attendance and employee requests, prepares payroll, records compensation, reviews vehicles, and manages user roles and account administration. Creates walk-in buyer and seller accounts. |
 
 ---
@@ -81,8 +81,8 @@ All test accounts share one password. It is **not stored in this file** — it i
 | Role | `head_accountant` |
 | Landing page | `/head_accountant/dashboard` |
 | Job function | Financial oversight, attendance cross-check, payroll review, payslip payment responsibility |
-| Dashboard sidebar | Dashboards: Default. Operations: Vehicles, Transactions. Staff: Attendance, Payroll, Payslips, Reports, Announcements. |
-| Accessible pages | `/head_accountant/dashboard`, `/head_accountant/vehicles`, `/head_accountant/transactions`, `/head_accountant/attendance`, `/head_accountant/payroll`, `/head_accountant/payslips`, `/head_accountant/reports`, `/head_accountant/announcements` |
+| Dashboard sidebar | Dashboards: Default, Finance. Operations: Vehicles, Transactions. Staff: Attendance, Payroll, Payslips, Reports, Announcements. |
+| Accessible pages | `/head_accountant/dashboard`, `/head_accountant/finance`, `/head_accountant/vehicles`, `/head_accountant/transactions`, `/head_accountant/attendance`, `/head_accountant/payroll`, `/head_accountant/payslips`, `/head_accountant/reports`, `/head_accountant/announcements` |
 | System purpose | Reviews vehicle inventory and pricing, cross-checks attendance, verifies financial entries, reviews and finalizes payroll runs, marks finalized payslips as paid (salary-payment responsibility), and reviews submitted reports. |
 
 ---
@@ -96,8 +96,8 @@ All test accounts share one password. It is **not stored in this file** — it i
 | Role | `confidential_informant` |
 | Landing page | `/confidential_informant/dashboard` |
 | Job function | Source vehicles, field cases, delivery coordination |
-| Dashboard sidebar | Dashboards: Default. Operations: Vehicles, Inspections, Transactions. Staff: Field Cases, Announcements. |
-| Accessible pages | `/confidential_informant/dashboard`, `/confidential_informant/vehicles`, `/confidential_informant/inspections`, `/confidential_informant/transactions`, `/confidential_informant/field-cases`, `/confidential_informant/announcements` |
+| Dashboard sidebar | Dashboards: Default, Finance. Operations: Vehicles, Inspections, Transactions. Staff: Field Cases, Announcements. |
+| Accessible pages | `/confidential_informant/dashboard`, `/confidential_informant/finance`, `/confidential_informant/vehicles`, `/confidential_informant/inspections`, `/confidential_informant/transactions`, `/confidential_informant/field-cases`, `/confidential_informant/announcements` |
 | System purpose | Sources vehicles from the market, coordinates deliveries, and handles field cases for vehicle acquisition, delivery, and recovery. Records case expenses and submits disbursement requests. Needs vehicle inventory and mechanic inspections to inform sourcing decisions. |
 
 ---
@@ -126,8 +126,8 @@ All test accounts share one password. It is **not stored in this file** — it i
 | Role | `mechanic` |
 | Landing page | `/mechanic/inspections` |
 | Job function | Inspect vehicles, complete checklists, track repairs |
-| Dashboard sidebar | Dashboards: Default. Operations: Vehicles, Inspections. Staff: Field Cases. |
-| Accessible pages | `/mechanic/dashboard`, `/mechanic/vehicles`, `/mechanic/inspections`, `/mechanic/field-cases` |
+| Dashboard sidebar | Dashboards: Default. Operations: Vehicles, Inspections. Staff: Field Cases, Announcements. |
+| Accessible pages | `/mechanic/dashboard`, `/mechanic/vehicles`, `/mechanic/inspections`, `/mechanic/field-cases`, `/mechanic/announcements` |
 | System purpose | Performs vehicle inspections using the nested checklist (system/component/part levels). Records condition scores, findings, repair status, and part replacements. Needs the vehicle inventory to know which vehicles require inspection. |
 
 ---
@@ -141,8 +141,8 @@ All test accounts share one password. It is **not stored in this file** — it i
 | Role | `sales_manager` |
 | Landing page | `/sales_manager/vehicles` |
 | Job function | Manage sales, vehicle inventory, inquiries, transactions, and customer recommendations |
-| Dashboard sidebar | Dashboards: Default. Operations: Vehicles, Showroom, Inspections, Inquiries, Recommendations, Transactions, Roadmap. Staff: Field Cases. |
-| Accessible pages | `/sales_manager/dashboard`, `/sales_manager/vehicles`, `/sales_manager/showroom`, `/sales_manager/inspections`, `/sales_manager/inquiries`, `/sales_manager/recommendations`, `/sales_manager/transactions`, `/sales_manager/roadmap`, `/sales_manager/field-cases` |
+| Dashboard sidebar | Dashboards: Default. Operations: Vehicles, Showroom, Inspections, Inquiries, Recommendations, Transactions, Roadmap. Staff: Field Cases, Staff Records, Announcements. |
+| Accessible pages | `/sales_manager/dashboard`, `/sales_manager/vehicles`, `/sales_manager/showroom`, `/sales_manager/inspections`, `/sales_manager/inquiries`, `/sales_manager/recommendations`, `/sales_manager/transactions`, `/sales_manager/roadmap`, `/sales_manager/field-cases`, `/sales_manager/staff-records`, `/sales_manager/announcements` |
 | System purpose | Manages the vehicle sales pipeline. Handles Buy Now inquiries, reviews vehicle pricing, creates walk-in accounts and transactions, monitors the showroom from the customer's perspective, oversees mechanic inspections, and reviews recommendation accuracy and customer buying patterns. |
 
 ---
@@ -156,8 +156,8 @@ All test accounts share one password. It is **not stored in this file** — it i
 | Role | `head_security` |
 | Landing page | `/head_security/dashboard` |
 | Job function | Security oversight, duty checks, vehicle lot awareness |
-| Dashboard sidebar | Dashboards: Default. Operations: Vehicles. Staff: Security Duty Checks. |
-| Accessible pages | `/head_security/dashboard`, `/head_security/vehicles`, `/head_security/security-duty-checks` |
+| Dashboard sidebar | Dashboards: Default. Operations: Vehicles. Staff: Attendance, Employee Requests, Security Duty Checks, Announcements. |
+| Accessible pages | `/head_security/dashboard`, `/head_security/vehicles`, `/head_security/attendance`, `/head_security/employee-requests`, `/head_security/security-duty-checks`, `/head_security/announcements` |
 | System purpose | Monitors vehicle inventory to know what is on the lot. Completes security duty checks with before-and-after photographic evidence uploaded to a private storage bucket. |
 
 ---
@@ -167,6 +167,7 @@ All test accounts share one password. It is **not stored in this file** — it i
 | Page | CEO | Acct Mgr | Head Acct | Conf Inf | Marketing | Mechanic | Sales Mgr | Head Sec |
 |---|---|---|---|---|---|---|---|---|
 | Dashboard | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Finance | ✅ | ✅ | ✅ | ✅ | — | — | — | — |
 | Vehicles | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Showroom | ✅ | — | — | — | ✅ | — | ✅ | — |
 | Content | ✅ | — | — | — | ✅ | — | — | — |
@@ -178,18 +179,18 @@ All test accounts share one password. It is **not stored in this file** — it i
 | Suppliers | ✅ | ✅ | — | — | — | — | — | — |
 | Roles | ✅ | ✅ | — | — | — | — | — | — |
 | Users | ✅ | ✅ | — | — | — | — | — | — |
-| Staff Records | ✅ | ✅ | — | — | — | — | — | — |
-| Attendance | ✅ | ✅ | ✅ | — | — | — | — | — |
-| Employee Requests | ✅ | ✅ | — | — | — | — | — | — |
+| Staff Records | ✅ | ✅ | — | — | — | — | ✅ | — |
+| Attendance | ✅ | ✅ | ✅ | — | — | — | — | ✅ |
+| Employee Requests | ✅ | ✅ | — | — | — | — | — | ✅ |
 | Payroll | ✅ | ✅ | ✅ | — | — | — | — | — |
 | Payslips | ✅ | ✅ | ✅ | — | — | — | — | — |
-| Field Cases | ✅ | ✅ | — | ✅ | — | ✅ | ✅ | — |
+| Field Cases | ✅ | ✅ | ✅* | ✅ | — | ✅ | ✅ | — |
 | Security Duty Checks | ✅ | — | — | — | — | — | — | ✅ |
 | Reports | ✅ | ✅ | ✅ | — | — | — | — | — |
 | Announcements | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Supplier Messages | ✅ | — | — | — | — | — | — | — |
 
-Customers and suppliers use the customer-facing header navigation (Showroom, My Inquiries, Find Your Car) and do not see the dashboard sidebar. Every staff page listed above is also protected by an action-level role check and by Supabase RLS policies; see [12 - DATABASE SCHEMA](../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/12%20-%20DATABASE%20SCHEMA.md).
+Customers and suppliers use the customer-facing header navigation (Showroom, My Inquiries, Find Your Car) and do not see the dashboard sidebar. Every staff page listed above is also protected by a page-level role guard (`requireRole`), an action-level role check, and Supabase RLS policies; see [12 - DATABASE SCHEMA](../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/12%20-%20DATABASE%20SCHEMA.md). *The Head Accountant can open Field Cases (view cases and create repossession cases) but has no sidebar link to it.
 
 ---
 
@@ -197,7 +198,7 @@ Customers and suppliers use the customer-facing header navigation (Showroom, My 
 
 ### Staff (Dashboard Sidebar)
 
-Every staff role sees the dashboard sidebar with role-specific items. Empty groups are hidden. The sidebar filters based on `ROLE_NAV_ACCESS` in `src/lib/auth/roles.ts`, and each role's items are listed individually above. All staff roles share the internal `(staff)` route group; the role-prefixed URL (`/ceo/...`, `/mechanic/...`, ...) is rewritten by middleware to the shared pages.
+Every staff role sees the dashboard sidebar with role-specific items. Empty groups are hidden. The sidebar filters based on `ROLE_NAV_ACCESS` in `src/lib/auth/roles.ts`, and each role's items are listed individually above. Each page additionally enforces the same grant with a `requireRole` guard, so typing an address does not bypass the menu. All staff roles share the internal `(staff)` route group; the role-prefixed URL (`/ceo/...`, `/mechanic/...`, ...) is rewritten by middleware to the shared pages.
 
 ### Customer & Supplier (Header Navigation)
 

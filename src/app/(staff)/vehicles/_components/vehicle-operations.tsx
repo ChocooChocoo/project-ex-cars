@@ -10,9 +10,11 @@ import { VehicleTable } from "./vehicles-table";
 export function VehicleOperations({
   proposals,
   vehicles,
+  canManage,
 }: {
   readonly proposals: PriceProposalRow[];
   readonly vehicles: Record<string, unknown>[];
+  readonly canManage: boolean;
 }) {
   const [segment, setSegment] = useState<"pending" | "vehicles">(proposals.length > 0 ? "pending" : "vehicles");
 
@@ -32,7 +34,11 @@ export function VehicleOperations({
         <ToggleGroupItem value="pending">Pending</ToggleGroupItem>
         <ToggleGroupItem value="vehicles">Vehicles</ToggleGroupItem>
       </ToggleGroup>
-      {segment === "pending" ? <PendingApprovalsTable proposals={proposals} /> : <VehicleTable vehicles={vehicles} />}
+      {segment === "pending" ? (
+        <PendingApprovalsTable proposals={proposals} />
+      ) : (
+        <VehicleTable vehicles={vehicles} canManage={canManage} />
+      )}
     </div>
   );
 }

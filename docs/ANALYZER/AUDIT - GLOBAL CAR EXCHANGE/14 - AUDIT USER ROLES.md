@@ -5,7 +5,7 @@
 > **Supporting context:** `docs/ANALYZER/ANALYSIS - GLOBAL CAR EXCHANGE/`
 > **Implementation reviewed:** `src/`, `supabase/migrations/`, `src/lib/auth/roles.ts`
 > **Date:** 9 August 2026
-> **Remediation status:** All section-7.1 recommendations were implemented on 9 August 2026 (migrations 00024–00028; see docs/tasks/13.md). Per-item status is tracked live in [15 - SYSTEM STATUS](15%20-%20SYSTEM%20STATUS.md). Remaining deviations are documented, deliberate substitutions (Informant cash-handoff ledger, supplier portal, general autofill).
+> **Remediation status:** All section-7.1 recommendations were implemented on 9 August 2026 (migrations 00024–00028; see docs/tasks/13.md). A follow-up RBAC/least-privilege pass on 10 August 2026 (migration `00038_rbac_least_privilege.sql`, `ROLE_NAV_ACCESS` refinements in `src/lib/auth/roles.ts`, page guards, action-guard narrowing; see docs/tasks/26.md) scoped operational writes to the responsible roles while keeping CEO visibility and approval authority. Per-item status is tracked live in [15 - SYSTEM STATUS](15%20-%20SYSTEM%20STATUS.md). Remaining deviations are documented, deliberate substitutions (Informant cash-handoff ledger, supplier portal, general autofill).
 
 ---
 
@@ -20,12 +20,12 @@ The GCE system defines **10 user roles**, and the capstone documentation describ
 | 2 | External roles (Customer, Supplier) |
 | 1 | Extra group in docs only: **Procurement Team** (revision list; no role value assigned) |
 
-**Overall alignment: ~75%.** All roles exist and their core modules are built, but several documented behaviours are only partially implemented or enforced differently:
+**Overall alignment: ~90%.** All roles exist and their core modules are built, and the 9–10 August 2026 remediation passes closed most documented gaps; a few behaviours remain deliberately substituted or partially enforced:
 
-1. **Supplier onboarding (R-27)** is the largest gap — no two-primary-ID capture, no "no sign-in before approval" gate, no Company/Individual validation server-side, no invitation evidence, and no supplier auth-account linkage. The creators are CEO/Account Manager instead of a Procurement Team (Q-19 unresolved).
+1. **Supplier onboarding (R-27) is implemented** — two-primary-ID upload + verification, approval-gated sign-in, server-side Company/Individual validation, and auth-account linkage landed 9 August 2026 (migrations 00024–00028). The creators are CEO/Account Manager per the Q-19 resolution (CEO/AM as the procurement capability); the self-registration portal + invitation evidence remain a documented backlog item.
 2. **Inquiry routing is visibility-based, not automatic** — "Inquiry → Account Manager" and "Buy Now → Sales Manager" are enforced by queue filtering + RLS + a manual "Assign to Me" button rather than auto-assignment at creation.
-3. **Head Accountant's documented duties are mostly missing** — no installment due-date notification to Account Manager, no repossession instruction to Confidential Informant, and no release-of-funds action for car purchases. Payroll salary-payment responsibility *is* implemented (`markPayslipPaid`).
-4. **Confidential Informant's documented fund path is not implemented** — the payment-request-to-CEO workflow is replaced by a generalized disbursement ledger where the Informant can *create* requests but cannot reach the finance page UI.
+3. **Head Accountant's documented duties are implemented** — installment due-date notification to Account Manager (`checkAndNotifyDueInstallments`), repossession instruction to Confidential Informant (`instructRepossession`; head_accountant field-case access via migration 00038), release-of-funds for car purchases (`requestPurchaseFunds` → `advanceDisbursement`), and payroll salary payment (`markPayslipPaid`).
+4. **Confidential Informant's documented fund path differs** — the payment-request-to-CEO workflow is replaced by a generalized disbursement ledger; the Informant can *create* requests and open the finance page (read-only, since 10 Aug 2026) but there is no CEO fund-release handoff.
 5. **Some documented roles lack an owner in the sidebar hierarchy** — Head Security is not listed as an administrator, yet the docs describe it using attendance and proof-of-duty. Implementation treats it as a staff role, which is consistent.
 
 The detailed findings, per-role profiles, gap matrix, communication flows, and recommendations follow.
@@ -85,9 +85,9 @@ The detailed findings, per-role profiles, gap matrix, communication flows, and r
 | Repossession | Confidential Informant | ⚠️ Partial | `recovery` case kind exists; no Head-Accountant instruction flow |
 | Delivery | Confidential Informant | ✅ | `field-cases` (delivery kind) |
 | Mechanic reports | Confidential Informant | ✅ | `vehicles`, `inspections` nav |
-| Payment approval process | Confidential Informant | ⚠️ Differs | generalized disbursement requests; no CEO→funds handoff; no finance page access |
+| Payment approval process | Confidential Informant | ⚠️ Differs | generalized disbursement requests; no CEO→funds handoff; finance page readable (own requests) since 10 Aug 2026 |
 | Case expenses | Confidential Informant | ✅ | `field-cases` expenses editable |
-| Vehicle posting | Marketing Specialist | ✅ | `vehicles` (ceo/sales/marketing) |
+| Vehicle posting | Marketing Specialist | ✅ | `vehicles` (INSERT/UPDATE marketing-only; DELETE ceo-only, migration 00038) |
 | Price approval | Marketing Specialist | ✅ | `proposePrice` → CEO `approvePrice` |
 | Vehicle inspection | Mechanic | ✅ | `inspections`, nested checklist |
 | Repair progress tracking | Mechanic | ✅ | checklist results + part replacements |
@@ -107,7 +107,7 @@ The detailed findings, per-role profiles, gap matrix, communication flows, and r
 
 - **Purpose / business value:** Top-level oversight of the entire GCE operation; the executive decision-maker and approver.
 - **Real-world scenario:** The owner/chief executive watches daily operations on one screen, approves price proposals before a car is posted, signs off on reports, and broadcasts company announcements to employees.
-- **Access level:** Full — every nav item (`ROLE_NAV_ACCESS.ceo` lists all 22 items, `src/lib/auth/roles.ts:87-110`). Sole owner of announcement creation, price approval, vehicle deletion, and supplier-message channel.
+- **Access level:** Full — every nav item (`ROLE_NAV_ACCESS.ceo` lists all 23 items, `src/lib/auth/roles.ts:103-127`). Sole owner of announcement creation, price approval, vehicle deletion, and supplier-message channel. Since migration 00038 (10 Aug 2026) operational writes are RLS-scoped to the responsible roles — the CEO keeps SELECT-all visibility plus approval/review authority rather than blanket CRUD.
 - **Responsibilities (docs):** Executive dashboard overview; approval/rejection of payslip & disbursement reports (Account Manager), expense & revenue reports (Head Accountant), vehicle price proposals (Marketing Specialist), inventory reports (Sales Manager); company announcements; approves cars for inventory.
 - **Implemented:** ✅ Executive dashboard with live operations overview (`dashboard/page.tsx` CEO-only `Phase6Overview`). ✅ Price approval CEO-only (`vehicles/actions.ts:178-232`). ✅ Announcements CEO-only (`announcements/actions.ts`). ✅ Report review (CEO + Head Acct). ⚠️ "Approves cars for inventory" is approximated by `publishVehicle` requiring an approved price proposal; there is no separate explicit "approve car for inventory" decision distinct from pricing. ✅ Supplier messages (CEO-only side, read-only UI).
 - **Communication patterns:**
@@ -122,7 +122,7 @@ The detailed findings, per-role profiles, gap matrix, communication flows, and r
 
 - **Purpose / business value:** The operational hub — HR, client-relations, payroll preparation, and RBAC administrator.
 - **Real-world scenario:** The office manager who fields client inquiries about cars, arranges viewings, keeps employee/customer records, processes attendance and leave, prepares payroll, and decides who in the company may see what.
-- **Access level:** Broad staff access — `ROLE_NAV_ACCESS.account_manager` (18 items, `roles.ts:111-130`): Dashboard, Roles, Users, Vehicles, Inspections, Inquiries, Recommendations, Transactions, Roadmap, Suppliers, Staff Records, Attendance, Employee Requests, Payroll, Payslips, Field Cases, Reports, Announcements. Not granted: Showroom, Content, Security Duty Checks, Supplier Messages.
+- **Access level:** Broad staff access — `ROLE_NAV_ACCESS.account_manager` (19 items, `roles.ts:128-148`): Dashboard, Finance, Roles, Users, Vehicles, Inspections, Inquiries, Recommendations, Transactions, Roadmap, Suppliers, Staff Records, Attendance, Employee Requests, Payroll, Payslips, Field Cases, Reports, Announcements. Not granted: Showroom, Content, Security Duty Checks, Supplier Messages.
 - **Responsibilities (docs):** Dashboard overview (leave, overtime, reconditioning); inquiries + viewing schedule with handoff to Sales Manager; employee & customer account records; attendance/leave/overtime/late-arrival processing; payroll preparation (salary + statutory deductions) submitted to Head Accountant; RBAC management.
 - **Implemented:**
   - ✅ Inquiries: queue + schedule (`scheduleArrangement`) + handoff (`handoffInquiry`).
@@ -144,7 +144,7 @@ The detailed findings, per-role profiles, gap matrix, communication flows, and r
 
 - **Purpose / business value:** Financial oversight, payroll/payslip payment authority, and cross-checking of inventory, sales, attendance, and installment accounts.
 - **Real-world scenario:** The finance lead who checks the books against the lot and sales, signs off payroll, pays employees, monitors installment payers, and watches for non-payment so recovery can be triggered.
-- **Access level:** `ROLE_NAV_ACCESS.head_accountant` (8 items): Dashboard, Vehicles, Transactions, Attendance, Payroll, Payslips, Reports, Announcements.
+- **Access level:** `ROLE_NAV_ACCESS.head_accountant` (9 items, `roles.ts:149-159`): Dashboard, Finance, Vehicles, Transactions, Attendance, Payroll, Payslips, Reports, Announcements.
 - **Responsibilities (docs):** Disbursement for car purchases (upon CEO request); payroll/payslip payment responsibility; car inventory monitoring (view); car sales monitoring (view); installment accounts (notify AM at due date → repossession path → instruct Confidential Informant to retrieve); attendance monitoring (view).
 - **Implemented:**
   - ✅ Payroll payment responsibility: `markPayslipPaid` head_accountant-only (`payroll/actions.ts:58`); payroll review seq 1; `finalizePayrollRun` head_accountant-only.
@@ -153,17 +153,17 @@ The detailed findings, per-role profiles, gap matrix, communication flows, and r
   - ✅ Installment accounts (partial): payment terms approve (`approvePaymentTerms`), installment waive (`markInstallmentWaived`), payment verify (`verifyPayment`). The *schedule generation* is triggered by CEO/Account Manager (`activatePaymentTerms`), not Head Acct.
   - ❌ Car-purchase disbursement release: **no release-of-funds action**; disbursements are advanced through a generic ledger by CEO+Head Acct, but there is no documented CEO-request → Head-Acct-release handoff for purchases.
   - ❌ Installment due-date notification to Account Manager: **not implemented** (no notification flow found).
-  - ❌ Repossession instruction to Confidential Informant: **not implemented** (no action creating a recovery case from an installment).
+  - ✅ Repossession instruction to Confidential Informant: `instructRepossession` creates a `recovery` field case; migration 00038 grants head_accountant field-cases SELECT + INSERT (10 Aug 2026).
 - **Communication patterns (documented vs. actual):**
   - Documented: notifies Account Manager at due date; instructs Confidential Informant to retrieve vehicles; releases car-purchase funds on CEO request.
   - Actual: approves payment terms, verifies payments, waives installments, pays payslips, reviews reports.
-- **Documented vs. implemented:** Partial. Payment/payslip authority is fully implemented; the installment-notification, repossession-instruction, and purchase-disbursement handoffs are absent.
+- **Documented vs. implemented:** Well aligned. Payment/payslip authority and the full financial duty chain (due-date notification, repossession instruction, purchase-funds release) are implemented; the only nuance is that installment schedule *generation* is triggered by CEO/Account Manager, not Head Acct.
 
 ### 4.4 Sales Manager
 
 - **Purpose / business value:** Owner of the sales pipeline — Buy Now handling, walk-in accounts, transactions, paperwork, and record of sales.
 - **Real-world scenario:** The sales lead who closes deals: takes over when an inquiring client walks in, creates accounts for walk-in buyers/sellers, records each sale with buyer and payment details, and manages paperwork.
-- **Access level:** `ROLE_NAV_ACCESS.sales_manager` (9 items): Dashboard, Vehicles, Showroom, Inspections, Inquiries, Recommendations, Transactions, Roadmap, Field Cases.
+- **Access level:** `ROLE_NAV_ACCESS.sales_manager` (11 items, `roles.ts:170-182`): Dashboard, Vehicles, Showroom, Inspections, Inquiries, Recommendations, Transactions, Roadmap, Field Cases, Staff Records, Announcements.
 - **Responsibilities (docs):** Buy Now handling (vs. Inquiry → Account Manager); auto-filled purchase forms + 2 valid IDs + proof of billing; walk-in buyer/seller account creation; record of sales; paperwork.
 - **Implemented:**
   - ✅ Buy Now routing (visibility): staff `inquiries` page filters to `buy_now` for sales_manager (`inquiries/page.tsx:15-17`); RLS `Sales Manager can read buy_now inquiries`; "Assign to Me" derives `sales_manager` for `buy_now`.
@@ -182,20 +182,20 @@ The detailed findings, per-role profiles, gap matrix, communication flows, and r
 
 - **Purpose / business value:** The field agent — physically acquires, delivers, and recovers vehicles, and records related expenses.
 - **Real-world scenario:** The person dispatched to pick up a purchased car, deliver a sold car, or repossess one from a non-paying buyer; logs travel expenses per assignment.
-- **Access level:** `ROLE_NAV_ACCESS.confidential_informant` (5 items): Dashboard, Vehicles, Inspections, Transactions, Field Cases, Announcements.
+- **Access level:** `ROLE_NAV_ACCESS.confidential_informant` (7 items, `roles.ts:160-168`): Dashboard, Finance, Vehicles, Inspections, Transactions, Field Cases, Announcements.
 - **Responsibilities (docs):** Car acquisition; mechanic assignment; repossession; delivery; mechanic reports viewing; payment approval process (request → CEO approval → funds); case expenses.
 - **Implemented:**
   - ✅ Field cases: worker role (`FIELD_CASE_WORKERS = [ceo, confidential_informant, mechanic, sales_manager]`); kinds include `acquisition`, `delivery`, `recovery`, `sourcing`; expenses editable (`expenses_cents`).
   - ⚠️ Repossession: `recovery` case kind exists but no Head-Accountant → Informant instruction flow.
   - ❌ Mechanic assignment: **no action** for assigning a mechanic to accompany an inspection.
-  - ⚠️ Payment approval process: **differs**. The Informant can *create* disbursement requests (`finance/actions.ts:13`, `DISBURSEMENT_REQUESTERS`), and RLS lets them read their own, but they are **excluded from the finance page gate** (`FINANCE_ROLES = [ceo, head_accountant, account_manager]`), and there is no CEO → Informant fund-release handoff tied to a vehicle transaction.
+  - ⚠️ Payment approval process: **differs**. The Informant can *create* disbursement requests (`finance/actions.ts:13`, `DISBURSEMENT_REQUESTERS`) and has had the finance page since 10 Aug 2026 (`FINANCE_ROLES = [ceo, head_accountant, account_manager, confidential_informant]`, read-only — record/verify/advance disabled for Informant), but there is no CEO → Informant fund-release handoff tied to a vehicle transaction.
   - ✅ Case expenses recorded.
 - **Communication patterns:**
   - ← Head Accountant (documented): repossession instruction. **Missing.**
   - ↑ CEO (documented): payment request → approval → funds. **Changed** to a generic disbursement ledger.
   - → Mechanic (documented): assignment for inspection. **Missing.**
   - → CEO: sourcing leads via `assignInformant` (as the assignee, receives cases).
-- **Documented vs. implemented:** Partial. Field-case handling and expenses exist; the mechanic-assignment, repossession-instruction, and CEO payment-funds flows are missing/changed.
+- **Documented vs. implemented:** Partial. Field-case handling (all four kinds), expenses, mechanic assignment (`assignMechanic`), and read-only finance access exist; the CEO payment-funds flow remains a generalized ledger rather than a per-request handoff.
 
 ### 4.6 Marketing Specialist
 
@@ -204,8 +204,8 @@ The detailed findings, per-role profiles, gap matrix, communication flows, and r
 - **Access level:** `ROLE_NAV_ACCESS.marketing_specialist` (5 items): Dashboard, Vehicles, Showroom, Content, Announcements.
 - **Responsibilities (docs):** Vehicle posting; price approval (propose → CEO approve before posting).
 - **Implemented:**
-  - ✅ Vehicle posting: `createVehicle`/`updateVehicle`/`archiveVehicle` (ceo/sales/marketing).
-  - ✅ Price approval: `proposePrice` (ceo/marketing) → CEO-only `approvePrice`; `publishVehicle` **requires an approved price proposal** (`vehicles/actions.ts:126-135`).
+  - ✅ Vehicle posting: `createVehicle`/`updateVehicle`/`archiveVehicle` marketing-only since 10 Aug 2026 (action guards + RLS, migration 00038).
+  - ✅ Price approval: `proposePrice` (marketing-only since 10 Aug 2026) → CEO-only `approvePrice`; `publishVehicle` **requires an approved price proposal** (`vehicles/actions.ts:126-135`).
   - ✅ Content: `createContentItem`/`publishContent` (hero/promotion/featured_vehicle).
   - ✅ Showroom presentation: `staff-showroom` preview.
   - ✅ 360° media: upload manager for `360_view` frames.
@@ -218,11 +218,11 @@ The detailed findings, per-role profiles, gap matrix, communication flows, and r
 
 - **Purpose / business value:** Provides condition intelligence — inspections feed the DSS scores and repair records.
 - **Real-world scenario:** The technician who checks each car GCE is acquiring (on-site or with the Confidential Informant), works the nested system → component → part checklist, records repairs, and produces the inspection report that feeds pricing and recommendations.
-- **Access level:** `ROLE_NAV_ACCESS.mechanic` (4 items): Dashboard, Vehicles, Inspections, Field Cases.
+- **Access level:** `ROLE_NAV_ACCESS.mechanic` (5 items, `roles.ts:183`): Dashboard, Vehicles, Inspections, Field Cases, Announcements.
 - **Responsibilities (docs):** Vehicle inspection; repair progress tracking; accompanies Confidential Informant off-site.
 - **Implemented:**
   - ✅ Nested checklist: `ChecklistEntry { level: system|component|part }` (`inspections/_components/checklist-form.tsx:19-25`).
-  - ✅ Condition scoring: `submitChecklistAnswer` (ceo/mechanic) with part replacements (name/brand/cost).
+  - ✅ Condition scoring: `submitChecklistAnswer` (mechanic-only since 10 Aug 2026; migration 00038 scopes inspections/repairs/checklist/part-replacement writes to mechanic) with part replacements (name/brand/cost).
   - ✅ Repair progress: per-entry results + `part_replacements`.
   - ⚠️ Inspection report: a summary list/detail exists; revision R-33 (one status per component, auto-filled from checklist) is approximated by the checklist itself.
   - ⚠️ Accompanies Informant: no explicit pairing flow (same gap as Informant's mechanic-assignment).
@@ -235,7 +235,7 @@ The detailed findings, per-role profiles, gap matrix, communication flows, and r
 
 - **Purpose / business value:** Physical security evidence — attendance and before/after proof-of-duty photographs.
 - **Real-world scenario:** The guard on duty clocks in, submits leave/overtime requests, and uploads photos of the building's locks and grounds before and after each shift as proof the site was secured.
-- **Access level:** `ROLE_NAV_ACCESS.head_security` (3 items): Dashboard, Vehicles, Security Duty Checks.
+- **Access level:** `ROLE_NAV_ACCESS.head_security` (6 items, `roles.ts:184-191`): Dashboard, Vehicles, Attendance, Employee Requests, Security Duty Checks, Announcements.
 - **Responsibilities (docs):** Attendance functions (leave, overtime, time-in/out); proof of duty (before/after photographic evidence).
 - **Implemented:**
   - ✅ Attendance: any staff can clock in/out; `employee-requests` for leave/overtime.
@@ -302,9 +302,9 @@ Priority: **H** = blocks documented behaviour; **M** = meaningful behaviour diff
 | G6 | **Procurement Team** creates supplier accounts | Revisions §5 | ⚠️ CEO/Account Manager instead; role not defined | M | `auth/actions.ts:224`; Q-19 |
 | G7 | Inquiry → Account Manager; Buy Now → Sales Manager (auto-routing) | USERS LEVELS §Sales Mgr 1 | ⚠️ Visibility + RLS + manual "Assign to Me"; not auto-assigned | M | `inquiries/page.tsx:15-17`, `staff-chat-view.tsx:95-98`, migration `00005` |
 | G8 | Head Accountant notifies AM at installment **due date** | USERS LEVELS §Head Acct 5 | ❌ No notification flow | H | installments module |
-| G9 | Head Accountant instructs Informant to **repossess** | USERS LEVELS §Head Acct 5, §Conf Inf 3 | ❌ No instruction action; `recovery` case kind only | H | `field-cases` |
+| G9 | Head Accountant instructs Informant to **repossess** | USERS LEVELS §Head Acct 5, §Conf Inf 3 | ✅ `instructRepossession` creates a `recovery` field case; migration 00038 grants head_accountant field-cases SELECT + INSERT (10 Aug 2026) | — | `transactions/actions.ts:708`; migration `00038` |
 | G10 | Head Accountant **releases car-purchase funds** on CEO request | USERS LEVELS §Head Acct 1 | ❌ No release-of-funds action for purchases | M | `finance` |
-| G11 | Confidential Informant **payment-request → CEO approval → funds** | USERS LEVELS §Conf Inf 6 | ⚠️ Generalized disbursement; no CEO-funds handoff; no finance page access | M | `finance/actions.ts:13`, `finance/page.tsx:8` |
+| G11 | Confidential Informant **payment-request → CEO approval → funds** | USERS LEVELS §Conf Inf 6 | ⚠️ Generalized disbursement; no CEO-funds handoff; finance page readable (own requests) since 10 Aug 2026 | M | `finance/actions.ts:13`, `finance/page.tsx:8` |
 | G12 | Informant **assigns a mechanic** for off-site inspection | USERS LEVELS §Conf Inf 2 | ❌ No mechanic-assignment action | M | field-cases |
 | G13 | Account Manager **vehicle reconditioning** dashboard | USERS LEVELS §Acct Mgr 1 | ❌ No reconditioning module | L | dashboard |
 | G14 | Account Manager **statutory deductions** (SSS/Pag-IBIG/TIN/PhilHealth) | USERS LEVELS §Acct Mgr 4 | ⚠️ Free-form line items; no computation; no TIN field | M | `payslips/[id]` detail |
@@ -322,8 +322,8 @@ Priority: **H** = blocks documented behaviour; **M** = meaningful behaviour diff
 ### 5.2 Highest-impact gaps
 
 1. **Supplier onboarding & sign-in gating (G1–G6, G19).** KYC, two-ID evidence, approval gating, account linkage, and the CEO channel are all incomplete. This is the single weakest area against the revision list and blocks the documented B2B/B2C supplier story.
-2. **Head Accountant financial duty chain (G8–G10).** The installment-due → AM-notify → repossession-instruct and CEO-request → funds-release loops that the docs describe for the Head Accountant are absent; recovery is reduced to a case kind.
-3. **Informant financial/field flows (G11, G12, G24).** The Informant's payment-request-to-CEO path and mechanic-assignment duty are not realized; field cases can only be created via the sourcing path.
+2. **Head Accountant financial duty chain (G8–G10).** Resolved 9–10 August 2026 — due-date notifications (`checkAndNotifyDueInstallments`), the repossession instruction (`instructRepossession`; head_accountant field-case access via migration 00038), and purchase fund release (`requestPurchaseFunds` → `advanceDisbursement`) are all implemented.
+3. **Informant financial/field flows (G11, G12, G24).** Mostly resolved — mechanic assignment (`assignMechanic`) and `createFieldCase` for all four kinds (recovery restricted to CEO/Head Accountant) exist, and the Informant can open the finance page (read-only). The payment-request-to-CEO path remains a generalized disbursement ledger (deliberate substitution).
 
 ---
 
@@ -374,7 +374,7 @@ Completion (buy)  -->  vehicle auto-marked 'sold' everywhere
 - `CEO (request) → Head Accountant (release funds for car purchase)` — absent.
 - `Head Accountant (installment due) → Account Manager (contact buyer)` — absent.
 - `Head Accountant (ultimatum passed) → Confidential Informant (repossess)` — absent; `recovery` case kind exists but nothing creates it.
-- `Confidential Informant (payment request) → CEO (approve) → funds` — replaced by generic disbursement ledger; Informant can't even open the finance page.
+- `Confidential Informant (payment request) → CEO (approve) → funds` — replaced by generic disbursement ledger; the Informant can open the finance page (read-only) since 10 Aug 2026.
 
 ### 6.4 Payroll chain (AM → HA → CEO → HA)
 
@@ -400,20 +400,20 @@ Supplier messages: CEO ↔ approved Supplier (read-only UI; RLS enforced)
 
 ```
 Field cases: kinds acquisition | delivery | recovery | sourcing
-  - created only via assignInformant (CEO+SM) as 'sourcing'
-  - workers: ceo, confidential_informant, mechanic, sales_manager
+  - created via assignInformant (CEO+SM) or createFieldCase (ceo, confidential_informant, sales_manager, head_accountant); recovery restricted to CEO/Head Accountant
+  - workers: ceo, confidential_informant, mechanic, sales_manager (Head Security removed 10 Aug 2026)
   - expenses_cents recorded per case
 Security duty checks: head_security start → upload before/after → complete (both required)
 Mechanic: checklist → inspection_score → DSS + repair progress
 ```
-**Gap:** no creation path for acquisition/delivery/recovery cases; mechanic-assignment pairing missing.
+**Gap:** creation paths for all four kinds and mechanic assignment (`assignMechanic`) exist; only automatic Informant↔Mechanic pairing is absent.
 
 ### 6.7 Role hierarchy (permission tiers)
 
 ```
-CEO                     (everything, sole approver of prices/announcements/deletions)
-├── Account Manager     (RBAC, payroll prep, inquiries, staff records)
-├── Head Accountant     (payroll pay, verify payments, reports; lacks due-date/ins-truction flows)
+CEO                     (select-all visibility + approvals; operational writes scoped per role, migration 00038)
+├── Account Manager     (RBAC, payroll prep, inquiries, staff records, finance)
+├── Head Accountant     (payroll pay, verify payments, reports, finance; due-date notices + repossession instructions)
 ├── Sales Manager       (sales pipeline, Buy Now, walk-in accounts, transitions)
 └── Staff workers       Confidential Informant / Mechanic / Marketing Specialist / Head Security
 Public:  Customer | Supplier
@@ -423,29 +423,31 @@ Public:  Customer | Supplier
 
 ## 7. Recommendations
 
-### 7.1 Align implementation with documentation (code changes, future work)
+### 7.1 Align implementation with documentation (code changes)
 
-1. **Close the supplier onboarding gap (R-27).**
+All items below were implemented on 9 August 2026 (migrations 00024–00028) and the RBAC/least-privilege pass on 10 August 2026 (migration 00038, page guards, `ROLE_NAV_ACCESS`).
+
+1. **Close the supplier onboarding gap (R-27).** — Implemented 9 Aug 2026 (migrations 00024–00028):
    - Add a `supplier_documents` upload flow (two primary IDs from `ACCEPTED_ID_TYPES`) and a verification step before approval (`approveSupplier`).
    - Gate sign-in on `suppliers.state = 'approved'` in `signIn` (and middleware) — reject with a "pending approval" message otherwise.
    - Add server-side validation for `supplierKind` (`z.enum(["company","individual"])`) and a state-transition guard in `approveSupplier` (only `pending_approval` may be decided).
    - Set `suppliers.account_id` when a supplier user signs in / is linked.
    - Resolve Q-19 (Procurement Team identity) — either document CEO/Account Manager as the procurement capability or add a permission set for it.
-2. **Wire the CEO↔Supplier channel (R-38 / Revisions §3):** implement a send action using the existing `supplierMessageSchema`; today the page is read-only.
-3. **Restore the Head Accountant financial chain (G8–G10):**
+2. **Wire the CEO↔Supplier channel (R-38 / Revisions §3):** — Implemented 9 Aug 2026: `sendSupplierMessage` sends via the existing `supplierMessageSchema`; the page is no longer read-only.
+3. **Restore the Head Accountant financial chain (G8–G10):** — Implemented 9–10 Aug 2026: due-date notifications (`checkAndNotifyDueInstallments`), repossession instruction (`instructRepossession`; head_accountant field-case access via migration 00038), and purchase fund release (`requestPurchaseFunds` → `advanceDisbursement`).
    - Add a due-date notification from installments to the Account Manager (and, if in scope, a route for Account Manager to contact the buyer).
    - Add a "repossession instruction" action that creates a `recovery` field case assigned to a Confidential Informant (Head Accountant only).
    - Add an explicit car-purchase fund-release action (CEO request → Head Accountant release) or document that the generic disbursement ledger supersedes it.
-4. **Give the Confidential Informant their documented flows (G11–G12):**
+4. **Give the Confidential Informant their documented flows (G11–G12):** — Implemented: mechanic assignment (`assignMechanic`, 9 Aug 2026) and finance page read access (10 Aug 2026, `ROLE_NAV_ACCESS` + `FINANCE_ROLES`). The fund-release path remains the generalized disbursement ledger (deliberate substitution).
    - Grant the Informant read access to the finance page for their own disbursement requests, or provide a dedicated payment-request UI to the CEO with a fund-release state.
    - Add a mechanic-assignment action on field cases/inspections.
-5. **Add creation paths for field cases** of kind `acquisition`, `delivery`, and `recovery` (today only `sourcing` is created via `assignInformant`).
-6. **Replace the static `users/` page** with DB-backed staff/customer records, or remove the mock page so it isn't mistaken for real RBAC UI.
-7. **Automate statutory deductions** (SSS/Pag-IBIG/PhilHealth/TIN) or add dedicated deduction fields in `payslips` instead of free-form items, per `USERS LEVELS §Acct Mgr 4`.
-8. **Implement a general autofill layer (R-29)** so stored registration details fill purchase/request forms beyond the current sales path.
-9. **Enforce the two-ID + proof-of-billing requirement** on purchases (validation + a verification step) per `USERS LEVELS §Sales Mgr 2`.
-10. **Add the `pending_handoff` step** to the AM→SM handoff so the Sales Manager accepts the handoff, matching the documented two-stage transfer.
-11. **Add a vehicle-reconditioning view** for the Account Manager dashboard (documented in `USERS LEVELS §Acct Mgr 1`) or remove it from the docs.
+5. **Add creation paths for field cases** — Implemented 9 Aug 2026: `createFieldCase` covers all four kinds; `recovery` is restricted to CEO/Head Accountant (migration 00038).
+6. **Replace the static `users/` page** — Implemented 9 Aug 2026: `users/` is DB-backed (profiles + roles).
+7. **Automate statutory deductions** — Implemented 9 Aug 2026: compensation record fields auto-create payslip deduction items (SSS/Pag-IBIG/PhilHealth/TIN).
+8. **Implement a general autofill layer (R-29)** — Partial: purchase-flow and arrangement-location autofill exist; general autofill stays on the backlog (see [15 - SYSTEM STATUS](15%20-%20SYSTEM%20STATUS.md)).
+9. **Enforce the two-ID + proof-of-billing requirement** — Implemented 9 Aug 2026: `verifyTransactionDocument`; `buy → completed` blocked until 2 verified IDs + billing, per `USERS LEVELS §Sales Mgr 2`.
+10. **Add the `pending_handoff` step** — Implemented 9 Aug 2026: `pending_handoff` → `acceptHandoff` (Sales Manager accepts the handoff).
+11. **Add a vehicle-reconditioning view** — Implemented 9 Aug 2026: `ReconditioningOverview` widget on the Account Manager dashboard, per `USERS LEVELS §Acct Mgr 1`.
 
 ### 7.2 Update documentation to reflect implementation (docs changes)
 
@@ -458,7 +460,7 @@ Public:  Customer | Supplier
 
 ### 7.3 Roadmap suggestion
 
-Fold the supplier work (7.1.1) and the Head Accountant chain (7.1.3) into the next implementation phase before any further Phase 6 work, since both are high-priority documented behaviours with no current coverage. Track the rest as a documented backlog tied to the open questions in `docs/ANALYZER/…/00 - START HERE.md` (Q-04, Q-12, Q-13, Q-14, Q-15, Q-19, Q-22).
+Fold the supplier work (7.1.1) and the Head Accountant chain (7.1.3) into the next implementation phase before any further Phase 6 work, since both are high-priority documented behaviours with no current coverage. — Done: both were implemented in the 9–10 August 2026 passes before further Phase 6 work. Track the rest as a documented backlog tied to the open questions in `docs/ANALYZER/…/00 - START HERE.md` (Q-04, Q-12, Q-13, Q-14, Q-15, Q-19, Q-22).
 
 ---
 
@@ -466,6 +468,7 @@ Fold the supplier work (7.1.1) and the Head Accountant chain (7.1.3) into the ne
 
 | Concern | File | Lines |
 |---|---|---|
+| RBAC least-privilege RLS (role-scoped operational writes) | `supabase/migrations/00038_rbac_least_privilege.sql` | — |
 | Role definitions, nav access, landing pages | `src/lib/auth/roles.ts` | 1–177 |
 | Page guard | `src/lib/auth/guards.ts` | `requireRole` |
 | Server-action guard | `src/lib/auth/action-guard.ts` | `authorizeAction` |

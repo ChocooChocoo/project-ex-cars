@@ -5,10 +5,12 @@ import { Sparkles } from "lucide-react";
 import { ShowroomGrid } from "@/app/(customer)/showroom/_components/showroom-grid";
 import { getCurrentRole } from "@/app/auth/actions";
 import { Button } from "@/components/ui/button";
+import { requireRole } from "@/lib/auth/guards";
 import { rolePath } from "@/lib/routing/paths";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export default async function DashboardShowroomPage() {
+  await requireRole(["ceo", "marketing_specialist", "sales_manager"]);
   const supabase = await createServerSupabase();
   const role = (await getCurrentRole()) ?? "ceo";
 

@@ -1,4 +1,6 @@
 import { getCurrentRole } from "@/app/auth/actions";
+import { requireRole } from "@/lib/auth/guards";
+import { STAFF_ROLES } from "@/lib/auth/roles";
 import { checkAndNotifyDueInstallments, getNotifications } from "@/lib/notifications/actions";
 
 import { MetricCards } from "./_components/metric-cards";
@@ -9,6 +11,7 @@ import { ReconditioningOverview } from "./_components/reconditioning-overview";
 import { SubscriberOverview } from "./_components/subscriber-overview";
 
 export default async function Page() {
+  await requireRole(STAFF_ROLES);
   const role = await getCurrentRole();
   const isCeo = role === "ceo";
 
