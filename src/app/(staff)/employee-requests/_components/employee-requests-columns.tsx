@@ -6,6 +6,7 @@ import { CalendarClock, Check, MoreHorizontal, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -81,6 +82,49 @@ export function createEmployeeRequestColumns({
 }: EmployeeRequestColumnOptions): ColumnDef<EmployeeRequestRow>[] {
   return [
     {
+      id: "select",
+      header: ({ table }) => (
+        <div className="flex items-center justify-center">
+          <Checkbox
+            checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && "indeterminate")}
+            onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+            aria-label="Select all employee requests on this page"
+          />
+        </div>
+      ),
+      cell: ({ row }) => (
+        <div className="flex items-center justify-center">
+          <Checkbox
+            checked={row.getIsSelected()}
+            onCheckedChange={(value) => row.toggleSelected(!!value)}
+            aria-label={`Select request ${row.original.id}`}
+          />
+        </div>
+      ),
+      enableHiding: false,
+    },
+    {
+      id: "search",
+      accessorFn: (row) =>
+        `${row.id} ${row.request_kind} ${row.status} ${row.reason} ${row.start_date} ${row.end_date ?? ""}`,
+      filterFn: "includesString",
+      enableHiding: true,
+    },
+    {
+      id: "startWindow",
+      accessorFn: (row) => {
+        const daysSinceStart = Math.max(
+          0,
+          Math.round((new Date().setHours(0, 0, 0, 0) - new Date(row.start_date).setHours(0, 0, 0, 0)) / 86_400_000),
+        );
+        if (daysSinceStart <= 30) return ["30", "90"];
+        if (daysSinceStart <= 90) return ["90"];
+        return [];
+      },
+      filterFn: "arrIncludes",
+      enableHiding: true,
+    },
+    {
       accessorKey: "request_kind",
       header: "Type",
       cell: ({ row }) => (
@@ -125,32 +169,30 @@ export function createEmployeeRequestColumns({
       header: () => <span className="sr-only">Actions</span>,
       cell: ({ row }) => {
         const request = row.original;
-        if (canReview && request.status === "pending") {
-          return (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="size-8" aria-label="Open review actions">
-                  <MoreHorizontal className="size-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="size-8" aria-label="Open request actions">
+                <MoreHorizontal className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              {canReview && request.status === "pending" ? (
                 <DropdownMenuItem onClick={() => onReview(request)}>
                   <Check data-icon="inline-start" />
                   Review request
                 </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          );
-        }
-        if (!canReview && request.status === "pending") {
-          return (
-            <Button variant="ghost" size="sm" onClick={() => onCancel(request.id)}>
-              <X data-icon="inline-start" />
-              Cancel
-            </Button>
-          );
-        }
-        return null;
+              ) : !canReview && request.status === "pending" ? (
+                <DropdownMenuItem variant="destructive" onClick={() => onCancel(request.id)}>
+                  <X data-icon="inline-start" />
+                  Cancel request
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem disabled>No actions available</DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        );
       },
     },
   ];

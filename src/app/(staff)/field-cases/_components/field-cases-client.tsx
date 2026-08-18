@@ -5,12 +5,11 @@ import { useState } from "react";
 
 import { useRouter } from "next/navigation";
 
-import { Pencil, Plus, Wrench } from "lucide-react";
+import { Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import { updateFieldCase } from "@/app/(staff)/field-cases/actions";
 import { assignMechanic, createFieldCase } from "@/app/(staff)/transactions/actions";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -21,13 +20,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Textarea } from "@/components/ui/textarea";
 import { FIELD_CASE_STATES, type FieldCaseState } from "@/lib/validation/phase6";
 
-const STATE_VARIANTS: Record<FieldCaseState, "default" | "secondary" | "outline" | "destructive"> = {
-  assigned: "secondary",
-  accepted: "default",
-  in_progress: "default",
-  completed: "default",
-  cancelled: "destructive",
-};
+import { FieldCasesTable } from "./field-cases-table";
 
 export interface FieldCaseRow {
   id: string;
@@ -48,7 +41,7 @@ interface FieldCasesClientProps {
   canAssignMechanic: boolean;
   informants: { id: string; full_name: string | null }[];
   mechanics: { id: string; full_name: string | null }[];
-  role: string;
+  userRole: string;
 }
 
 const CASE_KIND_OPTIONS = [
@@ -72,7 +65,7 @@ export function FieldCasesClient({
   canAssignMechanic,
   informants,
   mechanics,
-  role,
+  userRole,
 }: FieldCasesClientProps) {
   const router = useRouter();
   const [editTarget, setEditTarget] = useState<FieldCaseRow | null>(null);
@@ -84,7 +77,7 @@ export function FieldCasesClient({
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createKind, setCreateKind] = useState<string>(
-    () => CASE_KIND_OPTIONS.find((option) => CASE_KIND_RULES[option.value]?.includes(role))?.value ?? "",
+    () => CASE_KIND_OPTIONS.find((option) => CASE_KIND_RULES[option.value]?.includes(userRole))?.value ?? "",
   );
   const [createWorkerKind, setCreateWorkerKind] = useState<"informant" | "mechanic">("informant");
   const [createWorker, setCreateWorker] = useState("");
@@ -96,7 +89,7 @@ export function FieldCasesClient({
   const [mechanicTarget, setMechanicTarget] = useState<FieldCaseRow | null>(null);
   const [mechanicId, setMechanicId] = useState("");
 
-  const allowedKinds = CASE_KIND_OPTIONS.filter((option) => CASE_KIND_RULES[option.value]?.includes(role)).map(
+  const allowedKinds = CASE_KIND_OPTIONS.filter((option) => CASE_KIND_RULES[option.value]?.includes(userRole)).map(
     (option) => option.value,
   );
   const workersForKind = createWorkerKind === "mechanic" ? mechanics : informants;
@@ -187,83 +180,27 @@ export function FieldCasesClient({
         <CardHeader>
           <CardTitle>All Cases</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="px-2 py-2 font-medium">Kind</th>
-                  <th className="px-2 py-2 font-medium">State</th>
-                  <th className="px-2 py-2 font-medium">Vehicle</th>
-                  <th className="px-2 py-2 font-medium">Location</th>
-                  <th className="px-2 py-2 font-medium">Expenses</th>
-                  <th className="px-2 py-2 font-medium">Completed</th>
-                  {canUpdate ? <th className="px-2 py-2" /> : null}
-                </tr>
-              </thead>
-              <tbody>
-                {cases.length === 0 ? (
-                  <tr>
-                    <td colSpan={canUpdate ? 7 : 6} className="px-2 py-6 text-center text-muted-foreground">
-                      No field cases assigned.
-                    </td>
-                  </tr>
-                ) : (
-                  cases.map((fieldCase) => (
-                    <tr key={fieldCase.id} className="border-b last:border-0">
-                      <td className="px-2 py-2 font-medium capitalize">{fieldCase.case_kind}</td>
-                      <td className="px-2 py-2">
-                        <Badge variant={STATE_VARIANTS[fieldCase.state]} className="capitalize">
-                          {fieldCase.state.replace(/_/g, " ")}
-                        </Badge>
-                      </td>
-                      <td className="px-2 py-2 text-muted-foreground">
-                        {fieldCase.vehicle_id ? fieldCase.vehicle_id.slice(0, 8) : "—"}
-                      </td>
-                      <td className="px-2 py-2 text-muted-foreground">{fieldCase.location ?? "—"}</td>
-                      <td className="px-2 py-2">₱{((fieldCase.expenses_cents ?? 0) / 100).toLocaleString()}</td>
-                      <td className="px-2 py-2 text-muted-foreground">
-                        {fieldCase.completion_date ? new Date(fieldCase.completion_date).toLocaleDateString() : "—"}
-                      </td>
-                      {canUpdate ? (
-                        <td className="px-2 py-2 text-right">
-                          <div className="flex justify-end gap-2">
-                            {canAssignMechanic ? (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setMechanicTarget(fieldCase);
-                                  setMechanicId("");
-                                }}
-                              >
-                                <Wrench data-icon="inline-start" />
-                                Assign Mechanic
-                              </Button>
-                            ) : null}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setEditTarget(fieldCase);
-                                setState(fieldCase.state);
-                                setExpenses(fieldCase.expenses_cents ? String(fieldCase.expenses_cents / 100) : "");
-                                setNotes(fieldCase.notes ?? "");
-                                setFormError(null);
-                              }}
-                            >
-                              <Pencil data-icon="inline-start" />
-                              Update
-                            </Button>
-                          </div>
-                        </td>
-                      ) : null}
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+        <CardContent className="pt-0">
+          {cases.length === 0 ? (
+            <p className="text-muted-foreground text-sm">No field cases assigned.</p>
+          ) : (
+            <FieldCasesTable
+              cases={cases}
+              canUpdate={canUpdate}
+              canAssignMechanic={canAssignMechanic}
+              onAssignMechanic={(fieldCase) => {
+                setMechanicTarget(fieldCase);
+                setMechanicId("");
+              }}
+              onUpdate={(fieldCase) => {
+                setEditTarget(fieldCase);
+                setState(fieldCase.state);
+                setExpenses(fieldCase.expenses_cents ? String(fieldCase.expenses_cents / 100) : "");
+                setNotes(fieldCase.notes ?? "");
+                setFormError(null);
+              }}
+            />
+          )}
         </CardContent>
       </Card>
 

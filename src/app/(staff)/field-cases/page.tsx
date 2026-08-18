@@ -50,7 +50,7 @@ export default async function FieldCasesPage() {
       canAssignMechanic={["ceo", "confidential_informant", "sales_manager"].includes(role)}
       informants={(informants as { id: string; full_name: string | null }[]) ?? []}
       mechanics={(mechanics as { id: string; full_name: string | null }[]) ?? []}
-      role={role}
+      userRole={role}
     />
   );
 }

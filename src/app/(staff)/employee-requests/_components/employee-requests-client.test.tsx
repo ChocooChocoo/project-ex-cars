@@ -47,13 +47,18 @@ describe("EmployeeRequestsClient", () => {
     mocks.cancelEmployeeRequest.mockReset().mockResolvedValue({ success: true });
   });
 
-  it("uses the shared DataTable with ten rows per page and a route-local rows-per-page id", () => {
+  it("matches the template table controls with ten rows per page", () => {
     renderRequests({
       requests: Array.from({ length: 11 }, (_, index) =>
         request({ id: `request-${index + 1}`, reason: `Reason ${index + 1}` }),
       ),
     });
 
+    expect(screen.getByPlaceholderText("Search employee requests...")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Status" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start date" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Type" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sort" })).toBeInTheDocument();
     expect(document.getElementById("employee-requests-rows-per-page")).toBeInTheDocument();
     expect(screen.getByText("Page 1 of 2")).toBeInTheDocument();
     expect(screen.getAllByRole("row")).toHaveLength(11);
@@ -110,13 +115,13 @@ describe("EmployeeRequestsClient", () => {
   it("lets reviewers open a pending request and approve it", async () => {
     renderRequests({ canReview: true, requests: [request({ id: "review-target" })] });
 
-    const reviewTrigger = screen.getByRole("button", { name: "Open review actions" });
+    const reviewTrigger = screen.getByRole("button", { name: "Open request actions" });
     expect(reviewTrigger).not.toHaveTextContent("Review");
     fireEvent.pointerDown(reviewTrigger);
     fireEvent.mouseDown(reviewTrigger, { button: 0 });
     fireEvent.mouseUp(reviewTrigger, { button: 0 });
     fireEvent.click(reviewTrigger);
-    const reviewMenu = await screen.findByRole("menu");
+    const reviewMenu = screen.getByRole("menu");
     expect(reviewMenu).toHaveClass("w-48");
     fireEvent.click(within(reviewMenu).getByRole("menuitem", { name: "Review request" }));
     const dialog = screen.getByRole("dialog");
@@ -130,10 +135,33 @@ describe("EmployeeRequestsClient", () => {
     expect(submitted.get("decision")).toBe("approved");
   });
 
+  it("keeps row actions in the template ellipsis menu", async () => {
+    renderRequests({ requests: [request({ id: "cancel-target" })] });
+
+    const trigger = screen.getByRole("button", { name: "Open request actions" });
+    fireEvent.pointerDown(trigger);
+    fireEvent.mouseDown(trigger, { button: 0 });
+    fireEvent.mouseUp(trigger, { button: 0 });
+    fireEvent.click(trigger);
+    const menu = screen.getByRole("menu");
+    expect(within(menu).getByRole("menuitem", { name: "Cancel request" })).toBeInTheDocument();
+    await within(menu).getByRole("menuitem", { name: "Cancel request" }).click();
+
+    await waitFor(() => expect(mocks.cancelEmployeeRequest).toHaveBeenCalledTimes(1));
+    const submitted = mocks.cancelEmployeeRequest.mock.calls[0]?.[0] as FormData;
+    expect(submitted.get("request_id")).toBe("cancel-target");
+  });
+
   it("lets employees cancel their own pending request", async () => {
     renderRequests({ requests: [request({ id: "cancel-target" })] });
 
-    await screen.getByRole("button", { name: /Cancel/ }).click();
+    const trigger = screen.getByRole("button", { name: "Open request actions" });
+    fireEvent.pointerDown(trigger);
+    fireEvent.mouseDown(trigger, { button: 0 });
+    fireEvent.mouseUp(trigger, { button: 0 });
+    fireEvent.click(trigger);
+    const menu = screen.getByRole("menu");
+    await within(menu).getByRole("menuitem", { name: "Cancel request" }).click();
 
     await waitFor(() => expect(mocks.cancelEmployeeRequest).toHaveBeenCalledTimes(1));
     const submitted = mocks.cancelEmployeeRequest.mock.calls[0]?.[0] as FormData;

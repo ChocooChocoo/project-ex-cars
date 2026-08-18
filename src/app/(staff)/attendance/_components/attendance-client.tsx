@@ -7,24 +7,52 @@ import { useRouter } from "next/navigation";
 
 import {
   type ColumnDef,
+  type ColumnFiltersState,
+  flexRender,
   getCoreRowModel,
+  getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
   type PaginationState,
   type SortingState,
   useReactTable,
+  type VisibilityState,
 } from "@tanstack/react-table";
-import { LogIn, LogOut, ShieldCheck } from "lucide-react";
+import {
+  ArrowUpDown,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  LogIn,
+  LogOut,
+  MoreHorizontal,
+  Search,
+  ShieldCheck,
+  UsersRound,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { checkAttendance, clockIn, clockOut } from "@/app/(staff)/attendance/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DataTable } from "@/components/ui/data-table";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { createClient } from "@/lib/supabase/client";
 import { ATTENDANCE_STATUSES, type AttendanceStatus } from "@/lib/validation/phase6";
@@ -46,6 +74,27 @@ const STATUS_STYLES: Record<AttendanceStatus, { className: string; variant: "def
   on_leave: { variant: "outline", className: "border-muted-foreground/40" },
   half_day: { variant: "default", className: "bg-sky-500 text-white hover:bg-sky-500/90" },
 };
+
+const attendanceStatusOptions = [
+  { value: "all", label: "All" },
+  ...ATTENDANCE_STATUSES.map((status) => ({ value: status, label: STATUS_LABELS[status] })),
+];
+const attendanceDateOptions = [
+  { value: "all", label: "All time" },
+  { value: "30", label: "Last 30 days" },
+  { value: "90", label: "Last 90 days" },
+] as const;
+const checkedOptions = [
+  { value: "all", label: "All" },
+  { value: "checked", label: "Checked" },
+  { value: "unchecked", label: "Unchecked" },
+] as const;
+const attendanceSortOptions = [
+  { value: "newest", label: "Newest first" },
+  { value: "oldest", label: "Oldest first" },
+  { value: "name-asc", label: "Employee A-Z" },
+  { value: "name-desc", label: "Employee Z-A" },
+] as const;
 
 export interface AttendanceEntry {
   id: string;
@@ -188,8 +237,15 @@ export function AttendanceClient({
   const [status, setStatus] = useState<AttendanceStatus>("present");
   const [notes, setNotes] = useState("");
   const [checkError, setCheckError] = useState<string | null>(null);
+  const [rowSelection, setRowSelection] = useState({});
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [sorting, setSorting] = useState<SortingState>([{ id: "attendance_date", desc: true }]);
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 });
+  const [columnVisibility] = useState<VisibilityState>({
+    search: false,
+    attendanceWindow: false,
+    checkedFilter: false,
+  });
 
   const defaultRealtimeAccess = useMemo<AttendanceRealtimeAccess>(
     () => ({
@@ -238,6 +294,28 @@ export function AttendanceClient({
 
   const columns = useMemo<ColumnDef<AttendanceEntry>[]>(
     () => [
+      {
+        id: "select",
+        header: ({ table }) => (
+          <div className="flex items-center justify-center">
+            <Checkbox
+              checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && "indeterminate")}
+              onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+              aria-label="Select all attendance on this page"
+            />
+          </div>
+        ),
+        cell: ({ row }) => (
+          <div className="flex items-center justify-center">
+            <Checkbox
+              checked={row.getIsSelected()}
+              onCheckedChange={(value) => row.toggleSelected(!!value)}
+              aria-label={`Select attendance ${row.original.id}`}
+            />
+          </div>
+        ),
+        enableHiding: false,
+      },
       ...(canCheck
         ? [
             {
@@ -253,6 +331,12 @@ export function AttendanceClient({
         accessorKey: "attendance_date",
         header: "Date",
         cell: ({ row }) => formatDate(row.original.attendance_date),
+      },
+      {
+        id: "search",
+        accessorFn: (row) => `${row.id} ${row.employee_name} ${row.attendance_date} ${row.status} ${row.notes ?? ""}`,
+        filterFn: "includesString",
+        enableHiding: true,
       },
       {
         accessorKey: "time_in",
@@ -274,6 +358,28 @@ export function AttendanceClient({
         header: "Status",
         cell: ({ row }) => statusBadge(row.original.status),
       },
+      {
+        id: "checkedFilter",
+        accessorFn: (row) => (row.checked_by ? "checked" : "unchecked"),
+        filterFn: "equalsString",
+        enableHiding: true,
+      },
+      {
+        id: "attendanceWindow",
+        accessorFn: (row) => {
+          const daysSinceAttendance = Math.max(
+            0,
+            Math.round(
+              (new Date().setHours(0, 0, 0, 0) - new Date(row.attendance_date).setHours(0, 0, 0, 0)) / 86_400_000,
+            ),
+          );
+          if (daysSinceAttendance <= 30) return ["30", "90"];
+          if (daysSinceAttendance <= 90) return ["90"];
+          return [];
+        },
+        filterFn: "arrIncludes",
+        enableHiding: true,
+      },
       ...(canCheck
         ? [
             {
@@ -286,13 +392,23 @@ export function AttendanceClient({
                   <Badge variant="outline">Unchecked</Badge>
                 ),
             } satisfies ColumnDef<AttendanceEntry>,
-            {
-              id: "actions",
-              header: () => <span className="sr-only">Actions</span>,
-              cell: ({ row }: { row: { original: AttendanceEntry } }) => (
-                <Button
-                  variant="ghost"
-                  size="sm"
+          ]
+        : []),
+      {
+        id: "actions",
+        header: () => <span className="sr-only">Actions</span>,
+        enableSorting: false,
+        enableHiding: false,
+        cell: ({ row }) => (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="size-8" aria-label="Open attendance actions">
+                <MoreHorizontal className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              {canCheck ? (
+                <DropdownMenuItem
                   onClick={() => {
                     setCheckTarget(row.original);
                     setStatus(row.original.status);
@@ -301,12 +417,15 @@ export function AttendanceClient({
                   }}
                 >
                   <ShieldCheck data-icon="inline-start" />
-                  Check
-                </Button>
-              ),
-            } satisfies ColumnDef<AttendanceEntry>,
-          ]
-        : []),
+                  Check attendance
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem disabled>No actions available</DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ),
+      } satisfies ColumnDef<AttendanceEntry>,
     ],
     [canCheck],
   );
@@ -314,15 +433,33 @@ export function AttendanceClient({
   const table = useReactTable({
     data: entries,
     columns,
-    state: { sorting, pagination },
+    state: { rowSelection, columnFilters, sorting, columnVisibility, pagination },
     getRowId: (row) => row.id,
     autoResetPageIndex: false,
+    enableRowSelection: true,
+    onRowSelectionChange: setRowSelection,
+    onColumnFiltersChange: setColumnFilters,
     onSortingChange: setSorting,
     onPaginationChange: setPagination,
     getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
   });
+
+  const searchQuery = (table.getColumn("search")?.getFilterValue() as string) ?? "";
+  const statusFilter = (table.getColumn("status")?.getFilterValue() as string) ?? "all";
+  const dateFilter = (table.getColumn("attendanceWindow")?.getFilterValue() as string) ?? "all";
+  const checkedFilter = (table.getColumn("checkedFilter")?.getFilterValue() as string) ?? "all";
+  const sortValue = useMemo(() => {
+    const currentSort = sorting[0];
+    if (!currentSort) return "newest";
+    if (currentSort.id === "attendance_date" && currentSort.desc) return "newest";
+    if (currentSort.id === "attendance_date" && !currentSort.desc) return "oldest";
+    if (currentSort.id === "employee_name" && !currentSort.desc) return "name-asc";
+    if (currentSort.id === "employee_name" && currentSort.desc) return "name-desc";
+    return "newest";
+  }, [sorting]);
 
   const clockLabel = new Intl.DateTimeFormat("en-US", {
     timeZone: attendanceState.timeZone,
@@ -413,8 +550,240 @@ export function AttendanceClient({
         <CardHeader>
           <CardTitle>{canCheck ? "All Records" : "My Attendance"}</CardTitle>
         </CardHeader>
-        <CardContent className="px-0 pb-0">
-          <DataTable table={table} rowsPerPageId="attendance-rows-per-page" />
+        <CardContent className="pt-0">
+          <div className="space-y-4">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative w-full lg:w-80">
+                  <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    className="h-7 rounded-[min(var(--radius-md),12px)] pl-8"
+                    placeholder="Search attendance..."
+                    value={searchQuery}
+                    onChange={(event) => {
+                      table.getColumn("search")?.setFilterValue(event.target.value || undefined);
+                      table.setPageIndex(0);
+                    }}
+                  />
+                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <UsersRound />
+                      Status
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-35" align="start">
+                    <DropdownMenuRadioGroup
+                      value={statusFilter}
+                      onValueChange={(value) => {
+                        table.getColumn("status")?.setFilterValue(value === "all" ? undefined : value);
+                        table.setPageIndex(0);
+                      }}
+                    >
+                      {attendanceStatusOptions.map((option) => (
+                        <DropdownMenuRadioItem key={option.value} value={option.value}>
+                          {option.label}
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <CalendarDays />
+                      Attendance date
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-40" align="start">
+                    <DropdownMenuRadioGroup
+                      value={dateFilter}
+                      onValueChange={(value) => {
+                        table.getColumn("attendanceWindow")?.setFilterValue(value === "all" ? undefined : value);
+                        table.setPageIndex(0);
+                      }}
+                    >
+                      {attendanceDateOptions.map((option) => (
+                        <DropdownMenuRadioItem key={option.value} value={option.value}>
+                          {option.label}
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center xl:w-auto">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <UsersRound />
+                      Checked
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuRadioGroup
+                      value={checkedFilter}
+                      onValueChange={(value) => {
+                        table.getColumn("checkedFilter")?.setFilterValue(value === "all" ? undefined : value);
+                        table.setPageIndex(0);
+                      }}
+                    >
+                      {checkedOptions.map((option) => (
+                        <DropdownMenuRadioItem key={option.value} value={option.value}>
+                          {option.label}
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <ArrowUpDown />
+                      Sort
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuRadioGroup
+                      value={sortValue}
+                      onValueChange={(value) => {
+                        const nextSorting: SortingState =
+                          value === "oldest"
+                            ? [{ id: "attendance_date", desc: false }]
+                            : value === "name-asc"
+                              ? [{ id: "employee_name", desc: false }]
+                              : value === "name-desc"
+                                ? [{ id: "employee_name", desc: true }]
+                                : [{ id: "attendance_date", desc: true }];
+                        table.setSorting(nextSorting);
+                        table.setPageIndex(0);
+                      }}
+                    >
+                      {attendanceSortOptions.map((option) => (
+                        <DropdownMenuRadioItem key={option.value} value={option.value}>
+                          {option.label}
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+
+            <div className="overflow-hidden rounded-lg border bg-card">
+              <Table>
+                <TableHeader className="bg-muted/15">
+                  {table.getHeaderGroups().map((headerGroup) => (
+                    <TableRow key={headerGroup.id}>
+                      {headerGroup.headers.map((header) => (
+                        <TableHead key={header.id} colSpan={header.colSpan} className="h-11 p-3 font-medium">
+                          {header.isPlaceholder
+                            ? null
+                            : flexRender(header.column.columnDef.header, header.getContext())}
+                        </TableHead>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableHeader>
+                <TableBody>
+                  {table.getRowModel().rows.length ? (
+                    table.getRowModel().rows.map((row) => (
+                      <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
+                        {row.getVisibleCells().map((cell) => (
+                          <TableCell key={cell.id} className="p-3 align-middle">
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={table.getVisibleLeafColumns().length} className="h-24 text-center">
+                        No results.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="flex items-center justify-between px-1">
+              <div className="hidden flex-1 text-muted-foreground text-sm lg:flex">
+                {table.getFilteredSelectedRowModel().rows.length} of {table.getFilteredRowModel().rows.length} row(s)
+                selected.
+              </div>
+              <div className="flex w-full items-center gap-8 lg:w-fit">
+                <div className="hidden items-center gap-2 lg:flex">
+                  <Label htmlFor="attendance-rows-per-page" className="font-medium text-sm">
+                    Rows per page
+                  </Label>
+                  <Select
+                    value={`${table.getState().pagination.pageSize}`}
+                    onValueChange={(value) => table.setPageSize(Number(value))}
+                  >
+                    <SelectTrigger size="sm" className="w-20" id="attendance-rows-per-page">
+                      <SelectValue placeholder={table.getState().pagination.pageSize} />
+                    </SelectTrigger>
+                    <SelectContent side="top">
+                      <SelectGroup>
+                        {[10, 20, 30, 40, 50].map((pageSize) => (
+                          <SelectItem key={pageSize} value={`${pageSize}`}>
+                            {pageSize}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex w-fit items-center justify-center font-medium text-sm">
+                  Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
+                </div>
+                <div className="ml-auto flex items-center gap-2 lg:ml-0">
+                  <Button
+                    variant="outline"
+                    className="hidden size-8 lg:flex"
+                    size="icon"
+                    onClick={() => table.setPageIndex(0)}
+                    disabled={!table.getCanPreviousPage()}
+                  >
+                    <span className="sr-only">Go to first page</span>
+                    <ChevronsLeft className="size-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="size-8"
+                    size="icon"
+                    onClick={() => table.previousPage()}
+                    disabled={!table.getCanPreviousPage()}
+                  >
+                    <span className="sr-only">Go to previous page</span>
+                    <ChevronLeft className="size-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="size-8"
+                    size="icon"
+                    onClick={() => table.nextPage()}
+                    disabled={!table.getCanNextPage()}
+                  >
+                    <span className="sr-only">Go to next page</span>
+                    <ChevronRight className="size-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="hidden size-8 lg:flex"
+                    size="icon"
+                    onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+                    disabled={!table.getCanNextPage()}
+                  >
+                    <span className="sr-only">Go to last page</span>
+                    <ChevronsRight className="size-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
         </CardContent>
       </Card>
 

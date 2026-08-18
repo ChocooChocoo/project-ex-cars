@@ -127,16 +127,21 @@ describe("AttendanceClient", () => {
     expect(screen.getByText("08:00 AM")).toBeInTheDocument();
   });
 
-  it("uses the shared DataTable and paginates attendance records with its dedicated rows-per-page id", () => {
+  it("matches the template table controls and paginates attendance records", () => {
     renderAttendance({
       entries: Array.from({ length: 11 }, (_, index) =>
         entry({ id: `entry-${index + 1}`, employee_name: `Employee ${index + 1}` }),
       ),
     });
 
+    expect(screen.getByPlaceholderText("Search attendance...")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Status" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Attendance date" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Checked" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sort" })).toBeInTheDocument();
     expect(document.getElementById("attendance-rows-per-page")).toBeInTheDocument();
     expect(screen.getByText("Page 1 of 2")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "2" }));
+    fireEvent.click(screen.getByRole("button", { name: "Go to next page" }));
     expect(screen.getByText("Employee 11")).toBeInTheDocument();
   });
 
@@ -152,11 +157,17 @@ describe("AttendanceClient", () => {
     expect(screen.getByText(label)).toHaveClass(expectedClass);
   });
 
-  it("shows employee names to authorized attendance checkers and keeps review targeting on the selected row", () => {
+  it("shows employee names to authorized attendance checkers and keeps review targeting on the selected row", async () => {
     renderAttendance();
 
     expect(screen.getByRole("columnheader", { name: "Employee" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /check/i }));
+    const actionTrigger = screen.getByRole("button", { name: "Open attendance actions" });
+    fireEvent.pointerDown(actionTrigger);
+    fireEvent.mouseDown(actionTrigger, { button: 0 });
+    fireEvent.mouseUp(actionTrigger, { button: 0 });
+    fireEvent.click(actionTrigger);
+    const menu = screen.getByRole("menu");
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Check attendance" }));
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByText("Ada Santos")).toBeInTheDocument();
   });

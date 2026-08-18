@@ -5,7 +5,7 @@ import { useState } from "react";
 
 import { useRouter } from "next/navigation";
 
-import { Check, CheckCheck, Plus, X } from "lucide-react";
+import { Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -14,7 +14,6 @@ import {
   reviewPayrollRun,
   saveCompensation,
 } from "@/app/(staff)/payroll/actions";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -23,25 +22,9 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
-export interface PayrollRunRow {
-  id: string;
-  period_start: string;
-  period_end: string;
-  status: "draft" | "pending_approval" | "approved" | "finalized" | "cancelled";
-  total_gross_cents: number;
-  total_deductions_cents: number;
-  total_net_cents: number;
-  notes: string | null;
-}
+import { type CompensationRow, CompensationTable, type PayrollRunRow, PayrollRunsTable } from "./payroll-tables";
 
-export interface CompensationRow {
-  id: string;
-  employee_id: string;
-  base_salary_cents: number;
-  effective_from: string;
-  effective_until: string | null;
-  profiles: { full_name: string | null } | null;
-}
+export type { CompensationRow, PayrollRunRow } from "./payroll-tables";
 
 interface PayrollClientProps {
   runs: PayrollRunRow[];
@@ -51,14 +34,6 @@ interface PayrollClientProps {
   canReview: boolean;
   canFinalize: boolean;
 }
-
-const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-  draft: "outline",
-  pending_approval: "secondary",
-  approved: "default",
-  finalized: "default",
-  cancelled: "destructive",
-};
 
 export function PayrollClient({
   runs,
@@ -199,39 +174,14 @@ export function PayrollClient({
             </Button>
           ) : null}
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-0">
           {compensation.length === 0 ? (
             <p className="text-muted-foreground text-sm">
               No compensation records yet. The Account Manager enters base salary and effective periods here — these
               feed draft payroll runs.
             </p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left text-muted-foreground">
-                    <th className="px-2 py-2 font-medium">Employee</th>
-                    <th className="px-2 py-2 font-medium">Base Salary (₱/mo)</th>
-                    <th className="px-2 py-2 font-medium">Effective</th>
-                    <th className="px-2 py-2 font-medium">Until</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {compensation.map((row) => (
-                    <tr key={row.id} className="border-b last:border-0">
-                      <td className="px-2 py-2 font-medium">
-                        {row.profiles?.full_name ?? row.employee_id.slice(0, 8)}
-                      </td>
-                      <td className="px-2 py-2">₱{(row.base_salary_cents / 100).toLocaleString()}</td>
-                      <td className="px-2 py-2">{new Date(row.effective_from).toLocaleDateString()}</td>
-                      <td className="px-2 py-2">
-                        {row.effective_until ? new Date(row.effective_until).toLocaleDateString() : "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <CompensationTable data={compensation} />
           )}
         </CardContent>
       </Card>
@@ -240,67 +190,18 @@ export function PayrollClient({
         <CardHeader>
           <CardTitle>Payroll Runs</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="px-2 py-2 font-medium">Period</th>
-                  <th className="px-2 py-2 font-medium">Gross</th>
-                  <th className="px-2 py-2 font-medium">Deductions</th>
-                  <th className="px-2 py-2 font-medium">Net</th>
-                  <th className="px-2 py-2 font-medium">Status</th>
-                  <th className="px-2 py-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {runs.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-2 py-6 text-center text-muted-foreground">
-                      No payroll runs yet.
-                    </td>
-                  </tr>
-                ) : (
-                  runs.map((run) => (
-                    <tr key={run.id} className="border-b last:border-0">
-                      <td className="px-2 py-2 font-medium">
-                        {new Date(run.period_start).toLocaleDateString()} —{" "}
-                        {new Date(run.period_end).toLocaleDateString()}
-                      </td>
-                      <td className="px-2 py-2">₱{(run.total_gross_cents / 100).toLocaleString()}</td>
-                      <td className="px-2 py-2">₱{(run.total_deductions_cents / 100).toLocaleString()}</td>
-                      <td className="px-2 py-2 font-medium">₱{(run.total_net_cents / 100).toLocaleString()}</td>
-                      <td className="px-2 py-2">
-                        <Badge variant={STATUS_VARIANTS[run.status]}>{run.status.replace(/_/g, " ")}</Badge>
-                      </td>
-                      <td className="px-2 py-2 text-right">
-                        <div className="flex justify-end gap-2">
-                          {canReview && (run.status === "draft" || run.status === "pending_approval") ? (
-                            <>
-                              <Button variant="ghost" size="sm" onClick={() => submitReview(run.id, "rejected")}>
-                                <X data-icon="inline-start" />
-                                Reject
-                              </Button>
-                              <Button size="sm" onClick={() => submitReview(run.id, "approved")}>
-                                <Check data-icon="inline-start" />
-                                Approve
-                              </Button>
-                            </>
-                          ) : null}
-                          {canFinalize && run.status === "approved" ? (
-                            <Button size="sm" onClick={() => submitFinalize(run.id)}>
-                              <CheckCheck data-icon="inline-start" />
-                              Finalize
-                            </Button>
-                          ) : null}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+        <CardContent className="pt-0">
+          {runs.length === 0 ? (
+            <p className="text-muted-foreground text-sm">No payroll runs yet.</p>
+          ) : (
+            <PayrollRunsTable
+              data={runs}
+              canReview={canReview}
+              canFinalize={canFinalize}
+              onReview={submitReview}
+              onFinalize={submitFinalize}
+            />
+          )}
         </CardContent>
       </Card>
 
