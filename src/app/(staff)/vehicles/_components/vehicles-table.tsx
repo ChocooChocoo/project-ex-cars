@@ -31,7 +31,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { publishVehicle } from "@/app/(staff)/vehicles/actions";
+import { archiveVehicle, deleteVehicle, proposePrice, publishVehicle } from "@/app/(staff)/vehicles/actions";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,6 +45,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuRadioGroup,
@@ -55,6 +63,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
 
 import { VehicleFormSheet } from "./vehicle-form-sheet";
 import { createColumns } from "./vehicles-columns";
@@ -91,9 +100,11 @@ const sortOptions = [
 export function VehicleTable({
   vehicles,
   canManage,
+  canDelete,
 }: {
   readonly vehicles: Record<string, unknown>[];
   readonly canManage: boolean;
+  readonly canDelete: boolean;
 }) {
   const router = useRouter();
   const [rowSelection, setRowSelection] = React.useState({});
@@ -109,6 +120,14 @@ export function VehicleTable({
   });
   const [publishTarget, setPublishTarget] = React.useState<Record<string, unknown> | null>(null);
   const [publishing, setPublishing] = React.useState(false);
+  const [priceTarget, setPriceTarget] = React.useState<Record<string, unknown> | null>(null);
+  const [proposedAmount, setProposedAmount] = React.useState("");
+  const [proposalNotes, setProposalNotes] = React.useState("");
+  const [proposingPrice, setProposingPrice] = React.useState(false);
+  const [archiveTarget, setArchiveTarget] = React.useState<Record<string, unknown> | null>(null);
+  const [archiving, setArchiving] = React.useState(false);
+  const [deleteTarget, setDeleteTarget] = React.useState<Record<string, unknown> | null>(null);
+  const [deleting, setDeleting] = React.useState(false);
   const [formSheet, setFormSheet] = React.useState<{
     mode: "add" | "edit";
     vehicle: Record<string, unknown> | null;
@@ -130,6 +149,54 @@ export function VehicleTable({
     router.refresh();
   }
 
+  async function handleProposePrice() {
+    if (!priceTarget) return;
+    setProposingPrice(true);
+    const form = new FormData();
+    form.set("vehicle_id", priceTarget.id as string);
+    form.set("proposed_amount", proposedAmount);
+    form.set("notes", proposalNotes);
+    const result = await proposePrice(form);
+    setProposingPrice(false);
+    if (result.error) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success("Price proposal submitted.");
+    setPriceTarget(null);
+    setProposedAmount("");
+    setProposalNotes("");
+    router.refresh();
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    const result = await deleteVehicle(deleteTarget.id as string);
+    setDeleting(false);
+    if (result.error) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success("Vehicle deleted.");
+    setDeleteTarget(null);
+    router.refresh();
+  }
+
+  async function handleArchive() {
+    if (!archiveTarget) return;
+    setArchiving(true);
+    const result = await archiveVehicle(archiveTarget.id as string);
+    setArchiving(false);
+    if (result.error) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success("Vehicle archived.");
+    setArchiveTarget(null);
+    router.refresh();
+  }
+
   const table = useReactTable({
     data: vehicles,
     columns: createColumns(
@@ -138,7 +205,14 @@ export function VehicleTable({
         if (vehicle) setPublishTarget(vehicle);
       },
       (vehicle: Record<string, unknown>) => setFormSheet({ mode: "edit", vehicle }),
+      (vehicle: Record<string, unknown>) => {
+        setPriceTarget(vehicle);
+        setProposedAmount((vehicle.current_price as number | null)?.toString() ?? "");
+      },
+      (vehicle: Record<string, unknown>) => setArchiveTarget(vehicle),
+      (vehicle: Record<string, unknown>) => setDeleteTarget(vehicle),
       canManage,
+      canDelete,
     ),
     state: {
       rowSelection,
@@ -454,6 +528,85 @@ export function VehicleTable({
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handlePublish} disabled={publishing}>
               {publishing ? "Publishing..." : "Publish"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={archiveTarget !== null} onOpenChange={(open) => !open && setArchiveTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Archive this vehicle?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {archiveTarget
+                ? `${archiveTarget.make as string} ${archiveTarget.model as string} will be removed from active listings.`
+                : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleArchive} disabled={archiving}>
+              {archiving ? "Archiving..." : "Archive"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={priceTarget !== null} onOpenChange={(open) => !open && setPriceTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Propose a vehicle price</DialogTitle>
+            <DialogDescription>
+              {priceTarget ? `${priceTarget.make as string} ${priceTarget.model as string}` : null}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="proposed-amount">Proposed price</Label>
+              <Input
+                id="proposed-amount"
+                type="number"
+                min="0"
+                step="0.01"
+                value={proposedAmount}
+                onChange={(event) => setProposedAmount(event.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="proposal-notes">Notes</Label>
+              <Textarea
+                id="proposal-notes"
+                value={proposalNotes}
+                onChange={(event) => setProposalNotes(event.target.value)}
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPriceTarget(null)}>
+              Cancel
+            </Button>
+            <Button onClick={handleProposePrice} disabled={proposingPrice || !proposedAmount}>
+              {proposingPrice ? "Submitting..." : "Submit Proposal"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this vehicle?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget
+                ? `${deleteTarget.make as string} ${deleteTarget.model as string} will be permanently removed.`
+                : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={handleDelete} disabled={deleting}>
+              {deleting ? "Deleting..." : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
