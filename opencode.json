@@ -1,0 +1,20 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "playwright": {
+      "type": "local",
+      "command": ["npx", "-y", "@playwright/mcp@latest", "--browser", "chrome", "--executable-path", "C:/Program Files/BraveSoftware/Brave-Browser/Application/brave.exe"],
+      "enabled": true
+    },
+    "context7": {
+      "type": "local",
+      "command": ["npx", "-y", "@upstash/context7-mcp@latest"],
+      "enabled": true
+    },
+    "serena": {
+      "type": "local",
+      "command": ["serena"],
+      "enabled": true
+    }
+  }
+}
