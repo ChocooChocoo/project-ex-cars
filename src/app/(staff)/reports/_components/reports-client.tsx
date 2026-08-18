@@ -5,11 +5,10 @@ import { useState } from "react";
 
 import { useRouter } from "next/navigation";
 
-import { Check, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import { reviewReport, submitReport } from "@/app/(staff)/reports/actions";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -18,6 +17,9 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { REPORT_KINDS, type ReportKind } from "@/lib/validation/phase6";
+
+import { ReportsTable } from "./reports-table";
+import type { ReportRow } from "./reports-types";
 
 const KIND_LABELS: Record<ReportKind, string> = {
   attendance: "Attendance",
@@ -31,16 +33,7 @@ const KIND_LABELS: Record<ReportKind, string> = {
   other: "Other",
 };
 
-export interface ReportRow {
-  id: string;
-  title: string;
-  report_kind: ReportKind;
-  description: string | null;
-  status: "draft" | "submitted" | "reviewed" | "archived";
-  period_start: string | null;
-  period_end: string | null;
-  created_at: string;
-}
+export type { ReportRow } from "./reports-types";
 
 interface ReportsClientProps {
   reports: ReportRow[];
@@ -114,57 +107,12 @@ export function ReportsClient({ reports, canCreate, canReview }: ReportsClientPr
         <CardHeader>
           <CardTitle>Submitted Reports</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="px-2 py-2 font-medium">Title</th>
-                  <th className="px-2 py-2 font-medium">Kind</th>
-                  <th className="px-2 py-2 font-medium">Period</th>
-                  <th className="px-2 py-2 font-medium">Status</th>
-                  {canReview ? <th className="px-2 py-2" /> : null}
-                </tr>
-              </thead>
-              <tbody>
-                {reports.length === 0 ? (
-                  <tr>
-                    <td colSpan={canReview ? 5 : 4} className="px-2 py-6 text-center text-muted-foreground">
-                      No reports submitted.
-                    </td>
-                  </tr>
-                ) : (
-                  reports.map((report) => (
-                    <tr key={report.id} className="border-b last:border-0">
-                      <td className="px-2 py-2 font-medium">{report.title}</td>
-                      <td className="px-2 py-2">
-                        <Badge variant="secondary" className="capitalize">
-                          {KIND_LABELS[report.report_kind]}
-                        </Badge>
-                      </td>
-                      <td className="px-2 py-2 text-muted-foreground">
-                        {report.period_start ? `${new Date(report.period_start).toLocaleDateString()} — ` : ""}
-                        {report.period_end ? new Date(report.period_end).toLocaleDateString() : "—"}
-                      </td>
-                      <td className="px-2 py-2">
-                        <Badge variant={report.status === "reviewed" ? "default" : "secondary"}>{report.status}</Badge>
-                      </td>
-                      {canReview ? (
-                        <td className="px-2 py-2 text-right">
-                          {report.status === "submitted" ? (
-                            <Button variant="ghost" size="sm" onClick={() => submitReview(report.id)}>
-                              <Check data-icon="inline-start" />
-                              Mark Reviewed
-                            </Button>
-                          ) : null}
-                        </td>
-                      ) : null}
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+        <CardContent className="pt-0">
+          {reports.length === 0 ? (
+            <p className="text-muted-foreground text-sm">No reports submitted.</p>
+          ) : (
+            <ReportsTable reports={reports} canReview={canReview} onReview={submitReview} />
+          )}
         </CardContent>
       </Card>
 

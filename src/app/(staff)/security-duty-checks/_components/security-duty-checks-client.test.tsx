@@ -65,6 +65,11 @@ describe("SecurityDutyChecksClient", () => {
     expect(screen.getByRole("table")).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Date" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Status" })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Search duty checks...")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Status" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Duty date" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Evidence" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sort" })).toBeInTheDocument();
     expect(screen.getByRole("combobox")).toHaveAttribute("id", "security-duty-checks-rows-per-page");
     expect(screen.getByRole("combobox")).toHaveTextContent("10");
   });
@@ -125,12 +130,18 @@ describe("SecurityDutyChecksClient", () => {
     expect(formData?.get("image")).toBe(file);
   });
 
-  it("gates completion until both evidence slots are uploaded", () => {
+  it("gates completion until both evidence slots are uploaded", async () => {
     renderChecks();
     const firstRow = screen.getAllByRole("row")[1];
-    const completeButton = within(firstRow).getByRole("button", { name: "Complete Check" });
-    expect(completeButton).toBeDisabled();
+    const trigger = within(firstRow).getByRole("button", { name: "Open duty check actions" });
+    fireEvent.pointerDown(trigger);
+    fireEvent.mouseDown(trigger, { button: 0 });
+    fireEvent.mouseUp(trigger, { button: 0 });
+    fireEvent.click(trigger);
+    const menu = screen.getByRole("menu");
+    expect(within(menu).getByRole("menuitem", { name: "Complete Check" })).toHaveAttribute("aria-disabled", "true");
 
+    fireEvent.keyDown(document, { key: "Escape" });
     fireEvent.click(screen.getByRole("radio", { name: "Grid" }));
     expect(
       within(screen.getAllByTestId("duty-check-card")[0]).getByRole("button", { name: "Complete Check" }),
