@@ -1,7 +1,7 @@
 # System Status — Documented Responsibilities vs. Implementation
 
 > **Living reference** mapping every documented role responsibility to its implementation status.
-> Maintained alongside `14 - AUDIT USER ROLES.md`. Status key: ✅ Implemented · ⚠️ Partial / differs · ❌ Missing · 🗂️ Planned backlog.
+> Maintained alongside `18 - MODULE PURPOSE OWNERSHIP AND ACTIONS.md`. Status key: ✅ Implemented · ⚠️ Partial / differs · ❌ Missing · 🗂️ Planned backlog.
 
 **Last updated:** 10 August 2026 (RBAC/least-privilege pass)
 

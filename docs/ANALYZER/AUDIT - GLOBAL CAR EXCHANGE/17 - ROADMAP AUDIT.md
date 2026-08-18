@@ -1,6 +1,6 @@
 # 17 - ROADMAP AUDIT
 
-[Back to start](../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/00%20-%20START%20HERE.md) · Related: [07 - DEVELOPMENT ROADMAP](../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/07%20-%20DEVELOPMENT%20ROADMAP.md) · [08 - ROADMAP TRACKER](../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/08%20-%20ROADMAP%20TRACKER.md) · [16 - USER LEVEL AND PROCESS GUIDE](16%20-%20USER%20LEVEL%20AND%20PROCESS%20GUIDE.md)
+[Back to start](../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/00%20-%20START%20HERE.md) · Related: [07 - DEVELOPMENT ROADMAP](../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/07%20-%20DEVELOPMENT%20ROADMAP.md) · [08 - ROADMAP TRACKER](../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/08%20-%20ROADMAP%20TRACKER.md) · [18 - MODULE PURPOSE OWNERSHIP AND ACTIONS](18%20-%20MODULE%20PURPOSE%20OWNERSHIP%20AND%20ACTIONS.md)
 
 **Written:** 10 August 2026
 **Type:** Review only. No roadmap item, tracker status, or code was changed.
@@ -9,7 +9,7 @@
 
 ## How to read this guide
 
-The roadmap (`07`) says what should be built, in what order. The tracker (`08`) says where each item stands. This file checks both against the running system, item by item, using the same three-column shape as `16`:
+The roadmap (`07`) says what should be built, in what order. The tracker (`08`) says where each item stands. This file checks both against the running system, item by item, using a three-column comparison format:
 
 1. **What the roadmap promised** — the R-item as written.
 2. **What the tracker claims** — its recorded status and note.
@@ -67,11 +67,11 @@ The system confirms the tracker — attendance, employee requests, payroll, pays
 
 **Verdict: the roadmap sentence is stale.** Phase 6 was implemented; `07` was never updated.
 
-### 1.4 Two different documents both numbered 14
+### 1.4 Historical document numbering note
 
-`14 - AUDIT USER ROLES` sits in this folder. A separate document titled `# 14 - PHASE 6 IMPLEMENTATION PLAN` lives at `docs/tasks/10.md`, and both `07` and `08` link to it by that number. Anyone following a reference to "14" can land on either.
+The former role audit was consolidated into `18 - MODULE PURPOSE OWNERSHIP AND ACTIONS`. A separate document titled `# 14 - PHASE 6 IMPLEMENTATION PLAN` lives at `docs/tasks/10.md`; keep the task-document number distinct from the current audit filename when linking to it.
 
-**Verdict: numbering clash.** Not a system fault, but it makes the paper trail hard to follow.
+**Verdict: historical naming risk.** Use explicit file paths so the paper trail remains clear.
 
 ---
 
@@ -82,7 +82,7 @@ The system confirms the tracker — attendance, employee requests, payroll, pays
 | # | Roadmap promised | Tracker claims | Actually there | Verdict |
 |---|---|---|---|---|
 | **R-01** | Registration, sign-in, **email and phone checks**, profiles, ID upload, walk-in account creation | ✅ Auth connected, profile trigger, document upload, walk-in creation | Registration, sign-in, profiles, customer document upload, and walk-in creation all work. Email confirmation is handled by the sign-in provider. **Phone verification does not exist** — a phone number is format-checked when typed and never confirmed. | **Overstated** — the phone half of "email and phone checks" is not built. |
-| **R-02** | Role-based access for the customer, the supplier, and the eight operational roles, managed by the Account Manager | ✅ All 10 roles, RLS per table, role assignment, middleware, sidebar filtering, landing pages | All ten roles exist. Role assignment is restricted to the CEO and Account Manager. Menus filter per role. **But several pages carry no role check of their own**, so the menu hides them without blocking them — see finding A-1 in [16](16%20-%20USER%20LEVEL%20AND%20PROCESS%20GUIDE.md). | **Overstated** — the roles exist; the boundary leaks. |
+| **R-02** | Role-based access for the customer, the supplier, and the eight operational roles, managed by the Account Manager | ✅ All 10 roles, RLS per table, role assignment, middleware, sidebar filtering, landing pages | All ten roles exist. Role assignment is restricted to the CEO and Account Manager. Menus filter per role. **But several pages carry no role check of their own**, so the menu hides them without blocking them — see the current role/module/action guide for the exact role and action boundary. | **Overstated** — the roles exist; the boundary leaks. |
 | **R-03** | One shared record foundation across customer, vehicle, conversation, transaction, inspection, and staff information | ✅ All 6 Phase 1 tables live with RLS | Confirmed. Later phases build on the same records; a completed sale updates the vehicle everywhere. | **Confirmed** |
 | **R-27** | Supplier account created by the **Procurement Team**, Company or Individual, two primary valid IDs from a published list, invitation evidence if a portal is kept, no sign-in until approved | ✅ Full KYC flow, verified IDs before approval, sign-in gating, account linkage | Company/Individual validated, two IDs required and verified before approval, sign-in genuinely refused before approval, account linked on first sign-in. **The creator is the CEO or Account Manager, not a Procurement Team, and no portal or invitation evidence exists.** | **Overstated** — the security half is fully built; the ownership question (who is the Procurement Team) was never answered, and the tracker's ✅ hides that. |
 | **R-28** | Field checks on every form: number ranges, text lengths, allowed kinds, required fields, formats | ✅ Validation schemas wired into auth, vehicles, transactions, buy/sell/request, inquiries, Phase 6 | A validation layer exists and is wired into the named areas. **Whether every field carries its stated limits cannot be judged, because the documents never state the limits** — that is still an open question. | **Unverifiable** — not the builder's fault; the requirement has no target to measure against. |
@@ -139,7 +139,7 @@ The system confirms the tracker — attendance, employee requests, payroll, pays
 | # | Roadmap promised | Tracker claims | Actually there | Verdict |
 |---|---|---|---|---|
 | **R-20** | Time, late arrival, leave, overtime, **performance**, employee records, customer accounts, Head Accountant attendance cross-check | ✅ "Performance reviews table exists; **review UI pending**" | The review interface **does exist** — reviews can be written and updated from Staff Records. The tracker note is out of date in the system's favour. | **Understated** |
-| **R-21** | Permitted purchase and reconditioning disbursements, payment requests, financing, installment, cheque, invoice, case-expense, and financial reports | ✅ Record-only ledger, disbursement request → approve → release → receive → paid, report submission and review | Built and working. **But the page carrying it is granted to no role**, so it appears in nobody's menu — see finding A-7 in [16](16%20-%20USER%20LEVEL%20AND%20PROCESS%20GUIDE.md). Built is not the same as reachable. | **Overstated** — the feature is finished; nobody can find it. |
+| **R-21** | Permitted purchase and reconditioning disbursements, payment requests, financing, installment, cheque, invoice, case-expense, and financial reports | ✅ Record-only ledger, disbursement request → approve → release → receive → paid, report submission and review | Built and working. **But the page carrying it is granted to no role**, so it appears in nobody's menu — see the Finance access and action notes in `18 - MODULE PURPOSE OWNERSHIP AND ACTIONS`. Built is not the same as reachable. | **Overstated** — the feature is finished; nobody can find it. |
 | **R-22** | CEO dashboard with sales, revenue, inventory, pending work, **staff performance**, report and price approvals, announcements, and **agreed recommendation measures** | ✅ CEO totals, performance review UI, price-approval queue, report queue, every metric links to its source | Sales, revenue, inventory, pending approvals, price queue, and announcements are all present and traceable. **The recommendation measure is not** — it was removed with R-14. | **Overstated** — one of the eight promised dashboard contents is missing. |
 | **R-23** | Security photographs, sourcing, **mechanic assignment**, delivery, case expenses, vehicle-recovery records | ✅ Field case state and expense updates; security before/after uploads requiring both images | Confirmed, and now broader than the note says — mechanic assignment and all four case kinds exist. | **Confirmed** |
 | **R-26** | Payroll: attendance inputs, salary and deduction entry, report preparation, payslip approval, salary-payment responsibility | ✅ Compensation entry, run generation, payment status with Head Accountant handoff, approval sequence, printable payslips | Confirmed, including automatic statutory deduction lines. **The approval order itself is a working assumption, not an approved decision** — the roadmap's own blocker list says so, and it is still unresolved. | **Confirmed** in build; the order still needs sign-off. |
@@ -190,7 +190,7 @@ Ordered by how much confusion it causes. **These are recommendations, not change
 | **High** | `07` | Delete "Phase 6 implementation remains unstarted." It was implemented on 8 August 2026. |
 | **Medium** | `08` | Update the R-20 note — the performance review interface is no longer pending. |
 | **Medium** | `08` | Add a caveat to R-21 and R-38 that the feature is built but not reachable from any menu. |
-| **Medium** | `07` and `08` | Renumber the Phase 6 implementation plan so it stops clashing with `14 - AUDIT USER ROLES`. |
+| **Medium** | `07` and `08` | Keep the Phase 6 implementation plan's task path (`docs/tasks/10.md`) explicit so it cannot be confused with the current role/module/action audit. |
 | **Medium** | `08` | Reword R-24 from "not yet started" to "built, not yet checked", and R-40 from "not yet started" to "partly built". |
 | **Low** | `08` | Note against R-27, R-29, R-33, and R-37 which sub-part remains open, so the ✅ does not hide it. |
 
@@ -203,7 +203,7 @@ Two items only. Everything else in this audit is a documentation correction.
 | **High** | Restore a recommendation-accuracy view for management (R-14) | The data is still collected. A capstone built around a Decision Support System cannot show whether it works. Smallest possible fix in this list, biggest loss if skipped. |
 | **Medium** | Restore or re-map the four management decision views (R-13) | Pricing trends, stock turnover, buying patterns, and market information are named promises in the chapter document. The replacement panels cover the ground loosely; the named views do not exist. |
 
-Grant the Finance menu item to the four roles that already have permission for the page — see finding A-7 in [16](16%20-%20USER%20LEVEL%20AND%20PROCESS%20GUIDE.md). That is a navigation fix, not a roadmap item, but it is what turns a finished R-21 into a usable one.
+Grant the Finance menu item to the four roles that already have permission for the page — see the Finance access and action notes in `18 - MODULE PURPOSE OWNERSHIP AND ACTIONS`. That is a navigation fix, not a roadmap item, but it is what turns a finished R-21 into a usable one.
 
 ---
 
