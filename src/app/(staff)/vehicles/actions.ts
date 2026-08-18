@@ -160,16 +160,29 @@ export async function proposePrice(formData: FormData) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid price proposal." };
   }
 
+  const { data: existingProposal } = await supabase
+    .from("vehicle_price_proposals")
+    .select("id")
+    .eq("vehicle_id", parsed.data.vehicle_id)
+    .eq("decision", "pending")
+    .maybeSingle();
+  if (existingProposal) return { error: "This vehicle already has a pending price proposal." };
+
   const { error } = await supabase.from("vehicle_price_proposals").insert({
     vehicle_id: parsed.data.vehicle_id,
     proposed_amount: parsed.data.proposed_amount,
     proposer_id: user.user.id,
+    decision: "pending",
     notes: parsed.data.notes || null,
   });
 
   if (error) return { error: error.message };
 
-  await supabase.from("vehicles").update({ listing_state: "awaiting_price_approval" }).eq("id", parsed.data.vehicle_id);
+  const { error: vehicleError } = await supabase
+    .from("vehicles")
+    .update({ listing_state: "awaiting_price_approval" })
+    .eq("id", parsed.data.vehicle_id);
+  if (vehicleError) return { error: vehicleError.message };
 
   revalidatePath("/dashboard/vehicles");
   return { success: true };
@@ -187,10 +200,20 @@ export async function approvePrice(formData: FormData) {
 
   const proposalId = formData.get("proposal_id") as string;
   const decision = formData.get("decision") as string;
-  const vehicleId = formData.get("vehicle_id") as string;
+  if (!["approved", "rejected"].includes(decision)) return { error: "Invalid proposal decision." };
 
   const admin = createAdminClient();
 
+  const { data: proposal, error: proposalError } = await admin
+    .from("vehicle_price_proposals")
+    .select("vehicle_id, proposed_amount, decision")
+    .eq("id", proposalId)
+    .eq("decision", "pending")
+    .maybeSingle();
+  if (proposalError) return { error: proposalError.message };
+  if (!proposal) return { error: "Price proposal is no longer pending." };
+
+  const vehicleId = proposal.vehicle_id as string;
   const { error } = await admin
     .from("vehicle_price_proposals")
     .update({
@@ -198,20 +221,13 @@ export async function approvePrice(formData: FormData) {
       decider_id: user.user.id,
       decision_date: new Date().toISOString(),
     })
-    .eq("id", proposalId);
+    .eq("id", proposalId)
+    .eq("decision", "pending");
 
   if (error) return { error: error.message };
 
   if (decision === "approved") {
-    const { data: proposal } = await supabase
-      .from("vehicle_price_proposals")
-      .select("proposed_amount")
-      .eq("id", proposalId)
-      .single();
-
-    if (proposal) {
-      await admin.from("vehicles").update({ current_price: proposal.proposed_amount }).eq("id", vehicleId);
-    }
+    await admin.from("vehicles").update({ current_price: proposal.proposed_amount }).eq("id", vehicleId);
   }
 
   await admin
@@ -451,7 +467,7 @@ export async function createContentItem(formData: FormData) {
 
   if (error) return { error: error.message };
 
-  revalidatePath("/dashboard/content");
+  revalidatePath("/content");
   return { success: true };
 }
 
@@ -472,7 +488,57 @@ export async function publishContent(id: string) {
 
   if (error) return { error: error.message };
 
-  revalidatePath("/dashboard/content");
+  revalidatePath("/content");
+  return { success: true };
+}
+
+export async function updateContentItem(formData: FormData) {
+  const supabase = await createServerSupabaseClient();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+
+  const role = await getCurrentRole();
+  if (!role || role !== "marketing_specialist") {
+    return { error: "Not authorized" };
+  }
+
+  const id = formData.get("id") as string;
+  const parsed = contentItemSchema.safeParse(Object.fromEntries(formData));
+  if (!id) return { error: "Content item not found." };
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid content item." };
+  }
+
+  const { error } = await supabase
+    .from("content_items")
+    .update({
+      content_kind: parsed.data.content_kind,
+      vehicle_id: parsed.data.vehicle_id || null,
+      title: parsed.data.title,
+      body: parsed.data.body || null,
+    })
+    .eq("id", id);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/content");
+  return { success: true };
+}
+
+export async function deleteContentItem(id: string) {
+  const supabase = await createServerSupabaseClient();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+
+  const role = await getCurrentRole();
+  if (!role || role !== "marketing_specialist") {
+    return { error: "Not authorized" };
+  }
+
+  const { error } = await supabase.from("content_items").delete().eq("id", id);
+  if (error) return { error: error.message };
+
+  revalidatePath("/content");
   return { success: true };
 }
 
@@ -484,6 +550,12 @@ export async function archiveVehicle(vehicleId: string) {
   const role = await getCurrentRole();
   if (!role || role !== "marketing_specialist") {
     return { error: "Not authorized" };
+  }
+
+  const { data: vehicle } = await supabase.from("vehicles").select("listing_state").eq("id", vehicleId).single();
+  if (!vehicle) return { error: "Vehicle not found." };
+  if (["reserved", "sold", "awaiting_price_approval"].includes(vehicle.listing_state as string)) {
+    return { error: "Reserved, sold, or awaiting-approval vehicles cannot be archived." };
   }
 
   const { error } = await supabase.from("vehicles").update({ listing_state: "archived" }).eq("id", vehicleId);
@@ -504,9 +576,20 @@ export async function deleteVehicle(vehicleId: string) {
     return { error: "Not authorized" };
   }
 
+  const { data: vehicle } = await supabase.from("vehicles").select("listing_state").eq("id", vehicleId).single();
+  if (!vehicle) return { error: "Vehicle not found." };
+  if (["reserved", "sold"].includes(vehicle.listing_state as string)) {
+    return { error: "Reserved or sold vehicles cannot be deleted." };
+  }
+
   const { error } = await supabase.from("vehicles").delete().eq("id", vehicleId);
 
-  if (error) return { error: error.message };
+  if (error) {
+    return {
+      error:
+        error.code === "23503" ? "This vehicle has related transaction records and cannot be deleted." : error.message,
+    };
+  }
 
   revalidatePath("/dashboard/vehicles");
   return { success: true };

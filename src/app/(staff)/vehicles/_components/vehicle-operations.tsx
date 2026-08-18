@@ -11,10 +11,12 @@ export function VehicleOperations({
   proposals,
   vehicles,
   canManage,
+  canDelete,
 }: {
   readonly proposals: PriceProposalRow[];
   readonly vehicles: Record<string, unknown>[];
   readonly canManage: boolean;
+  readonly canDelete: boolean;
 }) {
   const [segment, setSegment] = useState<"pending" | "vehicles">(proposals.length > 0 ? "pending" : "vehicles");
 
@@ -37,7 +39,7 @@ export function VehicleOperations({
       {segment === "pending" ? (
         <PendingApprovalsTable proposals={proposals} />
       ) : (
-        <VehicleTable vehicles={vehicles} canManage={canManage} />
+        <VehicleTable vehicles={vehicles} canManage={canManage} canDelete={canDelete} />
       )}
     </div>
   );

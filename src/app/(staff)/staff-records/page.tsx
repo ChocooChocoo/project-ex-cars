@@ -12,7 +12,7 @@ import { WalkInForm } from "./_components/walk-in-form";
 
 export default async function StaffRecordsPage() {
   const role = await getCurrentRole();
-  if (!role || !["ceo", "account_manager"].includes(role)) {
+  if (!role || !["ceo", "account_manager", "sales_manager"].includes(role)) {
     redirect("/unauthorized");
   }
 

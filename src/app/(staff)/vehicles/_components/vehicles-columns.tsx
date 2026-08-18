@@ -1,7 +1,7 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
-import { MoreHorizontal, Pencil, Send } from "lucide-react";
+import { Archive, DollarSign, MoreHorizontal, Pencil, Send, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,11 @@ import { listingStateLabel, listingStateVariant } from "@/lib/vehicles/labels";
 export function createColumns(
   onPublish: (id: string) => void,
   onEdit: (vehicle: Record<string, unknown>) => void,
+  onProposePrice: (vehicle: Record<string, unknown>) => void,
+  onArchive: (vehicle: Record<string, unknown>) => void,
+  onDelete: (vehicle: Record<string, unknown>) => void,
   canManage: boolean,
+  canDelete: boolean,
 ): ColumnDef<Record<string, unknown>>[] {
   return [
     {
@@ -137,7 +141,7 @@ export function createColumns(
 
         return (
           <div className="text-right">
-            {canManage ? (
+            {canManage || canDelete ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -150,16 +154,36 @@ export function createColumns(
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => onEdit(vehicle)}>
-                    <Pencil className="mr-2 size-4" />
-                    Edit
-                  </DropdownMenuItem>
-                  {state === "draft" && (
+                  {canManage ? (
+                    <DropdownMenuItem onClick={() => onEdit(vehicle)}>
+                      <Pencil className="mr-2 size-4" />
+                      Edit
+                    </DropdownMenuItem>
+                  ) : null}
+                  {canManage && state === "draft" && (
+                    <DropdownMenuItem onClick={() => onProposePrice(vehicle)}>
+                      <DollarSign className="mr-2 size-4" />
+                      Propose Price
+                    </DropdownMenuItem>
+                  )}
+                  {canManage && state === "draft" ? (
                     <DropdownMenuItem onClick={() => onPublish(id)}>
                       <Send className="mr-2 size-4" />
                       Publish
                     </DropdownMenuItem>
-                  )}
+                  ) : null}
+                  {canManage && state !== "archived" ? (
+                    <DropdownMenuItem onClick={() => onArchive(vehicle)}>
+                      <Archive className="mr-2 size-4" />
+                      Archive
+                    </DropdownMenuItem>
+                  ) : null}
+                  {canDelete ? (
+                    <DropdownMenuItem variant="destructive" onClick={() => onDelete(vehicle)}>
+                      <Trash2 className="mr-2 size-4" />
+                      Delete
+                    </DropdownMenuItem>
+                  ) : null}
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : null}

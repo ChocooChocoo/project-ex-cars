@@ -1,3 +1,4 @@
+import { getCurrentRole } from "@/app/auth/actions";
 import { requireRole } from "@/lib/auth/guards";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -6,6 +7,7 @@ import { ContentManager } from "./_components/content-manager";
 export default async function ContentPage() {
   await requireRole(["ceo", "marketing_specialist"]);
   const supabase = await createServerSupabase();
+  const canManage = (await getCurrentRole()) === "marketing_specialist";
 
   const { data: items } = await supabase.from("content_items").select("*").order("created_at", { ascending: false });
 
@@ -18,6 +20,7 @@ export default async function ContentPage() {
     <ContentManager
       items={(items as Record<string, unknown>[]) ?? []}
       vehicles={(vehicles as Record<string, unknown>[]) ?? []}
+      canManage={canManage}
     />
   );
 }
