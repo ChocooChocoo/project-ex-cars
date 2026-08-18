@@ -25,18 +25,22 @@ export default async function FieldCasesPage() {
   const supabase = await createServerSupabase();
   const { data: cases } = await supabase.from("field_cases").select("*").order("created_at", { ascending: false });
 
-  const [{ data: informants }, { data: mechanics }] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("id, full_name, private_user_roles!inner(role)")
-      .eq("private_user_roles.role", "confidential_informant")
-      .eq("private_user_roles.active", true),
-    supabase
-      .from("profiles")
-      .select("id, full_name, private_user_roles!inner(role)")
-      .eq("private_user_roles.role", "mechanic")
-      .eq("private_user_roles.active", true),
+  const [{ data: profiles }, { data: workerRoles }] = await Promise.all([
+    supabase.from("profiles").select("id, full_name").order("full_name", { ascending: true }),
+    supabase.rpc("get_all_user_roles"),
   ]);
+
+  const workerIdsByRole = new Map<string, Set<string>>([
+    ["confidential_informant", new Set<string>()],
+    ["mechanic", new Set<string>()],
+  ]);
+  for (const workerRole of (workerRoles as { account_id: string; role: string }[] | null) ?? []) {
+    workerIdsByRole.get(workerRole.role)?.add(workerRole.account_id);
+  }
+  const informants = (profiles ?? []).filter((profile) =>
+    workerIdsByRole.get("confidential_informant")?.has(profile.id),
+  );
+  const mechanics = (profiles ?? []).filter((profile) => workerIdsByRole.get("mechanic")?.has(profile.id));
 
   return (
     <FieldCasesClient

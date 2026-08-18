@@ -681,14 +681,12 @@ export async function assignMechanic(formData: FormData) {
 
   if (!fieldCaseId || !mechanicId) return { error: "Field case and mechanic are required." };
 
-  const { data: mechanic } = await supabase
-    .from("profiles")
-    .select("id, private_user_roles!inner(role)")
-    .eq("id", mechanicId)
-    .eq("private_user_roles.role", "mechanic")
-    .eq("private_user_roles.active", true)
-    .maybeSingle();
-  if (!mechanic) return { error: "The selected user is not an active mechanic." };
+  // user_roles is protected from the exposed API schemas. This RPC keeps the
+  // role lookup server-side while enforcing the caller-role guard in SQL too.
+  const { data: isActiveMechanic, error: mechanicError } = await supabase.rpc("is_active_mechanic", {
+    p_account_id: mechanicId,
+  });
+  if (mechanicError || !isActiveMechanic) return { error: "The selected user is not an active mechanic." };
 
   const { error } = await supabase.from("field_cases").update({ mechanic_id: mechanicId }).eq("id", fieldCaseId);
   if (error) return { error: error.message };

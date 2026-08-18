@@ -14,6 +14,16 @@ import {
   expireAnnouncement,
   publishAnnouncement,
 } from "@/app/(staff)/announcements/actions";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,6 +54,8 @@ const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | 
   archived: "destructive",
 };
 
+type StatusAction = "publish" | "expire";
+
 export function AnnouncementsClient({ announcements, canManage }: AnnouncementsClientProps) {
   const router = useRouter();
   const [formOpen, setFormOpen] = useState(false);
@@ -52,6 +64,10 @@ export function AnnouncementsClient({ announcements, canManage }: AnnouncementsC
   const [expiresAt, setExpiresAt] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [statusTarget, setStatusTarget] = useState<{ announcement: AnnouncementRow; action: StatusAction } | null>(
+    null,
+  );
+  const [statusLoading, setStatusLoading] = useState(false);
 
   async function submitForm() {
     setLoading(true);
@@ -78,16 +94,29 @@ export function AnnouncementsClient({ announcements, canManage }: AnnouncementsC
     action: (fd: FormData) => Promise<{ error?: string } | { success?: boolean }>,
     id: string,
     successMessage: string,
-  ) {
+  ): Promise<boolean> {
     const fd = new FormData();
     fd.set("announcement_id", id);
     const result = await action(fd);
     if ("error" in result && result.error) {
       toast.error(result.error);
-      return;
+      return false;
     }
     toast.success(successMessage);
     router.refresh();
+    return true;
+  }
+
+  async function confirmStatusAction() {
+    if (!statusTarget || statusLoading) return;
+    setStatusLoading(true);
+    const { announcement, action } = statusTarget;
+    const confirmed =
+      action === "publish"
+        ? await runStatusAction(publishAnnouncement, announcement.id, "Announcement published.")
+        : await runStatusAction(expireAnnouncement, announcement.id, "Announcement expired.");
+    setStatusLoading(false);
+    if (confirmed) setStatusTarget(null);
   }
 
   return (
@@ -138,10 +167,7 @@ export function AnnouncementsClient({ announcements, canManage }: AnnouncementsC
                 </div>
                 {canManage && announcement.status === "draft" ? (
                   <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() => runStatusAction(publishAnnouncement, announcement.id, "Announcement published.")}
-                    >
+                    <Button size="sm" onClick={() => setStatusTarget({ announcement, action: "publish" })}>
                       <Send data-icon="inline-start" />
                       Publish
                     </Button>
@@ -152,7 +178,7 @@ export function AnnouncementsClient({ announcements, canManage }: AnnouncementsC
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => runStatusAction(expireAnnouncement, announcement.id, "Announcement expired.")}
+                      onClick={() => setStatusTarget({ announcement, action: "expire" })}
                     >
                       <TimerOff data-icon="inline-start" />
                       Expire
@@ -208,6 +234,32 @@ export function AnnouncementsClient({ announcements, canManage }: AnnouncementsC
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={!!statusTarget}
+        onOpenChange={(open) => {
+          if (!open && !statusLoading) setStatusTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {statusTarget?.action === "publish" ? "Publish announcement?" : "Expire announcement?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {statusTarget?.action === "publish"
+                ? `“${statusTarget.announcement.title}” will become visible to its intended audience.`
+                : `“${statusTarget?.announcement.title}” will no longer be active.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={statusLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmStatusAction} disabled={statusLoading}>
+              {statusLoading ? "Saving..." : statusTarget?.action === "publish" ? "Publish" : "Expire"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

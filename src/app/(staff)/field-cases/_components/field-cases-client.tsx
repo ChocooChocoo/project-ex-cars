@@ -83,7 +83,9 @@ export function FieldCasesClient({
   const [loading, setLoading] = useState(false);
 
   const [createOpen, setCreateOpen] = useState(false);
-  const [createKind, setCreateKind] = useState<string>("acquisition");
+  const [createKind, setCreateKind] = useState<string>(
+    () => CASE_KIND_OPTIONS.find((option) => CASE_KIND_RULES[option.value]?.includes(role))?.value ?? "",
+  );
   const [createWorkerKind, setCreateWorkerKind] = useState<"informant" | "mechanic">("informant");
   const [createWorker, setCreateWorker] = useState("");
   const [createSchedule, setCreateSchedule] = useState("");
@@ -94,8 +96,10 @@ export function FieldCasesClient({
   const [mechanicTarget, setMechanicTarget] = useState<FieldCaseRow | null>(null);
   const [mechanicId, setMechanicId] = useState("");
 
-  const allowedKinds = (CASE_KIND_RULES[role] ?? []).filter((kind) => CASE_KIND_OPTIONS.some((o) => o.value === kind));
-  const workersForKind = createKind === "recovery" ? informants : [...informants, ...mechanics];
+  const allowedKinds = CASE_KIND_OPTIONS.filter((option) => CASE_KIND_RULES[option.value]?.includes(role)).map(
+    (option) => option.value,
+  );
+  const workersForKind = createWorkerKind === "mechanic" ? mechanics : informants;
 
   async function submitUpdate() {
     if (!editTarget) return;
@@ -137,7 +141,7 @@ export function FieldCasesClient({
     }
     toast.success("Field case created.");
     setCreateOpen(false);
-    setCreateKind("acquisition");
+    setCreateKind(allowedKinds[0] ?? "");
     setCreateWorkerKind("informant");
     setCreateWorker("");
     setCreateSchedule("");
@@ -376,7 +380,10 @@ export function FieldCasesClient({
                 <FieldLabel>Worker Type</FieldLabel>
                 <Select
                   value={createWorkerKind}
-                  onValueChange={(value) => setCreateWorkerKind(value as "informant" | "mechanic")}
+                  onValueChange={(value) => {
+                    setCreateWorkerKind(value as "informant" | "mechanic");
+                    setCreateWorker("");
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue />

@@ -15,6 +15,16 @@ import {
   requestPurchaseFunds,
   verifyFinancialEntry,
 } from "@/app/(staff)/finance/actions";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -121,6 +131,8 @@ export function FinanceClient({
   const [fundNotes, setFundNotes] = useState("");
   const [fundError, setFundError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [verifyTarget, setVerifyTarget] = useState<FinancialEntryRow | null>(null);
+  const [verifying, setVerifying] = useState(false);
 
   const revenueTotal = entries.filter((e) => e.entry_kind === "revenue").reduce((sum, e) => sum + e.amount_cents, 0);
   const expenseTotal = entries.filter((e) => e.entry_kind === "expense").reduce((sum, e) => sum + e.amount_cents, 0);
@@ -211,10 +223,19 @@ export function FinanceClient({
     const result = await verifyFinancialEntry(fd);
     if ("error" in result && result.error) {
       toast.error(result.error);
-      return;
+      return false;
     }
     toast.success("Entry verified.");
     router.refresh();
+    return true;
+  }
+
+  async function confirmVerify() {
+    if (!verifyTarget || verifying) return;
+    setVerifying(true);
+    const verified = await verify(verifyTarget.id);
+    setVerifying(false);
+    if (verified) setVerifyTarget(null);
   }
 
   return (
@@ -249,7 +270,7 @@ export function FinanceClient({
       </div>
 
       {isInformant ? (
-        <div className="rounded-lg border border-amber-300/50 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-950/30 dark:text-amber-200">
+        <div className="rounded-lg border border-amber-300/50 bg-amber-50 p-3 text-amber-800 text-sm dark:border-amber-500/30 dark:bg-amber-950/30 dark:text-amber-200">
           You are viewing your own disbursement requests. New requests must be advanced by the CEO or Head Accountant.
         </div>
       ) : null}
@@ -349,7 +370,7 @@ export function FinanceClient({
                           {canVerify ? (
                             <td className="px-2 py-2 text-right">
                               {!entry.verified_by ? (
-                                <Button variant="ghost" size="sm" onClick={() => verify(entry.id)}>
+                                <Button variant="ghost" size="sm" onClick={() => setVerifyTarget(entry)}>
                                   <Check data-icon="inline-start" />
                                   Verify
                                 </Button>
@@ -590,6 +611,29 @@ export function FinanceClient({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={!!verifyTarget}
+        onOpenChange={(open) => {
+          if (!open && !verifying) setVerifyTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Verify financial entry?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will mark “{verifyTarget?.description}” as verified. Confirm only after reviewing the amount and
+              entry details.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={verifying}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmVerify} disabled={verifying}>
+              {verifying ? "Verifying..." : "Verify entry"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

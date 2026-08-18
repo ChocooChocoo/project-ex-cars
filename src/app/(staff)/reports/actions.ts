@@ -53,11 +53,14 @@ export async function reviewReport(formData: FormData): Promise<Phase6ActionResu
   }
 
   const reportId = formData.get("report_id") as string;
-  const { error } = await supabase
+  const { data: updatedReport, error } = await supabase
     .from("reports")
     .update({ status: "reviewed", updated_at: new Date().toISOString() })
-    .eq("id", reportId);
+    .eq("id", reportId)
+    .select("id")
+    .maybeSingle();
   if (error) return { error: error.message };
+  if (!updatedReport) return { error: "Report not found or not authorized to review it." };
 
   revalidatePath("/dashboard/reports");
   return { success: true };

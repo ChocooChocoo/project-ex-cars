@@ -83,22 +83,12 @@ test.describe("shared inquiry conversation", () => {
     });
   }
 
-  test("CEO controls remain available in the shared thread", async ({ page }) => {
+  test("CEO can inspect the shared thread without an invalid self-assignment action", async ({ page }) => {
     test.setTimeout(60000);
     await signIn(page, "ceo@gce.local", "/ceo/inquiries");
     await assertSharedConversation(page, "Inquiries Queue");
-
-    const rows = inquiryRows(page);
-    const actionCount = async () =>
-      (await page.getByRole("button", { name: /Assign to Me|Request Handoff|Accept Handoff|Schedule/ }).count()) +
-      (await page.getByText("Handed off to Sales Manager", { exact: true }).count());
-
-    for (let index = 0; index < Math.min(await rows.count(), 20); index++) {
-      await rows.nth(index).click();
-      if ((await actionCount()) > 0) return;
-    }
-
-    expect(await actionCount()).toBeGreaterThan(0);
+    await expect(page.getByRole("button", { name: "Assign to Me", exact: true })).toHaveCount(0);
+    await expect(page.getByText("Not authorized", { exact: true })).toHaveCount(0);
   });
 
   for (const route of ROUTES) {

@@ -62,16 +62,16 @@ export default async function InspectionDetailPage({ params }: { params: Promise
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          {role === "mechanic" ? (
+        {role === "mechanic" ? (
+          <div className="lg:col-span-2">
             <ChecklistForm
               inspectionId={id}
               checklist={(checklist as Record<string, unknown>[]).map((e) => e as unknown as ChecklistEntry)}
               existingResults={(results as Record<string, unknown>[]).map((r) => r as unknown as ChecklistResult)}
             />
-          ) : null}
-        </div>
-        <Card className="h-fit">
+          </div>
+        ) : null}
+        <Card className={role === "mechanic" ? "h-fit" : "h-fit lg:col-span-3"}>
           <CardHeader>
             <CardTitle className="text-lg">Summary</CardTitle>
           </CardHeader>

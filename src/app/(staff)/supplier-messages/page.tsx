@@ -37,13 +37,12 @@ export default async function SupplierMessagesPage() {
     .order("created_at", { ascending: false })
     .limit(50);
 
-  return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="font-semibold text-3xl tracking-tight">Supplier Messages</h1>
-        <p className="text-muted-foreground text-sm">Direct communication with approved suppliers.</p>
-      </div>
+  const visibleSuppliers = isCeo
+    ? (suppliers ?? [])
+    : (suppliers ?? []).filter((supplier) => supplier.id === ownSupplierId);
 
+  return (
+    <div data-content-padding="false" className="flex min-h-0 min-w-0 flex-1 flex-col">
       <SupplierMessageThread
         messages={
           (messages ?? []) as {
@@ -56,7 +55,7 @@ export default async function SupplierMessagesPage() {
           }[]
         }
         suppliers={
-          (suppliers ?? []) as {
+          visibleSuppliers as {
             id: string;
             business_name: string;
           }[]
