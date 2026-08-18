@@ -80,6 +80,11 @@ export function RoadmapDashboardShell({
     setFormOpen(true);
   }, []);
 
+  const handleCreate = useCallback(() => {
+    setEditingItem(null);
+    setFormOpen(true);
+  }, []);
+
   const handleDeleteRequest = useCallback((item: RoadmapItem) => {
     setDeleteTarget(item);
   }, []);
@@ -102,7 +107,12 @@ export function RoadmapDashboardShell({
   return (
     <>
       <div className="flex flex-col gap-4 p-4 md:p-6">
-        <RoadmapProjectsSection projects={projects} onSelect={handleSelect} canWrite={canWrite} />
+        <RoadmapProjectsSection
+          projects={projects}
+          onSelect={handleSelect}
+          onCreate={handleCreate}
+          canWrite={canWrite}
+        />
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
           <div className="xl:col-span-8">
             <RoadmapPerformanceHighlights highlights={highlights} />

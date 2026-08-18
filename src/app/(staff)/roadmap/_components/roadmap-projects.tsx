@@ -29,6 +29,7 @@ import type { ProjectCardData } from "./roadmap-dashboard-data";
 interface RoadmapProjectsSectionProps {
   projects: ProjectCardData[];
   onSelect: (id: string) => void;
+  onCreate: () => void;
   canWrite: boolean;
 }
 
@@ -44,7 +45,7 @@ const TEAM_ICONS: Record<string, LucideIcon> = {
   Security: Wrench,
 };
 
-export function RoadmapProjectsSection({ projects, onSelect, canWrite }: RoadmapProjectsSectionProps) {
+export function RoadmapProjectsSection({ projects, onSelect, onCreate, canWrite }: RoadmapProjectsSectionProps) {
   const router = useRouter();
 
   return (
@@ -65,7 +66,7 @@ export function RoadmapProjectsSection({ projects, onSelect, canWrite }: Roadmap
             </SelectContent>
           </Select>
           {canWrite ? (
-            <Button variant="outline" onClick={() => router.push("/roadmap/new")}>
+            <Button variant="outline" onClick={onCreate}>
               <Plus data-icon="inline-start" />
               New
             </Button>

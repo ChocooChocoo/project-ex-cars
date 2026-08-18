@@ -15,6 +15,16 @@ import {
   sendMessageWithAttachment,
 } from "@/app/(customer)/my-inquiries/actions";
 import { InquiryConversation } from "@/components/inquiries/inquiry-conversation";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,6 +65,7 @@ export function StaffChatView({
   const [arrangementKind, setArrangementKind] = useState("gce_visit");
   const [arrangementSchedule, setArrangementSchedule] = useState("");
   const [arrangementLocation, setArrangementLocation] = useState("");
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
 
   const inquiryId = inquiry.id as string;
   const intention = inquiry.intention_kind as string;
@@ -65,6 +76,8 @@ export function StaffChatView({
     (inquiry.assigned_sales_manager as string | null | undefined);
   const canRequestHandoff = userRole === "account_manager";
   const canAcceptHandoff = userRole === "sales_manager";
+  const expectedManagerRole = intention === "buy_now" ? "sales_manager" : "account_manager";
+  const canAssign = !hasManager && userRole === expectedManagerRole;
 
   async function handleAssign() {
     if (assigning) return;
@@ -130,8 +143,8 @@ export function StaffChatView({
 
   const headerActions = (
     <>
-      {!hasManager && (
-        <Button size="sm" onClick={handleAssign} disabled={assigning} type="button">
+      {canAssign && (
+        <Button size="sm" onClick={() => setAssignDialogOpen(true)} disabled={assigning} type="button">
           {assigning ? "Assigning..." : "Assign to Me"}
         </Button>
       )}
@@ -212,17 +225,37 @@ export function StaffChatView({
   ) : null;
 
   return (
-    <InquiryConversation
-      inquiry={inquiry}
-      messages={messages}
-      arrangement={arrangement}
-      perspective="staff"
-      sendMessage={sendMessageWithAttachment}
-      markMessagesRead={markMessagesRead}
-      headerActions={headerActions}
-      beforeMessages={arrangementForm}
-      fillHeight={fillHeight}
-      onBack={onBack}
-    />
+    <>
+      <InquiryConversation
+        inquiry={inquiry}
+        messages={messages}
+        arrangement={arrangement}
+        perspective="staff"
+        sendMessage={sendMessageWithAttachment}
+        markMessagesRead={markMessagesRead}
+        headerActions={headerActions}
+        beforeMessages={arrangementForm}
+        fillHeight={fillHeight}
+        onBack={onBack}
+      />
+
+      <AlertDialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Assign this inquiry to yourself?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will assign the inquiry to you as the {expectedManagerRole === "sales_manager" ? "sales" : "account"}{" "}
+              manager.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={assigning}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleAssign} disabled={assigning}>
+              {assigning ? "Assigning..." : "Assign to Me"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

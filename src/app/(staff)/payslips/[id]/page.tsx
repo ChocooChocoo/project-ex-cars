@@ -41,7 +41,7 @@ export default async function PayslipDetailPage({ params }: { readonly params: P
     : "No period";
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-6">
+    <div className="flex w-full flex-col gap-6">
       <PayslipDetailClient
         payslipId={id}
         status={(payslip.status as "draft" | "finalized") ?? "draft"}

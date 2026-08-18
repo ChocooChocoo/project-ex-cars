@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { getCurrentRole } from "@/app/auth/actions";
+import { STAFF_ROLES } from "@/lib/auth/roles";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 import { type CompensationRow, PayrollClient, type PayrollRunRow } from "./_components/payroll-client";
@@ -16,10 +17,17 @@ export default async function PayrollPage() {
   const supabase = await createServerSupabase();
   const { data: runs } = await supabase.from("payroll_runs").select("*").order("created_at", { ascending: false });
 
-  const { data: employees } = await supabase
-    .from("profiles")
-    .select("id, full_name, private_user_roles!inner(role)")
-    .not("private_user_roles.role", "in", '("customer","supplier")');
+  const [{ data: profiles }, { data: roles }] = await Promise.all([
+    supabase.from("profiles").select("id, full_name").order("full_name", { ascending: true }),
+    ["ceo", "account_manager"].includes(role) ? supabase.rpc("get_all_user_roles") : Promise.resolve({ data: null }),
+  ]);
+
+  const employeeIds = new Set(
+    ((roles as { account_id: string; role: string }[] | null) ?? [])
+      .filter((userRole) => (STAFF_ROLES as readonly string[]).includes(userRole.role))
+      .map((userRole) => userRole.account_id),
+  );
+  const employees = (profiles ?? []).filter((profile) => employeeIds.has(profile.id));
 
   const admin = await import("@/lib/supabase/admin").then((m) => m.createAdminClient());
   const { data: compensation } = await admin
