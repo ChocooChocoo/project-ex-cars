@@ -401,4 +401,16 @@ export const sidebarItems: NavGroup[] = [
       },
     ],
   },
+  {
+    id: 8,
+    label: "Supplier Portal",
+    items: [
+      {
+        id: "supplier-overview",
+        title: "My Supplier Profile",
+        url: "/overview",
+        icon: ScanFace,
+      },
+    ],
+  },
 ];

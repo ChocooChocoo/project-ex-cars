@@ -75,6 +75,27 @@ const STATUS_STYLES: Record<AttendanceStatus, { className: string; variant: "def
   half_day: { variant: "default", className: "bg-sky-500 text-white hover:bg-sky-500/90" },
 };
 
+function AttendanceSummaryStrip({ entries }: { readonly entries: AttendanceEntry[] }) {
+  const today = useMemo(() => new Intl.DateTimeFormat("en-CA", { timeZone: TIME_ZONE }).format(new Date()), []);
+  const todayEntries = useMemo(() => entries.filter((entry) => entry.attendance_date === today), [entries, today]);
+  const present = todayEntries.filter((entry) => entry.status === "present").length;
+  const late = todayEntries.filter((entry) => entry.status === "late").length;
+  const absent = todayEntries.filter((entry) => entry.status === "absent").length;
+  const pending = todayEntries.filter((entry) => !entry.checked_by).length;
+  return (
+    <Card aria-label="Today attendance summary">
+      <CardContent className="flex flex-wrap items-center gap-2 py-3">
+        <span className="font-medium text-sm">Today —</span>
+        <Badge className="bg-emerald-500 text-white hover:bg-emerald-500/90">Present {present}</Badge>
+        <Badge className="bg-amber-500 text-white hover:bg-amber-500/90">Late {late}</Badge>
+        <Badge variant="destructive">Absent {absent}</Badge>
+        <Badge variant="outline">Pending {pending}</Badge>
+        <span className="text-muted-foreground text-xs">{todayEntries.length} record(s) today · full table below</span>
+      </CardContent>
+    </Card>
+  );
+}
+
 const attendanceStatusOptions = [
   { value: "all", label: "All" },
   ...ATTENDANCE_STATUSES.map((status) => ({ value: status, label: STATUS_LABELS[status] })),
@@ -545,6 +566,8 @@ export function AttendanceClient({
           </div>
         </CardContent>
       </Card>
+
+      <AttendanceSummaryStrip entries={entries} />
 
       <Card>
         <CardHeader>

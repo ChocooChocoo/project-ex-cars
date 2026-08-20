@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -38,10 +39,62 @@ import {
   transactionStatusBadgeVariant,
 } from "@/lib/transactions/labels";
 import type { TransactionState } from "@/lib/transactions/state-machine";
-import { formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 
 import type { TransactionPaperProps } from "./transaction-paper";
 import { TransactionPreview } from "./transaction-preview";
+
+function ProgressStepper({ state }: { readonly state: TransactionState }) {
+  const isCancelled = state === "cancelled" || state === "rejected";
+  const labels = isCancelled
+    ? ["Requested", "Details", "Documents", "Review", state === "rejected" ? "Rejected" : "Cancelled"]
+    : ["Requested", "Details", "Documents", "Review", "Complete"];
+  const active = state === "pending" ? 0 : state === "under_review" ? 3 : 4;
+  const hints: Record<TransactionState, string> = {
+    pending: "We received your request — add your details and documents for review.",
+    under_review: "Under review — we are checking your details and documents.",
+    approved: "Approved — we are finalising your transaction.",
+    completed: "Complete — your transaction is finished.",
+    cancelled: "Cancelled — this transaction was stopped. Start a new request if needed.",
+    rejected: "Not approved — check the history for the reason or contact support.",
+  };
+  return (
+    <Card>
+      <CardContent className="flex flex-col gap-3">
+        <ol className="flex flex-wrap items-center gap-2" aria-label="Transaction progress">
+          {labels.map((label, index) => {
+            const done = index < active;
+            const current = index === active;
+            return (
+              <li key={label} className="flex items-center gap-2">
+                <span
+                  className={cn(
+                    "flex size-7 items-center justify-center rounded-full border font-medium text-xs",
+                    done
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : current
+                        ? isCancelled
+                          ? "border-destructive bg-destructive text-destructive-foreground"
+                          : "border-primary bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground",
+                  )}
+                  aria-current={current ? "step" : undefined}
+                >
+                  {done ? "✓" : index + 1}
+                </span>
+                <span className={cn("text-sm", current ? "font-medium" : "text-muted-foreground")}>{label}</span>
+                {index < labels.length - 1 ? (
+                  <span className="mx-1 hidden h-px w-8 bg-border sm:block" aria-hidden="true" />
+                ) : null}
+              </li>
+            );
+          })}
+        </ol>
+        <p className="text-muted-foreground text-sm">{hints[state]}</p>
+      </CardContent>
+    </Card>
+  );
+}
 
 export function TransactionDetail({
   transaction,
@@ -227,6 +280,7 @@ export function TransactionDetail({
 
   return (
     <>
+      <ProgressStepper state={state} />
       {/* Header */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex flex-col gap-1">
