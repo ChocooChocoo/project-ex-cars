@@ -30,6 +30,21 @@ export function resolveInternalPath(role: string, segment: string): string {
     return `/${seg}`;
   }
 
+  // Supplier isolated overview — maps /supplier/overview → /overview.
+  // Choice: isolated (supplier)/overview route group avoids leaking staff layout/header
+  // vs (staff)/supplier-overview reuse. Builder creates src/app/(supplier)/overview/page.tsx.
+  // Also accepts supplier-overview alias for staff-reuse fallback.
+  if (role === "supplier") {
+    if (seg === "overview" || seg.startsWith("overview/")) {
+      return seg === "overview" ? "/overview" : seg.replace("overview", "/overview");
+    }
+    if (seg === "supplier-overview" || seg.startsWith("supplier-overview")) {
+      return seg === "supplier-overview"
+        ? "/supplier-overview"
+        : seg.replace("supplier-overview", "/supplier-overview");
+    }
+  }
+
   if (seg.startsWith("showroom")) return seg.replace("showroom", "/showroom");
   if (seg.startsWith("inquiries")) return seg.replace("inquiries", "/my-inquiries");
   if (seg.startsWith("my-inquiries")) return `/${seg}`;
@@ -46,6 +61,7 @@ export function resolveInternalPath(role: string, segment: string): string {
 export function landingPath(role: string): string {
   if (role === "mechanic") return `/${role}/inspections`;
   if (role === "marketing_specialist" || role === "sales_manager") return `/${role}/vehicles`;
-  if (role === "customer" || role === "supplier") return `/${role}/showroom`;
+  if (role === "supplier") return `/${role}/overview`;
+  if (role === "customer") return `/${role}/showroom`;
   return `/${role}/dashboard`;
 }

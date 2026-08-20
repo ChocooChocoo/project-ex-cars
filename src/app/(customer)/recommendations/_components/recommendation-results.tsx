@@ -44,6 +44,14 @@ interface ResultWithExplanation {
   vehicle: VehicleDisplay;
 }
 
+const plainHintByLabel: Record<string, string> = {
+  "Budget Fit": "Price close to your budget scores higher.",
+  Condition: "Better condition and inspection score rank higher.",
+  "Fuel Efficiency": "Electric and hybrid score higher for fuel savings.",
+  "Demand / Resale": "More favourites and inquiries means higher demand.",
+  Mileage: "Lower mileage scores higher.",
+};
+
 const medalColors = ["bg-amber-500", "bg-slate-400", "bg-amber-700"];
 
 interface ScoreColor {
@@ -272,6 +280,7 @@ export function RecommendationResults({ runId }: RecommendationResultsProps) {
                               />
                             </div>
                             <p className="text-muted-foreground text-xs">{c.detail}</p>
+                            <p className="text-muted-foreground/80 text-xs">{plainHintByLabel[c.label]}</p>
                           </div>
                         );
                       })}

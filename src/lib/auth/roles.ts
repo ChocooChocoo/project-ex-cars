@@ -178,6 +178,8 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
     "cust-request-car",
     "cust-sell-vehicle",
     "cust-favourites",
+    "supplier-messages",
+    "supplier-overview",
   ]),
   ceo: new Set([
     "default",
@@ -273,7 +275,7 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
 /** Landing page path for each role after sign-in (resolved to role-prefixed URL by {@link landingPath}). */
 export const ROLE_LANDING_PAGES: Record<GceRole, string> = {
   customer: "/showroom",
-  supplier: "/showroom",
+  supplier: "/overview",
   ceo: "/dashboard",
   account_manager: "/dashboard",
   head_accountant: "/dashboard",
