@@ -1,10 +1,87 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "default_agent": "orchestrator",
+  "default_agent": "planner-architect",
+  "permission": {
+    "*": "allow",
+    "external_directory": "ask"
+  },
+  "agents": {
+    "orchestrator": {
+      "description": "Orchestrator that routes tasks to the appropriate specialist agents (Planner, Explorer, Coder, Reviewer, Debugger, DevOps).",
+      "mode": "primary",
+      "temperature": 0.3,
+      "permission": {
+        "*": "allow",
+        "external_directory": "ask"
+      }
+    },
+    "planner-architect": {
+      "description": "Strategic planner and solution architect. Use for high-level system design, technology selection, breaking down epics into tasks, and documenting architectural decisions.",
+      "mode": "primary",
+      "temperature": 0.3,
+      "permission": {
+        "*": "allow",
+        "external_directory": "ask"
+      }
+    },
+    "code-explorer": {
+      "description": "Codebase explorer and technical researcher. Use for investigating existing code, discovering usage patterns, mapping dependencies, and researching external libraries.",
+      "mode": "subagent",
+      "temperature": 0.1,
+      "permission": {
+        "*": "allow",
+        "external_directory": "ask"
+      }
+    },
+    "coder-implementer": {
+      "description": "Primary implementer focused on writing clean, tested, and maintainable code. Use for feature development, refactoring, and unit test creation.",
+      "mode": "primary",
+      "temperature": 0.2,
+      "permission": {
+        "*": "allow",
+        "external_directory": "ask"
+      }
+    },
+    "reviewer": {
+      "description": "Code reviewer focused on quality, correctness, and consistency. Use for pull/merge request reviews, design validation, and adherence to standards.",
+      "mode": "subagent",
+      "temperature": 0.1,
+      "permission": {
+        "*": "allow",
+        "external_directory": "ask"
+      }
+    },
+    "debugger-fixer": {
+      "description": "Specialised troubleshooter for diagnosing bugs, investigating failures, and applying targeted fixes. Use for incident analysis, flaky test resolution, and critical hotfixes.",
+      "mode": "subagent",
+      "temperature": 0.1,
+      "permission": {
+        "*": "allow",
+        "external_directory": "ask"
+      }
+    },
+    "devops-integration": {
+      "description": "DevOps and integration specialist. Use for CI/CD pipelines, containerisation, infrastructure provisioning, and environment configuration.",
+      "mode": "subagent",
+      "temperature": 0.1,
+      "permission": {
+        "*": "allow",
+        "external_directory": "ask"
+      }
+    }
+  },
   "mcp": {
     "playwright": {
       "type": "local",
-      "command": ["npx", "-y", "@playwright/mcp@latest", "--browser", "chrome", "--executable-path", "C:/Program Files/BraveSoftware/Brave-Browser/Application/brave.exe"],
+      "command": [
+        "npx",
+        "-y",
+        "@playwright/mcp@latest",
+        "--browser",
+        "chrome",
+        "--executable-path",
+        "C:/Program Files/BraveSoftware/Brave-Browser/Application/brave.exe"
+      ],
       "enabled": true
     },
     "context7": {
