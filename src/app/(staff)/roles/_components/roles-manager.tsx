@@ -56,7 +56,7 @@ export function RolesManager({ users }: { readonly users: UserRecord[] }) {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="font-bold text-2xl">Role Management</h1>
+        <h2 className="font-semibold text-lg">User role assignments</h2>
         <p className="text-muted-foreground text-sm">Assign and manage user roles across the system.</p>
       </div>
       <div className="rounded-md border">
