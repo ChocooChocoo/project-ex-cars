@@ -388,6 +388,12 @@ export const sidebarItems: NavGroup[] = [
         icon: Banknote,
       },
       {
+        id: "cust-buying-guide",
+        title: "Buying Guide",
+        url: "/buying-requirements",
+        icon: FileText,
+      },
+      {
         id: "cust-favourites",
         title: "Favourites",
         url: "/favourites",

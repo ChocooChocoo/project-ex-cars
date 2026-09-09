@@ -136,6 +136,29 @@ export const disbursementEventSchema = z.object({
 export const FIELD_CASE_STATES = ["assigned", "accepted", "in_progress", "completed", "cancelled"] as const;
 export type FieldCaseState = (typeof FIELD_CASE_STATES)[number];
 
+export const FIELD_CASE_KINDS = ["acquisition", "delivery", "recovery", "sourcing"] as const;
+export type FieldCaseKind = (typeof FIELD_CASE_KINDS)[number];
+
+export const fieldCaseCreateSchema = z
+  .object({
+    case_kind: z.enum(FIELD_CASE_KINDS),
+    transaction_id: z.string().uuid().optional().or(z.literal("")),
+    vehicle_id: z.string().uuid().optional().or(z.literal("")),
+    assigned_confidential_informant: z.string().uuid().optional().or(z.literal("")),
+    mechanic_id: z.string().uuid().optional().or(z.literal("")),
+    schedule: z.string().optional().or(z.literal("")),
+    location: z.string().max(500).optional().or(z.literal("")),
+    notes: z.string().max(1000).optional().or(z.literal("")),
+  })
+  .refine((data) => Boolean(data.transaction_id) || Boolean(data.vehicle_id), {
+    path: ["transaction_id"],
+    message: "Select a transaction or a vehicle to link this field case.",
+  })
+  .refine((data) => Boolean(data.assigned_confidential_informant) || Boolean(data.mechanic_id), {
+    path: ["assigned_confidential_informant"],
+    message: "Assign an informant or a mechanic to this field case.",
+  });
+
 export const fieldCaseUpdateSchema = z.object({
   field_case_id: z.string().uuid(),
   state: z.enum(FIELD_CASE_STATES),

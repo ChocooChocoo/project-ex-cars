@@ -80,7 +80,7 @@ export function createSupplierColumns({
     {
       id: "search",
       accessorFn: (row) =>
-        `${row.id} ${row.business_name} ${row.supplier_kind} ${row.state} ${row.contact_name} ${row.contact_email} ${row.contact_phone}`,
+        `${row.id} ${row.business_name} ${row.supplier_kind} ${row.supplier_offering} ${row.state} ${row.contact_name} ${row.contact_email} ${row.contact_phone}`,
       filterFn: "includesString",
       enableHiding: true,
     },
@@ -102,6 +102,22 @@ export function createSupplierColumns({
         <Badge variant="outline" className="px-1.5 text-muted-foreground capitalize">
           {kindIcon(row.original.supplier_kind)}
           {row.original.supplier_kind}
+        </Badge>
+      ),
+    },
+    {
+      accessorKey: "supplier_offering",
+      header: "Offering",
+      // Inclusive match: filtering "vehicle" also shows "both" (and same for
+      // "parts"), since "both" suppliers offer either category.
+      filterFn: (row, columnId, filterValue) => {
+        if (filterValue === "all" || filterValue === undefined) return true;
+        const offering = row.getValue(columnId) as string;
+        return offering === filterValue || offering === "both";
+      },
+      cell: ({ row }) => (
+        <Badge variant="outline" className="px-1.5 text-muted-foreground capitalize">
+          {row.original.supplier_offering === "both" ? "Vehicles & Parts" : row.original.supplier_offering}
         </Badge>
       ),
     },

@@ -14,7 +14,10 @@ import {
   type AttendanceState,
 } from "./_components/attendance-client";
 
-const ATTENDANCE_CHECKERS = ["ceo", "account_manager", "head_accountant"];
+const ATTENDANCE_CHECKERS = ["account_manager"];
+// Task 32: checking is Account-Manager-only, but CEO + Head Accountant keep
+// read/summary oversight (CEO staffing oversight, HA payroll cross-check).
+const ATTENDANCE_READERS = ["account_manager", "ceo", "head_accountant"];
 const TIME_ZONE = "Asia/Manila";
 export const ATTENDANCE_ENTRY_SELECT =
   "id, employee_id, attendance_date, time_in, time_out, hours_worked, status, notes, checked_by, profiles!attendance_entries_employee_id_fkey(full_name)";
@@ -31,7 +34,7 @@ export function getAttendanceDataError(results: ReadonlyArray<AttendanceQueryErr
 }
 
 export function buildAttendanceRealtimeAccess(role: string, employeeId: string): AttendanceRealtimeAccess {
-  const canReadAll = ATTENDANCE_CHECKERS.includes(role);
+  const canReadAll = ATTENDANCE_READERS.includes(role);
   return {
     attendanceEmployeeId: canReadAll ? null : employeeId,
     leaveEmployeeId: canReadAll ? null : employeeId,
@@ -363,13 +366,14 @@ export default async function AttendancePage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/auth/v1/login");
 
-  const isStaff = ATTENDANCE_CHECKERS.includes(role);
+  const isAccountManager = ATTENDANCE_CHECKERS.includes(role);
+  const canReadAll = ATTENDANCE_READERS.includes(role);
   const attendanceQuery = supabase
     .from("attendance_entries")
     .select(ATTENDANCE_ENTRY_SELECT)
     .order("attendance_date", { ascending: false })
-    .limit(isStaff ? 100 : 30);
-  if (!isStaff) attendanceQuery.eq("employee_id", user.id);
+    .limit(canReadAll ? 100 : 30);
+  if (!canReadAll) attendanceQuery.eq("employee_id", user.id);
 
   const now = new Date();
   const today = philippinesDate(now);
@@ -411,13 +415,18 @@ export default async function AttendancePage() {
       <div>
         <h1 className="font-semibold text-3xl tracking-tight">Attendance</h1>
         <p className="text-muted-foreground text-sm">
-          {isStaff ? "Clock in, clock out, and review employee attendance records." : "Your attendance history."}
+          {isAccountManager
+            ? "Managed by the Account Manager. Clock in, clock out, and review employee attendance records."
+            : canReadAll
+              ? "Attendance records for oversight. Checking is managed by the Account Manager."
+              : "Your attendance history."}
         </p>
       </div>
 
       <AttendanceClient
         entries={entries}
-        canCheck={isStaff}
+        canCheck={isAccountManager}
+        canReadAll={canReadAll}
         todayEntry={todayEntry}
         attendanceState={attendanceState}
         realtimeEnabled

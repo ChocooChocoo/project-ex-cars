@@ -9,6 +9,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { generateInstallmentSchedule } from "@/lib/transactions/installments";
 import type { TransactionState } from "@/lib/transactions/state-machine";
 import { canTransition } from "@/lib/transactions/state-machine";
+import { fieldCaseCreateSchema } from "@/lib/validation/phase6";
 import {
   paymentRecordSchema,
   paymentTermsSchema,
@@ -49,6 +50,32 @@ export async function transitionTransaction(formData: FormData) {
 
   // Use admin client for state transitions (bypass RLS for role-gated logic).
   const admin = await createAdminClient();
+
+  // Task 32: HA verification precedes CEO approval. Two verified valid IDs +
+  // proof of billing are required before a purchase is approved (not only at
+  // completion), so the CEO cannot approve an unverified transaction (G16).
+  if (toState === "approved" && tx.transaction_kind === "buy") {
+    const [{ count: verifiedIds }, { count: verifiedBilling }] = await Promise.all([
+      admin
+        .from("transaction_documents")
+        .select("id", { count: "exact", head: true })
+        .eq("transaction_id", id)
+        .eq("document_kind", "valid_id")
+        .eq("verification_state", "verified"),
+      admin
+        .from("transaction_documents")
+        .select("id", { count: "exact", head: true })
+        .eq("transaction_id", id)
+        .eq("document_kind", "proof_of_billing")
+        .eq("verification_state", "verified"),
+    ]);
+    if ((verifiedIds ?? 0) < 2 || (verifiedBilling ?? 0) < 1) {
+      return {
+        error:
+          "Two verified valid IDs and a verified proof of billing are required before approval. Ask the Head Accountant to verify the documents first.",
+      };
+    }
+  }
 
   // Two valid IDs + proof of billing must be verified before a purchase completes (G16).
   if (toState === "completed" && tx.transaction_kind === "buy") {
@@ -363,7 +390,9 @@ export async function verifyTransactionDocument(formData: FormData) {
   if (!user.user) return { error: "Not authenticated" };
 
   const role = await getCurrentRole();
-  if (!role || !["ceo", "sales_manager", "account_manager"].includes(role)) {
+  // Task 32: Head Accountant verifies purchase-document correctness as part of
+  // the Sales → HA verify → CEO approve flow.
+  if (!role || !["ceo", "sales_manager", "account_manager", "head_accountant"].includes(role)) {
     return { error: "Not authorized to verify purchase documents" };
   }
 
@@ -435,7 +464,10 @@ export async function reviewSellTransaction(formData: FormData) {
   const role = await getCurrentRole();
   if (!role) return { error: "No role assigned" };
 
-  const parsed = reviewSellSchema.parse(Object.fromEntries(formData));
+  const parsed = reviewSellSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid sell review." };
+  }
 
   const { data: tx } = await supabase
     .from("transactions")
@@ -601,6 +633,12 @@ export async function createWalkInTransaction(formData: FormData) {
   return { success: true, id: transaction.id };
 }
 
+function validateFieldCaseSchedule(raw: string): string | null {
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString();
+}
+
 export async function createFieldCase(formData: FormData) {
   const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
@@ -620,30 +658,32 @@ export async function createFieldCase(formData: FormData) {
     return { error: `Not authorized to create ${caseKind ?? ""} field cases` };
   }
 
-  const transactionId = (formData.get("transaction_id") as string) || null;
-  const vehicleId = (formData.get("vehicle_id") as string) || null;
-  const informantId = (formData.get("assigned_confidential_informant") as string) || null;
-  const mechanicId = (formData.get("mechanic_id") as string) || null;
-  const schedule = (formData.get("schedule") as string) || null;
-  const location = (formData.get("location") as string) || null;
-  const notes = (formData.get("notes") as string) || null;
+  const parsed = fieldCaseCreateSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid field case." };
+  }
 
-  if (!transactionId && !vehicleId) {
-    return { error: "A transaction or vehicle is required." };
+  const transactionId = parsed.data.transaction_id || null;
+  const vehicleId = parsed.data.vehicle_id || null;
+  const informantId = parsed.data.assigned_confidential_informant || null;
+  const mechanicId = parsed.data.mechanic_id || null;
+  const rawSchedule = parsed.data.schedule || null;
+  const schedule = rawSchedule ? validateFieldCaseSchedule(rawSchedule) : null;
+  if (rawSchedule && !schedule) {
+    return { error: "Schedule must be a valid date and time." };
   }
-  if (!informantId && !mechanicId) {
-    return { error: "Assign a worker to this field case." };
-  }
+  const location = parsed.data.location || null;
+  const notes = parsed.data.notes || null;
 
   const { data: fieldCase, error } = await supabase
     .from("field_cases")
     .insert({
       transaction_id: transactionId,
       vehicle_id: vehicleId,
-      case_kind: caseKind,
+      case_kind: parsed.data.case_kind,
       assigned_confidential_informant: informantId,
       mechanic_id: mechanicId,
-      schedule: schedule ? new Date(schedule).toISOString() : null,
+      schedule,
       location,
       state: "assigned",
       notes,
@@ -655,10 +695,10 @@ export async function createFieldCase(formData: FormData) {
 
   await logAuditEvent({
     actorId: user.user.id,
-    action: `field_case_created_${caseKind}`,
+    action: `field_case_created_${parsed.data.case_kind}`,
     recordKind: "field_cases",
     recordId: fieldCase.id,
-    summary: `${caseKind} field case created for transaction ${transactionId ?? vehicleId ?? ""}`,
+    summary: `${parsed.data.case_kind} field case created for transaction ${transactionId ?? vehicleId ?? ""}`,
   });
 
   revalidatePath("/dashboard/field-cases");
@@ -672,7 +712,9 @@ export async function assignMechanic(formData: FormData) {
   if (!user.user) return { error: "Not authenticated" };
 
   const role = await getCurrentRole();
-  if (!role || !["ceo", "confidential_informant", "sales_manager"].includes(role)) {
+  // Task 32: mechanic assignment is owned by the Confidential Informant; the
+  // CEO keeps an override. Sales Manager can no longer assign mechanics.
+  if (!role || !["confidential_informant", "ceo"].includes(role)) {
     return { error: "Not authorized to assign mechanics" };
   }
 

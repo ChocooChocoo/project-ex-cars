@@ -31,7 +31,13 @@ export default async function ShowroomPage() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="flex flex-col gap-1">
           <h1 className="text-3xl leading-none tracking-tight">Virtual Showroom</h1>
-          <p className="text-muted-foreground text-sm">Browse our available vehicles.</p>
+          <p className="text-muted-foreground text-sm">
+            Browse our available vehicles.{" "}
+            <Link href="/buying-requirements" className="underline underline-offset-4">
+              See what to prepare before you buy
+            </Link>
+            .
+          </p>
         </div>
         <Button asChild>
           <Link href="/recommendations" className="gap-2">

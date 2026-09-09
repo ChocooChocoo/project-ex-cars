@@ -57,6 +57,12 @@ const kindOptions = [
   { value: "company", label: "Company" },
   { value: "individual", label: "Individual" },
 ] as const;
+const offeringOptions = [
+  { value: "all", label: "All" },
+  { value: "vehicle", label: "Vehicles" },
+  { value: "parts", label: "Parts" },
+  { value: "both", label: "Both" },
+] as const;
 const createdDateOptions = [
   { value: "all", label: "All time" },
   { value: "30", label: "Last 30 days" },
@@ -119,6 +125,7 @@ export function SuppliersTable({
   const searchQuery = (table.getColumn("search")?.getFilterValue() as string) ?? "";
   const stateFilter = (table.getColumn("state")?.getFilterValue() as string) ?? "all";
   const kindFilter = (table.getColumn("supplier_kind")?.getFilterValue() as string) ?? "all";
+  const offeringFilter = (table.getColumn("supplier_offering")?.getFilterValue() as string) ?? "all";
   const createdDateFilter = (table.getColumn("createdWindow")?.getFilterValue() as string) ?? "all";
   const sortValue = React.useMemo(() => {
     const currentSort = sorting[0];
@@ -214,6 +221,29 @@ export function SuppliersTable({
                 {kindOptions.map((kind) => (
                   <DropdownMenuRadioItem key={kind.value} value={kind.value}>
                     {kind.label}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Building2 />
+                Offering
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuRadioGroup
+                value={offeringFilter}
+                onValueChange={(value) => {
+                  table.getColumn("supplier_offering")?.setFilterValue(value === "all" ? undefined : value);
+                  table.setPageIndex(0);
+                }}
+              >
+                {offeringOptions.map((offering) => (
+                  <DropdownMenuRadioItem key={offering.value} value={offering.value}>
+                    {offering.label}
                   </DropdownMenuRadioItem>
                 ))}
               </DropdownMenuRadioGroup>

@@ -159,6 +159,7 @@ export interface AttendanceRealtimeAccess {
 interface AttendanceClientProps {
   entries: AttendanceEntry[];
   canCheck: boolean;
+  canReadAll?: boolean;
   todayEntry: AttendanceEntry | null;
   attendanceState?: AttendanceState;
   realtimeEnabled?: boolean;
@@ -252,6 +253,7 @@ function useAttendanceRealtime(enabled: boolean, access: AttendanceRealtimeAcces
 export function AttendanceClient({
   entries,
   canCheck,
+  canReadAll = false,
   todayEntry,
   attendanceState: providedState,
   realtimeEnabled = false,
@@ -578,7 +580,7 @@ export function AttendanceClient({
 
       <Card>
         <CardHeader>
-          <CardTitle>{canCheck ? "All Records" : "My Attendance"}</CardTitle>
+          <CardTitle>{canCheck || canReadAll ? "All Records" : "My Attendance"}</CardTitle>
         </CardHeader>
         <CardContent className="pt-0">
           <div className="space-y-4">

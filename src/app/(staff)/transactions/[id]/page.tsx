@@ -62,6 +62,27 @@ export default async function TransactionDetailPage({ params }: { readonly param
     .eq("private_user_roles.role", "confidential_informant")
     .eq("private_user_roles.active", true);
 
+  // Task 32: resolve sell condition_items ids to display names for staff.
+  // sell_details is a UNIQUE-per-transaction row; the relation may still come
+  // back as an array, so normalize first.
+  const sellDetailsRow = (transaction as Record<string, unknown> | null)?.sell_details as
+    | Record<string, unknown>
+    | Record<string, unknown>[]
+    | null;
+  const sellDetailsSingle = Array.isArray(sellDetailsRow) ? (sellDetailsRow[0] ?? null) : sellDetailsRow;
+  const rawConditionItems = sellDetailsSingle?.condition_items;
+  const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const conditionIds = Array.isArray(rawConditionItems)
+    ? rawConditionItems.filter((id): id is string => typeof id === "string" && UUID_PATTERN.test(id))
+    : [];
+  let checklistNameMap: Record<string, string> = {};
+  if (conditionIds.length > 0) {
+    const { data: nodes } = await supabase.from("inspection_checklist_nodes").select("id, name").in("id", conditionIds);
+    checklistNameMap = Object.fromEntries(
+      ((nodes as { id: string; name: string }[] | null) ?? []).map((node) => [node.id, node.name]),
+    );
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <StaffTransactionDetail
@@ -74,6 +95,7 @@ export default async function TransactionDetailPage({ params }: { readonly param
         viewingArrangements={(viewingArrangements as Record<string, unknown>[]) ?? []}
         userRole={role}
         informants={(informants as { id: string; full_name: string | null }[]) ?? []}
+        checklistNameMap={checklistNameMap}
       />
     </div>
   );

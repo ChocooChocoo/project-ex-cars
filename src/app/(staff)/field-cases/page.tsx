@@ -29,9 +29,19 @@ export default async function FieldCasesPage() {
   ]);
   const currentUserId = userData.user?.id ?? null;
 
-  const [{ data: profiles }, { data: workerRoles }] = await Promise.all([
+  const [{ data: profiles }, { data: workerRoles }, { data: transactions }, { data: vehicles }] = await Promise.all([
     supabase.from("profiles").select("id, full_name").order("full_name", { ascending: true }),
     supabase.rpc("get_all_user_roles"),
+    supabase
+      .from("transactions")
+      .select("id, transaction_kind, current_state")
+      .order("opened_at", { ascending: false })
+      .limit(100),
+    supabase
+      .from("vehicles")
+      .select("id, make, model, year, stock_code")
+      .order("created_at", { ascending: false })
+      .limit(100),
   ]);
 
   const workerIdsByRole = new Map<string, Set<string>>([
@@ -51,11 +61,15 @@ export default async function FieldCasesPage() {
       cases={(cases as unknown as FieldCaseRow[]) ?? []}
       canUpdate={FIELD_CASE_WORKERS.includes(role)}
       canCreate={FIELD_CASE_CREATORS.includes(role)}
-      canAssignMechanic={["ceo", "confidential_informant", "sales_manager"].includes(role)}
+      canAssignMechanic={["confidential_informant", "ceo"].includes(role)}
       informants={(informants as { id: string; full_name: string | null }[]) ?? []}
       mechanics={(mechanics as { id: string; full_name: string | null }[]) ?? []}
       userRole={role}
       currentUserId={currentUserId}
+      transactions={(transactions as { id: string; transaction_kind: string; current_state: string }[] | null) ?? []}
+      vehicles={
+        (vehicles as { id: string; make: string; model: string; year: number; stock_code: string }[] | null) ?? []
+      }
     />
   );
 }
