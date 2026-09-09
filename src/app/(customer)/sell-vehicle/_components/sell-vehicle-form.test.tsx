@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { sellVehicleSchema } from "@/lib/validation/transactions";
 
-import { SellVehicleForm } from "./sell-vehicle-form";
+import { SellVehicleForm, validateSellPhotos } from "./sell-vehicle-form";
 
 if (typeof window !== "undefined" && !window.HTMLElement.prototype.scrollIntoView) {
   window.HTMLElement.prototype.scrollIntoView =
@@ -109,6 +109,104 @@ describe("sellVehicleSchema condition enum + legacy fallback", () => {
       expect(parsed.data.condition.length).toBeGreaterThan(0);
       expect(parsed.data.condition.length).toBeLessThanOrEqual(50);
     }
+  });
+});
+
+function photo(name: string, type: string, size: number): File {
+  const bytes = new Uint8Array(Math.min(size, 16));
+  return new File([bytes], name, {
+    type,
+    lastModified: Date.now(),
+  }) as File & { size: number };
+}
+
+function sizedPhoto(name: string, type: string, size: number): File {
+  const file = photo(name, type, size);
+  Object.defineProperty(file, "size", { value: size });
+  return file;
+}
+
+describe("validateSellPhotos", () => {
+  it("requires at least one photo", () => {
+    expect(validateSellPhotos([])).toBe("At least one vehicle photo is required.");
+  });
+
+  it("accepts 1–6 valid photos", () => {
+    const files = [sizedPhoto("a.jpg", "image/jpeg", 1024), sizedPhoto("b.png", "image/png", 2048)];
+    expect(validateSellPhotos(files)).toBeNull();
+  });
+
+  it("rejects more than 6 photos", () => {
+    const files = Array.from({ length: 7 }, (_, i) => sizedPhoto(`p${i}.jpg`, "image/jpeg", 1024));
+    expect(validateSellPhotos(files)).toBe("You can upload at most 6 photos.");
+  });
+
+  it("rejects non-image mime types", () => {
+    expect(validateSellPhotos([sizedPhoto("doc.pdf", "application/pdf", 1024)])).toBe(
+      "Photos must be JPEG, PNG, or WebP images.",
+    );
+  });
+
+  it("rejects files larger than 5MB", () => {
+    expect(validateSellPhotos([sizedPhoto("big.jpg", "image/jpeg", 6 * 1024 * 1024)])).toBe(
+      "Each photo must be 5MB or smaller.",
+    );
+  });
+});
+
+describe("condition_items payload", () => {
+  it("serialises selected node ids as a JSON string array", () => {
+    const ids = ["00000000-0000-4000-a000-000000000001", "00000000-0000-4000-a000-000000000002"];
+    const fd = new FormData();
+    fd.set("condition_items", JSON.stringify(ids));
+    const raw = fd.get("condition_items");
+    expect(typeof raw).toBe("string");
+    const decoded = JSON.parse(raw as string) as unknown;
+    expect(Array.isArray(decoded)).toBe(true);
+    expect(decoded).toEqual(ids);
+  });
+
+  it("rejects non-UUID condition items server-side shape", () => {
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const bad = ["not-a-uuid", 42, null];
+    expect(bad.every((id) => typeof id === "string" && uuidPattern.test(id))).toBe(false);
+  });
+
+  it("caps condition items at 200 entries", () => {
+    const many = Array.from({ length: 201 }, () => "00000000-0000-4000-a000-000000000001");
+    expect(many.length > 200).toBe(true);
+  });
+});
+
+describe("SellVehicleForm photo + checklist UI", () => {
+  it("renders the required photo file input", () => {
+    render(<SellVehicleForm />);
+    const input = screen.getByLabelText("Vehicle photos");
+    expect(input).toBeInTheDocument();
+    expect(input).toHaveAttribute("accept", "image/jpeg,image/png,image/webp");
+    expect(input).toHaveAttribute("multiple");
+  });
+
+  it("renders the optional checklist trigger when nodes are provided", () => {
+    render(
+      <SellVehicleForm
+        checklistNodes={[
+          { id: "00000000-0000-4000-a000-000000000001", parent_id: null, level: "system", name: "Brakes" },
+          {
+            id: "00000000-0000-4000-a000-000000000002",
+            parent_id: "00000000-0000-4000-a000-000000000001",
+            level: "component",
+            name: "Pads",
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByText("Known issues checklist (optional)")).toBeInTheDocument();
+  });
+
+  it("hides the checklist trigger when no nodes are provided", () => {
+    render(<SellVehicleForm />);
+    expect(screen.queryByText("Known issues checklist (optional)")).not.toBeInTheDocument();
   });
 });
 

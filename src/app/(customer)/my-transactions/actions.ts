@@ -166,6 +166,16 @@ export async function saveBuyDetails(formData: FormData) {
   return { success: true };
 }
 
+const SELL_PHOTO_MAX_COUNT = 6;
+const SELL_PHOTO_MAX_SIZE = 5 * 1024 * 1024;
+const SELL_PHOTO_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+const SELL_PHOTO_EXTENSIONS: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+};
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function submitSellVehicle(formData: FormData) {
   const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
@@ -174,6 +184,40 @@ export async function submitSellVehicle(formData: FormData) {
   const parsed = sellVehicleSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid vehicle details." };
+  }
+
+  // Files cannot ride the zod schema (FormData parsed via Object.fromEntries
+  // drops File values), so validate them separately here.
+  const photos = formData.getAll("photos").filter((entry): entry is File => entry instanceof File && entry.size > 0);
+  if (photos.length === 0) return { error: "At least one vehicle photo is required." };
+  if (photos.length > SELL_PHOTO_MAX_COUNT) {
+    return { error: `You can upload at most ${SELL_PHOTO_MAX_COUNT} photos.` };
+  }
+  for (const photo of photos) {
+    if (!(SELL_PHOTO_MIME_TYPES as readonly string[]).includes(photo.type)) {
+      return { error: "Photos must be JPEG, PNG, or WebP images." };
+    }
+    if (photo.size > SELL_PHOTO_MAX_SIZE) return { error: "Each photo must be 5MB or smaller." };
+  }
+
+  // Optional condition parts/issues checklist: JSON string of node ids.
+  let conditionItems: string[] = [];
+  const rawConditionItems = formData.get("condition_items");
+  if (typeof rawConditionItems === "string" && rawConditionItems.trim()) {
+    let decoded: unknown;
+    try {
+      decoded = JSON.parse(rawConditionItems);
+    } catch {
+      return { error: "Invalid condition checklist." };
+    }
+    if (
+      !Array.isArray(decoded) ||
+      decoded.length > 200 ||
+      !decoded.every((id): id is string => typeof id === "string" && UUID_PATTERN.test(id))
+    ) {
+      return { error: "Invalid condition checklist." };
+    }
+    conditionItems = [...new Set(decoded)];
   }
 
   const data = parsed.data;
@@ -206,12 +250,55 @@ export async function submitSellVehicle(formData: FormData) {
 
   if (error) return { error: error.message };
 
+  // Upload sell photos to the transaction-documents bucket BEFORE any child
+  // rows exist (existing customer-own-folder INSERT/SELECT policies from 00028
+  // apply — no policy change). There is no customer DELETE policy on
+  // transactions, so a customer-issued DELETE cannot roll the parent row back
+  // under RLS (it would delete 0 rows with no error). Ordering the fallible
+  // photo uploads first means a photo failure only leaves the bare pending
+  // transaction row plus already-uploaded storage objects, which are removed
+  // below. Staff can cancel/delete the leftover pending row if needed.
+  const uploadedPaths: string[] = [];
+  for (const photo of photos) {
+    const ext = SELL_PHOTO_EXTENSIONS[photo.type] ?? "jpg";
+    const storagePath = `${transaction.id}/sell-photo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const { error: uploadError } = await supabase.storage.from("transaction-documents").upload(storagePath, photo);
+    if (uploadError) {
+      if (uploadedPaths.length > 0) await supabase.storage.from("transaction-documents").remove(uploadedPaths);
+      await supabase.from("transactions").delete().eq("id", transaction.id);
+      return {
+        error: `${uploadError.message} Your sell request was not created — please try again.`,
+      };
+    }
+    uploadedPaths.push(storagePath);
+  }
+
   const { error: detailError } = await supabase.from("sell_details").insert({
     transaction_id: transaction.id,
     offered_amount: data.offered_amount,
+    condition_items: conditionItems,
   });
 
-  if (detailError) return { error: detailError.message };
+  if (detailError) {
+    if (uploadedPaths.length > 0) await supabase.storage.from("transaction-documents").remove(uploadedPaths);
+    await supabase.from("transactions").delete().eq("id", transaction.id);
+    return { error: detailError.message };
+  }
+
+  for (const storagePath of uploadedPaths) {
+    const { error: docError } = await supabase.from("transaction_documents").insert({
+      transaction_id: transaction.id,
+      document_kind: "sell_photo",
+      storage_path: storagePath,
+      uploader_id: user.user.id,
+      verification_state: "verified",
+    });
+    if (docError) {
+      await supabase.storage.from("transaction-documents").remove(uploadedPaths);
+      await supabase.from("transactions").delete().eq("id", transaction.id);
+      return { error: docError.message };
+    }
+  }
 
   // Create a draft vehicle record for the offered vehicle.
   // The ID is generated here because INSERT ... RETURNING is subject to the
@@ -230,7 +317,10 @@ export async function submitSellVehicle(formData: FormData) {
     listing_state: "draft",
   });
 
-  if (vehicleError) return { error: vehicleError.message };
+  if (vehicleError) {
+    await supabase.from("transactions").delete().eq("id", transaction.id);
+    return { error: vehicleError.message };
+  }
 
   // Link the vehicle back to the transaction.
   await supabase.from("transactions").update({ vehicle_id: vehicleId }).eq("id", transaction.id);

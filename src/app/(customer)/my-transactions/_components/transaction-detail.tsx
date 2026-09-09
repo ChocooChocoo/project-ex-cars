@@ -52,8 +52,8 @@ function ProgressStepper({ state }: { readonly state: TransactionState }) {
   const active = state === "pending" ? 0 : state === "under_review" ? 3 : 4;
   const hints: Record<TransactionState, string> = {
     pending: "We received your request — add your details and documents for review.",
-    under_review: "Under review — we are checking your details and documents.",
-    approved: "Approved — we are finalising your transaction.",
+    under_review: "Under review — Sales has processed your request and our Head Accountant is verifying the details.",
+    approved: "Approved by GCE — we are finalising your transaction.",
     completed: "Complete — your transaction is finished.",
     cancelled: "Cancelled — this transaction was stopped. Start a new request if needed.",
     rejected: "Not approved — check the history for the reason or contact support.",

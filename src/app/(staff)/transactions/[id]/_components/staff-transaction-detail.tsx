@@ -37,6 +37,7 @@ export function StaffTransactionDetail({
   viewingArrangements,
   userRole,
   informants,
+  checklistNameMap,
 }: {
   readonly transaction: Record<string, unknown>;
   readonly history: Record<string, unknown>[];
@@ -47,15 +48,25 @@ export function StaffTransactionDetail({
   readonly viewingArrangements: Record<string, unknown>[];
   readonly userRole: string;
   readonly informants: { id: string; full_name: string | null }[];
+  readonly checklistNameMap?: Record<string, string>;
 }) {
   const router = useRouter();
   const id = transaction.id as string;
   const kind = transaction.transaction_kind as string;
   const state = (transaction.current_state ?? "pending") as TransactionState;
   const vehicles = transaction.vehicles as Record<string, unknown> | undefined;
-  const purchaseDetails = transaction.purchase_details as Record<string, unknown> | undefined;
-  const sellDetails = transaction.sell_details as Record<string, unknown> | undefined;
-  const vehicleRequests = transaction.vehicle_requests as Record<string, unknown> | undefined;
+  const purchaseDetailsRaw = transaction.purchase_details as
+    | Record<string, unknown>
+    | Record<string, unknown>[]
+    | undefined;
+  const purchaseDetails = Array.isArray(purchaseDetailsRaw) ? purchaseDetailsRaw[0] : purchaseDetailsRaw;
+  const sellDetailsRaw = transaction.sell_details as Record<string, unknown> | Record<string, unknown>[] | undefined;
+  const sellDetails = Array.isArray(sellDetailsRaw) ? sellDetailsRaw[0] : sellDetailsRaw;
+  const vehicleRequestsRaw = transaction.vehicle_requests as
+    | Record<string, unknown>
+    | Record<string, unknown>[]
+    | undefined;
+  const vehicleRequests = Array.isArray(vehicleRequestsRaw) ? vehicleRequestsRaw[0] : vehicleRequestsRaw;
   const openedAt = transaction.opened_at as string;
   const completedAt = transaction.completed_at as string | null;
   const customerName = ((transaction.profiles as Record<string, unknown> | null)?.full_name as string | null) ?? null;
@@ -230,6 +241,8 @@ export function StaffTransactionDetail({
         customerName={customerName}
         openedAt={openedAt}
         completedAt={completedAt}
+        history={history}
+        documents={documents}
       />
 
       <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-3">
@@ -265,6 +278,7 @@ export function StaffTransactionDetail({
           viewingArrangements={viewingArrangements}
           informants={informants}
           sellDetails={sellDetails}
+          checklistNameMap={checklistNameMap}
           onRecordPayment={onRecordPayment}
           onReviewSell={onReviewSell}
           onUploadDocument={onUploadDocument}

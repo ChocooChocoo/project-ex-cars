@@ -14,6 +14,10 @@ import type { RoadmapItem } from "./_components/roadmap-types";
 
 const ROADMAP_WRITER_ROLES = ["ceo"];
 
+// Roadmap is the CEO-owned business-milestone planner: it tracks GCE business milestones (sales pushes,
+// showroom openings, field operations), not software sprints. GCE has no IT department, so the legacy
+// IT-team template residue (Platform/Backend/Frontend team tags) was replaced with GCE business teams in
+// ROADMAP_TEAMS. Writers stay CEO-only; readers (account_manager, sales_manager) keep read access.
 export default async function RoadmapPage() {
   await requireRole(["ceo", "account_manager", "sales_manager"]);
   const supabase = await createServerSupabase();

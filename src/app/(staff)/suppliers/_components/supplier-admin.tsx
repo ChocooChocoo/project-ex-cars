@@ -67,6 +67,7 @@ export function SupplierAdmin({
   const [createOpen, setCreateOpen] = useState(false);
   const [businessName, setBusinessName] = useState("");
   const [supplierKind, setSupplierKind] = useState("company");
+  const [supplierOffering, setSupplierOffering] = useState("parts");
   const [contactName, setContactName] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [contactPhone, setContactPhone] = useState("");
@@ -105,6 +106,7 @@ export function SupplierAdmin({
     setCreating(true);
     const result = await createSupplier({
       supplierKind,
+      supplierOffering,
       businessName: businessName.trim(),
       contactName: contactName.trim(),
       contactEmail: contactEmail.trim(),
@@ -122,6 +124,7 @@ export function SupplierAdmin({
           id: result.id as string,
           business_name: businessName.trim(),
           supplier_kind: supplierKind,
+          supplier_offering: supplierOffering as "vehicle" | "parts" | "both",
           state: "pending_approval",
           contact_name: contactName.trim(),
           contact_email: contactEmail.trim(),
@@ -270,6 +273,21 @@ export function SupplierAdmin({
                 </SelectContent>
               </Select>
             </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="supplier-offering">Offering</Label>
+              <Select value={supplierOffering} onValueChange={setSupplierOffering}>
+                <SelectTrigger id="supplier-offering">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="vehicle">Vehicles</SelectItem>
+                    <SelectItem value="parts">Parts</SelectItem>
+                    <SelectItem value="both">Both</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
             <Separator />
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="business-name">Business Name</Label>
@@ -342,6 +360,16 @@ export function SupplierAdmin({
                     <DetailRow
                       label="Type"
                       value={docsSupplier.supplier_kind === "company" ? "Company" : "Individual"}
+                    />
+                    <DetailRow
+                      label="Offering"
+                      value={
+                        docsSupplier.supplier_offering === "vehicle"
+                          ? "Vehicles"
+                          : docsSupplier.supplier_offering === "both"
+                            ? "Vehicles & Parts"
+                            : "Parts"
+                      }
                     />
                     <DetailRow label="Contact name" value={docsSupplier.contact_name || "—"} />
                     <DetailRow label="Email" value={docsSupplier.contact_email || "—"} />
@@ -472,7 +500,7 @@ export function SupplierAdmin({
                 <>
                   <span className="font-medium text-foreground">“{approveTarget.supplier.business_name}”</span>{" "}
                   {approveTarget.decision === "approved"
-                    ? "will be approved and can start supplying parts and services."
+                    ? "will be approved and can start supplying vehicles, parts and services."
                     : "will be rejected and cannot supply parts or services."}{" "}
                   This action cannot be undone.
                 </>

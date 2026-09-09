@@ -73,7 +73,9 @@ export default async function StaffRecordsPage() {
           <h1 className="font-semibold text-3xl tracking-tight">Staff Records</h1>
           <p className="text-muted-foreground text-sm">Manage employee and customer accounts.</p>
         </div>
-        <WalkInForm />
+        {/* Task 32 WS-D: page stays viewable to ceo/account_manager/sales_manager,
+            but WalkInForm renders its button only for account_manager/ceo. */}
+        {role === "account_manager" || role === "ceo" ? <WalkInForm /> : null}
       </div>
 
       <TabsList className="w-fit gap-1">

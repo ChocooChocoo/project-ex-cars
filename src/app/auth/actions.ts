@@ -187,9 +187,10 @@ export async function createWalkInAccount(params: CreateWalkInAccountParams) {
   if (!user) return { error: "Not authenticated" };
 
   const { data: roles } = await supabase.rpc("get_user_roles");
-  const hasRole = (roles as { role: string }[] | undefined)?.some((r) =>
-    ["ceo", "account_manager", "sales_manager"].includes(r.role),
-  );
+  // Task 32 WS-D: walk-in ACCOUNT creation is an Account Manager responsibility.
+  // The CEO keeps an emergency override (ceo retained); sales_manager is removed
+  // so they can still create walk-in TRANSACTIONS but not walk-in ACCOUNTS.
+  const hasRole = (roles as { role: string }[] | undefined)?.some((r) => ["ceo", "account_manager"].includes(r.role));
   if (!hasRole) return { error: "Not authorized" };
 
   const admin = createAdminClient();
@@ -231,6 +232,7 @@ export async function createWalkInAccount(params: CreateWalkInAccountParams) {
 
 interface CreateSupplierParams {
   supplierKind: string;
+  supplierOffering?: string;
   businessName: string;
   contactName: string;
   contactEmail: string;
@@ -240,6 +242,7 @@ interface CreateSupplierParams {
 
 const createSupplierSchema = z.object({
   supplierKind: z.enum(["company", "individual"]),
+  supplierOffering: z.enum(["vehicle", "parts", "both"]).default("parts"),
   businessName: z.string().min(1, "Business name is required.").max(200),
   contactName: z.string().min(1, "Contact name is required.").max(200),
   contactEmail: z.string().email("A valid contact email is required."),
@@ -252,7 +255,8 @@ export async function createSupplier(params: CreateSupplierParams) {
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid supplier details." };
   }
-  const { supplierKind, businessName, contactName, contactEmail, contactPhone, createdBy } = parsed.data;
+  const { supplierKind, supplierOffering, businessName, contactName, contactEmail, contactPhone, createdBy } =
+    parsed.data;
 
   const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
@@ -268,6 +272,7 @@ export async function createSupplier(params: CreateSupplierParams) {
     .from("suppliers")
     .insert({
       supplier_kind: supplierKind,
+      supplier_offering: supplierOffering,
       business_name: businessName,
       contact_name: contactName,
       contact_email: contactEmail,
@@ -288,7 +293,7 @@ export async function createSupplier(params: CreateSupplierParams) {
     action: "supplier_created",
     record_kind: "supplier",
     record_id: data.id,
-    summary: `Supplier '${businessName}' created (${supplierKind})`,
+    summary: `Supplier '${businessName}' created (${supplierKind}, ${supplierOffering})`,
   });
 
   revalidatePath("/dashboard/suppliers");

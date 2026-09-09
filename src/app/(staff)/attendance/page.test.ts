@@ -28,11 +28,21 @@ describe("attendance page data loading", () => {
     expect(getAttendanceDataError([{ error: null }, { error: null }, { error: null }, { error: null }])).toBeNull();
   });
 
-  it("gives Head Accountant all authorized attendance, leave, and schedule realtime scopes", () => {
-    expect(buildAttendanceRealtimeAccess("head_accountant", "employee-1")).toEqual({
-      attendanceEmployeeId: null,
-      leaveEmployeeId: null,
-      scheduleEmployeeId: null,
+  it("gives attendance readers full realtime scopes for oversight", () => {
+    for (const role of ["account_manager", "ceo", "head_accountant"]) {
+      expect(buildAttendanceRealtimeAccess(role, "employee-1")).toEqual({
+        attendanceEmployeeId: null,
+        leaveEmployeeId: null,
+        scheduleEmployeeId: null,
+      });
+    }
+  });
+
+  it("scopes other staff realtime access to their own employee id", () => {
+    expect(buildAttendanceRealtimeAccess("sales_manager", "employee-1")).toEqual({
+      attendanceEmployeeId: "employee-1",
+      leaveEmployeeId: "employee-1",
+      scheduleEmployeeId: "employee-1",
     });
   });
 

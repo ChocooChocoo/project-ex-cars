@@ -6,7 +6,15 @@ import { toast } from "sonner";
 
 import { createWalkInAccount } from "@/app/auth/actions";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -59,6 +67,7 @@ export function WalkInForm() {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Create Walk-in Account</DialogTitle>
+          <DialogDescription>Creating walk-in accounts is an Account Manager responsibility.</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">

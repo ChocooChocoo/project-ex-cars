@@ -24,4 +24,7 @@ export type RoadmapFilters = {
   team: string | "all";
 };
 
-export const ROADMAP_TEAMS = ["Platform", "Backend", "Frontend", "Mobile", "Data", "Design", "QA", "Security"] as const;
+// GCE business teams (the roadmap is a business-milestone planner, not software sprints — GCE has no IT
+// department). Pre-existing rows tagged with legacy IT team names (Platform, Backend, Frontend, Mobile, Data,
+// Design, QA) still render under their stored value and can be re-tagged; no data migration was written.
+export const ROADMAP_TEAMS = ["Sales", "Finance", "Operations", "Marketing", "Field Operations", "Security"] as const;

@@ -21,19 +21,26 @@ const stateTone: Record<TransactionState, string> = {
 const TRANSACTION_ACTION_LABELS: Record<TransactionState, string> = {
   pending: "Move to Pending",
   under_review: "Move to Review",
-  approved: "Approve",
-  rejected: "Reject",
+  // CEO-only approve: under_review → approved/rejected is restricted to the CEO in
+  // state-machine.ts, so non-CEO roles never see these buttons (no fallback label needed).
+  approved: "Approve (CEO)",
+  rejected: "Reject (CEO)",
   completed: "Complete",
   cancelled: "Cancel",
 };
 
+// Task 32 flow: Sales processes → Head Accountant verifies → CEO approves/rejects → car sold.
+// Price is proposed by Sales (valuation / price proposal) and approved by the CEO;
+// the CEO does not set the price after payment.
 const STATE_GUIDANCE: Record<TransactionState, (kind: string) => string> = {
-  pending: (kind) => `This ${kind} transaction is pending and awaiting review by management.`,
-  under_review: (kind) => `This ${kind} transaction is under review. Confirm details before approving.`,
-  approved: (kind) => `This ${kind} transaction is approved. Complete it to record final paperwork.`,
-  rejected: (kind) => `This ${kind} transaction was rejected and can no longer be advanced.`,
+  pending: (kind) => `This ${kind} transaction is pending. Sales processes it first (pending → under review).`,
+  under_review: (kind) =>
+    `This ${kind} transaction is under review. The Head Accountant must verify documents (2 valid IDs + proof of billing) before the CEO can approve. CEO approval is required to proceed.`,
+  approved: (kind) =>
+    `This ${kind} transaction is approved by the CEO. Complete it to mark the car sold and record final paperwork.`,
+  rejected: (kind) => `This ${kind} transaction was rejected by the CEO and can no longer be advanced.`,
   cancelled: (kind) => `This ${kind} transaction was cancelled and can no longer be advanced.`,
-  completed: (kind) => `This ${kind} transaction is completed. All required steps are done.`,
+  completed: (kind) => `This ${kind} transaction is completed and the car is marked sold. All required steps are done.`,
 };
 
 export function TransactionStatusTriageV1({
@@ -57,6 +64,10 @@ export function TransactionStatusTriageV1({
 }) {
   const daysOpen = Math.max(0, Math.floor((Date.now() - new Date(openedAt).getTime()) / 86_400_000));
   const allowed = getAllowedTransitions(state, userRole);
+  // CEO-only approve: under_review → approved/rejected is CEO-only in TRANSITION_RULES,
+  // so only the CEO ever sees Approve/Reject buttons. Non-CEO viewers on under_review
+  // get an explanatory note instead.
+  const showCeoOnlyNote = userRole !== "ceo" && state === "under_review";
 
   return (
     <Card className="shadow-xs">
@@ -86,30 +97,44 @@ export function TransactionStatusTriageV1({
         <p className="text-muted-foreground text-xs">{STATE_GUIDANCE[state](kind)}</p>
 
         {allowed.length > 0 ? (
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-            {allowed.map((to) => (
-              <button
-                key={to}
-                type="button"
-                disabled={transitioning}
-                onClick={() => onTransition(to)}
-                className="space-y-1 rounded-md border bg-muted/20 px-2.5 py-2 text-left transition-colors hover:bg-muted/35 disabled:opacity-50"
-              >
-                <div className="text-muted-foreground text-xs">Transition</div>
-                <div className="font-semibold text-sm capitalize">{TRANSACTION_ACTION_LABELS[to]}</div>
-                <div className="text-muted-foreground text-xs">
-                  Mark as {TRANSACTION_STATE_LABELS[to].toLowerCase()}
-                </div>
-              </button>
-            ))}
-          </div>
+          <>
+            {showCeoOnlyNote ? (
+              <p className="rounded-md border border-dashed bg-muted/10 px-3 py-2 text-muted-foreground text-xs">
+                Approval is CEO-only. The Head Accountant verifies documents first, then the CEO approves or rejects.
+              </p>
+            ) : null}
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              {allowed.map((to) => (
+                <button
+                  key={to}
+                  type="button"
+                  disabled={transitioning}
+                  onClick={() => onTransition(to)}
+                  className="space-y-1 rounded-md border bg-muted/20 px-2.5 py-2 text-left transition-colors hover:bg-muted/35 disabled:opacity-50"
+                >
+                  <div className="text-muted-foreground text-xs">Transition</div>
+                  <div className="font-semibold text-sm capitalize">{TRANSACTION_ACTION_LABELS[to]}</div>
+                  <div className="text-muted-foreground text-xs">
+                    Mark as {TRANSACTION_STATE_LABELS[to].toLowerCase()}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </>
         ) : (
-          <div className="space-y-1 rounded-md border border-dashed bg-muted/10 px-3 py-2.5">
-            <p className="text-muted-foreground text-xs">
-              No transitions:{" "}
-              <span className="font-medium text-foreground">this transaction is in a terminal state.</span>
-            </p>
-          </div>
+          <>
+            {showCeoOnlyNote ? (
+              <p className="rounded-md border border-dashed bg-muted/10 px-3 py-2 text-muted-foreground text-xs">
+                Approval is CEO-only. The Head Accountant verifies documents first, then the CEO approves or rejects.
+              </p>
+            ) : null}
+            <div className="space-y-1 rounded-md border border-dashed bg-muted/10 px-3 py-2.5">
+              <p className="text-muted-foreground text-xs">
+                No transitions:{" "}
+                <span className="font-medium text-foreground">this transaction is in a terminal state.</span>
+              </p>
+            </div>
+          </>
         )}
 
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/20 px-3 py-2">

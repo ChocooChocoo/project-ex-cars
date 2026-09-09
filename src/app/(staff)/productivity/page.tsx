@@ -1,3 +1,5 @@
+import { requireRole } from "@/lib/auth/guards";
+
 import { CalendarPanel } from "./_components/calendar-panel";
 import { FocusCard } from "./_components/focus-card";
 import { ProjectsSection } from "./_components/projects-section";
@@ -8,7 +10,10 @@ import { SummaryCards } from "./_components/summary-cards";
 import { TasksSection } from "./_components/tasks-section";
 import { WeeklySummaryCard } from "./_components/weekly-summary-card";
 
-export default function Page() {
+// Productivity is personal productivity (tasks, focus, notes) — not an IT Planner module. Guarded to
+// CEO + Account Manager so it is not an unguarded pseudo-Planner surface.
+export default async function Page() {
+  await requireRole(["ceo", "account_manager"]);
   return (
     <div className="grid gap-6 lg:grid-cols-12">
       <section className="lg:col-span-9">

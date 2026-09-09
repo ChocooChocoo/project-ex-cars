@@ -26,6 +26,7 @@ export default async function SuppliersPage() {
           id: string;
           business_name: string;
           supplier_kind: string;
+          supplier_offering: "vehicle" | "parts" | "both";
           state: string;
           contact_name: string;
           contact_email: string;

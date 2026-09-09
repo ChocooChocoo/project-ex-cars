@@ -38,6 +38,20 @@ export interface FieldCaseRow {
   mechanic_id?: string | null;
 }
 
+export interface TransactionLookup {
+  id: string;
+  transaction_kind: string;
+  current_state: string;
+}
+
+export interface VehicleLookup {
+  id: string;
+  make: string;
+  model: string;
+  year: number;
+  stock_code: string;
+}
+
 interface FieldCasesClientProps {
   cases: FieldCaseRow[];
   canUpdate: boolean;
@@ -47,6 +61,8 @@ interface FieldCasesClientProps {
   mechanics: { id: string; full_name: string | null }[];
   userRole: string;
   currentUserId?: string | null;
+  transactions?: TransactionLookup[];
+  vehicles?: VehicleLookup[];
 }
 
 const CASE_KIND_OPTIONS = [
@@ -74,6 +90,8 @@ export function FieldCasesClient({
   mechanics,
   userRole,
   currentUserId = null,
+  transactions = [],
+  vehicles = [],
 }: FieldCasesClientProps) {
   const router = useRouter();
   const [quickFilter, setQuickFilter] = useState<FieldCasesQuickFilter>("all");
@@ -100,6 +118,8 @@ export function FieldCasesClient({
   const [createKind, setCreateKind] = useState<string>(
     () => CASE_KIND_OPTIONS.find((option) => CASE_KIND_RULES[option.value]?.includes(userRole))?.value ?? "",
   );
+  const [createTransactionId, setCreateTransactionId] = useState("");
+  const [createVehicleId, setCreateVehicleId] = useState("");
   const [createWorkerKind, setCreateWorkerKind] = useState<"informant" | "mechanic">("informant");
   const [createWorker, setCreateWorker] = useState("");
   const [createSchedule, setCreateSchedule] = useState("");
@@ -136,10 +156,20 @@ export function FieldCasesClient({
   }
 
   async function submitCreate() {
+    if (!createTransactionId && !createVehicleId) {
+      setCreateError("Select a transaction or a vehicle to link this field case.");
+      return;
+    }
+    if (!createWorker) {
+      setCreateError("Assign an informant or a mechanic to this field case.");
+      return;
+    }
     setLoading(true);
     setCreateError(null);
     const fd = new FormData();
     fd.set("case_kind", createKind);
+    if (createTransactionId) fd.set("transaction_id", createTransactionId);
+    if (createVehicleId) fd.set("vehicle_id", createVehicleId);
     if (createWorker) {
       if (createWorkerKind === "mechanic") fd.set("mechanic_id", createWorker);
       else fd.set("assigned_confidential_informant", createWorker);
@@ -156,6 +186,8 @@ export function FieldCasesClient({
     toast.success("Field case created.");
     setCreateOpen(false);
     setCreateKind(allowedKinds[0] ?? "");
+    setCreateTransactionId("");
+    setCreateVehicleId("");
     setCreateWorkerKind("informant");
     setCreateWorker("");
     setCreateSchedule("");
@@ -323,7 +355,7 @@ export function FieldCasesClient({
                 onValueChange={(value) => {
                   setCreateKind(value);
                   setCreateWorker("");
-                  setCreateWorkerKind(value === "recovery" ? "informant" : "informant");
+                  setCreateWorkerKind("informant");
                 }}
               >
                 <SelectTrigger>
@@ -347,9 +379,52 @@ export function FieldCasesClient({
               <p className="text-destructive text-sm">Your role cannot create any field case kind.</p>
             ) : null}
             <Field>
+              <FieldLabel>Transaction (at least one link required)</FieldLabel>
+              <Select
+                value={createTransactionId || "none"}
+                onValueChange={(value) => setCreateTransactionId(value === "none" ? "" : value)}
+              >
+                <SelectTrigger aria-label="Select transaction">
+                  <SelectValue placeholder="Select transaction" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="none">None</SelectItem>
+                    {transactions.map((transaction) => (
+                      <SelectItem key={transaction.id} value={transaction.id}>
+                        {transaction.transaction_kind} · {transaction.current_state} · {transaction.id.slice(0, 8)}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field>
+              <FieldLabel>Vehicle (at least one link required)</FieldLabel>
+              <Select
+                value={createVehicleId || "none"}
+                onValueChange={(value) => setCreateVehicleId(value === "none" ? "" : value)}
+              >
+                <SelectTrigger aria-label="Select vehicle">
+                  <SelectValue placeholder="Select vehicle" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="none">None</SelectItem>
+                    {vehicles.map((vehicle) => (
+                      <SelectItem key={vehicle.id} value={vehicle.id}>
+                        {vehicle.year} {vehicle.make} {vehicle.model} · {vehicle.stock_code}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <p className="text-muted-foreground text-xs">Link a transaction or a vehicle (at least one).</p>
+            </Field>
+            <Field>
               <FieldLabel>Assigned Worker</FieldLabel>
               <Select value={createWorker} onValueChange={setCreateWorker}>
-                <SelectTrigger>
+                <SelectTrigger aria-label="Select worker">
                   <SelectValue placeholder="Select worker" />
                 </SelectTrigger>
                 <SelectContent>

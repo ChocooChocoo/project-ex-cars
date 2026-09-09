@@ -81,6 +81,7 @@ export type Database = {
           id: string;
           account_id: string | null;
           supplier_kind: string;
+          supplier_offering: string;
           business_name: string;
           contact_name: string | null;
           contact_email: string | null;
@@ -98,6 +99,7 @@ export type Database = {
         Insert: {
           account_id?: string | null;
           supplier_kind: string;
+          supplier_offering?: string;
           business_name: string;
           contact_name?: string | null;
           contact_email?: string | null;
@@ -110,6 +112,7 @@ export type Database = {
         Update: {
           account_id?: string | null;
           supplier_kind?: string;
+          supplier_offering?: string;
           business_name?: string;
           contact_name?: string | null;
           contact_email?: string | null;

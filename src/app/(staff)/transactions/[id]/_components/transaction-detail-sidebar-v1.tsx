@@ -18,6 +18,20 @@ import { arrangementKindLabel, TRANSACTION_STATE_LABELS } from "@/lib/transactio
 import type { TransactionState } from "@/lib/transactions/state-machine";
 import { formatCurrency } from "@/lib/utils";
 
+export function normalizeConditionItems(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === "string" && item.length > 0);
+  }
+  if (typeof value === "string" && value.trim()) {
+    try {
+      return normalizeConditionItems(JSON.parse(value));
+    } catch {
+      return [value];
+    }
+  }
+  return [];
+}
+
 export function TransactionDetailSidebarV1({
   kind,
   state,
@@ -30,6 +44,9 @@ export function TransactionDetailSidebarV1({
   viewingArrangements,
   informants,
   sellDetails,
+  sellPhotos,
+  conditionItems,
+  checklistNameMap,
   onRecordPayment,
   onReviewSell,
   onUploadDocument,
@@ -52,6 +69,13 @@ export function TransactionDetailSidebarV1({
   readonly viewingArrangements: Record<string, unknown>[];
   readonly informants: { id: string; full_name: string | null }[];
   readonly sellDetails: Record<string, unknown> | undefined;
+  // Optional Task 32 props: page.tsx (orchestrator-owned) may pass these later.
+  // Falls back to deriving sell photos from `documents` (document_kind === "sell_photo").
+  readonly sellPhotos?: { id: string; storage_path: string | null }[];
+  // Raw condition_items from sell_details (array of checklist node ids or names).
+  readonly conditionItems?: unknown;
+  // Optional id → display-name map for inspection_checklist_nodes.
+  readonly checklistNameMap?: Record<string, string>;
   readonly onRecordPayment: (amount: string, method: string, date: string) => Promise<void>;
   readonly onReviewSell: (decision: string, valuation: string, notes: string) => Promise<void>;
   readonly onUploadDocument: (documentKind: string, idType: string, file: File) => Promise<void>;
@@ -83,6 +107,24 @@ export function TransactionDetailSidebarV1({
   );
   const tState = state as TransactionState;
   const pt = paymentTerms as Record<string, unknown>;
+  // Task 32 role scoping: CEO approves (triage Approve/Reject + sell review), doesn't process.
+  // Processing actions (upload / record payment / record paperwork) are hidden for CEO;
+  // docs and payments stay visible read-only. Head Accountant verifies documents.
+  const isCeo = userRole === "ceo";
+
+  const docSellPhotos = documents.filter((doc) => String(doc.document_kind) === "sell_photo");
+  const photos =
+    sellPhotos && sellPhotos.length > 0
+      ? sellPhotos
+      : docSellPhotos.map((doc) => ({
+          id: String(doc.id),
+          storage_path: typeof doc.storage_path === "string" ? doc.storage_path : null,
+        }));
+  const rawConditionItems =
+    conditionItems ?? (sellDetails ? (sellDetails as Record<string, unknown>).condition_items : undefined);
+  const conditionList = normalizeConditionItems(rawConditionItems).map((item) => checklistNameMap?.[item] ?? item);
+
+  const showSellExtras = kind === "sell" && (photos.length > 0 || conditionList.length > 0);
 
   async function handleUpload() {
     const file = docFileRef.current?.files?.[0];
@@ -207,7 +249,7 @@ export function TransactionDetailSidebarV1({
               <p className="text-muted-foreground text-xs">Documents</p>
               <Badge className="h-5 px-2 text-[11px] tabular-nums">{documents.length}</Badge>
             </div>
-            {kind === "buy" && (
+            {kind === "buy" && !isCeo && (
               <div className="flex flex-col gap-2">
                 <Select
                   value={docKind}
@@ -268,7 +310,7 @@ export function TransactionDetailSidebarV1({
                     </p>
                   ) : null}
                   {doc.verification_state === "pending" &&
-                  ["ceo", "sales_manager", "account_manager"].includes(userRole) ? (
+                  ["sales_manager", "account_manager", "head_accountant"].includes(userRole) ? (
                     <div className="flex gap-1.5">
                       <Button size="sm" className="h-6 px-2 text-xs" onClick={() => onVerifyDocument(doc.id as string)}>
                         Verify
@@ -287,6 +329,40 @@ export function TransactionDetailSidebarV1({
               ))
             )}
           </div>
+
+          {showSellExtras ? (
+            <div className="space-y-2 rounded-md border bg-muted/20 px-3 py-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-muted-foreground text-xs">Vehicle photos & condition</p>
+                <Badge className="h-5 px-2 text-[11px] tabular-nums">
+                  {photos.length} photo{photos.length === 1 ? "" : "s"}
+                </Badge>
+              </div>
+              {photos.length > 0 ? (
+                <ul className="flex flex-col gap-1">
+                  {photos.map((photo) => (
+                    <li
+                      key={photo.id}
+                      className="rounded-md border bg-background/70 px-2.5 py-1.5 text-muted-foreground text-xs"
+                    >
+                      Photo attached (private storage{photo.storage_path ? `: ${photo.storage_path}` : ""}).
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {conditionList.length > 0 ? (
+                <ul className="flex flex-col gap-1">
+                  {conditionList.map((item) => (
+                    <li key={item} className="rounded-md border bg-background/70 px-2.5 py-1.5 text-xs">
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-muted-foreground text-xs">No condition checklist submitted.</p>
+              )}
+            </div>
+          ) : null}
 
           {viewingArrangements.length > 0 && (
             <div className="space-y-2 rounded-md border bg-muted/20 px-3 py-2">
@@ -307,7 +383,7 @@ export function TransactionDetailSidebarV1({
             </div>
           )}
 
-          {["approved", "completed"].includes(tState) && (
+          {["approved", "completed"].includes(tState) && !isCeo && (
             <div className="space-y-2 rounded-md border bg-muted/20 px-3 py-2">
               <p className="text-muted-foreground text-xs">Record payment</p>
               <div className="flex flex-col gap-1.5">
@@ -381,7 +457,7 @@ export function TransactionDetailSidebarV1({
             </div>
           )}
 
-          {tState === "completed" && (
+          {tState === "completed" && !isCeo && (
             <div className="space-y-2 rounded-md border bg-muted/20 px-3 py-2">
               <p className="text-muted-foreground text-xs">Record paperwork</p>
               <div className="flex gap-1.5">
@@ -400,51 +476,55 @@ export function TransactionDetailSidebarV1({
             </div>
           )}
 
-          {kind === "sell" && sellDetails && !sellDetails.decision && userRole === "sales_manager" && (
-            <div className="space-y-2 rounded-md border bg-muted/20 px-3 py-2">
-              <p className="text-muted-foreground text-xs">Review sell offer</p>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="valuation" className="text-xs">
-                  Valuation (₱)
-                </Label>
-                <Input
-                  id="valuation"
-                  type="number"
-                  className="h-7 text-xs"
-                  value={valuation}
-                  onChange={(e) => setValuation(e.target.value)}
-                />
+          {kind === "sell" &&
+            sellDetails &&
+            !sellDetails.decision &&
+            userRole === "ceo" &&
+            tState === "under_review" && (
+              <div className="space-y-2 rounded-md border bg-muted/20 px-3 py-2">
+                <p className="text-muted-foreground text-xs">Review sell offer</p>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="valuation" className="text-xs">
+                    Valuation (₱)
+                  </Label>
+                  <Input
+                    id="valuation"
+                    type="number"
+                    className="h-7 text-xs"
+                    value={valuation}
+                    onChange={(e) => setValuation(e.target.value)}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="review_notes" className="text-xs">
+                    Notes
+                  </Label>
+                  <Input
+                    id="review_notes"
+                    className="h-7 text-xs"
+                    value={reviewNotes}
+                    onChange={(e) => setReviewNotes(e.target.value)}
+                  />
+                </div>
+                <div className="flex gap-1.5">
+                  <Button
+                    size="sm"
+                    className="h-6 flex-1 px-2 text-xs"
+                    onClick={() => onReviewSell("accepted", valuation, reviewNotes)}
+                  >
+                    Accept
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    className="h-6 flex-1 px-2 text-xs"
+                    onClick={() => onReviewSell("rejected", valuation, reviewNotes)}
+                  >
+                    Reject
+                  </Button>
+                </div>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="review_notes" className="text-xs">
-                  Notes
-                </Label>
-                <Input
-                  id="review_notes"
-                  className="h-7 text-xs"
-                  value={reviewNotes}
-                  onChange={(e) => setReviewNotes(e.target.value)}
-                />
-              </div>
-              <div className="flex gap-1.5">
-                <Button
-                  size="sm"
-                  className="h-6 flex-1 px-2 text-xs"
-                  onClick={() => onReviewSell("accepted", valuation, reviewNotes)}
-                >
-                  Accept
-                </Button>
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  className="h-6 flex-1 px-2 text-xs"
-                  onClick={() => onReviewSell("rejected", valuation, reviewNotes)}
-                >
-                  Reject
-                </Button>
-              </div>
-            </div>
-          )}
+            )}
 
           <div className="flex items-center justify-between gap-2 rounded-md border bg-muted/20 px-3 py-2">
             <span className="text-muted-foreground text-xs">Transaction state</span>

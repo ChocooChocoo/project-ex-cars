@@ -44,7 +44,11 @@ const SCA = [...S, ...C, ...A];
 const SC = [...S, ...C];
 const SCH = [...S, ...C, ...H];
 
-// TRANSITION_RULES[from][to] = roles allowed to make the transition.
+// Task 32 client flow: Sales Manager processes, Head Accountant verifies,
+// CEO approves/rejects, then the car is marked sold. CEO is the sole approver:
+// under_review → approved/rejected is CEO-only (C). Sales "processing" is the
+// pending → under_review step plus sell review input; verification happens via
+// document/payment verification actions, not a separate state.
 export const TRANSITION_RULES: Record<
   TransactionState,
   Partial<Record<TransactionState, readonly TransitionRole[]>>
@@ -54,8 +58,8 @@ export const TRANSITION_RULES: Record<
     cancelled: SCA,
   },
   under_review: {
-    approved: SC,
-    rejected: SC,
+    approved: C,
+    rejected: C,
     cancelled: SC,
   },
   approved: {
