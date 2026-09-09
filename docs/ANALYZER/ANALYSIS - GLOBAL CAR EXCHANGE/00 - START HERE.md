@@ -15,7 +15,7 @@ Next: [01 - OVERVIEW](01%20-%20OVERVIEW.md)
 | **GCE USERS LEVELS MODULES.md**   | Markdown document       | Yes — in full; primary citation copy         |
 | **GCE USERS LEVELS MODULES.docx** | Word document, 7 pages  | Yes — in full; verified formatting duplicate |
 | **REVISIONS LISTS.md**            | Markdown document       | Yes — in full; the newest material           |
-| **SOURCE CODES**                  | Source-code folder      | Empty — nothing was available to read        |
+| **SOURCE CODES**                  | Source-code folder      | Empty — nothing was available to read        | *[Editorial note, 10 August 2026: source code was subsequently supplied and audited — see the audit set. This entry preserves the original hand-over state.]* |
 
 All five document files were read from beginning to end. The Markdown role file is the primary citation copy for the role details because its headings are stable. Its 90 meaningful lines match the 90 paragraphs in the seven-page Word copy. The chapter document explains the problem, intended scope, background studies, and several page flows. The additional document supplies an earlier list of people, features, transaction paths, and recommendation weights. No working files were supplied, so this analysis cannot confirm what has actually been built.
 
@@ -52,6 +52,7 @@ These four files live in a separate folder, [AUDIT - GLOBAL CAR EXCHANGE](../AUD
 | [13 - USER ACCOUNTS](../AUDIT%20-%20GLOBAL%20CAR%20EXCHANGE/13%20-%20USER%20ACCOUNTS.md) | The current test-account roles, intended access, and navigation reference |
 | [15 - SYSTEM STATUS](../AUDIT%20-%20GLOBAL%20CAR%20EXCHANGE/15%20-%20SYSTEM%20STATUS.md) | Living map of every documented responsibility to its implementation status |
 | [18 - MODULE PURPOSE OWNERSHIP AND ACTIONS](../AUDIT%20-%20GLOBAL%20CAR%20EXCHANGE/18%20-%20MODULE%20PURPOSE%20OWNERSHIP%20AND%20ACTIONS.md) | Current plain-language guide to every role, module, action, route, and access rule |
+| [16 — not made this time](../AUDIT%20-%20GLOBAL%20CAR%20EXCHANGE/) | No separate file was needed; its planned content is covered by the living status map in [15 - SYSTEM STATUS](../AUDIT%20-%20GLOBAL%20CAR%20EXCHANGE/15%20-%20SYSTEM%20STATUS.md). *(Explanation added 10 August 2026 — the number was previously skipped silently.)* |
 | [17 - ROADMAP AUDIT](../AUDIT%20-%20GLOBAL%20CAR%20EXCHANGE/17%20-%20ROADMAP%20AUDIT.md) | Every roadmap item and tracker status checked against the built system, with a corrected count |
 
 ## Not made this time
@@ -81,7 +82,7 @@ Start with [01 - OVERVIEW](01%20-%20OVERVIEW.md) for the quickest explanation. R
 
 | # | Question | Why it matters | Who can answer |
 |---|---|---|---|
-| Q-01 | What parts of the proposed system already exist and work? | No working files were supplied, so every completion status remains unverified. | The development team |
+| Q-01 | What parts of the proposed system already exist and work? | No working files were supplied, so every completion status remains unverified. *[Editorial note, 10 August 2026: working files were later supplied and audited; completion statuses are tracked in the audit set — this answer records the original hand-over state.]* | The development team |
 | Q-04 | Which finance work is allowed if money is settled outside the system? | The documents require payment and financing records but exclude direct payment processing and a payment gateway. | Head Accountant and project owners |
 | Q-05 | Is the Decision Support System for buyer recommendations, staff pricing advice, guided buying steps, or all three? | The documents give it three different jobs, so its final outputs and users are unclear. | Sales Manager and project owners |
 | Q-06 | Does “mobile application” mean one responsive website or separate customer and employee experiences? | The document rules out native phone applications but also describes separate mobile web applications. | Project owners |

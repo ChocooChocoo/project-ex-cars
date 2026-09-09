@@ -1,5 +1,7 @@
 # Writing Rules
 
+*Note: numbered-file links referenced by these rules are generic per-run targets; they resolve only when a run creates those files.*
+
 The contract every output file obeys. Read this before writing any of them.
 
 ## 1. Plain language is not optional

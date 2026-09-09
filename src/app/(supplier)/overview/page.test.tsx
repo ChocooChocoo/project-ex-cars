@@ -72,6 +72,7 @@ describe("SupplierOverviewPage (WS-A isolated overview)", () => {
         },
       ],
       verification: { verifiedPrimary: 1, required: 2, total: 2 },
+      unreadCount: 0,
     });
     const ui = await SupplierOverviewPage();
     render(ui);
@@ -81,5 +82,62 @@ describe("SupplierOverviewPage (WS-A isolated overview)", () => {
     expect(screen.getByText("drivers_license")).toBeInTheDocument();
     expect(screen.getAllByText("primary")).toHaveLength(2);
     expect(screen.getByRole("link", { name: "Open Messages" })).toHaveAttribute("href", "/supplier/supplier-messages");
+  });
+
+  it("renders unread badge when supplier has unread messages", async () => {
+    mockGetOwnSupplierOverview.mockResolvedValueOnce({
+      supplier: {
+        id: "sup-1",
+        business_name: "Acme Supplies",
+        supplier_kind: "company",
+        state: "approved",
+        contact_name: "Jane Doe",
+        contact_email: "jane@acme.test",
+        contact_phone: "09170000000",
+        created_at: "2026-08-01T00:00:00.000Z",
+        account_id: "user-1",
+      },
+      documents: [],
+      verification: { verifiedPrimary: 2, required: 2, total: 2 },
+      unreadCount: 3,
+    });
+    const ui = await SupplierOverviewPage();
+    render(ui);
+    expect(screen.getByText("Acme Supplies")).toBeInTheDocument();
+    expect(screen.getByText(/3 unread/i)).toBeInTheDocument();
+  });
+
+  it("renders own docs and badge structure with Badge component", async () => {
+    mockGetOwnSupplierOverview.mockResolvedValueOnce({
+      supplier: {
+        id: "sup-1",
+        business_name: "Acme Supplies",
+        supplier_kind: "company",
+        state: "approved",
+        contact_name: "Jane Doe",
+        contact_email: "jane@acme.test",
+        contact_phone: "09170000000",
+        created_at: "2026-08-01T00:00:00.000Z",
+        account_id: "user-1",
+      },
+      documents: [
+        {
+          id: "doc-1",
+          supplier_id: "sup-1",
+          document_kind: "passport",
+          is_primary_id: true,
+          storage_path: "sup-1/passport-1.pdf",
+          verification_state: "verified",
+          verified_at: "2026-08-02T00:00:00.000Z",
+          created_at: "2026-08-01T00:00:00.000Z",
+        },
+      ],
+      verification: { verifiedPrimary: 1, required: 2, total: 1 },
+      unreadCount: 1,
+    });
+    const ui = await SupplierOverviewPage();
+    const { container } = render(ui);
+    expect(screen.getByText("passport")).toBeInTheDocument();
+    expect(container.querySelector("[data-slot='badge']")).not.toBeNull();
   });
 });

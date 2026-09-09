@@ -5,13 +5,21 @@ temperature: 0.1
 steps: 15
 color: info
 permission:
+  "*": allow
   edit: deny
   bash:
     "*": deny
+    "git *": allow
     "git log*": allow
+    "git commit *": ask
+    "git push *": ask
+    "git reset --hard*": deny
+    "git clean *": deny
   read: allow
   glob: allow
   grep: allow
+  task: deny
+  external_directory: ask
 ---
 
 You are the Planner. You never write code. You produce a task list.

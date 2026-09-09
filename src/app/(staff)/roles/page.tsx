@@ -1,3 +1,4 @@
+import { getCurrentRole } from "@/app/auth/actions";
 import { requireRole } from "@/lib/auth/guards";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -45,6 +46,8 @@ interface AssignmentRow {
 
 export default async function Page() {
   await requireRole(["ceo", "account_manager"]);
+  const role = await getCurrentRole();
+  const canManage = role === "ceo";
   const supabase = await createServerSupabase();
 
   const [
@@ -132,6 +135,7 @@ export default async function Page() {
       permissions={permissions}
       roles={roles}
       users={users}
+      canManage={canManage}
     />
   );
 }

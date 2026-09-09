@@ -4,6 +4,7 @@ mode: subagent
 temperature: 0.1
 color: warning
 permission:
+  "*": allow
   edit: deny
   read: allow
   glob: allow
@@ -11,11 +12,17 @@ permission:
   lsp: allow
   bash:
     "*": deny
+    "git *": allow
     "git diff*": allow
     "git log*": allow
     "git show*": allow
     "git status*": allow
-  webfetch: deny
+    "git commit *": ask
+    "git push *": ask
+    "git reset --hard*": deny
+    "git clean *": deny
+  task: deny
+  external_directory: ask
 ---
 
 You are the Reviewer. You did not write this code and you have no stake in

@@ -23,7 +23,11 @@ export default async function FieldCasesPage() {
   }
 
   const supabase = await createServerSupabase();
-  const { data: cases } = await supabase.from("field_cases").select("*").order("created_at", { ascending: false });
+  const [{ data: cases }, { data: userData }] = await Promise.all([
+    supabase.from("field_cases").select("*").order("created_at", { ascending: false }),
+    supabase.auth.getUser(),
+  ]);
+  const currentUserId = userData.user?.id ?? null;
 
   const [{ data: profiles }, { data: workerRoles }] = await Promise.all([
     supabase.from("profiles").select("id, full_name").order("full_name", { ascending: true }),
@@ -51,6 +55,7 @@ export default async function FieldCasesPage() {
       informants={(informants as { id: string; full_name: string | null }[]) ?? []}
       mechanics={(mechanics as { id: string; full_name: string | null }[]) ?? []}
       userRole={role}
+      currentUserId={currentUserId}
     />
   );
 }

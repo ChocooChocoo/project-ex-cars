@@ -7,12 +7,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 npm run dev                # dev server on :3000
 npm run build              # next build
-npm run check:fix          # biome: lint + format + organize imports, autofix (use this before committing)
-npm run check              # same, report only
+npm run start              # serve the production build
+npm run lint               # biome lint (report only)
+npm run format             # biome format --write
+npm run check              # biome check (report only)
+npm run check:fix          # biome check --write: lint + format + organize imports (run before committing)
 npm run generate:presets   # regenerate theme preset metadata into src/lib/preferences/theme.ts
+npm run seed:data          # seed demo data (.env.local required)
+npm run test               # vitest unit tests, single run (jsdom)
+npm run test:watch         # vitest in watch mode
+npm run test:e2e           # playwright e2e (requires dev server on :3000)
 ```
 
-No test framework is configured — there is no test runner, no test files. Don't invent one unless asked.
+Tests are configured: Vitest unit tests (`npm run test`, jsdom environment, setup at `src/tests/setup.ts`) and Playwright e2e (`npm run test:e2e`, specs in `src/tests/e2e/`, requires the dev server on :3000). Run `check:fix` before tests; tests are not part of pre-commit.
 
 Husky `pre-commit` runs `generate:presets`, stages `src/lib/preferences/theme.ts`, then `lint-staged` (biome autofix on staged JS/TS). A biome error blocks the commit.
 
@@ -22,7 +29,7 @@ Next.js 16 App Router, React 19 + React Compiler (`reactCompiler: true`), Tailwi
 
 ### Colocation routing
 
-Routes live under `src/app/(main)/…`; each route folder owns its own `_components/`, and only genuinely shared UI goes to `src/components/`. `src/components/ui/` is shadcn-generated and **excluded from biome** — don't hand-format it, regenerate via shadcn instead. `/dashboard` redirects to `/dashboard/default` (next.config.mjs). `(legacy)` route group holds v1 dashboard variants kept for reference.
+Routes live directly under `src/app` in four groups — `(staff)` (dashboard for the eight staff roles), `(customer)`, `(supplier)`, `(external)` — plus top-level `src/app/auth/`, `src/app/template/`, and `src/app/unauthorized/`. Each route folder owns its own `_components/`, and only genuinely shared UI goes to `src/components/`. `src/components/ui/` is shadcn-generated and **excluded from biome** — don't hand-format it, regenerate via shadcn instead. v1 dashboard variants live in a nested group at `src/app/(staff)/(legacy)/`. `/dashboard*` is redirected by `src/middleware.ts` (`next.config.mjs`'s `redirects()` is empty) to role-prefixed paths (`/{role}/…`) resolved by `src/lib/routing/paths.ts` from the `gce-role` cookie set at sign-in. `src/app/template/**` holds upstream-template preview routes that middleware skips entirely — publicly reachable design references, not part of the GCE product surface.
 
 ### Preferences system (theme, fonts, layout) — the core non-obvious piece
 
@@ -58,4 +65,4 @@ Adding a preset: create the CSS file (header comment required), `@import` it in 
 - Biome enforces `useFilenamingConvention` (kebab-case), sorted Tailwind classes, no floating/misused promises, no import cycles, and a fixed import group order (react → next → packages → `@/` aliases → relative). Run `npm run check:fix` rather than fighting it manually.
 - Line width 120, double quotes, semicolons, trailing commas, 2-space indent.
 - Prefer real types over `any`; conventional commit prefixes (`feat:`, `fix:`, `chore:`).
-- Data in `src/data/` is mock/demo data — there is no backend or database in this template.
+- Data in `src/data/` is mock/demo data — do not treat as production seed. The real backend is Supabase: 43 migrations in `supabase/migrations/` with RLS throughout; server access goes through server actions (`src/app/**/actions.ts`) and `src/server/server-actions.ts`.

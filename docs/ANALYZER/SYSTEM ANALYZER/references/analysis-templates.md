@@ -1,5 +1,7 @@
 # Analysis Templates
 
+*Note: numbered-file links inside these templates (for example `03 - CODE FINDINGS`, `04 - COMBINED FINDINGS`) are generic per-run targets; they resolve only when an analysis run creates those files.*
+
 Templates for `00`, `01`, `02`, `03`, `04`, `05`, and `10`. Everything in angle brackets gets replaced. Sections with nothing to report say so in one line rather than being dropped — an empty section is information too.
 
 ---

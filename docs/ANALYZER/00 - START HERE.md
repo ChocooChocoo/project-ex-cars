@@ -12,7 +12,7 @@ Every note is written for someone with no technical background. Nothing here nee
 
 | Analysis | What it covers | Started | Last updated |
 |---|---|---|---|
-| [Global Car Exchange](./ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/00%20-%20START%20HERE.md) | The proposed vehicle exchange system, its document findings, architecture, diagrams, and development plan | 7 August 2026 | 7 August 2026 |
+| [Global Car Exchange](./ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/00%20-%20START%20HERE.md) | The proposed vehicle exchange system, its document findings, architecture, diagrams, and development plan | 7 August 2026 | 10 August 2026 (analysis changelog through 9 August; audit set dated 10 August) |
 
 ## How to start one
 
@@ -52,7 +52,7 @@ Files that do not apply are not made, and the run's own `00 - START HERE` says w
 
 ## Status legend
 
-The same emojis mean the same things everywhere in this vault.
+The same emojis mean the same things in every ANALYSIS-set file. AUDIT-set files declare their own local keys at the top of each file (see `15 - SYSTEM STATUS` and `17 - ROADMAP AUDIT`); where a local key exists, it governs that file.
 
 | Emoji | Means |
 |---|---|

@@ -2,6 +2,7 @@
 
 > **Living reference** mapping every documented role responsibility to its implementation status.
 > Maintained alongside `18 - MODULE PURPOSE OWNERSHIP AND ACTIONS.md`. Status key: ✅ Implemented · ⚠️ Partial / differs · ❌ Missing · 🗂️ Planned backlog.
+> *(This file declares its own four-state key, which governs here; it extends rather than replaces the vault-wide emoji legend described in the ANALYZER index.)*
 
 **Last updated:** 10 August 2026 (RBAC/least-privilege pass)
 
@@ -17,7 +18,8 @@
 | Company / Individual declaration | ✅ | Zod enum `z.enum(["company","individual"])` server-side + DB CHECK |
 | Auth-account linkage | ✅ | `signIn` sets `suppliers.account_id` on first approved sign-in |
 | Invitation evidence | 🗂️ | `invitation_evidence_path` column exists; portal route not built (staff-created only) |
-| CEO ↔ Supplier channel | ✅ | `sendSupplierMessage` (CEO or approved supplier); realtime thread on `/supplier-messages` |
+| CEO ↔ Supplier channel | ✅ | `sendSupplierMessage` (CEO or approved supplier); realtime thread on `/supplier-messages`; sidebar-discoverable for the supplier via the Supplier Portal group since the task31/RBAC pass |
+| Dedicated supplier portal | ✅ | task31/RBAC pass: `ROLE_NAV_ACCESS.supplier` = `{supplier-overview, supplier-messages}`, landing `/supplier/overview` (`src/lib/auth/roles.ts:173,268`), isolated `(supplier)` layout with supplier-only guard; legacy `/supplier/showroom…` URLs redirect back to the overview (locked by `src/lib/auth/roles.supplier.test.ts` and `src/tests/e2e/supplier-portal.spec.ts`) |
 
 ## CEO
 
@@ -28,7 +30,7 @@
 | Announcements | ✅ | `announcements/actions.ts` CEO-only |
 | Approve cars for inventory | ✅ | Realized as `approvePrice` + `publishVehicle` (requires approved proposal) |
 | Supplier messages | ✅ | Read + send on `/supplier-messages` |
-| RBAC / least-privilege enforcement | ✅ | Migration `00038` (10 Aug 2026): vehicles INSERT/UPDATE + content/media → Marketing, DELETE → CEO; inspections/repairs/checklist results + part replacements/checklist nodes → Mechanic; vehicle_document_items → Sales Manager; roadmap_items → CEO; inquiries UPDATE + viewing arrangements → assigned managers; field_cases: Head Security removed, Head Accountant added (SELECT + INSERT); CEO keeps SELECT-all, price approval (`vehicle_price_proposals` UPDATE), announcements, `financial_entries`/`disbursement_requests` approval, reports, vehicle DELETE. Page guards added to Dashboard/Vehicles/Content/Inspections/Transactions/Roles/Showroom/Roadmap/Field Cases |
+| RBAC / least-privilege enforcement | ✅ | Migration `00038` (10 Aug 2026): vehicles INSERT/UPDATE + content/media → Marketing, DELETE → CEO; inspections/repairs/checklist results + part replacements/checklist nodes → Mechanic; vehicle_document_items → Sales Manager; roadmap_items → CEO; inquiries UPDATE narrowed to unassigned-only self-claims by the assigned managers with a WITH CHECK ending assigned-to-self (CEO update right removed); viewing arrangements → assigned staff; field_cases: Head Security removed, Head Accountant added (SELECT + INSERT); CEO keeps SELECT-all, price approval (`vehicle_price_proposals` UPDATE), announcements, `financial_entries`/`disbursement_requests` approval, reports, vehicle DELETE. Page guards added to Dashboard/Vehicles/Content/Inspections/Transactions/Roles/Showroom/Roadmap/Field Cases. Known exceptions recorded in doc 13: `/staff-recommendations` and six child/detail routes lack a repeated page guard |
 | Menu / nav grants | ✅ | `ROLE_NAV_ACCESS` (10 Aug 2026): Finance added for CEO, Account Manager, Head Accountant, Confidential Informant; Staff Records + Announcements added for Sales Manager; Announcements added for Mechanic; Attendance + Employee Requests + Announcements added for Head Security |
 
 ## Account Manager
@@ -54,6 +56,7 @@
 | Installment accounts (waive, verify, approve terms) | ✅ | `markInstallmentWaived`, `verifyPayment`, `approvePaymentTerms` |
 | Notify Account Manager at due date | ✅ | `checkAndNotifyDueInstallments` → Account Manager notifications |
 | Instruct Confidential Informant to repossess | ✅ | `instructRepossession` → creates `recovery` field case + `collection_action`; field-cases SELECT + INSERT for head_accountant granted by migration 00038 (10 Aug 2026) |
+| Supplier document uploads (support capability) | ◑ | `uploadSupplierDocument` permits ceo/account_manager/**head_accountant** at the action and storage level, but Head Accountant has no Suppliers page or nav entry, so this is only exercisable inside another workflow's context |
 
 ## Confidential Informant
 
@@ -91,6 +94,14 @@
 | Inquiry chat + Buy Now + attachments | ✅ | `my-inquiries` (word filter, attachments) |
 | Buy / sell / request-a-car + payment terms | ✅ | `my-transactions` |
 | Two valid IDs + proof of billing | ✅ | Customer upload UI on purchase (`uploadPurchaseDocument`); staff verification (`verifyTransactionDocument`); `buy → completed` blocked until 2 verified IDs + billing |
+
+## Public web surface
+
+| Documented expectation | Status | Where / note |
+|---|---|---|
+| Login-first application (no anonymous browsing) | ✅ | Middleware redirects `/` to the role landing page or the sign-in screen for everyone (`src/middleware.ts`) |
+| Public landing experience | ❌ | `src/app/(external)/page.tsx` builds a landing from `content_items` but is unreachable dead code — nothing links to it and `/` always redirects; documented here as intentionally not part of the live product surface |
+| Template previews | ◑ | `src/app/template/**` is publicly served (middleware skips the prefix) — upstream design reference, explicitly not GCE product surface |
 
 ## Backlog (documented but intentionally not built)
 

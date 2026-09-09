@@ -4,18 +4,25 @@ mode: primary
 temperature: 0.1
 color: accent
 permission:
+  "*": allow
   edit: deny
   bash:
     "*": deny
+    "git *": allow
     "git status*": allow
     "git diff*": allow
     "git log*": allow
     "git branch*": allow
+    "git commit *": ask
+    "git push *": ask
+    "git reset --hard*": deny
+    "git clean *": deny
   task:
     "*": deny
     "orchestrator-*": allow
     "explore": allow
     "scout": allow
+  external_directory: ask
 ---
 
 You are the Orchestrator. You do not write code, edit files, or run tests

@@ -102,6 +102,12 @@ const DISBURSEMENT_EVENT_LABELS: Record<string, string> = {
   paid: "Mark Paid",
 };
 
+export function getFinanceSummary(entries: FinancialEntryRow[]) {
+  const revenueTotal = entries.filter((e) => e.entry_kind === "revenue").reduce((sum, e) => sum + e.amount_cents, 0);
+  const expenseTotal = entries.filter((e) => e.entry_kind === "expense").reduce((sum, e) => sum + e.amount_cents, 0);
+  return { revenueTotal, expenseTotal, netTotal: revenueTotal - expenseTotal, count: entries.length };
+}
+
 export function FinanceClient({
   entries,
   disbursements,
@@ -134,8 +140,7 @@ export function FinanceClient({
   const [verifyTarget, setVerifyTarget] = useState<FinancialEntryRow | null>(null);
   const [verifying, setVerifying] = useState(false);
 
-  const revenueTotal = entries.filter((e) => e.entry_kind === "revenue").reduce((sum, e) => sum + e.amount_cents, 0);
-  const expenseTotal = entries.filter((e) => e.entry_kind === "expense").reduce((sum, e) => sum + e.amount_cents, 0);
+  const { revenueTotal, expenseTotal } = getFinanceSummary(entries);
   const pendingApprovals = disbursements.filter(
     (d) => d.status === "submitted" || d.status === "approved" || d.status === "released" || d.status === "received",
   ).length;
@@ -302,6 +307,12 @@ export function FinanceClient({
 
       <Tabs defaultValue="ledger" className="flex flex-col gap-4">
         <TabsList className="w-fit">
+          {!isInformant ? (
+            <TabsTrigger value="summary" className="gap-2">
+              <Banknote />
+              Summary
+            </TabsTrigger>
+          ) : null}
           <TabsTrigger value="ledger" className="gap-2">
             <Banknote />
             Ledger
@@ -312,77 +323,182 @@ export function FinanceClient({
           </TabsTrigger>
         </TabsList>
 
+        {!isInformant ? (
+          <TabsContent value="summary">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <Card size="sm">
+                <CardContent className="flex flex-col gap-1 pt-3">
+                  <span className="text-muted-foreground text-xs">Revenue</span>
+                  <span className="font-semibold text-2xl text-green-600 dark:text-green-400">
+                    ₱{(revenueTotal / 100).toLocaleString()}
+                  </span>
+                </CardContent>
+              </Card>
+              <Card size="sm">
+                <CardContent className="flex flex-col gap-1 pt-3">
+                  <span className="text-muted-foreground text-xs">Expenses</span>
+                  <span className="font-semibold text-2xl text-red-600 dark:text-red-400">
+                    ₱{(expenseTotal / 100).toLocaleString()}
+                  </span>
+                </CardContent>
+              </Card>
+              <Card size="sm">
+                <CardContent className="flex flex-col gap-1 pt-3">
+                  <span className="text-muted-foreground text-xs">Active Disbursements</span>
+                  <span className="font-semibold text-2xl">{pendingApprovals}</span>
+                </CardContent>
+              </Card>
+            </div>
+            <p className="mt-3 text-muted-foreground text-xs">
+              Summary from same {entries.length} ledger entries · full table in Ledger tab
+            </p>
+          </TabsContent>
+        ) : null}
+
         <TabsContent value="ledger">
           <Card>
             <CardHeader>
               <CardTitle>Financial Entries</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-left text-muted-foreground">
-                      <th className="px-2 py-2 font-medium">Type</th>
-                      <th className="px-2 py-2 font-medium">Description</th>
-                      <th className="px-2 py-2 font-medium">Amount</th>
-                      <th className="px-2 py-2 font-medium">Recorded</th>
-                      <th className="px-2 py-2 font-medium">Verified</th>
-                      {canVerify ? <th className="px-2 py-2" /> : null}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {entries.length === 0 ? (
-                      <tr>
-                        <td colSpan={canVerify ? 6 : 5} className="px-2 py-6 text-center text-muted-foreground">
-                          No financial entries recorded.
-                        </td>
-                      </tr>
-                    ) : (
-                      entries.map((entry) => (
-                        <tr key={entry.id} className="border-b last:border-0">
-                          <td className="px-2 py-2">
-                            <Badge variant="secondary" className="capitalize">
-                              {ENTRY_LABELS[entry.entry_kind]}
-                            </Badge>
-                          </td>
-                          <td className="px-2 py-2 text-muted-foreground">{entry.description}</td>
-                          <td
-                            className={cn(
-                              "px-2 py-2 font-medium",
-                              entry.entry_kind === "expense" || entry.entry_kind === "disbursement"
-                                ? "text-red-600 dark:text-red-400"
-                                : "text-green-600 dark:text-green-400",
-                            )}
-                          >
-                            {entry.entry_kind === "expense" || entry.entry_kind === "disbursement" ? "−" : "+"}₱
-                            {(entry.amount_cents / 100).toLocaleString()}
-                          </td>
-                          <td className="px-2 py-2 text-muted-foreground">
-                            {new Date(entry.recorded_at).toLocaleDateString()}
-                          </td>
-                          <td className="px-2 py-2">
-                            {entry.verified_by ? (
-                              <Badge variant="default">Verified</Badge>
-                            ) : (
-                              <Badge variant="outline">Pending</Badge>
-                            )}
-                          </td>
-                          {canVerify ? (
-                            <td className="px-2 py-2 text-right">
-                              {!entry.verified_by ? (
-                                <Button variant="ghost" size="sm" onClick={() => setVerifyTarget(entry)}>
-                                  <Check data-icon="inline-start" />
-                                  Verify
-                                </Button>
-                              ) : null}
-                            </td>
-                          ) : null}
+              {isInformant ? (
+                <details data-testid="informant-ledger">
+                  <summary className="cursor-pointer text-muted-foreground text-sm">
+                    View full ledger ({entries.length} entries) — collapsed for informant
+                  </summary>
+                  <div className="mt-4 overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-left text-muted-foreground">
+                          <th className="px-2 py-2 font-medium">Type</th>
+                          <th className="px-2 py-2 font-medium">Description</th>
+                          <th className="px-2 py-2 font-medium">Amount</th>
+                          <th className="px-2 py-2 font-medium">Recorded</th>
+                          <th className="px-2 py-2 font-medium">Verified</th>
+                          {canVerify ? <th className="px-2 py-2" /> : null}
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                      </thead>
+                      <tbody>
+                        {entries.length === 0 ? (
+                          <tr>
+                            <td colSpan={canVerify ? 6 : 5} className="px-2 py-6 text-center text-muted-foreground">
+                              No financial entries recorded.
+                            </td>
+                          </tr>
+                        ) : (
+                          entries.map((entry) => (
+                            <tr key={entry.id} className="border-b last:border-0">
+                              <td className="px-2 py-2">
+                                <Badge variant="secondary" className="capitalize">
+                                  {ENTRY_LABELS[entry.entry_kind]}
+                                </Badge>
+                              </td>
+                              <td className="px-2 py-2 text-muted-foreground">{entry.description}</td>
+                              <td
+                                className={cn(
+                                  "px-2 py-2 font-medium",
+                                  entry.entry_kind === "expense" || entry.entry_kind === "disbursement"
+                                    ? "text-red-600 dark:text-red-400"
+                                    : "text-green-600 dark:text-green-400",
+                                )}
+                              >
+                                {entry.entry_kind === "expense" || entry.entry_kind === "disbursement" ? "−" : "+"}₱
+                                {(entry.amount_cents / 100).toLocaleString()}
+                              </td>
+                              <td className="px-2 py-2 text-muted-foreground">
+                                {new Date(entry.recorded_at).toLocaleDateString()}
+                              </td>
+                              <td className="px-2 py-2">
+                                {entry.verified_by ? (
+                                  <Badge variant="default">Verified</Badge>
+                                ) : (
+                                  <Badge variant="outline">Pending</Badge>
+                                )}
+                              </td>
+                              {canVerify ? (
+                                <td className="px-2 py-2 text-right">
+                                  {!entry.verified_by ? (
+                                    <Button variant="ghost" size="sm" onClick={() => setVerifyTarget(entry)}>
+                                      <Check data-icon="inline-start" />
+                                      Verify
+                                    </Button>
+                                  ) : null}
+                                </td>
+                              ) : null}
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b text-left text-muted-foreground">
+                        <th className="px-2 py-2 font-medium">Type</th>
+                        <th className="px-2 py-2 font-medium">Description</th>
+                        <th className="px-2 py-2 font-medium">Amount</th>
+                        <th className="px-2 py-2 font-medium">Recorded</th>
+                        <th className="px-2 py-2 font-medium">Verified</th>
+                        {canVerify ? <th className="px-2 py-2" /> : null}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {entries.length === 0 ? (
+                        <tr>
+                          <td colSpan={canVerify ? 6 : 5} className="px-2 py-6 text-center text-muted-foreground">
+                            No financial entries recorded.
+                          </td>
+                        </tr>
+                      ) : (
+                        entries.map((entry) => (
+                          <tr key={entry.id} className="border-b last:border-0">
+                            <td className="px-2 py-2">
+                              <Badge variant="secondary" className="capitalize">
+                                {ENTRY_LABELS[entry.entry_kind]}
+                              </Badge>
+                            </td>
+                            <td className="px-2 py-2 text-muted-foreground">{entry.description}</td>
+                            <td
+                              className={cn(
+                                "px-2 py-2 font-medium",
+                                entry.entry_kind === "expense" || entry.entry_kind === "disbursement"
+                                  ? "text-red-600 dark:text-red-400"
+                                  : "text-green-600 dark:text-green-400",
+                              )}
+                            >
+                              {entry.entry_kind === "expense" || entry.entry_kind === "disbursement" ? "−" : "+"}₱
+                              {(entry.amount_cents / 100).toLocaleString()}
+                            </td>
+                            <td className="px-2 py-2 text-muted-foreground">
+                              {new Date(entry.recorded_at).toLocaleDateString()}
+                            </td>
+                            <td className="px-2 py-2">
+                              {entry.verified_by ? (
+                                <Badge variant="default">Verified</Badge>
+                              ) : (
+                                <Badge variant="outline">Pending</Badge>
+                              )}
+                            </td>
+                            {canVerify ? (
+                              <td className="px-2 py-2 text-right">
+                                {!entry.verified_by ? (
+                                  <Button variant="ghost" size="sm" onClick={() => setVerifyTarget(entry)}>
+                                    <Check data-icon="inline-start" />
+                                    Verify
+                                  </Button>
+                                ) : null}
+                              </td>
+                            ) : null}
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

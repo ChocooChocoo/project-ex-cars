@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { cache } from "react";
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -29,11 +30,17 @@ export default async function CustomerLayout({ children }: Readonly<{ children: 
 
   const cookieStore = await cookies();
   const defaultOpen = cookieStore.get("sidebar_state")?.value !== "false";
+  const getCachedRole = cache(getCurrentRole);
   const [variant, collapsible, role] = await Promise.all([
     getPreference("sidebar_variant", SIDEBAR_VARIANT_VALUES, "inset"),
     getPreference("sidebar_collapsible", SIDEBAR_COLLAPSIBLE_VALUES, "icon"),
-    getCurrentRole(),
+    getCachedRole(),
   ]);
+
+  if (role === "supplier") {
+    redirect("/supplier/overview");
+  }
+
   const notifications = role ? await getNotifications(role) : [];
 
   return (

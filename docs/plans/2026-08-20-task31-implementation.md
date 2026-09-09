@@ -1,6 +1,6 @@
-﻿# Task 31 Implementation Plan — From Audit Recommendations to Code Changes
+# Task 31 Implementation Plan — From Audit Recommendations to Code Changes
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use `builder.md` for implementation, plus `frontend`, `auth`, `security`, `testing`, `reviewer` as noted. Steps use checkbox tracking.
+> **For agentic workers:** This plan originally required sub-skill files (`builder.md`, plus `frontend`, `auth`, `security`, `testing`, `reviewer`). Those skill files do not exist anywhere in this repository; execution proceeded without them. Steps use checkbox tracking.
 > **Source:** `docs/tasks/31.md` (audit only) + 10 reports under `docs/report/` (CEO #1 through Supplier #10, reviewer conditional FAIL fixed, security PASS)
 > **Plan location:** `docs/plans/2026-08-20-task31-implementation.md`
 > **Created:** 2026-08-20 | **Orchestrator:** delivery orchestrator | **Planner basis:** evidence from `src/lib/auth/roles.ts`, `src/navigation/sidebar/sidebar-items.ts`, `src/app/(staff)/*`, `src/app/(customer)/*`
@@ -67,6 +67,8 @@
 ### Workstream A — Supplier Navigation & Access Fix (Highest Impact, Unblocks Supplier)
 **Priority:** P0 | **Prerequisite:** Architect decision §8.1 (portal path) | **Parallelizable:** No — blocks B/C landing assumptions
 
+> **Completion status (recorded 10 August 2026):** WS-A shipped. The §8.1 path decision resolved to `(supplier)` isolation: `ROLE_NAV_ACCESS.supplier` = `{supplier-overview, supplier-messages}` (`src/lib/auth/roles.ts:173`), `ROLE_LANDING_PAGES.supplier` = `/overview` (`roles.ts:268`), a Supplier Portal group exists in `src/navigation/sidebar/sidebar-items.ts`, and `src/app/(supplier)/overview/page.tsx` renders own profile, documents, N-of-2 verification progress, and a Messages link behind a supplier-only layout guard. Evidence: `src/lib/auth/roles.supplier.test.ts` and `src/tests/e2e/supplier-portal.spec.ts` ("Option A — Fully Hidden"). Note: the optional secondary Customer "Market View" floated in Step 3 was not kept — Customer shopping areas were removed from the supplier grant outright. Steps 5–6 have no in-repository run records; their intent is represented by the committed unit/e2e suites cited above.
+
 **Owner:** `builder` + `auth` (for ROLE_NAV_ACCESS) + `frontend` (for Supplier overview UI) + `security` reviewer
 **Files:**
 - Modify: `src/lib/auth/roles.ts:163` (`ROLE_NAV_ACCESS.supplier`), `src/lib/auth/roles.ts:273` (`ROLE_LANDING_PAGES.supplier`), `src/navigation/sidebar/sidebar-items.ts` (new Supplier Portal group), `src/app/(staff)/supplier-messages/page.tsx` nav filtering
@@ -74,10 +76,10 @@
 - Create/Modify tests: `src/app/(supplier)/overview/page.test.tsx` or `src/app/(staff)/supplier-overview/page.test.tsx`
 
 **Steps:**
-- [ ] Step 1: Inspect current `ROLE_NAV_ACCESS.supplier` == customer (7 cust-*) and `ROLE_LANDING_PAGES.supplier=/showroom` plus hidden `supplier-messages` (exists but not in nav)
-- [ ] Step 2: Write failing test — supplier sees Supplier overview as landing, sees own profile/documents/messages, does NOT see Find Your Car/Favourites/Request a Car/My Inquiries/Transactions (or sees behind "Personal" secondary)
-- [ ] Step 3: Update `ROLE_NAV_ACCESS.supplier` to Supplier-scoped set (e.g., `supplier-overview`, `supplier-documents`, `supplier-messages` plus optional `cust-showroom` as secondary Market View), update `ROLE_LANDING_PAGES.supplier=/supplier-overview`, add Supplier Portal group to `sidebar-items.ts`
-- [ ] Step 4: Create Supplier overview page scoped to `suppliers.account_id=auth.uid()` + `supplier_documents` list + verification progress, reuse existing `supplier-messages` thread component
+- [x] Step 1: Inspect current `ROLE_NAV_ACCESS.supplier` == customer (7 cust-*) and `ROLE_LANDING_PAGES.supplier=/showroom` plus hidden `supplier-messages` (exists but not in nav)
+- [x] Step 2: Write failing test — supplier sees Supplier overview as landing, sees own profile/documents/messages, does NOT see Find Your Car/Favourites/Request a Car/My Inquiries/Transactions (or sees behind "Personal" secondary)
+- [x] Step 3: Update `ROLE_NAV_ACCESS.supplier` to Supplier-scoped set (e.g., `supplier-overview`, `supplier-documents`, `supplier-messages` plus optional `cust-showroom` as secondary Market View), update `ROLE_LANDING_PAGES.supplier=/supplier-overview`, add Supplier Portal group to `sidebar-items.ts`
+- [x] Step 4: Create Supplier overview page scoped to `suppliers.account_id=auth.uid()` + `supplier_documents` list + verification progress, reuse existing `supplier-messages` thread component
 - [ ] Step 5: Run `npm run check:fix` + `npm run test` + manual role-switch (supplier pending vs approved)
 - [ ] Step 6: Security review — confirm RLS `Approved suppliers can read own record` preserved, no full `suppliers` exposure, `supplier-documents` bucket private
 

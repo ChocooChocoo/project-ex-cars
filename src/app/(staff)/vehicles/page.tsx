@@ -14,6 +14,7 @@ export default async function VehiclesPage() {
   const { data: vehicles } = await supabase.from("vehicles").select("*").order("created_at", { ascending: false });
 
   const isCeo = role === "ceo";
+  const isHeadAccountant = role === "head_accountant";
   const canManage = role === "marketing_specialist";
   const { data: proposals } = isCeo
     ? await supabase
@@ -21,7 +22,13 @@ export default async function VehiclesPage() {
         .select("*, vehicles(make, model, year)")
         .eq("decision", "pending")
         .order("created_at", { ascending: false })
-    : { data: [] };
+    : isHeadAccountant
+      ? await supabase
+          .from("vehicle_price_proposals")
+          .select("*, vehicles(make, model, year)")
+          .eq("decision", "pending")
+          .order("created_at", { ascending: false })
+      : { data: [] };
 
   return (
     <div className="flex flex-col gap-4">
@@ -36,6 +43,8 @@ export default async function VehiclesPage() {
         vehicles={(vehicles as Record<string, unknown>[]) ?? []}
         canManage={canManage}
         canDelete={isCeo}
+        isHeadAccountant={isHeadAccountant}
+        userRole={role}
       />
     </div>
   );

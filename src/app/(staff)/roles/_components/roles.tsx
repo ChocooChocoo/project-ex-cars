@@ -68,6 +68,7 @@ interface RolesProps {
   actions: RbacCatalogOption[];
   users: UserRecord[];
   dataError?: string | null;
+  canManage?: boolean;
 }
 
 const statuses = ["active", "inactive"] as const;
@@ -91,7 +92,7 @@ function resultError(result: { error?: string | null } | { success: true }) {
   return "error" in result && Boolean(result.error);
 }
 
-export function Roles({ roles, permissions, accessAreas, actions, dataError }: RolesProps) {
+export function Roles({ roles, permissions, accessAreas, actions, dataError, canManage = true }: RolesProps) {
   const router = useRouter();
   const [createRoleOpen, setCreateRoleOpen] = useState(false);
   const [createPermissionOpen, setCreatePermissionOpen] = useState(false);
@@ -227,76 +228,78 @@ export function Roles({ roles, permissions, accessAreas, actions, dataError }: R
                 <h2 className="font-semibold text-lg">Role definitions</h2>
                 <p className="text-muted-foreground text-sm">Create managed roles and assign metadata permissions.</p>
               </div>
-              <Dialog open={createRoleOpen} onOpenChange={setRoleDialog}>
-                <DialogTrigger asChild>
-                  <Button disabled={Boolean(dataError) || availableRoleKeys.length === 0}>
-                    <Plus data-icon="inline-start" />
-                    Create Role
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Create Role</DialogTitle>
-                    <DialogDescription>Choose one of the canonical system roles.</DialogDescription>
-                  </DialogHeader>
-                  <form className="space-y-4" onSubmit={submitRole}>
-                    <div className="space-y-2">
-                      <Label htmlFor="role-label">Role Label</Label>
-                      <select
-                        className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-                        id="role-label"
-                        name="roleKey"
-                        onChange={(event) => setRoleKey(event.target.value as RbacManagedRole | "")}
-                        required
-                        value={roleKey}
-                      >
-                        <option value="">Select a role</option>
-                        {availableRoleKeys.map((key) => (
-                          <option key={key} value={key}>
-                            {ROLE_LABELS[key]}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="role-key">System Role Key</Label>
-                      <Input id="role-key" readOnly value={roleKey} aria-label="System Role Key" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="role-description">Description</Label>
-                      <textarea
-                        className="min-h-20 w-full rounded-md border bg-background px-3 py-2 text-sm"
-                        id="role-description"
-                        name="description"
-                        onChange={(event) => setRoleDescription(event.target.value)}
-                        value={roleDescription}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="role-status">Status</Label>
-                      <select
-                        className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-                        id="role-status"
-                        name="status"
-                        onChange={(event) => setRoleStatus(event.target.value as (typeof statuses)[number])}
-                        value={roleStatus}
-                      >
-                        {statuses.map((status) => (
-                          <option key={status}>{status}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="flex items-center justify-between rounded-md border p-3">
-                      <Label htmlFor="role-protected">Protected System Role</Label>
-                      <Switch checked={roleProtected} id="role-protected" onCheckedChange={setRoleProtected} />
-                      <input name="isProtected" type="hidden" value={roleProtected ? "true" : "false"} />
-                    </div>
-                    <DialogFooter>
-                      <Button type="submit">Create Role</Button>
-                    </DialogFooter>
-                  </form>
-                </DialogContent>
-              </Dialog>
+              {canManage ? (
+                <Dialog open={createRoleOpen} onOpenChange={setRoleDialog}>
+                  <DialogTrigger asChild>
+                    <Button disabled={Boolean(dataError) || availableRoleKeys.length === 0}>
+                      <Plus data-icon="inline-start" />
+                      Create Role
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Create Role</DialogTitle>
+                      <DialogDescription>Choose one of the canonical system roles.</DialogDescription>
+                    </DialogHeader>
+                    <form className="space-y-4" onSubmit={submitRole}>
+                      <div className="space-y-2">
+                        <Label htmlFor="role-label">Role Label</Label>
+                        <select
+                          className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                          id="role-label"
+                          name="roleKey"
+                          onChange={(event) => setRoleKey(event.target.value as RbacManagedRole | "")}
+                          required
+                          value={roleKey}
+                        >
+                          <option value="">Select a role</option>
+                          {availableRoleKeys.map((key) => (
+                            <option key={key} value={key}>
+                              {ROLE_LABELS[key]}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="role-key">System Role Key</Label>
+                        <Input id="role-key" readOnly value={roleKey} aria-label="System Role Key" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="role-description">Description</Label>
+                        <textarea
+                          className="min-h-20 w-full rounded-md border bg-background px-3 py-2 text-sm"
+                          id="role-description"
+                          name="description"
+                          onChange={(event) => setRoleDescription(event.target.value)}
+                          value={roleDescription}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="role-status">Status</Label>
+                        <select
+                          className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                          id="role-status"
+                          name="status"
+                          onChange={(event) => setRoleStatus(event.target.value as (typeof statuses)[number])}
+                          value={roleStatus}
+                        >
+                          {statuses.map((status) => (
+                            <option key={status}>{status}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex items-center justify-between rounded-md border p-3">
+                        <Label htmlFor="role-protected">Protected System Role</Label>
+                        <Switch checked={roleProtected} id="role-protected" onCheckedChange={setRoleProtected} />
+                        <input name="isProtected" type="hidden" value={roleProtected ? "true" : "false"} />
+                      </div>
+                      <DialogFooter>
+                        <Button type="submit">Create Role</Button>
+                      </DialogFooter>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+              ) : null}
             </div>
             <div className="overflow-hidden rounded-md border">
               <Table className="min-w-[1060px]">
@@ -329,15 +332,17 @@ export function Roles({ roles, permissions, accessAreas, actions, dataError }: R
                           assigned
                         </TableCell>
                         <TableCell className="min-w-28 text-right">
-                          <Button
-                            aria-label={`Edit ${ROLE_LABELS[role.roleKey]}`}
-                            onClick={() => openEditRole(role)}
-                            size="sm"
-                            variant="outline"
-                          >
-                            <Pencil data-icon="inline-start" />
-                            Edit
-                          </Button>
+                          {canManage ? (
+                            <Button
+                              aria-label={`Edit ${ROLE_LABELS[role.roleKey]}`}
+                              onClick={() => openEditRole(role)}
+                              size="sm"
+                              variant="outline"
+                            >
+                              <Pencil data-icon="inline-start" />
+                              Edit
+                            </Button>
+                          ) : null}
                         </TableCell>
                       </TableRow>
                     ))
@@ -360,113 +365,115 @@ export function Roles({ roles, permissions, accessAreas, actions, dataError }: R
               <h2 className="font-semibold text-lg">Permission</h2>
               <p className="text-muted-foreground text-sm">Define the fixed access-area and action combinations.</p>
             </div>
-            <Dialog open={createPermissionOpen} onOpenChange={setPermissionDialog}>
-              <DialogTrigger asChild>
-                <Button disabled={Boolean(dataError)}>
-                  <Plus data-icon="inline-start" />
-                  Add Permission
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Add Permission</DialogTitle>
-                  <DialogDescription>
-                    Permission keys and labels are generated from the selected catalogs.
-                  </DialogDescription>
-                </DialogHeader>
-                <form className="space-y-4" onSubmit={submitPermission}>
-                  <div className="space-y-2">
-                    <Label htmlFor="permission-area">Access Area</Label>
-                    <select
-                      className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-                      id="permission-area"
-                      name="accessAreaKey"
-                      onChange={(event) => setPermissionArea(event.target.value)}
-                      required
-                      value={permissionArea}
-                    >
-                      <option value="">Select an access area</option>
-                      {accessAreas.map((area) => (
-                        <option key={area.key} value={area.key}>
-                          {area.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="permission-action">Allowed Action</Label>
-                    <select
-                      className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-                      id="permission-action"
-                      name="actionKey"
-                      onChange={(event) => setPermissionAction(event.target.value)}
-                      required
-                      value={permissionAction}
-                    >
-                      <option value="">Select an action</option>
-                      {actions.map((action) => {
-                        const key = permissionArea ? `${permissionArea}.${action.key}` : "";
-                        return (
-                          <option
-                            disabled={Boolean(key && existingPermissionKeys.has(key))}
-                            key={action.key}
-                            value={action.key}
-                          >
-                            {action.label}
-                            {key && existingPermissionKeys.has(key) ? " (created)" : ""}
+            {canManage ? (
+              <Dialog open={createPermissionOpen} onOpenChange={setPermissionDialog}>
+                <DialogTrigger asChild>
+                  <Button disabled={Boolean(dataError)}>
+                    <Plus data-icon="inline-start" />
+                    Add Permission
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Add Permission</DialogTitle>
+                    <DialogDescription>
+                      Permission keys and labels are generated from the selected catalogs.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <form className="space-y-4" onSubmit={submitPermission}>
+                    <div className="space-y-2">
+                      <Label htmlFor="permission-area">Access Area</Label>
+                      <select
+                        className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                        id="permission-area"
+                        name="accessAreaKey"
+                        onChange={(event) => setPermissionArea(event.target.value)}
+                        required
+                        value={permissionArea}
+                      >
+                        <option value="">Select an access area</option>
+                        {accessAreas.map((area) => (
+                          <option key={area.key} value={area.key}>
+                            {area.label}
                           </option>
-                        );
-                      })}
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="permission-label-preview">Access Label Preview</Label>
-                    <Input
-                      aria-label="Access Label Preview"
-                      id="permission-label-preview"
-                      readOnly
-                      value={preview.accessLabel}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="permission-key-preview">System Permission Key</Label>
-                    <Input
-                      aria-label="System Permission Key"
-                      id="permission-key-preview"
-                      readOnly
-                      value={preview.permissionKey}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="permission-description">Description</Label>
-                    <textarea
-                      className="min-h-20 w-full rounded-md border bg-background px-3 py-2 text-sm"
-                      id="permission-description"
-                      name="description"
-                      onChange={(event) => setPermissionDescription(event.target.value)}
-                      value={permissionDescription}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="permission-status">Status</Label>
-                    <select
-                      className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-                      id="permission-status"
-                      name="status"
-                      onChange={(event) => setPermissionStatus(event.target.value as (typeof statuses)[number])}
-                      value={permissionStatus}
-                    >
-                      {statuses.map((status) => (
-                        <option key={status}>{status}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <DialogFooter>
-                    <Button type="submit">Add Permission</Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="permission-action">Allowed Action</Label>
+                      <select
+                        className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                        id="permission-action"
+                        name="actionKey"
+                        onChange={(event) => setPermissionAction(event.target.value)}
+                        required
+                        value={permissionAction}
+                      >
+                        <option value="">Select an action</option>
+                        {actions.map((action) => {
+                          const key = permissionArea ? `${permissionArea}.${action.key}` : "";
+                          return (
+                            <option
+                              disabled={Boolean(key && existingPermissionKeys.has(key))}
+                              key={action.key}
+                              value={action.key}
+                            >
+                              {action.label}
+                              {key && existingPermissionKeys.has(key) ? " (created)" : ""}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="permission-label-preview">Access Label Preview</Label>
+                      <Input
+                        aria-label="Access Label Preview"
+                        id="permission-label-preview"
+                        readOnly
+                        value={preview.accessLabel}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="permission-key-preview">System Permission Key</Label>
+                      <Input
+                        aria-label="System Permission Key"
+                        id="permission-key-preview"
+                        readOnly
+                        value={preview.permissionKey}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="permission-description">Description</Label>
+                      <textarea
+                        className="min-h-20 w-full rounded-md border bg-background px-3 py-2 text-sm"
+                        id="permission-description"
+                        name="description"
+                        onChange={(event) => setPermissionDescription(event.target.value)}
+                        value={permissionDescription}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="permission-status">Status</Label>
+                      <select
+                        className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                        id="permission-status"
+                        name="status"
+                        onChange={(event) => setPermissionStatus(event.target.value as (typeof statuses)[number])}
+                        value={permissionStatus}
+                      >
+                        {statuses.map((status) => (
+                          <option key={status}>{status}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <DialogFooter>
+                      <Button type="submit">Add Permission</Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            ) : null}
           </div>
           <div className="overflow-hidden rounded-md border">
             <Table className="min-w-[720px]">
@@ -623,9 +630,11 @@ export function Roles({ roles, permissions, accessAreas, actions, dataError }: R
                   })}
                 </div>
               </div>
-              <DialogFooter>
-                <Button type="submit">Save Changes</Button>
-              </DialogFooter>
+              {canManage ? (
+                <DialogFooter>
+                  <Button type="submit">Save Changes</Button>
+                </DialogFooter>
+              ) : null}
             </form>
           ) : null}
         </DialogContent>

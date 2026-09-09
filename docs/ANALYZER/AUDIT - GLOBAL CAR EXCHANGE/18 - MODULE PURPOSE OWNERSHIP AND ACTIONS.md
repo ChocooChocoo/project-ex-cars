@@ -1,9 +1,10 @@
-﻿# Module Purpose, Ownership, and Actions Audit
+# Module Purpose, Ownership, and Actions Audit
 
 **System:** Global Car Exchange (GCE)
 **Audit date:** 18 August 2026
 **Scope:** Current working tree, active role-accessible GCE pages, shared access controls, and reachable child pages.
 **Status:** Documentation only. No application data, code, configuration, schema, or permissions were changed.
+**Revised (10 August 2026 documentation audit):** supplier portal rewritten to the dedicated Overview+Messages portal; Head Accountant transaction-document row removed; payroll/payslip RLS limitations annotated; Account Manager Field Cases marked view-only; Head Security attendance clarified to personal-only; entry-point pages and route inventory corrected; price-proposal read visibility recorded per migration 00039.
 
 ## Start here
 
@@ -15,14 +16,14 @@ This is the simple guide. Find your role, open the suggested first page, and fol
 |---|---|---|
 | CEO | `/ceo/dashboard` | Oversee the business, approve prices, manage announcements, suppliers, and escalations. |
 | Account Manager | `/account_manager/dashboard` | Handle customers, staff records, inquiries, requests, suppliers, and payroll preparation. |
-| Head Accountant | `/head_accountant/finance` | Check finance, payments, payroll, and payslips. |
+| Head Accountant | `/head_accountant/dashboard` | Check finance, payments, payroll, and payslips. |
 | Sales Manager | `/sales_manager/dashboard` | Handle sales inquiries, transactions, walk-ins, and field handoffs. |
 | Confidential Informant | `/confidential_informant/dashboard` | Work on sourcing, delivery, recovery, and related finance requests. |
 | Marketing Specialist | `/marketing_specialist/vehicles` | Add and update vehicles, propose prices, manage media, and publish content. |
 | Mechanic | `/mechanic/inspections` | Inspect vehicles and record condition, repairs, and required documents. |
-| Head Security | `/head_security/security-duty-checks` | Complete security checks, attendance checks, and staff requests. |
+| Head Security | `/head_security/dashboard` | Complete security duty checks and manage personal attendance and requests. |
 | Customer | `/customer/showroom` | Browse vehicles, ask questions, buy, sell, request a car, and save favourites. |
-| Supplier | `/supplier/showroom` | Use the approved supplier portal; the current setup gives Supplier the same seven portal areas as Customer. |
+| Supplier | `/supplier/overview` | Track own profile and ID-document verification in the dedicated supplier portal and exchange messages with GCE. *(Updated 10 August 2026: suppliers no longer receive the customer portal set.)* |
 
 ## User Role: CEO
 
@@ -400,8 +401,8 @@ Actions:
 
 | Action | Purpose |
 |---|---|
-| View and Update | follow field cases. |
-| Create or Assign | available only when the recovery/action guard allows it. |
+| View | follow assigned field cases. Known limitation (10 Aug 2026): Account Manager has view-only access here — update actions reject this role. |
+| Create or Assign | available only when the recovery/action guard allows it. Note: `field_cases` RLS currently grants writes to CEO/Sales Manager (+ Head Accountant INSERT); Confidential Informant creation and CI/Mechanic updates pass the action guard but fail RLS until worker policies land. |
 
 ### Module: Reports
 
@@ -460,7 +461,6 @@ Actions:
 | Search, filters, Sort, and View Details | find transactions. |
 | Record Payment or Verify Payment | record and confirm payments. |
 | Approve Terms, Activate & Generate Installments, Waive, or Instruct Repossession | perform authorised finance and recovery actions. |
-| Verify or Reject document | review transaction evidence. |
 
 ### Module: Attendance
 
@@ -486,8 +486,10 @@ Actions:
 
 | Action | Purpose |
 |---|---|
-| Open, Print, or Add Item | review and update permitted payslips. |
+| Open or Print | review permitted payslips (draft item edits belong to the CEO/Account Manager preparers only). |
 | Mark as Paid | record external payment. |
+
+*Known limitation (10 August 2026 RBAC audit): review/finalize/mark-paid steps are enforced at the action layer but currently blocked at the database — `payroll_runs` and `payslips` FOR ALL policies in `00017_phase6_payroll.sql` grant writes to ceo/account_manager only; a head_accountant UPDATE policy migration is pending.*
 
 ### Module: Reports
 
@@ -796,8 +798,7 @@ Actions:
 
 | Action | Purpose |
 |---|---|
-| Clock In or Clock Out | record your own attendance. |
-| Check attendance and Save Check | perform permitted attendance checks. |
+| Clock In or Clock Out | record your own attendance. Head Security performs personal clock in/out only — checking other employees' records is reserved for the CEO, Account Manager, and Head Accountant. |
 
 ### Module: Employee Requests
 
@@ -910,68 +911,29 @@ Actions:
 
 ## User Role: Supplier
 
-Start at: `/supplier/showroom`
-Access: 7 modules after supplier approval
+Start at: `/supplier/overview`
+Access: 2 modules after supplier approval *(updated 10 August 2026 by the RBAC/task31 pass; the earlier build shared seven customer shopping modules — see the historical note at the end of this section)*
 
-### Module: Customer Showroom
-
-Actions:
-
-| Action | Purpose |
-|---|---|
-| Search vehicles, Make, and Sort | find a vehicle. |
-| Add to favourites / Remove from favourites | save or remove a vehicle. |
-| Open vehicle card | view the listing. |
-| Inquire / Starting... or Buy Now / Sending... | start the selected customer-style workflow. |
-
-### Module: Find Your Car
+### Module: My Supplier Profile (Overview)
 
 Actions:
 
 | Action | Purpose |
 |---|---|
-| Preference fields and Get Recommendations | search for suitable vehicles. |
-| Score Breakdown and Yes / No | review and rate recommendations. |
+| View profile | see own business details, Company/Individual declaration, and approval state. |
+| Track verification progress | watch the "N of 2 primary IDs verified" checklist for own documents. |
+| Open documents list | review own uploaded documents and their verification states. |
+| Open Messages | jump to the messages thread. |
 
-### Module: My Inquiries
-
-Actions:
-
-| Action | Purpose |
-|---|---|
-| Open inquiry, Type a message..., Send, Attach file, Mark messages read, or Report message | manage your own conversations. |
-
-### Module: My Transactions
+### Module: Messages
 
 Actions:
 
 | Action | Purpose |
 |---|---|
-| Search, filters, Open transaction actions, Save Details, Upload, Print, and cancellation controls | manage your own transactions when allowed. |
+| Open thread, Type a message..., Send, or Mark messages read | converse directly with GCE about supply. |
 
-### Module: Request a Car
-
-Actions:
-
-| Action | Purpose |
-|---|---|
-| Request fields, Submit Request, or Cancel | send or dismiss a vehicle request. |
-
-### Module: Sell Vehicle
-
-Actions:
-
-| Action | Purpose |
-|---|---|
-| Vehicle detail fields, Submit Vehicle, or Cancel | send or dismiss a sell offer. |
-
-### Module: Favourites
-
-Actions:
-
-| Action | Purpose |
-|---|---|
-| Open saved vehicle or Remove from favourites | manage saved listings. |
+*Historical note:* before the task31/RBAC pass, an approved supplier received the same seven portal areas as the Customer (Showroom, Find Your Car, My Inquiries, My Transactions, Request a Car, Sell Vehicle, Favourites). Those grants were removed; customer-style addresses such as `/supplier/showroom` now redirect back to `/supplier/overview`. The recommendations area remains flagged as a documented/system mismatch from the earlier arrangement.
 
 ### What the action words mean
 
@@ -986,19 +948,25 @@ Actions:
 
 ### Common workflows
 
-**Customer or Supplier**
+**Customer**
 
 1. Open the showroom and select a vehicle.
 2. Choose **Inquire** to ask questions or **Buy Now** to start a purchase.
 3. Use **My Inquiries** to chat and arrange the next step.
 4. Use **My Transactions** to upload required documents, save details, print, or cancel when allowed.
 
+**Supplier**
+
+1. Wait for staff creation and approval (two verified primary IDs) — sign-in is blocked until approved.
+2. Sign in and land on **My Supplier Profile** (`/supplier/overview`): approval state, document verification progress, documents list.
+3. Use **Messages** to talk with GCE about supply.
+
 **Vehicle listing**
 
 1. Marketing adds or edits the vehicle.
 2. Marketing proposes a price.
-3. CEO approves or rejects the price proposal.
-4. Marketing publishes or archives the listing when its status allows it.
+3. CEO approves or rejects the price proposal — approval itself sets the price and makes the vehicle available in the showroom.
+4. Marketing may archive the listing, and re-publish it afterwards while its status allows; a separate publish step is not required to make an approved vehicle visible.
 
 **Customer inquiry and sale**
 
@@ -1066,7 +1034,7 @@ Child routes are listed beside their parent so create/detail pages are not lost 
 | `/ceo/dashboard` | Dashboard | CEO | Executive operating summary and drill-down links. |
 | `/ceo/finance` | Finance | CEO / Head Accountant | Read the ledger and advance authorised disbursement stages; CEO requests purchase funds. |
 | `/ceo/vehicles`, `/ceo/vehicles/new`, `/ceo/vehicles/[id]` | Vehicles | Marketing / CEO | View all inventory; CEO approves prices and alone deletes vehicles. |
-| `/ceo/staff-showroom`, `/ceo/showroom/[id]` | Staff Showroom | Marketing / Sales | Preview the public listing presentation. |
+| `/ceo/staff-showroom` | Staff Showroom | Marketing / Sales | Preview the public listing presentation. *(No `/showroom/[id]` staff child route exists; vehicle detail opens `/[role]/vehicles/[id]`.)* |
 | `/ceo/content` | Content | Marketing Specialist | CEO can review content; current source exposes management mutations to Marketing only. |
 | `/ceo/inspections`, `/ceo/inspections/[id]` | Inspections | Mechanic | Read inspections, vehicle documents, and reports. |
 | `/ceo/inquiries`, `/ceo/inquiries/[id]`, `/ceo/inquiries/reports` | Inquiries | Account Manager / Sales Manager | Review conversations, arrangements, and handoffs. |
@@ -1131,7 +1099,7 @@ Child routes are listed beside their parent so create/detail pages are not lost 
 |---|---|---|---|
 | `/sales_manager/dashboard` | Dashboard | Sales Manager | Sales and operational summary. |
 | `/sales_manager/vehicles`, `/sales_manager/vehicles/new`, `/sales_manager/vehicles/[id]` | Vehicles | Marketing | Read inventory and listing details; mutations are action-gated. |
-| `/sales_manager/staff-showroom`, `/sales_manager/showroom/[id]` | Staff Showroom | Marketing | Preview public listings. |
+| `/sales_manager/staff-showroom` | Staff Showroom | Marketing | Preview public listings. *(No `/showroom/[id]` staff child route exists.)* |
 | `/sales_manager/inspections`, `/sales_manager/inspections/[id]` | Inspections | Mechanic | Review condition and required vehicle documents. |
 | `/sales_manager/inquiries`, `/sales_manager/inquiries/[id]`, `/sales_manager/inquiries/reports` | Inquiries | Sales Manager | Receive Buy Now work and accept customer handoffs. |
 | `/sales_manager/staff-recommendations` | Recommendations | Sales Manager | Read sales and market insights. |
@@ -1159,7 +1127,7 @@ Child routes are listed beside their parent so create/detail pages are not lost 
 |---|---|---|---|
 | `/marketing_specialist/dashboard` | Dashboard | Marketing Specialist | Listing and content summary. |
 | `/marketing_specialist/vehicles`, `/marketing_specialist/vehicles/new`, `/marketing_specialist/vehicles/[id]` | Vehicles | Marketing Specialist | Create/update listings, propose prices, publish, archive where allowed, and manage media. |
-| `/marketing_specialist/staff-showroom`, `/marketing_specialist/showroom/[id]` | Staff Showroom | Marketing Specialist | Check the public presentation. |
+| `/marketing_specialist/staff-showroom` | Staff Showroom | Marketing Specialist | Check the public presentation. *(No `/showroom/[id]` staff child route exists.)* |
 | `/marketing_specialist/content` | Content | Marketing Specialist | Create, edit, publish, and delete landing-page content. |
 | `/marketing_specialist/announcements` | Announcements | CEO | Read company notices. |
 
@@ -1200,10 +1168,9 @@ Child routes are listed beside their parent so create/detail pages are not lost 
 
 | Route | Module | Handled by | Purpose and access note |
 |---|---|---|---|
-| `/supplier/showroom`, `/supplier/showroom/[id]` | Customer Showroom | Supplier after approval | Current role configuration grants the same showroom access as Customer. |
-| `/supplier/recommendations` | Find Your Car | Supplier after approval | Same portal route is granted; this is a documented/system mismatch. |
-| `/supplier/my-inquiries`, `/supplier/my-inquiries/[id]` | My Inquiries | Supplier / CEO | Same portal route is granted; supplier message access is separately approved. |
-| `/supplier/my-transactions`, `/supplier/my-transactions/[id]` | My Transactions | Supplier | Same portal route is granted by current role configuration. |
+| `/supplier/overview` | My Supplier Profile | Supplier | Dedicated supplier-portal home: own business profile, approval state, "N of 2 primary IDs verified" progress, documents list, messages link. |
+| `/supplier/supplier-messages` | Messages | Supplier / CEO | CEO↔supplier conversation thread; page-guarded to ceo and approved supplier. |
+| *(legacy)* `/supplier/showroom`, `/supplier/my-inquiries`, `/supplier/recommendations`, `/supplier/my-transactions` | — | Supplier | Redirect traps since the task31/RBAC pass — all bounce back to `/supplier/overview`; no longer part of the supplier's granted set. |
 | `/supplier/request-a-car` | Request a Car | Supplier | Same portal route is granted by current role configuration. |
 | `/supplier/sell-vehicle` | Sell Vehicle | Supplier | Same portal route is granted by current role configuration. |
 | `/supplier/favourites` | Favourites | Supplier | Same portal route is granted by current role configuration. |
@@ -1282,8 +1249,8 @@ These controls are shared infrastructure rather than role-owned business modules
 | Status, Condition, Pricing, Sort | Filters | Inventory viewers | Narrow or order the vehicle list. |
 | Propose Price / Submit Proposal | Mutation/form | Marketing Specialist; pending duplicate proposals are rejected | Submit a price proposal and move the vehicle to awaiting-price-approval. |
 | Publish / Publish this vehicle? | Approval-confirmed mutation | Marketing Specialist after required price approval | Make an eligible vehicle available to the public showroom. |
-| Pending / Vehicles | View toggle | Vehicle-operation viewers | Switch between pending price proposals and the vehicle inventory table. |
-| Search proposals... / Sort | View controls | CEO price-approval viewer | Find and order pending price proposals. |
+| Pending / Vehicles | View toggle | Vehicle-operation viewers | Switch between pending price proposals and the vehicle inventory table. Head Accountant sees the pending list read-only (no approve buttons) since migration `00039`. |
+| Search proposals... / Sort | View controls | CEO price-decision viewer; Head Accountant read-only viewer (`00039`) | Find and order pending price proposals. |
 | Approve / Reject | Approval mutation | CEO on a pending price proposal | Open the confirmation dialog and approve or reject the proposal; approval sets the proposed vehicle price. |
 | Cancel / Approve / Reject / Submitting... | Confirmation controls | CEO price-approval decision dialog | Dismiss or confirm the selected price decision; the submitting label reflects the in-flight request. |
 | Archive / Archive this vehicle? | Destructive/state mutation | Marketing Specialist; reserved, sold, and awaiting-approval states are blocked | Remove an eligible vehicle from active listings. |
@@ -1491,6 +1458,7 @@ These controls are shared infrastructure rather than role-owned business modules
 
 **Route:** `/{ceo\|account_manager\|head_accountant}/payroll`
 **Handled by:** Account Manager prepares; Head Accountant reviews/finalises; CEO approves.
+*Known limitation (10 August 2026 RBAC audit):* the review/finalise steps above pass their action-layer guards but are currently denied at the database — the `payroll_runs` FOR ALL policy in `00017_phase6_payroll.sql` grants writes to ceo/account_manager only. Treat them as action-enforced until a head_accountant UPDATE policy migration lands.
 
 | Action / button | Control type | Available to / condition | Purpose / result |
 |---|---|---|---|
@@ -1505,14 +1473,15 @@ These controls are shared infrastructure rather than role-owned business modules
 
 **Routes:** `/{ceo\|account_manager\|head_accountant}/payslips` and `/.../payslips/[id]`; an employee can reach their own detail by ownership.
 **Handled by:** Head Accountant for payment marking; employees/authorised staff read permitted records.
+*Known limitation (10 August 2026 RBAC audit):* mark-paid UPDATEs pass the action guard but are denied by the `payslips` RLS grant (00017, ceo/account_manager only); adding draft line items is preparer-only (CEO/Account Manager) by design.
 
 | Action / button | Control type | Available to / condition | Purpose / result |
 |---|---|---|---|
 | Open payslip | Navigation | Employee owner or authorised payroll role | View one payslip. |
 | Print | Output control | Payslip viewer | Send the payslip to the browser print flow. |
-| Add Item | Form opener | Draft/authorised record | Add an earning or deduction line. |
-| Save Item | Mutation | Draft/authorised record | Save the line item. |
-| Mark as Paid / Marking... | State mutation | Head Accountant only | Record that the payslip was paid outside the system; the progress label reflects the in-flight action. |
+| Add Item | Form opener | CEO / Account Manager preparer on a draft record | Add an earning or deduction line. |
+| Save Item | Mutation | CEO / Account Manager preparer on a draft record | Save the line item. |
+| Mark as Paid / Marking... | State mutation | Head Accountant only (action layer; see RLS limitation above) | Record that the payslip was paid outside the system; the progress label reflects the in-flight action. |
 | Cancel | Dialog control | Item editor | Close without saving. |
 
 ### 3.17 Field Cases
@@ -1530,6 +1499,7 @@ These controls are shared infrastructure rather than role-owned business modules
 | Cancel | Dialog control | Form user | Close without saving. |
 
 **Current UI limitation:** the standalone Create Field Case dialog is visible to permitted creators, but its current form does not supply the `transaction_id` or `vehicle_id` required by the server-side creation action. A submission therefore returns a validation error until one of those links is supplied. This is recorded as an implementation limitation, not as a successful field-case creation path.
+*RLS limitation (10 August 2026 audit):* `field_cases` INSERT/UPDATE policies currently grant writes to CEO and Sales Manager for all operations plus Head Accountant INSERT (migration `00038`). Confidential Informant case creation and CI/Mechanic case updates pass the action-layer allowlists but fail RLS until worker INSERT/UPDATE policies land.
 
 ### 3.18 Security Duty Checks
 
@@ -1545,6 +1515,8 @@ These controls are shared infrastructure rather than role-owned business modules
 | Upload | File mutation | Check owner | Store before or after evidence. |
 | Complete Check | State mutation | Both required files present | Mark the duty check complete. |
 | Cancel / close | Dialog control | Form user | Close without starting a check. |
+
+*Storage notes (10 August 2026 audit):* evidence uploads go to the private `security-evidence` bucket under an owner-scoped `${userId}/` folder. The bucket INSERT policy is folder-scoped rather than role-scoped — role enforcement lives solely in the server action. Evidence upload has no completed-state guard today, so uploading after completion overwrites the evidence paths and reverts status to `in_progress`; completed-check immutability is NOT enforced (known limitation).
 
 ### 3.19 Reports
 
@@ -1713,11 +1685,12 @@ These controls are shared infrastructure rather than role-owned business modules
 The following are important when reading the tables above:
 
 - `ROLE_NAV_ACCESS` controls what appears in the sidebar. It is not the complete authorization system.
-- Current page guards are uneven. Examples include `/staff-recommendations`, inquiry reports, roadmap child routes, transaction detail, and vehicle detail routes that do not all repeat the parent guard.
+- Current page guards are uneven. Pages with no page-level guard at all or no repeated parent guard: `/staff-recommendations` (no guard whatsoever — reachable by any signed-in account), `inquiries/reports`, `roadmap/new`, `roadmap/[id]`, `transactions/[id]`, `vehicles/[id]`, and `vehicles/new`.
 - The middleware rewrites role-prefixed paths and the staff layout authenticates the session, but an unlisted direct URL can still reach an unguarded staff page. Record visibility and mutations remain constrained by page/action/RLS checks where implemented.
 - Head Accountant can access and create the permitted recovery path in Field Cases but has no Field Cases sidebar item.
-- All staff can reach the Payslips page directly to see their own owned payslip even though only three staff roles receive the menu item.
-- Supplier Messages is permitted to an approved supplier by the page/action contract, but Supplier has no active sidebar link to it.
+- All staff can reach the Payslips page directly to see their own owned payslip even though only three staff roles receive the menu item; Attendance and Employee Requests pages likewise accept every staff role with self-service scoping.
+- Bare customer-facing URLs (`/showroom`, `/my-inquiries`, `/favourites`, …) have no customer-role page guard; staff roles can open them, and privacy rests on the customer layout's login check plus per-user query scoping (RLS). Suppliers are redirected out of the customer portal by the layout guard.
+- Supplier Messages is permitted to an approved supplier by the page/action contract and is discoverable from the Supplier Portal sidebar group and the overview page.
 - Current vehicle/content working-tree changes are reflected here: Marketing Specialist owns the listing/content mutations, CEO retains price approval and vehicle deletion, and Content is review-only for CEO.
 - Export, create-user, and other template-looking controls are documented as interface controls when visible in the current component, and are explicitly marked unwired where no current business mutation exists. Unmounted template controls are excluded from active-module action tables.
 - Server-side read helpers, KPI loaders, unread-count helpers, and data-fetch functions are not presented as user buttons. They are implementation details or automatic behavior.

@@ -181,4 +181,38 @@ describe("Roles", () => {
     expect(screen.queryByRole("columnheader", { name: "Description" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /edit supplier/i })).toBeInTheDocument();
   });
+
+  it("canManage=false hides Save/Create/Delete mutations for account_manager view-only", () => {
+    render(
+      <Roles
+        roles={roles}
+        permissions={permissions}
+        accessAreas={areas}
+        actions={actions}
+        users={[]}
+        canManage={false}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /create role/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /edit supplier/i })).not.toBeInTheDocument();
+    // Permission tab
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Permission" }), { button: 0 });
+    fireEvent.click(screen.getByRole("tab", { name: "Permission" }));
+    expect(screen.queryByRole("button", { name: /add permission/i })).not.toBeInTheDocument();
+  });
+
+  it("canManage=false still shows roles table read-only", () => {
+    render(
+      <Roles
+        roles={roles}
+        permissions={permissions}
+        accessAreas={areas}
+        actions={actions}
+        users={[]}
+        canManage={false}
+      />,
+    );
+    expect(screen.getByText("Supplier")).toBeInTheDocument();
+    expect(screen.getByText(/1 assigned/)).toBeInTheDocument();
+  });
 });
