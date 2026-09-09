@@ -2,22 +2,25 @@
 
 [Back to start](00%20-%20START%20HERE.md) · Previous: [07 - DEVELOPMENT ROADMAP](07%20-%20DEVELOPMENT%20ROADMAP.md) · Next: [09 - TASK TRACKER](09%20-%20TASK%20TRACKER.md)
 
-**Last checked:** 9 August 2026 (audit remediation pass)
+**Last checked:** 10 August 2026 (counts restated per the roadmap audit)
 
 ## Where everything stands
 
 | Status | How many |
 |---:|---|
-| ✅ Finished | 35 |
+| ✅ Finished | 34 |
 | 🟨 Being worked on | 0 |
 | ⭕ Not started | 0 |
 | ❌ Blocked | 0 |
 | 🔵 Already there | 0 |
+| 🔻 Regressed (built, later removed) | 2 |
 | ⬜ Dropped | 0 |
-| ❓ Unclear | 6 |
+| ❓ Unclear | 5 |
 | **Total** | **41** |
 
-The earlier tracker state recorded Phases 1–5 as completed. The source-code audit in [14 - PHASE 6 IMPLEMENTATION PLAN](../../tasks/10.md) found that this completion statement is not yet supported by build, authorization, user-journey, and repeatable-test evidence. Existing Phase 1–5 item labels require evidence-based reconciliation through Recovery Gates 0–3. R-07 (360° viewer) remains a placeholder, and R-28/R-29 remain in progress. **9 Aug 2026 audit pass:** R-38 (CEO↔supplier channel) moved from dropped to finished; R-27 notes refreshed with the full KYC flow.
+> **Counts restated per [17 - ROADMAP AUDIT](../AUDIT%20-%20GLOBAL%20CAR%20EXCHANGE/17%20-%20ROADMAP%20AUDIT.md) §3.2.** The earlier headline (35 finished / 6 unclear) miscounted the rows — the rows contain 36 ✅ and 5 ❓ before the regression adjustment. R-13 and R-14 are now marked 🔻 Regressed: they were built and later removed by an interface redesign (see that audit's Phase 4 verdicts).
+
+The earlier tracker state recorded Phases 1–5 as completed. The source-code audit in [14 - PHASE 6 IMPLEMENTATION PLAN](../../tasks/10.md) found that this completion statement is not yet supported by build, authorization, user-journey, and repeatable-test evidence. Existing Phase 1–5 item labels require evidence-based reconciliation through Recovery Gates 0–3. *(Corrected 10 August 2026: the sentence here previously claimed R-07 remained a placeholder and R-28/R-29 were in progress — all three items are finished per their own rows and confirmed by the roadmap audit.)* **9 Aug 2026 audit pass:** R-38 (CEO↔supplier channel) moved from dropped to finished; R-27 notes refreshed with the full KYC flow.
 
 ## Phase 1 — One shared foundation
 
@@ -60,8 +63,8 @@ The earlier tracker state recorded Phases 1–5 as completed. The source-code au
 | # | What gets built | Status | Notes |
 |---|---|---|---|
 | R-12 | Customer vehicle ranking using the five stated criteria and weights | ✅ | Ranking engine in src/lib/recommendations/engine.ts; customer-facing page at /recommendations with budget input, preference form, ranked results and per-criterion score breakdowns; runs saved to recommendation_runs/results. |
-| R-13 | Agreed management views for pricing, stock turnover, buying patterns, and market information | ✅ | Management dashboard at /dashboard/recommendations with tabs: Pricing Trends, Stock Turnover, Buying Patterns, Market Insights, Accuracy. All data derived from existing platform tables. |
-| R-14 | A way to report recommendation accuracy | ✅ | Accuracy tracking view comparing recommendation feedback (helpful/not_helpful) against runs; accuracy percentage, most recommended vehicles, feedback tally. |
+| R-13 | Agreed management views for pricing, stock turnover, buying patterns, and market information | 🔻 | Built as five named management tabs, then removed during a later interface redesign; current dashboard panels cover the ground loosely without the named views. **Regressed — see [17 - ROADMAP AUDIT](../AUDIT%20-%20GLOBAL%20CAR%20EXCHANGE/17%20-%20ROADMAP%20AUDIT.md), Phase 4.** |
+| R-14 | A way to report recommendation accuracy | 🔻 | The accuracy view was built and later removed entirely; feedback is still collected but no staff screen reads recommendation records today. **Regressed — see [17 - ROADMAP AUDIT](../AUDIT%20-%20GLOBAL%20CAR%20EXCHANGE/17%20-%20ROADMAP%20AUDIT.md), Phase 4.** |
 
 ## Phase 5 — Transactions can be followed
 

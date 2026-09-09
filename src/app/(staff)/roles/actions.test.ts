@@ -18,7 +18,7 @@ vi.mock("@/lib/supabase/server", () => ({
 
 import { createRbacPermission, createRbacRole, updateRbacRole } from "./actions";
 
-const manager = { ok: true, data: { userId: "11111111-1111-4111-8111-111111111111", role: "account_manager" } };
+const ceoManager = { ok: true, data: { userId: "11111111-1111-4111-8111-111111111111", role: "ceo" } };
 const roleKey = "account_manager";
 
 function form(values: Record<string, string>, permissionIds: string[] = []) {
@@ -31,7 +31,7 @@ function form(values: Record<string, string>, permissionIds: string[] = []) {
 describe("RBAC server actions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    authorizeAction.mockResolvedValue(manager);
+    authorizeAction.mockResolvedValue(ceoManager);
     insert.mockResolvedValue({ error: null });
     rpc.mockResolvedValue({ data: null, error: null });
   });
@@ -116,5 +116,33 @@ describe("RBAC server actions", () => {
     );
 
     expect(result).toEqual({ error: "That permission already exists." });
+  });
+
+  it("rejects account_manager for RBAC mutations (view-only)", async () => {
+    authorizeAction.mockResolvedValue({ ok: false, code: "not_authorized", message: "Not authorized" });
+
+    const result = await updateRbacRole(
+      form({ roleKey, description: "Operations", status: "active", isProtected: "false" }, [
+        "22222222-2222-4222-8222-222222222222",
+      ]),
+    );
+
+    expect(result).toEqual({ error: "Not authorized" });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("ceo can manage while account_manager is view-only at action layer", async () => {
+    // ceo manager already mocked as success in beforeEach
+    const ceoResult = await createRbacPermission(
+      form({ accessAreaKey: "vehicles", actionKey: "read", description: "", status: "active" }),
+    );
+    expect(ceoResult).toEqual({ success: true });
+
+    // simulate AM attempt
+    authorizeAction.mockResolvedValue({ ok: false, code: "not_authorized", message: "Not authorized" });
+    const amResult = await createRbacPermission(
+      form({ accessAreaKey: "vehicles", actionKey: "read", description: "", status: "active" }),
+    );
+    expect(amResult).toEqual({ error: "Not authorized" });
   });
 });

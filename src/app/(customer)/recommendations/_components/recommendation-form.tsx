@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { getWeightLabels } from "@/lib/recommendations/engine";
+import { plainHintByLabel } from "@/lib/recommendations/plain-hints";
 import { type RecommendationPreferences, recommendationPreferencesSchema } from "@/lib/validation/recommendations";
 
 import { runRecommendation } from "../actions";
@@ -188,11 +189,14 @@ export function RecommendationForm({ onResults }: RecommendationFormProps) {
               <SlidersHorizontal className="size-4" />
               Scoring Criteria
             </FieldLabel>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-3">
               {weights.map((w) => (
-                <Badge key={w.key} variant="secondary" className="text-xs">
-                  {w.label}: {w.pct}
-                </Badge>
+                <div key={w.key} className="flex flex-col gap-1">
+                  <Badge variant="secondary" className="text-xs">
+                    {w.label}: {w.pct}
+                  </Badge>
+                  <p className="text-muted-foreground text-xs">{plainHintByLabel[w.label]}</p>
+                </div>
               ))}
             </div>
           </div>

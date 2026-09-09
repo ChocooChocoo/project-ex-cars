@@ -10,7 +10,7 @@ describe("ROLE_NAV_ACCESS.supplier — WS-A minimal discoverability fix", () => 
     expect(access.has("supplier-messages")).toBe(true);
   });
 
-  it("still contains the 7 cust-* customer portal items (reversible, no removal yet)", () => {
+  it("does NOT contain any cust-* customer portal items (Option A Fully Hidden)", () => {
     const access = ROLE_NAV_ACCESS.supplier;
     expect(access).not.toBe("all");
     if (access === "all") return;
@@ -24,11 +24,18 @@ describe("ROLE_NAV_ACCESS.supplier — WS-A minimal discoverability fix", () => 
       "cust-favourites",
     ];
     for (const id of custIds) {
-      expect(access.has(id)).toBe(true);
+      expect([...access]).not.toContain(id);
+      expect(access.has(id)).toBe(false);
     }
+  });
+
+  it("contains exactly 2 supplier portal items (Option A)", () => {
+    const access = ROLE_NAV_ACCESS.supplier;
+    expect(access).not.toBe("all");
+    if (access === "all") return;
     expect(access.has("supplier-messages")).toBe(true);
     expect(access.has("supplier-overview")).toBe(true);
-    expect(access.size).toBe(9);
+    expect(access.size).toBe(2);
   });
 
   it("contains supplier-overview as isolated profile", async () => {

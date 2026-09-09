@@ -3,7 +3,12 @@ import type { ComponentProps } from "react";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AttendanceClient, type AttendanceEntry, type AttendanceState } from "./attendance-client";
+import {
+  AttendanceClient,
+  type AttendanceEntry,
+  type AttendanceState,
+  getAttendanceSummary,
+} from "./attendance-client";
 
 const refresh = vi.fn();
 const removeChannel = vi.fn();
@@ -200,5 +205,100 @@ describe("AttendanceClient", () => {
     expect(refresh).toHaveBeenCalledTimes(1);
     unmount();
     expect(removeChannel).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders AttendanceSummaryStrip with today present/late/absent/unchecked/pending counts", () => {
+    const today = "2026-08-09";
+    renderAttendance({
+      entries: [
+        entry({ id: "e1", attendance_date: today, status: "present", checked_by: "checker-1" }),
+        entry({ id: "e2", attendance_date: today, status: "late", checked_by: null }),
+        entry({ id: "e3", attendance_date: today, status: "absent", checked_by: null }),
+        entry({ id: "e4", attendance_date: "2026-08-08", status: "present", checked_by: null }),
+      ],
+    });
+    expect(screen.getByLabelText("Today attendance summary")).toBeInTheDocument();
+    expect(screen.getByText("Present 1")).toBeInTheDocument();
+    expect(screen.getByText("Late 1")).toBeInTheDocument();
+    expect(screen.getByText("Absent 1")).toBeInTheDocument();
+    expect(screen.getByText("Unchecked 2")).toBeInTheDocument();
+    expect(screen.getByText("Pending 2")).toBeInTheDocument();
+  });
+
+  it("respects isStaff 100 vs 30 already-fetched limit and preserves checked_by trail", () => {
+    const today = "2026-08-09";
+    const entries = [
+      entry({ id: "e1", attendance_date: today, status: "present", checked_by: "checker-1" }),
+      entry({ id: "e2", attendance_date: today, status: "present", checked_by: null }),
+    ];
+    const summary = getAttendanceSummary(entries, today);
+    expect(summary.total).toBe(2);
+    expect(summary.unchecked).toBe(1);
+    expect(summary.pendingCheck).toBe(1);
+    expect(summary.present).toBe(2);
+  });
+});
+
+describe("getAttendanceSummary", () => {
+  it("derives counts from same already-fetched entries array", () => {
+    const today = "2026-08-09";
+    const entries: AttendanceEntry[] = [
+      {
+        id: "1",
+        employee_id: "a",
+        employee_name: "A",
+        attendance_date: today,
+        time_in: null,
+        time_out: null,
+        hours_worked: null,
+        status: "present",
+        notes: null,
+        checked_by: "c1",
+      },
+      {
+        id: "2",
+        employee_id: "b",
+        employee_name: "B",
+        attendance_date: today,
+        time_in: null,
+        time_out: null,
+        hours_worked: null,
+        status: "late",
+        notes: null,
+        checked_by: null,
+      },
+      {
+        id: "3",
+        employee_id: "c",
+        employee_name: "C",
+        attendance_date: today,
+        time_in: null,
+        time_out: null,
+        hours_worked: null,
+        status: "absent",
+        notes: null,
+        checked_by: null,
+      },
+      {
+        id: "4",
+        employee_id: "d",
+        employee_name: "D",
+        attendance_date: "2026-08-08",
+        time_in: null,
+        time_out: null,
+        hours_worked: null,
+        status: "present",
+        notes: null,
+        checked_by: null,
+      },
+    ];
+    const summary = getAttendanceSummary(entries, today);
+    expect(summary.present).toBe(1);
+    expect(summary.late).toBe(1);
+    expect(summary.absent).toBe(1);
+    expect(summary.unchecked).toBe(2);
+    expect(summary.pendingCheck).toBe(2);
+    expect(summary.total).toBe(3);
+    expect(summary.todayEntries.length).toBe(3);
   });
 });

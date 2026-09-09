@@ -13,7 +13,7 @@ export default async function SupplierOverviewPage() {
     redirect("/unauthorized");
   }
 
-  const { supplier, documents, verification } = await getOwnSupplierOverview();
+  const { supplier, documents, verification, unreadCount } = await getOwnSupplierOverview();
 
   if (!supplier) {
     return (
@@ -40,7 +40,10 @@ export default async function SupplierOverviewPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl leading-none tracking-tight">My Supplier Profile</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl leading-none tracking-tight">My Supplier Profile</h1>
+          {unreadCount > 0 && <Badge variant="secondary">{unreadCount} unread</Badge>}
+        </div>
         <p className="text-muted-foreground text-sm">Your business profile, verification, and documents.</p>
       </div>
 

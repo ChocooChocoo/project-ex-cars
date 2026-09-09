@@ -31,7 +31,7 @@ const roleUpdateFormSchema = roleFormSchema.extend({
 type RbacActionResult = { error: string } | { success: true };
 
 async function authorizeRbacManager(): Promise<{ error: string } | { success: true }> {
-  const authorization = await authorizeAction(["ceo", "account_manager"]);
+  const authorization = await authorizeAction(["ceo"]);
   return authorization.ok ? { success: true } : { error: authorization.message };
 }
 

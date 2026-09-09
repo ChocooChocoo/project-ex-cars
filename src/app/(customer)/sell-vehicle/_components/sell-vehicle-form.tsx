@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { type Resolver, useForm } from "react-hook-form";
+import { Controller, type Resolver, useForm } from "react-hook-form";
 import { toast } from "sonner";
 
 import { submitSellVehicle } from "@/app/(customer)/my-transactions/actions";
@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { type SellVehicleFormData, sellVehicleSchema } from "@/lib/validation/transactions";
 
@@ -19,20 +20,33 @@ export function SellVehicleForm() {
   const {
     register,
     handleSubmit,
+    control,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<SellVehicleFormData>({
     resolver: zodResolver(sellVehicleSchema) as unknown as Resolver<SellVehicleFormData>,
   });
 
+  const conditionValue = watch("condition");
+  const showDetail = typeof conditionValue === "string" && conditionValue.toLowerCase() === "other";
+
   async function onSubmit(data: SellVehicleFormData) {
+    let finalCondition = data.condition;
+    const detail = data.condition_detail;
+    if (typeof finalCondition === "string" && finalCondition.toLowerCase() === "other" && detail?.trim()) {
+      finalCondition = detail.trim();
+    }
     const fd = new FormData();
     fd.set("make", data.make);
     fd.set("model", data.model);
     fd.set("year", String(data.year));
     fd.set("mileage", String(data.mileage));
-    fd.set("condition", data.condition);
+    fd.set("condition", finalCondition);
     fd.set("offered_amount", String(data.offered_amount));
     if (data.description) fd.set("description", data.description);
+    if (detail?.trim() && finalCondition !== detail.trim()) {
+      fd.set("condition_detail", detail.trim());
+    }
 
     const result = await submitSellVehicle(fd);
     if (result.error) {
@@ -76,9 +90,33 @@ export function SellVehicleForm() {
           </div>
           <Field data-invalid={!!errors.condition}>
             <FieldLabel>Condition *</FieldLabel>
-            <Input {...register("condition")} placeholder="e.g. Good, Fair, Excellent" />
+            <Controller
+              control={control}
+              name="condition"
+              render={({ field }) => (
+                <Select value={field.value ?? ""} onValueChange={field.onChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select condition" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="excellent">Excellent</SelectItem>
+                    <SelectItem value="good">Good</SelectItem>
+                    <SelectItem value="fair">Fair</SelectItem>
+                    <SelectItem value="needs_repair">Needs Repair</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+            />
             {errors.condition && <FieldError errors={[{ message: errors.condition.message }]} />}
           </Field>
+          {showDetail ? (
+            <Field data-invalid={!!errors.condition_detail}>
+              <FieldLabel>Condition Detail</FieldLabel>
+              <Textarea {...register("condition_detail")} placeholder="Describe the condition..." rows={3} />
+              {errors.condition_detail && <FieldError errors={[{ message: errors.condition_detail.message }]} />}
+            </Field>
+          ) : null}
           <Field data-invalid={!!errors.offered_amount}>
             <FieldLabel>Offered Amount (₱) *</FieldLabel>
             <Input {...register("offered_amount")} type="number" min="0" placeholder="Your asking price" />

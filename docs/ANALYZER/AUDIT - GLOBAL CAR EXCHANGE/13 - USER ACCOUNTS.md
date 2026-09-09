@@ -2,7 +2,7 @@
 
 [Back to start](../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/00%20-%20START%20HERE.md) · Previous: [12 - DATABASE SCHEMA](../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/12%20-%20DATABASE%20SCHEMA.md) · Next: [15 - SYSTEM STATUS](15%20-%20SYSTEM%20STATUS.md)
 
-**Last updated:** 10 August 2026 (RBAC least-privilege enforcement — nav and page access reconciled)
+**Last updated:** 10 August 2026 (RBAC least-privilege enforcement — nav and page access reconciled; documentation-audit pass correcting the supplier portal, portal navigation model, page-guard exceptions, and seed-script accuracy)
 
 All test accounts share one password. It is **not stored in this file** — it is set via the `SEED_USER_PASSWORD` environment variable in `.env.local` (git-ignored). See [Seed Script](#seed-script) below.
 
@@ -21,7 +21,7 @@ All test accounts share one password. It is **not stored in this file** — it i
 | Role | `customer` |
 | Landing page | `/customer/showroom` |
 | Job function | Browse vehicles, inquire about listings, receive recommendations |
-| Header nav | Showroom, My Inquiries, Find Your Car |
+| Navigation | Dashboard-style sidebar, Customer Portal group (7 items): Showroom, Find Your Car, My Inquiries, Transactions, Request a Car, Sell Vehicle, Favourites |
 | Accessible pages | `/customer/showroom`, `/customer/showroom/[id]`, `/customer/my-inquiries`, `/customer/recommendations`, `/customer/my-transactions`, `/customer/favourites`, `/customer/sell-vehicle`, `/customer/request-a-car` |
 | System purpose | Primary end user of the platform. Searches available vehicles, chats with staff about listings, and receives weighted vehicle recommendations based on budget and preferences. |
 
@@ -34,11 +34,11 @@ All test accounts share one password. It is **not stored in this file** — it i
 | Email | `supplier@gce.local` |
 | Password | `[env: SEED_USER_PASSWORD]` |
 | Role | `supplier` |
-| Landing page | `/supplier/showroom` |
+| Landing page | `/supplier/overview` |
 | Job function | Supply vehicles to the platform |
-| Header nav | Showroom, My Inquiries, Find Your Car (same customer-facing header) |
-| Accessible pages | `/supplier/showroom`, `/supplier/showroom/[id]`, `/supplier/my-inquiries`, `/supplier/recommendations`, `/supplier/my-transactions` |
-| System purpose | Provides vehicles to GCE for sale. Browses the showroom to verify listings and communicates with staff through inquiries. Supplier accounts require staff creation, two primary valid IDs, and approval before sign-in. |
+| Navigation | Dashboard-style sidebar, Supplier Portal group (2 items): My Supplier Profile, Messages |
+| Accessible pages | `/supplier/overview`, `/supplier/supplier-messages` |
+| System purpose | Provides vehicles to GCE for sale. Manages own supplier profile, tracks ID-document verification progress ("N of 2 primary IDs verified"), and communicates with the CEO through the messages thread. Legacy customer-style addresses such as `/supplier/showroom` or `/supplier/my-transactions` redirect back to the supplier overview. Supplier accounts require staff creation, two primary valid IDs, and approval before sign-in. |
 
 ---
 
@@ -51,7 +51,7 @@ All test accounts share one password. It is **not stored in this file** — it i
 | Role | `ceo` |
 | Landing page | `/ceo/dashboard` |
 | Job function | Oversee entire business, approve decisions, monitor performance |
-| Dashboard sidebar | Dashboards: Default, Finance. Operations: Vehicles, Showroom, Content, Inspections, Inquiries, Recommendations, Transactions, Roadmap, Suppliers. Staff: Staff Records, Attendance, Employee Requests, Payroll, Payslips, Field Cases, Security Duty Checks, Reports, Announcements, Supplier Messages. Pages: Roles, Users. |
+| Dashboard sidebar | Dashboards: Default, Finance. Operations: Vehicles, Showroom, Content, Inspections, Inquiries, Recommendations, Transactions, Roadmap, Suppliers. Staff: Staff Records, Attendance, Employee Requests, Payroll, Payslips, Field Cases, Security Duty Checks, Reports, Announcements, Supplier Messages *(rendered under a separate "Supplier Portal" group titled "Messages")*. Pages: Roles, Users. |
 | Accessible pages | `/ceo/dashboard`, `/ceo/finance`, `/ceo/vehicles`, `/ceo/showroom`, `/ceo/content`, `/ceo/inspections`, `/ceo/inquiries`, `/ceo/recommendations`, `/ceo/transactions`, `/ceo/roadmap`, `/ceo/roles`, `/ceo/users`, `/ceo/suppliers`, `/ceo/staff-records`, `/ceo/attendance`, `/ceo/employee-requests`, `/ceo/payroll`, `/ceo/payslips`, `/ceo/field-cases`, `/ceo/security-duty-checks`, `/ceo/reports`, `/ceo/announcements`, `/ceo/supplier-messages` |
 | System purpose | Chief executive oversees all platform areas. Reviews sales, revenue, inventory, pending work, staff performance, and approvals from the source-backed dashboard; approves price proposals and reports; publishes employee announcements; manages user roles and staff records. |
 
@@ -190,7 +190,13 @@ All test accounts share one password. It is **not stored in this file** — it i
 | Announcements | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Supplier Messages | ✅ | — | — | — | — | — | — | — |
 
-Customers and suppliers use the customer-facing header navigation (Showroom, My Inquiries, Find Your Car) and do not see the dashboard sidebar. Every staff page listed above is also protected by a page-level role guard (`requireRole`), an action-level role check, and Supabase RLS policies; see [12 - DATABASE SCHEMA](../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/12%20-%20DATABASE%20SCHEMA.md). *The Head Accountant can open Field Cases (view cases and create repossession cases) but has no sidebar link to it.
+Customers and suppliers see the same dashboard-style sidebar shell as staff, filtered to their own portal groups (see the Navigation Summary below). Most staff pages listed above are protected by a page-level role check (`requireRole` or an equivalent inline allowlist), an action-level role check, and Supabase RLS policies; see [12 - DATABASE SCHEMA](../ANALYSIS%20-%20GLOBAL%20CAR%20EXCHANGE/12%20-%20DATABASE%20SCHEMA.md). *The Head Accountant can open Field Cases (view cases and create repossession cases) but has no sidebar link to it.*
+
+**Page-guard exceptions (documented honestly, per Module audit appendix):** `/staff-recommendations` currently has **no page-level guard at all** — any signed-in account (customer or supplier included) can open it by typing the URL. Child/detail routes `vehicles/new`, `vehicles/[id]`, `transactions/[id]`, `roadmap/new`, `roadmap/[id]`, and `inquiries/reports` rely on action-level checks and RLS rather than repeating a parent page guard.
+
+**Known limitation (field cases):** `field_cases` database writes are currently granted only to CEO/Sales Manager (all operations) and Head Accountant (insert); Confidential Informant case creation and CI/Mechanic case updates pass the action guard but fail RLS until worker INSERT/UPDATE policies land. The standalone Create dialog additionally always fails validation ("A transaction or vehicle is required.") because it submits no vehicle/transaction link — see [18 - MODULE PURPOSE OWNERSHIP AND ACTIONS](18%20-%20MODULE%20PURPOSE%20OWNERSHIP%20AND%20ACTIONS.md) §3.17.
+
+**Self-service reachability:** Attendance, Employee Requests, and Payslips pages accept every staff role via direct URL with self-service scoping (own attendance rows, own requests view, own payslips); menu visibility remains restricted per the matrix above. Likewise, bare customer-facing URLs (`/showroom`, `/my-inquiries`, …) can be opened by staff roles — customer pages rely on their layout login check plus per-user query scoping rather than a customer-only page guard.
 
 ---
 
@@ -198,11 +204,16 @@ Customers and suppliers use the customer-facing header navigation (Showroom, My 
 
 ### Staff (Dashboard Sidebar)
 
-Every staff role sees the dashboard sidebar with role-specific items. Empty groups are hidden. The sidebar filters based on `ROLE_NAV_ACCESS` in `src/lib/auth/roles.ts`, and each role's items are listed individually above. Each page additionally enforces the same grant with a `requireRole` guard, so typing an address does not bypass the menu. All staff roles share the internal `(staff)` route group; the role-prefixed URL (`/ceo/...`, `/mechanic/...`, ...) is rewritten by middleware to the shared pages.
+Every staff role sees the dashboard sidebar with role-specific items. Empty groups are hidden. The sidebar filters based on `ROLE_NAV_ACCESS` in `src/lib/auth/roles.ts`, and each role's items are listed individually above. List pages enforce the same grant with a page-level role check (`requireRole` or an equivalent inline allowlist — see the exceptions noted under the matrix), so typing most addresses does not bypass the menu. All staff roles share the internal `(staff)` route group; the role-prefixed URL (`/ceo/...`, `/mechanic/...`, ...) is rewritten by middleware to the shared pages.
 
-### Customer & Supplier (Header Navigation)
+### Customer & Supplier (Portal Sidebar)
 
-Customers and suppliers do not see the dashboard sidebar. A top header bar appears on the showroom, inquiries, and recommendations pages with three links: **Showroom**, **My Inquiries**, and **Find Your Car**. These users do not access any dashboard routes.
+Both end-user portals render the same dashboard-style shell used by staff (sidebar plus utility header) — there is no separate horizontal header bar. Links come from dedicated sidebar groups filtered by `ROLE_NAV_ACCESS`:
+
+- **Customer Portal group (7 items):** Showroom, Find Your Car (→ recommendations), My Inquiries, Transactions, Request a Car, Sell Vehicle, Favourites.
+- **Supplier Portal group (2 items):** My Supplier Profile (→ `/supplier/overview`), Messages (→ `/supplier/supplier-messages`).
+
+Neither end-user role receives staff dashboard routes. Suppliers who type old customer-style addresses (`/supplier/showroom`, `/supplier/my-inquiries`, …) are redirected back to the supplier overview by the customer layout guard.
 
 ---
 
@@ -213,7 +224,7 @@ All accounts are created by `scripts/seed-users.cjs` using the Supabase Admin AP
 1. Deletes any existing accounts with the seed emails
 2. Creates auth users with pre-confirmed emails and the shared `SEED_USER_PASSWORD`
 3. Sets user metadata (`full_name`) and updates the `profiles` table
-4. Assigns roles via `assign_user_role` PostgreSQL RPC (only the CEO or Account Manager may call it)
+4. Role assignment happens in a second step: `scripts/seed-roles.sql` updates `private.user_roles` directly over the Supabase CLI as elevated SQL. This deliberately bypasses the `assign_user_role` RPC and its CEO-or-Account-Manager restriction (which governs runtime role changes, not seeding)
 
 Run the seed and role steps from the project root with the Supabase CLI linked:
 

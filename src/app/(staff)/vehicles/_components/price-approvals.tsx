@@ -80,7 +80,13 @@ const sortOptions = [
   { value: "amount-asc", label: "Amount low to high" },
 ] as const;
 
-export function PendingApprovalsTable({ proposals }: { readonly proposals: PriceProposalRow[] }) {
+export function PendingApprovalsTable({
+  proposals,
+  canApprove = true,
+}: {
+  readonly proposals: PriceProposalRow[];
+  readonly canApprove?: boolean;
+}) {
   const router = useRouter();
   const [rowSelection, setRowSelection] = React.useState({});
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
@@ -205,17 +211,21 @@ export function PendingApprovalsTable({ proposals }: { readonly proposals: Price
                     View Details
                   </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setDecisionTarget({ proposal, decision: "approved" })}>
-                  <Check className="mr-2 size-4" />
-                  Approve
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  variant="destructive"
-                  onClick={() => setDecisionTarget({ proposal, decision: "rejected" })}
-                >
-                  <X className="mr-2 size-4" />
-                  Reject
-                </DropdownMenuItem>
+                {canApprove ? (
+                  <>
+                    <DropdownMenuItem onClick={() => setDecisionTarget({ proposal, decision: "approved" })}>
+                      <Check className="mr-2 size-4" />
+                      Approve
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      variant="destructive"
+                      onClick={() => setDecisionTarget({ proposal, decision: "rejected" })}
+                    >
+                      <X className="mr-2 size-4" />
+                      Reject
+                    </DropdownMenuItem>
+                  </>
+                ) : null}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

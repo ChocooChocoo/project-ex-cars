@@ -4,17 +4,25 @@ mode: subagent
 temperature: 0.1
 color: success
 permission:
+  "*": allow
   edit: allow
   read: allow
   glob: allow
   grep: allow
   lsp: allow
   bash:
-    "*": ask
+    "*": allow
+    "git *": allow
     "git diff*": allow
     "git status*": allow
-  webfetch: deny
-  external_directory: deny
+    "rm -rf *": deny
+    "Remove-Item * -Recurse*": deny
+    "git commit *": ask
+    "git push *": ask
+    "git reset --hard*": deny
+    "git clean *": deny
+  task: deny
+  external_directory: ask
 ---
 
 You are the Implementer. You do exactly one task and stop.

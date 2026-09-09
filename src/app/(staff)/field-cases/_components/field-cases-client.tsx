@@ -1,7 +1,7 @@
 "use client";
 "use no memo";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { useRouter } from "next/navigation";
 
@@ -10,6 +10,7 @@ import { toast } from "sonner";
 
 import { updateFieldCase } from "@/app/(staff)/field-cases/actions";
 import { assignMechanic, createFieldCase } from "@/app/(staff)/transactions/actions";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -18,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { FIELD_CASE_STATES, type FieldCaseState } from "@/lib/validation/phase6";
 
 import { FieldCasesTable } from "./field-cases-table";
@@ -32,6 +34,8 @@ export interface FieldCaseRow {
   notes: string | null;
   completion_date: string | null;
   created_at: string;
+  assigned_confidential_informant?: string | null;
+  mechanic_id?: string | null;
 }
 
 interface FieldCasesClientProps {
@@ -42,6 +46,7 @@ interface FieldCasesClientProps {
   informants: { id: string; full_name: string | null }[];
   mechanics: { id: string; full_name: string | null }[];
   userRole: string;
+  currentUserId?: string | null;
 }
 
 const CASE_KIND_OPTIONS = [
@@ -58,6 +63,8 @@ const CASE_KIND_RULES: Record<string, string[]> = {
   sourcing: ["ceo", "sales_manager"],
 };
 
+type FieldCasesQuickFilter = "all" | "needs_assignment" | "assigned_to_me";
+
 export function FieldCasesClient({
   cases,
   canUpdate,
@@ -66,8 +73,22 @@ export function FieldCasesClient({
   informants,
   mechanics,
   userRole,
+  currentUserId = null,
 }: FieldCasesClientProps) {
   const router = useRouter();
+  const [quickFilter, setQuickFilter] = useState<FieldCasesQuickFilter>("all");
+
+  const filteredCases = useMemo(() => {
+    if (quickFilter === "needs_assignment") {
+      return cases.filter((c) => !c.assigned_confidential_informant && !c.mechanic_id);
+    }
+    if (quickFilter === "assigned_to_me" && currentUserId) {
+      return cases.filter(
+        (c) => c.assigned_confidential_informant === currentUserId || c.mechanic_id === currentUserId,
+      );
+    }
+    return cases;
+  }, [cases, quickFilter, currentUserId]);
   const [editTarget, setEditTarget] = useState<FieldCaseRow | null>(null);
   const [state, setState] = useState<FieldCaseState>("assigned");
   const [expenses, setExpenses] = useState("");
@@ -176,6 +197,34 @@ export function FieldCasesClient({
         ) : null}
       </div>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <ToggleGroup
+          type="single"
+          size="sm"
+          variant="outline"
+          spacing={1}
+          aria-label="Field case quick filter"
+          value={quickFilter}
+          onValueChange={(value) => {
+            if (value) setQuickFilter(value as FieldCasesQuickFilter);
+          }}
+          data-testid="field-case-quick-filter"
+        >
+          <ToggleGroupItem value="all" aria-label="All field cases">
+            All
+          </ToggleGroupItem>
+          <ToggleGroupItem value="needs_assignment" aria-label="Needs assignment">
+            Needs assignment
+          </ToggleGroupItem>
+          <ToggleGroupItem value="assigned_to_me" aria-label="Assigned to me">
+            Assigned to me
+          </ToggleGroupItem>
+        </ToggleGroup>
+        <Badge variant="outline" className="font-normal text-muted-foreground">
+          {filteredCases.length} / {cases.length}
+        </Badge>
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle>All Cases</CardTitle>
@@ -183,9 +232,11 @@ export function FieldCasesClient({
         <CardContent className="pt-0">
           {cases.length === 0 ? (
             <p className="text-muted-foreground text-sm">No field cases assigned.</p>
+          ) : filteredCases.length === 0 ? (
+            <p className="text-muted-foreground text-sm">No field cases match this filter.</p>
           ) : (
             <FieldCasesTable
-              cases={cases}
+              cases={filteredCases}
               canUpdate={canUpdate}
               canAssignMechanic={canAssignMechanic}
               onAssignMechanic={(fieldCase) => {

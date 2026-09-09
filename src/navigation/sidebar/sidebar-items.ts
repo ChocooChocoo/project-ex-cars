@@ -256,12 +256,6 @@ export const sidebarItems: NavGroup[] = [
         url: "/announcements",
         icon: Megaphone,
       },
-      {
-        id: "supplier-messages",
-        title: "Suppliers",
-        url: "/supplier-messages",
-        icon: ScanFace,
-      },
     ],
   },
   {
@@ -410,6 +404,12 @@ export const sidebarItems: NavGroup[] = [
         title: "My Supplier Profile",
         url: "/overview",
         icon: ScanFace,
+      },
+      {
+        id: "supplier-messages",
+        title: "Messages",
+        url: "/supplier-messages",
+        icon: MessageSquare,
       },
     ],
   },

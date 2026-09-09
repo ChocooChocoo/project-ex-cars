@@ -1,138 +1,84 @@
-# Next.js Admin Template with TypeScript & Shadcn UI
+# Global Car Exchange (GCE)
 
-**Studio Admin** - Includes multiple dashboards, authentication layouts, customizable theme presets, and more.
+A role-based vehicle marketplace platform: a public-facing customer shopping experience, an isolated supplier portal, and a staff dashboard covering sales, inspections, inquiries, transactions, payroll, finance records, field operations, and management reporting. Built on Next.js 16 and Supabase.
 
-<img src="https://github.com/arhamkhnz/next-shadcn-admin-dashboard/blob/main/media/dashboard.png?version=5" alt="Dashboard Screenshot">
+## Portals
 
-Most admin templates I found, free or paid, felt cluttered, outdated, or too rigid. I built this as a cleaner alternative with features often missing in others, such as theme toggling and layout controls, while keeping the design modern, minimal, and flexible.
-
-> **View demo:** [studio admin](https://next-shadcn-admin-dashboard.vercel.app)
-
-> [!NOTE]
-> Looking for the Base UI version? Check out [next-shadcn-admin-dashboard-baseui](https://github.com/arhamkhnz/next-shadcn-admin-dashboard-baseui).
-
-> [!TIP]
-> I’m also working on Nuxt.js, Svelte, and React (Vite + TanStack Router) versions of this dashboard. They’ll be live soon.
-
-## Features
-
-- Built with Next.js 16, TypeScript, Tailwind CSS v4, and Shadcn UI  
-- Responsive and mobile-friendly  
-- Customizable theme presets (light/dark modes with color schemes like Tangerine, Brutalist, and more)  
-- Flexible layouts (collapsible sidebar, variable content widths)  
-- Authentication flows and screens  
-- Prebuilt dashboards (Default, CRM, Finance, Analytics, Productivity) plus legacy variants  
-- Role-Based Access Control (RBAC) with config-driven UI and multi-tenant support *(planned)*  
-
-> [!NOTE]
-> The default dashboard uses the **shadcn neutral** theme.  
-> It also includes additional color presets inspired by [Tweakcn](https://tweakcn.com):  
->
-> - Tangerine  
-> - Neo Brutalism  
-> - Soft Pop  
->
-> You can create more presets by following the same structure as the existing ones.
-
-> Looking for the **Next.js 15** version?  
-> Check out the [`archive/next15`](https://github.com/arhamkhnz/next-shadcn-admin-dashboard/tree/archive/next15) branch.  
-> This branch contains the setup prior to upgrading to Next 16 and the React Compiler.
-
-> Looking for the **Next.js 14 + Tailwind CSS v3** version?  
-> Check out the [`archive/next14-tailwindv3`](https://github.com/arhamkhnz/next-shadcn-admin-dashboard/tree/archive/next14-tailwindv3) branch.  
-> It has a different color theme and is not actively maintained, but I try to keep it updated with major changes.  
+| Portal | Route group | Who | Notes |
+|---|---|---|---|
+| Staff dashboard | `src/app/(staff)/` | CEO, Account Manager, Head Accountant, Confidential Informant, Marketing Specialist, Mechanic, Sales Manager, Head Security | Role-prefixed URLs (`/ceo/…`, `/mechanic/…`) are rewritten by middleware onto shared pages; access is filtered by `ROLE_NAV_ACCESS` in `src/lib/auth/roles.ts`, page-level role checks, action allowlists, and Supabase RLS |
+| Customer portal | `src/app/(customer)/` | Customer | Showroom, Find Your Car (recommendations), inquiries chat, transactions, favourites, sell-vehicle, request-a-car |
+| Supplier portal | `src/app/(supplier)/` | Supplier | Isolated overview (profile, documents, ID-verification progress) plus messages to the CEO; suppliers are staff-created and approved before first sign-in |
+| Public/auth | `src/app/(external)/`, `src/app/auth/`, `src/app/unauthorized/` | — | The app is login-first; four auth screens under `/auth/v1` and `/auth/v2`; `src/app/template/**` holds publicly reachable upstream-template design previews that are not part of the product surface |
 
 ## Tech Stack
 
-- **Framework**: Next.js 16 (App Router), TypeScript, Tailwind CSS v4  
-- **UI Components**: Shadcn UI  
-- **Validation**: Zod  
-- **Forms & State Management**: React Hook Form, Zustand  
-- **Tables & Data Handling**: TanStack Table  
-- **Tooling & DX**: Biome, Husky  
-
-## Screens
-
-### Available
-- Default Dashboard  
-- CRM Dashboard  
-- Finance Dashboard  
-- Analytics Dashboard  
-- Productivity Dashboard  
-- E-commerce Dashboard  
-- Academy Dashboard  
-- Logistics Dashboard  
-- Infrastructure Dashboard  
-- Chat Page  
-- Email Page  
-- Users Management  
-- Roles Management  
-- Kanban Board  
-- Invoice Page  
-- Calendar Page  
-- Authentication (4 screens)  
-- Legacy: Default v1, CRM v1, Finance v1, Analytics v1
-
-### Planned
-I’ve added all the planned screens. Feel free to open an issue for requesting something specific.
-
-## Colocation File System Architecture
-
-This project follows a **colocation-based architecture** each feature keeps its own pages, components, and logic inside its route folder.  
-Shared UI, hooks, and configuration live at the top level, making the codebase modular, scalable, and easier to maintain as the app grows.
-
-For a full breakdown of the structure with examples, see the [Next Colocation Template](https://github.com/arhamkhnz/next-colocation-template).
+- **Framework:** Next.js 16 (App Router), React 19 + React Compiler, TypeScript strict
+- **UI:** Tailwind CSS v4 (CSS-first), shadcn/ui
+- **Backend:** Supabase (Postgres with row-level security, Auth, Storage, Realtime) — 43 SQL migrations in `supabase/migrations/`
+- **State/forms:** Zustand, React Hook Form, Zod validation
+- **Tooling:** Biome, Husky, Vitest, Playwright
 
 ## Getting Started
 
-You can run this project locally, or deploy it instantly with Vercel.
+### Prerequisites
 
-### Deploy with Vercel
+- Node.js and npm
+- A Supabase project (local or hosted) and the [Supabase CLI](https://supabase.com/docs/guides/cli) linked for migration pushes
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Farhamkhnz%2Fnext-shadcn-admin-dashboard)
+### Setup
 
-_Deploy your own copy with one click._
-
-### Run locally
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/arhamkhnz/next-shadcn-admin-dashboard.git
-   ```
-   
-2. **Navigate into the project**
-   ```bash
-    cd next-shadcn-admin-dashboard
-   ```
-   
-3. **Install dependencies**
-   ```bash
-    npm install
-   ```
-
-4. **Start the development server**
-   ```bash
-   npm run dev
-   ```
-
-Your app will be running at [http://localhost:3000](http://localhost:3000)
-
-### Formatting and Linting
-
-Format, lint, and organize imports
 ```bash
-npx @biomejs/biome check --write
+npm install
 ```
-> For more information on available rules, fixes, and CLI options, refer to the [Biome documentation](https://biomejs.dev/).
 
----
+Configure `.env.local` (git-ignored) with:
 
-> [!IMPORTANT]  
-> This project is updated frequently. If you’re working from a fork or an older clone, pull the latest changes before syncing. Some updates may include breaking changes.
+```
+NEXT_PUBLIC_SUPABASE_URL=<your project url>
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<your anon/publishable key>
+# Optional, server-only: needed for admin seeding and some e2e specs
+SUPABASE_SERVICE_ROLE_KEY=<service role key>
+# Shared password for the seeded test accounts — quote it so trailing '#' is not treated as a comment
+SEED_USER_PASSWORD="..."
+```
 
----
+Apply migrations and seed:
 
-Contributions are welcome. Feel free to open issues, feature requests, or start a discussion.
+```bash
+npx supabase db push            # or: npx supabase migration up
+npm run seed:data               # demo data via scripts/seed-data.cjs
+node --env-file=.env.local scripts/seed-users.cjs   # creates the ten test accounts (Admin API)
+npx supabase db query --linked --file scripts/seed-roles.sql   # assigns their roles
+```
 
+Run the app:
 
-**Happy Vibe Coding!**
+```bash
+npm run dev    # http://localhost:3000
+```
+
+The ten seeded accounts (one per role, e.g. `ceo@gce.local`, `supplier@gce.local`) and their landing pages are catalogued in [`docs/ANALYZER/AUDIT - GLOBAL CAR EXCHANGE/13 - USER ACCOUNTS.md`](docs/ANALYZER/AUDIT%20-%20GLOBAL%20CAR%20EXCHANGE/13%20-%20USER%20ACCOUNTS.md).
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `npm run dev` | Dev server on :3000 |
+| `npm run build` / `npm run start` | Production build / serve |
+| `npm run lint` / `npm run format` | Biome lint / format |
+| `npm run check` / `npm run check:fix` | Biome check, report only / autofix (run before committing) |
+| `npm run generate:presets` | Regenerate theme preset metadata in `src/lib/preferences/theme.ts` |
+| `npm run seed:data` | Seed demo data |
+| `npm run test` / `npm run test:watch` | Vitest unit tests (jsdom), single run / watch mode |
+| `npm run test:e2e` | Playwright e2e (requires dev server on :3000) |
+
+Husky pre-commit runs `generate:presets`, stages `src/lib/preferences/theme.ts`, then `lint-staged` (Biome autofix). A Biome error blocks the commit — run `npm run check:fix` first.
+
+## Architecture in one paragraph
+
+Routes live directly under `src/app` in four groups (`(staff)`, `(customer)`, `(supplier)`, `(external)`) plus top-level `auth/`, `template/`, and `unauthorized/`; each route folder owns its `_components/`. Middleware resolves the signed-in role from the `gce-role` cookie and rewrites role-prefixed URLs onto shared internal pages (`src/lib/routing/paths.ts`). Authorization is layered: navigation filtering (`ROLE_NAV_ACCESS`), per-page role checks, per-action allowlists in `src/app/**/actions.ts`, and Postgres RLS across all public tables. Data access runs through server actions and `src/server/server-actions.ts`; `src/data/` contains mock/demo content only.
+
+## Documentation
+
+Start with [`docs/ANALYZER/00 - START HERE.md`](docs/ANALYZER/00%20-%20START%20HERE.md). The audit set compares the built system against the specification — in particular [13 - USER ACCOUNTS](docs/ANALYZER/AUDIT%20-%20GLOBAL%20CAR%20EXCHANGE/13%20-%20USER%20ACCOUNTS.md) (accounts, portals, access matrix), [15 - SYSTEM STATUS](docs/ANALYZER/AUDIT%20-%20GLOBAL%20CAR%20EXCHANGE/15%20-%20SYSTEM%20STATUS.md) (responsibility-by-responsibility implementation map), and [18 - MODULE PURPOSE OWNERSHIP AND ACTIONS](docs/ANALYZER/AUDIT%20-%20GLOBAL%20CAR%20EXCHANGE/18%20-%20MODULE%20PURPOSE%20OWNERSHIP%20AND%20ACTIONS.md) (plain-language module/action guide).

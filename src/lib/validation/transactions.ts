@@ -25,7 +25,42 @@ export const sellVehicleSchema = z.object({
   model: z.string().min(1, "Model is required.").max(100),
   year: z.coerce.number().int().min(1900).max(2100),
   mileage: z.coerce.number().int().min(0, "Mileage cannot be negative."),
-  condition: z.string().min(1).max(50),
+  condition: z
+    .enum(["excellent", "good", "fair", "needs_repair"])
+    .transform((val) => {
+      const map: Record<string, string> = {
+        excellent: "Excellent",
+        good: "Good",
+        fair: "Fair",
+        needs_repair: "Needs Repair",
+      };
+      return map[val] ?? val;
+    })
+    .or(
+      z
+        .string()
+        .trim()
+        .toLowerCase()
+        .transform((val) => {
+          const map: Record<string, string> = {
+            excellent: "Excellent",
+            good: "Good",
+            fair: "Fair",
+            needs_repair: "Needs Repair",
+            "needs repair": "Needs Repair",
+            needsrepair: "Needs Repair",
+          };
+          if (map[val]) return map[val];
+          const cleaned = val.trim();
+          if (!cleaned) return cleaned;
+          return cleaned
+            .split(/[\s_]+/)
+            .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+            .join(" ");
+        })
+        .pipe(z.string().min(1, "Condition is required.").max(50)),
+    ),
+  condition_detail: z.string().max(1000).optional().or(z.literal("")),
   offered_amount: z.coerce.number().min(0, "Amount cannot be negative."),
   description: z.string().max(2000).optional().or(z.literal("")),
 });

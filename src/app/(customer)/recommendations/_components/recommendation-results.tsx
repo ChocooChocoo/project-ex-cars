@@ -18,6 +18,7 @@ import {
   type ScoreExplanation,
   type VehicleInput,
 } from "@/lib/recommendations/engine";
+import { plainHintByLabel } from "@/lib/recommendations/plain-hints";
 import { cn, formatCurrency } from "@/lib/utils";
 
 import { getRecommendationRun, submitFeedback } from "../actions";
@@ -43,14 +44,6 @@ interface ResultWithExplanation {
   explanation: ScoreExplanation;
   vehicle: VehicleDisplay;
 }
-
-const plainHintByLabel: Record<string, string> = {
-  "Budget Fit": "Price close to your budget scores higher.",
-  Condition: "Better condition and inspection score rank higher.",
-  "Fuel Efficiency": "Electric and hybrid score higher for fuel savings.",
-  "Demand / Resale": "More favourites and inquiries means higher demand.",
-  Mileage: "Lower mileage scores higher.",
-};
 
 const medalColors = ["bg-amber-500", "bg-slate-400", "bg-amber-700"];
 

@@ -287,6 +287,8 @@ flowchart LR
 
 **Reading this:** Employee time and request records feed the Account Manager's payroll preparation. The Account Manager enters salaries and deductions and prepares the report. The source separately gives payslip review work to the Head Accountant and report approval work to the chief executive. It then gives salary-payment responsibility to the Head Accountant. The order between those approvals is not stated, so the middle of the handoff remains [Q-13](00%20-%20START%20HERE.md#open-questions). — **GCE USERS LEVELS MODULES.md**, headings “CEO — 2. Approval and Rejection of Reports”, “Account Manager — 4. Attendance, Leave, and Overtime Records; Payroll Processing; and Reconditioning Disbursements”, and “Head Accountant — 2. Payroll” through “Head Accountant — 6. Attendance Monitoring”
 
+*Implementation note (10 August 2026):* payroll-run amounts come from checked attendance entries only; approved leave/overtime requests are not yet priced into runs.
+
 ## 10. Installment escalation and vehicle recovery
 
 ```mermaid

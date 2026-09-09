@@ -185,7 +185,7 @@ The same order appears as a picture in [06 - DIAGRAMS](06%20-%20DIAGRAMS.md#7-th
 
 **Why it comes here:** Staff and management summaries need the customer, vehicle, conversation, and transaction records created earlier.
 
-**Implementation plan:** [14 - PHASE 6 IMPLEMENTATION PLAN](../../tasks/10.md) contains the source-code audit, mandatory Phase 1–5 recovery gates, stakeholder decision gates, Phase 6 workstreams, and verification evidence required before this phase can be marked started or finished. Phase 6 implementation remains unstarted.
+**Implementation plan:** [14 - PHASE 6 IMPLEMENTATION PLAN](../../tasks/10.md) contains the source-code audit, mandatory Phase 1–5 recovery gates, stakeholder decision gates, Phase 6 workstreams, and verification evidence required before this phase can be marked started or finished. *Update (10 August 2026):* Phase 6 application work was implemented on 8 August 2026 against the provisional decision-gate answers (see [08 - ROADMAP TRACKER](08%20-%20ROADMAP%20TRACKER.md), Phase 6). RLS verification against a live database reset and stakeholder sign-offs on the remaining gates are still outstanding — see [15 - SYSTEM STATUS](../AUDIT%20-%20GLOBAL%20CAR%20EXCHANGE/15%20-%20SYSTEM%20STATUS.md) and [17 - ROADMAP AUDIT](../AUDIT%20-%20GLOBAL%20CAR%20EXCHANGE/17%20-%20ROADMAP%20AUDIT.md).
 
 **What gets built:**
 

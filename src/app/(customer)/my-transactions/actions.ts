@@ -177,6 +177,20 @@ export async function submitSellVehicle(formData: FormData) {
   }
 
   const data = parsed.data;
+  let finalCondition: string = data.condition;
+  const rawDetail = (data as unknown as { condition_detail?: string }).condition_detail;
+  if (finalCondition.toLowerCase() === "other" && rawDetail?.trim()) {
+    const trimmed = rawDetail.trim();
+    const map: Record<string, string> = {
+      excellent: "Excellent",
+      good: "Good",
+      fair: "Fair",
+      needs_repair: "Needs Repair",
+      "needs repair": "Needs Repair",
+    };
+    const lower = trimmed.toLowerCase();
+    finalCondition = map[lower] ?? trimmed;
+  }
 
   // Create the sell transaction.
   const { data: transaction, error } = await supabase
@@ -211,7 +225,7 @@ export async function submitSellVehicle(formData: FormData) {
     model: data.model,
     year: data.year,
     mileage: data.mileage,
-    condition: data.condition,
+    condition: finalCondition,
     description: data.description ?? null,
     listing_state: "draft",
   });

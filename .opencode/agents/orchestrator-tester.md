@@ -5,13 +5,14 @@ temperature: 0
 steps: 10
 color: error
 permission:
+  "*": allow
   edit: deny
   read: allow
   glob: allow
   grep: allow
-  webfetch: deny
   bash:
     "*": deny
+    "git *": allow
     "npm test*": allow
     "npm run test*": allow
     "pnpm test*": allow
@@ -27,6 +28,12 @@ permission:
     "dotnet test*": allow
     "mvn test*": allow
     "make test*": allow
+    "git commit *": ask
+    "git push *": ask
+    "git reset --hard*": deny
+    "git clean *": deny
+  task: deny
+  external_directory: ask
 ---
 
 You are the Tester. You run tests and report. You never fix anything.

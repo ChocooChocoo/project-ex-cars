@@ -34,6 +34,7 @@ export type SupplierOverviewResult = {
   supplier: SupplierOverviewSupplier | null;
   documents: SupplierOverviewDocument[];
   verification: SupplierVerificationProgress;
+  unreadCount: number;
 };
 
 const REQUIRED_PRIMARY_IDS = 2 as const;
@@ -50,6 +51,7 @@ export async function fetchOwnSupplierOverview(accountId: string): Promise<Suppl
     supplier: null,
     documents: [],
     verification: { verifiedPrimary: 0, required: REQUIRED_PRIMARY_IDS, total: 0 },
+    unreadCount: 0,
   };
   if (!accountId) return empty;
 
@@ -77,10 +79,23 @@ export async function fetchOwnSupplierOverview(accountId: string): Promise<Suppl
   const docs = (documents ?? []) as SupplierOverviewDocument[];
   const verifiedPrimary = docs.filter((d) => d.is_primary_id && d.verification_state === "verified").length;
 
+  let unreadCount = 0;
+  try {
+    const { count } = await supabase
+      .from("supplier_messages")
+      .select("id", { count: "exact", head: true })
+      .eq("supplier_id", supplier.id)
+      .is("read_at", null);
+    unreadCount = count ?? 0;
+  } catch {
+    unreadCount = 0;
+  }
+
   return {
     supplier: supplier as SupplierOverviewSupplier,
     documents: docs,
     verification: { verifiedPrimary, required: REQUIRED_PRIMARY_IDS, total: docs.length },
+    unreadCount,
   };
 }
 
@@ -94,6 +109,7 @@ export async function getOwnSupplierOverview(): Promise<SupplierOverviewResult> 
       supplier: null,
       documents: [],
       verification: { verifiedPrimary: 0, required: REQUIRED_PRIMARY_IDS, total: 0 },
+      unreadCount: 0,
     };
   }
   return fetchOwnSupplierOverview(user.id);

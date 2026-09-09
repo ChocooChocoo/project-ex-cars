@@ -1,3 +1,5 @@
+> **Scope note (added 10 August 2026):** This document specifies the eight operational staff roles only. The platform additionally defines two end-user levels — Customer and Supplier — whose portals, pages, navigation, and onboarding requirements are specified in [13 - USER ACCOUNTS](../ANALYZER/AUDIT%20-%20GLOBAL%20CAR%20EXCHANGE/13%20-%20USER%20ACCOUNTS.md). The original staff-role content below is preserved unaltered.
+
 # CEO
 
 ## 1. Executive Dashboard Overview

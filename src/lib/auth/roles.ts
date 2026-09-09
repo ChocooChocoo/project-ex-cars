@@ -170,17 +170,7 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
     "cust-sell-vehicle",
     "cust-favourites",
   ]),
-  supplier: new Set([
-    "cust-showroom",
-    "cust-recommendations",
-    "cust-inquiries",
-    "cust-transactions",
-    "cust-request-car",
-    "cust-sell-vehicle",
-    "cust-favourites",
-    "supplier-messages",
-    "supplier-overview",
-  ]),
+  supplier: new Set(["supplier-overview", "supplier-messages"]),
   ceo: new Set([
     "default",
     "finance",

@@ -1,5 +1,7 @@
 # Planning Templates
 
+*Note: numbered-file links inside these templates are generic per-run targets; they resolve only when a planning run creates those files.*
+
 Templates for `07 - DEVELOPMENT ROADMAP`, `08 - ROADMAP TRACKER`, and `09 - TASK TRACKER`, plus the two things that bind them together: the status legend and the ID scheme.
 
 ---

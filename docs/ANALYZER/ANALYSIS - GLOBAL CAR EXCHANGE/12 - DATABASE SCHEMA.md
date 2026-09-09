@@ -4,18 +4,19 @@
 
 ## Status and purpose
 
-This is a **Supabase database schema** — part planned, part built. Phases 1 through 5 are implemented. Phases 6 and 7 remain planned. No database, source code, migration, or running system was supplied at the time of writing; the plan was drawn from the project documents and then implemented phase by phase.
+This is a **Supabase database schema** — now substantially built. Phases 1 through 6 are implemented (one planned table remains); Phase 7 is still planned, and nine additional tables shipped beyond the original plan. The plan was drawn from the project documents and then implemented phase by phase.
 
-**Last checked:** 8 August 2026
+**Last checked:** 10 August 2026 *(reconciled against all migrations in `supabase/migrations/`; previous check 8 August 2026)*
 
 ### Table build status
 
 | Status | How many |
 |---:|---|
-| ✅ Built | 36 |
-| ⭕ Not yet built | 16 |
-| ❓ Conditional | 1 |
-| **Total** | **53** |
+| ✅ Built | 51 |
+| 🔵 Built beyond this plan | 9 |
+| ⭕ Not yet built | 1 |
+| **Planned-catalogue rows** | **52** *(the previous header claimed 53 with 36 built — both counts were wrong; the rows themselves are the truth)* |
+| **Live tables today** | **60 (58 public + 2 private)** |
 
 | Table | Section | Phase | Status |
 |---|---|---|---|
@@ -56,21 +57,51 @@ This is a **Supabase database schema** — part planned, part built. Phases 1 th
 | `collection_actions` | D | 5 | ✅ |
 | `field_cases` | D | 5 | ✅ |
 | `payment_terms` | D | 5 | ✅ |
-| `financial_entries` | E | 6 | ⭕ |
-| `disbursement_requests` | E | 6 | ⭕ |
-| `disbursement_events` | E | 6 | ⭕ |
-| `reports` | E | 6 | ⭕ |
-| `attendance_entries` | F | 6 | ⭕ |
-| `employee_requests` | F | 6 | ⭕ |
-| `private.staff_compensation` | F | 6 | ⭕ |
-| `payroll_runs` | F | 6 | ⭕ |
-| `payslips` | F | 6 | ⭕ |
-| `payslip_items` | F | 6 | ⭕ |
-| `payroll_approvals` | F | 6 | ⭕ |
-| `announcements` | G | 6 | ⭕ |
-| `security_duty_checks` | G | 6 | ⭕ |
-| `supplier_messages` | C | 6 | ❓ |
+| `financial_entries` | E | 6 | ✅ |
+| `disbursement_requests` | E | 6 | ✅ |
+| `disbursement_events` | E | 6 | ✅ |
+| `reports` | E | 6 | ✅ |
+| `attendance_entries` | F | 6 | ✅ |
+| `employee_requests` | F | 6 | ✅ |
+| `private.staff_compensation` | F | 6 | ✅ |
+| `payroll_runs` | F | 6 | ✅ |
+| `payslips` | F | 6 | ✅ |
+| `payslip_items` | F | 6 | ✅ |
+| `payroll_approvals` | F | 6 | ✅ |
+| `announcements` | G | 6 | ✅ |
+| `security_duty_checks` | G | 6 | ✅ |
+| `supplier_messages` | C | 6 | ✅ |
 | `acceptance_feedback` | A | 7 | ⭕ |
+
+### Tables built beyond the plan
+
+These shipped with later phases/work orders and are part of the live schema even though they were not in the original catalogue above:
+
+| Table | Introduced by | Purpose |
+|---|---|---|
+| `performance_reviews` | 00015 | Staff performance review records feeding the dashboard/reviews UI |
+| `roadmap_items` | 00020 | Product-roadmap entries managed from the staff roadmap module (CEO-only writes) |
+| `notifications` | 00025 | Per-account notices (installment due dates and similar) shown on dashboards |
+| `employee_work_schedules` | task18 (`20260809134551`) | Employee schedule baseline plus attendance schedule columns and late-minutes tracking |
+| `rbac_access_areas` / `rbac_actions` / `rbac_roles` / `rbac_permissions` / `rbac_role_permissions` | task30 (`20260818052430`, seed `20260818062528`) | System-permissions catalog powering the Roles management screen (~120 seeded permissions) — see the section below |
+
+### Migration inventory note
+
+There are **43 migration files**, numbered `00001`–`00039` **with no `00008`** (the number was skipped), plus five timestamped task migrations (`20260809134551_task18_staff_attendance.sql`, `20260818001141_content_marketing_read.sql`, `20260818032217_task28_security_data.sql`, `20260818052430_task30_rbac_management.sql`, `20260818062528_task30_seed_system_permissions.sql`). Two naming schemes coexist, and the low-numbered `00038`/`00039` files were authored *after* the dated ones — a lexicographic runner would order them earlier. This is currently harmless (the dated content-fix migration explicitly repairs `00038`), but future migrations should standardise on one scheme.
+
+### System-permissions catalog (task30)
+
+Migrations `20260818052430_task30_rbac_management.sql` (schema) and `20260818062528_task30_seed_system_permissions.sql` (seed) add a five-table permissions catalogue:
+
+| Table | Holds |
+|---|---|
+| `rbac_access_areas` | The 29 navigable/access areas (staff modules plus customer areas) |
+| `rbac_actions` | The 30 action verbs (read, create, approve, verify, publish, …) |
+| `rbac_roles` | One row per manageable role — CHECK-limited to the eight non-customer/non-CEO roles |
+| `rbac_permissions` | Generated `area.action` permission keys |
+| `rbac_role_permissions` | The bootstrap role→permission matrix (~120 seeded definitions) |
+
+RLS is enabled on all five with CEO-or-Account-Manager policies; the `update_rbac_role` RPC writes the matrix. **Scope caveat (stated in the migrations' own headers):** this catalogue configures the *management UI only* — actual authorization continues to come from route guards, server-action allowlists, RPC checks, and table RLS. Before task30, no analyzer/audit document described this subsystem; doc 15's RBAC row cites only migration `00038`.
 
 ### Status legend
 
@@ -123,6 +154,8 @@ The plan uses 52 custom tables. This is the smallest arrangement here that keeps
 | `supplier_documents` — *from the revision list* | One valid ID or supporting file supplied by a supplier | Supplier, document kind, whether it counts as one of the two primary valid IDs, private Storage path, verification state, verifier, and verification date | [R-27](07%20-%20DEVELOPMENT%20ROADMAP.md#phase-1-one-shared-foundation) |
 
 The role values are `customer`, `supplier`, `ceo`, `account_manager`, `head_accountant`, `confidential_informant`, `marketing_specialist`, `mechanic`, `sales_manager`, and `head_security`. `supplier` was previously left out because the role document did not contain it. The newer revision list restores supplier registration, so the value returns. — **REVISIONS LISTS.md**, heading “5. Supplier Registration and Account Management”
+
+*Implementation detail (verified 10 August 2026):* roles are stored as `TEXT` guarded by a CHECK constraint on `private.user_roles` (migration `00001`) — there is no PostgreSQL ENUM type. A trigger defaults every new profile to the `customer` role; runtime role changes go through the CEO/Account-Manager-gated `assign_user_role` RPC (secured in `00013`).
 
 No role value is proposed for the Procurement Team, because the revision list names that group without saying which of the existing roles it is. `suppliers.created_by` records whoever actually created the account until [Q-19](00%20-%20START%20HERE.md#open-questions) is answered. A supplier row may exist before any sign-in account exists, which is why the account identifier is optional; the account must stay unusable until the approval decision is recorded.
 
@@ -266,24 +299,48 @@ The five documented customer-ranking factors can be stored now. No separate mana
 
 Every movement between transaction states goes into `transaction_status_history`. Approval and money-related movements also go into `audit_events`. A status must never be changed merely to hide or overwrite an earlier decision.
 
-## Proposed Storage buckets
+## Storage buckets
 
-| Bucket | Files | Public? | Access rule |
-|---|---|---|---|
-| `showroom-media` | Approved public vehicle photographs and 360-degree media | Yes | Anyone may read; only authorised Marketing or vehicle staff may publish or replace files |
-| `vehicle-work` | Inspection, repair, acquisition, delivery, and recovery evidence | No | Only staff assigned to the vehicle or case and authorised managers may read |
-| `customer-documents` | Valid IDs and proof of billing | No | The customer may upload and read their own files; authorised Sales and finance staff may review |
-| `transaction-documents` | Invoices, receipts, sale documents, and payment paperwork | No | The customer may read their own permitted documents; authorised Sales and finance staff may manage |
-| `staff-documents` | Payslip and payroll report files | No | The employee may read their own payslip; authorised payroll staff may prepare; required approvers may review |
-| `business-evidence` | Reports and Head Security before-and-after photographs | No | Access follows the related report or security-duty record |
-| `chat-attachments` | Photographs and files sent inside conversations | No | Only the people in that conversation and the staff assigned to it may read; reviewers may read a reported file |
-| `supplier-documents` | Supplier valid IDs and invitation evidence | No | The supplier may upload and read their own files; the staff who create and approve supplier accounts may review |
+Build status reconciled against migrations on 10 August 2026 — **five buckets exist**; the rest of this plan's buckets were never created:
+
+| Bucket | Files | Public? | Status | Access rule |
+|---|---|---|---|---|
+| `showroom-media` | Approved public vehicle photographs and 360-degree media | Yes | ✅ Built (00023) | Anyone may read; authorised Marketing staff publish or replace files |
+| `transaction-documents` | Invoices, receipts, sale documents, and payment paperwork | No | ✅ Built (00011) | Customer reads own permitted documents; authorised Sales/finance staff manage |
+| `security-evidence` | Head Security before-and-after duty photographs | No | ✅ Built (00021) | Owner-scoped `${userId}/` folders; owner reads own folder, CEO reads all *(INSERT policy is folder-scoped, not role-scoped — role enforcement lives in the server action)* |
+| `report-evidence` | Report attachments | No | ✅ Built (00021) | Access follows the related report record |
+| `supplier-documents` | Supplier valid IDs and invitation evidence | No | ✅ Built (00024) | Staff upload/review; supplier reads own after approval |
+| `vehicle-work` | Inspection, repair, acquisition, delivery, recovery evidence | No | ⭕ Never created | Plan only — no migration or policy exists |
+| `staff-documents` | Payslip and payroll report files | No | ⭕ Never created | Plan only |
+| `business-evidence` | *(superseded name)* | — | ⬜ Replaced | Split at build time into `security-evidence` + `report-evidence` |
+| `chat-attachments` | Conversation photographs and files | No | ⭕ Never created | Attachments are stored as message rows instead |
+
+> ⚠️ **Deployment gap:** the application uploads customer identification to a bucket named **`customer-documents`** (`src/app/auth/actions.ts`, `uploadCustomerDocument`), but **no migration creates that bucket or any of its storage policies**. Until a migration (or manual project setup) provisions it with private policies, this path depends on environment setup outside the repository. Recorded 10 August 2026 as a known risk; documentation-only entry — provisioning is an operations decision.
 
 Private files use short-lived signed links. Storage paths are arranged by the owning record's identifier rather than a person's typed name. Upload policies must check both the bucket and the related row; a guessed path must not grant access. — [Supabase Storage access control](https://supabase.com/docs/guides/storage/security/access-control)
 
 ## Role-by-role row access plan
 
 These are proposed policy outcomes, not SQL. “Own” means the row points to the signed-in account. “Assigned” means the row names that staff member or a case assigned to them.
+
+> **Post-build corrections (10 August 2026).** The subsections below preserve the original plan; the shipped posture differs after migrations `00035`, `00038`, and `00039`:
+> - **Vehicles/media/content/inspections writes:** Marketing Specialist owns listing/content mutations and media; Mechanic owns inspections/repairs/checklist results/part replacements/checklist nodes; vehicle-document items → Sales Manager; DELETE on vehicles → CEO. The CEO no longer holds blanket write rights.
+> - **Roadmap items:** writes are CEO-only.
+> - **Inquiries:** UPDATE narrowed to assigned managers self-claiming *unassigned* inquiries, with a WITH CHECK requiring the claim to end assigned-to-self; the CEO's inquiry-update right was removed (superseding `00030`).
+> - **Viewing arrangements:** readable by assigned staff rather than broadly.
+> - **Field cases:** Head Security was removed; Head Accountant gained SELECT + INSERT (recovery path). Worker INSERT/UPDATE for Confidential Informant/Mechanic is still missing — see the limitations note below.
+> - **Price proposals:** Head Accountant gained SELECT (`00039`) for read-only pending-proposal visibility; approval remains CEO-only.
+> - **Customer-side DML fixes:** `00029`–`00036` restored customer INSERT paths for vehicle requests, sell details, purchase-details upsert, transaction cancellation, draft vehicles, and customers reading their own vehicles.
+> - **Column evolution folded in:** payslip payment status/`paid_at`/`paid_by` (`00022`); statutory-deduction columns `sss_/pagibig_/philhealth_contribution_cents` and `tin_number` on `private.staff_compensation` (`00026`); `transaction_documents.id_type` (`00027`); `disbursement_requests.purchase_transaction_id` (`00025`); field-case `expenses_cents`/`accepted_at`/`notes` (`00018`); attendance schedule columns and `late_minutes` (task18).
+>
+> The living status map for these rules is [15 - SYSTEM STATUS](../AUDIT%20-%20GLOBAL%20CAR%20EXCHANGE/15%20-%20SYSTEM%20STATUS.md).
+
+### Known RLS/action mismatches (documented limitations)
+
+Two places where the action layer permits what the database currently denies:
+
+1. **Payroll/payslips:** `payroll_runs` FOR ALL and `payslips` FOR ALL policies grant writes only to ceo/account_manager (`00017_phase6_payroll.sql`). The documented Head-Accountant steps — review sequence 1, finalise, mark-payslip-paid — pass their server-action guards but fail RLS until a head_accountant UPDATE-policy migration lands.
+2. **Field cases:** `field_cases` INSERT/UPDATE grants cover ceo + sales_manager (all operations) plus head_accountant INSERT (`00011_phase5_schema.sql`, extended by `00038`). Confidential Informant case creation and CI/Mechanic updates pass action allowlists but are denied by RLS until worker policies land.
 
 ### Customer
 
@@ -390,17 +447,15 @@ These are proposed policy outcomes, not SQL. “Own” means the row points to t
 
 Indexes must follow real page and report searches. This list is the starting set, not permission to index every column. Supabase's PostgreSQL guidance recommends indexes for foreign keys and frequent filters while avoiding unused indexes that slow changes. — [Supabase index guidance](https://supabase.com/docs/guides/database/postgres/indexes)
 
-## Realtime plan
+## Realtime plan → what shipped
 
-Realtime is proposed only for:
+The original proposal listed inquiry messages, read-state changes, assignment/handoff events, transaction status events, and announcement publications. The implemented `supabase_realtime` publication (as of 10 August 2026) covers:
 
-- new inquiry messages;
-- message read-state changes;
-- an inquiry assignment or handoff relevant to the connected customer or assigned staff member;
-- a transaction status change relevant to its customer or assigned staff member; and
-- an employee announcement becoming published.
+- `inquiry_messages` and `message_attachments` (inquiry chat, migration `00014`);
+- `supplier_messages` (CEO↔supplier thread, migration `00019`);
+- `attendance_entries`, `employee_work_schedules`, and `employee_requests` (attendance suite, task18).
 
-Payroll amounts, customer identification, financial entries, security photographs, and general audit events are not broadcast. Their pages read protected current records when opened. Realtime channel access must follow the same ownership and assignment rules as the underlying rows. — [Supabase Realtime](https://supabase.com/docs/guides/realtime)
+Transaction status events and announcement publications were **deliberately left out** of the publication; those screens read protected current records when opened. Payroll amounts, customer identification, financial entries, security photographs, and general audit events are likewise not broadcast. Realtime channel access must follow the same ownership and assignment rules as the underlying rows. — [Supabase Realtime](https://supabase.com/docs/guides/realtime)
 
 ## How the open questions affect implementation
 

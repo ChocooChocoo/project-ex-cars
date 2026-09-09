@@ -9,8 +9,7 @@
     }
   },
   "permission": {
-    "edit": "ask",
-    "bash": "ask",
-    "playwright_*": "deny"
+    "*": "allow",
+    "external_directory": "ask"
   }
 }
