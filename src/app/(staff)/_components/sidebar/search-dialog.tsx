@@ -17,10 +17,12 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command";
+import { type GceRole, ROLE_NAV_ACCESS } from "@/lib/auth/roles";
+import { rolePath } from "@/lib/routing/paths";
 import type { NavMainItem } from "@/navigation/sidebar/sidebar-items";
 import { sidebarItems } from "@/navigation/sidebar/sidebar-items";
 
-type SearchItem = {
+export type SearchItem = {
   id: string;
   group: string;
   label: string;
@@ -36,38 +38,55 @@ function getSubItemGroup(groupLabel: string | undefined, itemTitle: string) {
   return sidebarGroupLabels.has(itemTitle) ? (groupLabel ?? "Other") : itemTitle;
 }
 
-const searchItems: SearchItem[] = sidebarItems.flatMap((group) =>
-  group.items.flatMap((item) => {
-    if (item.subItems) {
-      return item.subItems.map((sub) => ({
-        id: sub.id,
-        group: getSubItemGroup(group.label, item.title),
-        label: sub.title,
-        url: sub.url,
-        icon: item.icon,
-        disabled: sub.disabled,
-        newTab: sub.newTab,
-      }));
-    }
-    return [
-      {
-        id: item.id,
-        group: group.label ?? "Other",
-        label: item.title,
-        url: item.url,
-        icon: item.icon,
-        disabled: item.disabled,
-        newTab: item.newTab,
-      },
-    ];
-  }),
-);
+export function getSearchItems(userRole?: string | null): SearchItem[] {
+  // Strict by default: a missing or unknown role gets no results rather than the
+  // full catalog, so role-restricted routes (e.g. the Account Manager-only
+  // Create Walk-In deep link) can never leak through search.
+  const access: Set<string> | "all" = userRole
+    ? (ROLE_NAV_ACCESS[userRole as GceRole] ?? new Set<string>())
+    : new Set<string>();
+
+  if (access !== "all" && access.size === 0) return [];
+
+  return sidebarItems.flatMap((group) =>
+    group.items.flatMap((item) => {
+      if (item.subItems) {
+        const subItems =
+          access === "all" || access.has(item.id)
+            ? item.subItems
+            : item.subItems.filter((subItem) => access.has(subItem.id));
+
+        return subItems.map((sub) => ({
+          id: sub.id,
+          group: getSubItemGroup(group.label, item.title),
+          label: sub.title,
+          url: userRole ? rolePath(userRole, sub.url) : sub.url,
+          icon: item.icon,
+          disabled: sub.disabled,
+          newTab: sub.newTab,
+        }));
+      }
+
+      if (access !== "all" && !access.has(item.id)) return [];
+
+      return [
+        {
+          id: item.id,
+          group: group.label ?? "Other",
+          label: item.title,
+          url: userRole ? rolePath(userRole, item.url) : item.url,
+          icon: item.icon,
+          disabled: item.disabled,
+          newTab: item.newTab,
+        },
+      ];
+    }),
+  );
+}
 
 function getAvailableItems(items: SearchItem[]) {
   return items.filter((item) => !item.disabled && !item.url.includes("coming-soon"));
 }
-
-const recommendations = getAvailableItems(searchItems);
 
 function groupBy(items: SearchItem[]) {
   const groups = [...new Set(items.map((item) => item.group))];
@@ -77,10 +96,12 @@ function groupBy(items: SearchItem[]) {
   }));
 }
 
-export function SearchDialog() {
+export function SearchDialog({ userRole }: { readonly userRole?: string | null }) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
   const router = useRouter();
+  const searchItems = React.useMemo(() => getSearchItems(userRole), [userRole]);
+  const recommendations = React.useMemo(() => getAvailableItems(searchItems), [searchItems]);
 
   React.useEffect(() => {
     const down = (e: KeyboardEvent) => {

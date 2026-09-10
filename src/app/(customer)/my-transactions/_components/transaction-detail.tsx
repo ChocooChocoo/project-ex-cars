@@ -10,6 +10,7 @@ import { Calendar, FileText, ShieldCheck, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import { cancelTransaction, saveBuyDetails, uploadPurchaseDocument } from "@/app/(customer)/my-transactions/actions";
+import { TransactionImagePreview } from "@/components/transaction-image-preview";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,6 +32,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import type { ProfileAutoFill } from "@/lib/autofill";
+import { transactionDocumentLabel } from "@/lib/transactions/document-media";
 import {
   arrangementKindLabel,
   paymentMethodLabel,
@@ -580,20 +582,42 @@ export function TransactionDetail({
               <p className="text-muted-foreground text-xs">No documents uploaded.</p>
             ) : (
               <div className="flex flex-col gap-2">
-                {documents.map((doc) => (
-                  <div key={doc.id as string} className="flex items-center gap-2 text-sm">
-                    <FileText className="size-4 text-muted-foreground" />
-                    <span className="capitalize">{(doc.document_kind as string).replace(/_/g, " ")}</span>
-                    {doc.id_type ? (
-                      <span className="text-muted-foreground text-xs capitalize">
-                        {(doc.id_type as string).replace(/_/g, " ")}
-                      </span>
-                    ) : null}
-                    <Badge variant="secondary" className="ml-auto text-xs">
-                      {doc.verification_state as string}
-                    </Badge>
-                  </div>
-                ))}
+                {documents.map((doc) => {
+                  const label = transactionDocumentLabel(doc.document_kind);
+                  const signedUrl = typeof doc.signed_url === "string" ? doc.signed_url : null;
+                  return (
+                    <div key={doc.id as string} className="flex flex-col gap-2 rounded-lg border p-3 text-sm">
+                      <div className="flex items-center gap-2">
+                        <FileText className="size-4 text-muted-foreground" />
+                        <span>{label}</span>
+                        {doc.id_type ? (
+                          <span className="text-muted-foreground text-xs capitalize">
+                            {(doc.id_type as string).replace(/_/g, " ")}
+                          </span>
+                        ) : null}
+                        <Badge variant="secondary" className="ml-auto text-xs">
+                          {doc.verification_state as string}
+                        </Badge>
+                      </div>
+                      {signedUrl ? (
+                        doc.is_image === true ? (
+                          <TransactionImagePreview src={signedUrl} alt={`${label} preview`} />
+                        ) : (
+                          <a
+                            href={signedUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-primary text-xs underline"
+                          >
+                            Open {label.toLowerCase()}
+                          </a>
+                        )
+                      ) : (
+                        <p className="text-muted-foreground text-xs">Preview unavailable</p>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </section>

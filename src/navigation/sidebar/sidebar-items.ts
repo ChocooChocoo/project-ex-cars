@@ -209,6 +209,12 @@ export const sidebarItems: NavGroup[] = [
         icon: Users,
       },
       {
+        id: "create-walk-in",
+        title: "Create Walk-In",
+        url: "/staff-records?createWalkIn=1",
+        icon: Users,
+      },
+      {
         id: "attendance",
         title: "Attendance",
         url: "/attendance",

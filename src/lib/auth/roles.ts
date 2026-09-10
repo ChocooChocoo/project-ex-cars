@@ -210,6 +210,7 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
     "roadmap",
     "suppliers",
     "staff-records",
+    "create-walk-in",
     "attendance",
     "employee-requests",
     "payroll",

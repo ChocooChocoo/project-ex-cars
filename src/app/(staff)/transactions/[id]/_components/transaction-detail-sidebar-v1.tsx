@@ -6,6 +6,7 @@ import { useRef, useState } from "react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
+import { TransactionImagePreview } from "@/components/transaction-image-preview";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ACCEPTED_ID_TYPES, ID_LABELS } from "@/lib/auth/roles";
+import { transactionDocumentLabel } from "@/lib/transactions/document-media";
 import { arrangementKindLabel, TRANSACTION_STATE_LABELS } from "@/lib/transactions/labels";
 import type { TransactionState } from "@/lib/transactions/state-machine";
 import { formatCurrency } from "@/lib/utils";
@@ -71,7 +73,7 @@ export function TransactionDetailSidebarV1({
   readonly sellDetails: Record<string, unknown> | undefined;
   // Optional Task 32 props: page.tsx (orchestrator-owned) may pass these later.
   // Falls back to deriving sell photos from `documents` (document_kind === "sell_photo").
-  readonly sellPhotos?: { id: string; storage_path: string | null }[];
+  readonly sellPhotos?: { id: string; is_image: boolean; signed_url: string | null }[];
   // Raw condition_items from sell_details (array of checklist node ids or names).
   readonly conditionItems?: unknown;
   // Optional id → display-name map for inspection_checklist_nodes.
@@ -111,6 +113,9 @@ export function TransactionDetailSidebarV1({
   // Processing actions (upload / record payment / record paperwork) are hidden for CEO;
   // docs and payments stay visible read-only. Head Accountant verifies documents.
   const isCeo = userRole === "ceo";
+  // Only the Head Accountant may verify purchase documents, so the buttons match
+  // the server-side guard in verifyTransactionDocument.
+  const isHeadAccountant = userRole === "head_accountant";
 
   const docSellPhotos = documents.filter((doc) => String(doc.document_kind) === "sell_photo");
   const photos =
@@ -118,7 +123,8 @@ export function TransactionDetailSidebarV1({
       ? sellPhotos
       : docSellPhotos.map((doc) => ({
           id: String(doc.id),
-          storage_path: typeof doc.storage_path === "string" ? doc.storage_path : null,
+          is_image: doc.is_image === true,
+          signed_url: typeof doc.signed_url === "string" ? doc.signed_url : null,
         }));
   const rawConditionItems =
     conditionItems ?? (sellDetails ? (sellDetails as Record<string, unknown>).condition_items : undefined);
@@ -294,39 +300,55 @@ export function TransactionDetailSidebarV1({
             {documents.length === 0 ? (
               <p className="text-muted-foreground text-xs">No documents.</p>
             ) : (
-              documents.map((doc) => (
-                <div key={doc.id as string} className="space-y-1 rounded-md border bg-background/70 px-2.5 py-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium text-sm capitalize">
-                      {(doc.document_kind as string).replace(/_/g, " ")}
-                    </span>
-                    <Badge variant="secondary" className="h-5 px-2 text-[11px]">
-                      {doc.verification_state as string}
-                    </Badge>
-                  </div>
-                  {doc.id_type ? (
-                    <p className="text-muted-foreground text-xs capitalize">
-                      {(doc.id_type as string).replace(/_/g, " ")}
-                    </p>
-                  ) : null}
-                  {doc.verification_state === "pending" &&
-                  ["sales_manager", "account_manager", "head_accountant"].includes(userRole) ? (
-                    <div className="flex gap-1.5">
-                      <Button size="sm" className="h-6 px-2 text-xs" onClick={() => onVerifyDocument(doc.id as string)}>
-                        Verify
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-6 px-2 text-xs"
-                        onClick={() => onRejectDocument(doc.id as string)}
-                      >
-                        Reject
-                      </Button>
+              documents.map((doc) => {
+                const label = transactionDocumentLabel(doc.document_kind);
+                const signedUrl = typeof doc.signed_url === "string" ? doc.signed_url : null;
+                return (
+                  <div key={doc.id as string} className="space-y-2 rounded-md border bg-background/70 px-2.5 py-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-sm">{label}</span>
+                      <Badge variant="secondary" className="h-5 px-2 text-[11px]">
+                        {doc.verification_state as string}
+                      </Badge>
                     </div>
-                  ) : null}
-                </div>
-              ))
+                    {doc.id_type ? (
+                      <p className="text-muted-foreground text-xs capitalize">
+                        {(doc.id_type as string).replace(/_/g, " ")}
+                      </p>
+                    ) : null}
+                    {signedUrl ? (
+                      doc.is_image === true ? (
+                        <TransactionImagePreview src={signedUrl} alt={`${label} document preview`} />
+                      ) : (
+                        <a href={signedUrl} target="_blank" rel="noreferrer" className="text-primary text-xs underline">
+                          Open {label.toLowerCase()}
+                        </a>
+                      )
+                    ) : (
+                      <p className="text-muted-foreground text-xs">Preview unavailable</p>
+                    )}
+                    {doc.verification_state === "pending" && isHeadAccountant ? (
+                      <div className="flex gap-1.5">
+                        <Button
+                          size="sm"
+                          className="h-6 px-2 text-xs"
+                          onClick={() => onVerifyDocument(doc.id as string)}
+                        >
+                          Verify
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 px-2 text-xs"
+                          onClick={() => onRejectDocument(doc.id as string)}
+                        >
+                          Reject
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })
             )}
           </div>
 
@@ -341,11 +363,12 @@ export function TransactionDetailSidebarV1({
               {photos.length > 0 ? (
                 <ul className="flex flex-col gap-1">
                   {photos.map((photo) => (
-                    <li
-                      key={photo.id}
-                      className="rounded-md border bg-background/70 px-2.5 py-1.5 text-muted-foreground text-xs"
-                    >
-                      Photo attached (private storage{photo.storage_path ? `: ${photo.storage_path}` : ""}).
+                    <li key={photo.id} className="rounded-md border bg-background/70 p-2.5">
+                      {photo.signed_url && photo.is_image ? (
+                        <TransactionImagePreview src={photo.signed_url} alt="Sell vehicle attachment" />
+                      ) : (
+                        <p className="text-muted-foreground text-xs">Preview unavailable</p>
+                      )}
                     </li>
                   ))}
                 </ul>

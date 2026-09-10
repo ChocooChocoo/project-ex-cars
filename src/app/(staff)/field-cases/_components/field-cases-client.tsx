@@ -17,9 +17,19 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { TRANSACTION_STATE_LABELS, transactionKindLabel } from "@/lib/transactions/labels";
+import type { TransactionKind, TransactionState } from "@/lib/transactions/state-machine";
 import { FIELD_CASE_STATES, type FieldCaseState } from "@/lib/validation/phase6";
 
 import { FieldCasesTable } from "./field-cases-table";
@@ -38,18 +48,49 @@ export interface FieldCaseRow {
   mechanic_id?: string | null;
 }
 
-export interface TransactionLookup {
-  id: string;
-  transaction_kind: string;
-  current_state: string;
-}
-
 export interface VehicleLookup {
   id: string;
   make: string;
   model: string;
   year: number;
   stock_code: string;
+}
+
+export interface TransactionLookup {
+  id: string;
+  transaction_kind: string;
+  current_state: string;
+  profiles?: { full_name: string | null } | null;
+  vehicles?: VehicleLookup | null;
+}
+
+function transactionKindDisplayLabel(kind: string): string {
+  return transactionKindLabel(kind as TransactionKind) || kind;
+}
+
+function vehicleDisplayLabel(vehicle: VehicleLookup): string {
+  return `${vehicle.year} ${vehicle.make} ${vehicle.model} · ${vehicle.stock_code}`;
+}
+
+function transactionStateDisplayLabel(state: string): string {
+  return TRANSACTION_STATE_LABELS[state as TransactionState] || state;
+}
+
+function transactionDisplayLabel(transaction: TransactionLookup): string {
+  const customerName = transaction.profiles?.full_name?.trim();
+  const vehicleLabel = transaction.vehicles ? vehicleDisplayLabel(transaction.vehicles) : null;
+  const details = [customerName, vehicleLabel].filter(Boolean);
+
+  return [
+    transactionKindDisplayLabel(transaction.transaction_kind),
+    transactionStateDisplayLabel(transaction.current_state),
+    ...details,
+    transaction.id.slice(0, 8),
+  ].join(" · ");
+}
+
+function isSelectPortalTarget(target: EventTarget | null): boolean {
+  return target instanceof Element && Boolean(target.closest('[data-slot="select-content"]'));
 }
 
 interface FieldCasesClientProps {
@@ -134,6 +175,37 @@ export function FieldCasesClient({
     (option) => option.value,
   );
   const workersForKind = createWorkerKind === "mechanic" ? mechanics : informants;
+  const sortedVehicles = useMemo(
+    () =>
+      [...vehicles].sort((a, b) =>
+        vehicleDisplayLabel(a).localeCompare(vehicleDisplayLabel(b), undefined, { numeric: true, sensitivity: "base" }),
+      ),
+    [vehicles],
+  );
+  const transactionGroups = useMemo(() => {
+    const groups = new Map<string, TransactionLookup[]>();
+    for (const transaction of transactions) {
+      const group = groups.get(transaction.transaction_kind) ?? [];
+      group.push(transaction);
+      groups.set(transaction.transaction_kind, group);
+    }
+
+    return [...groups.entries()]
+      .sort(([kindA], [kindB]) =>
+        transactionKindDisplayLabel(kindA).localeCompare(transactionKindDisplayLabel(kindB), undefined, {
+          sensitivity: "base",
+        }),
+      )
+      .map(([kind, group]) => ({
+        kind,
+        transactions: group.sort((a, b) =>
+          transactionDisplayLabel(a).localeCompare(transactionDisplayLabel(b), undefined, {
+            numeric: true,
+            sensitivity: "base",
+          }),
+        ),
+      }));
+  }, [transactions]);
 
   async function submitUpdate() {
     if (!editTarget) return;
@@ -343,7 +415,12 @@ export function FieldCasesClient({
       </Dialog>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent>
+        <DialogContent
+          className="max-h-[90vh] overflow-y-auto sm:max-w-lg"
+          onInteractOutside={(event) => {
+            if (isSelectPortalTarget(event.target)) event.preventDefault();
+          }}
+        >
           <DialogHeader>
             <DialogTitle>Create Field Case</DialogTitle>
           </DialogHeader>
@@ -358,7 +435,7 @@ export function FieldCasesClient({
                   setCreateWorkerKind("informant");
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger aria-label="Select case kind">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -387,15 +464,21 @@ export function FieldCasesClient({
                 <SelectTrigger aria-label="Select transaction">
                   <SelectValue placeholder="Select transaction" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-64">
                   <SelectGroup>
-                    <SelectItem value="none">None</SelectItem>
-                    {transactions.map((transaction) => (
-                      <SelectItem key={transaction.id} value={transaction.id}>
-                        {transaction.transaction_kind} · {transaction.current_state} · {transaction.id.slice(0, 8)}
-                      </SelectItem>
-                    ))}
+                    <SelectLabel>None</SelectLabel>
+                    <SelectItem value="none">No transaction</SelectItem>
                   </SelectGroup>
+                  {transactionGroups.map((group) => (
+                    <SelectGroup key={group.kind}>
+                      <SelectLabel>{transactionKindDisplayLabel(group.kind)}</SelectLabel>
+                      {group.transactions.map((transaction) => (
+                        <SelectItem key={transaction.id} value={transaction.id}>
+                          {transactionDisplayLabel(transaction)}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  ))}
                 </SelectContent>
               </Select>
             </Field>
@@ -408,12 +491,16 @@ export function FieldCasesClient({
                 <SelectTrigger aria-label="Select vehicle">
                   <SelectValue placeholder="Select vehicle" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-64">
                   <SelectGroup>
-                    <SelectItem value="none">None</SelectItem>
-                    {vehicles.map((vehicle) => (
+                    <SelectLabel>None</SelectLabel>
+                    <SelectItem value="none">No vehicle</SelectItem>
+                  </SelectGroup>
+                  <SelectGroup>
+                    <SelectLabel>Vehicles</SelectLabel>
+                    {sortedVehicles.map((vehicle) => (
                       <SelectItem key={vehicle.id} value={vehicle.id}>
-                        {vehicle.year} {vehicle.make} {vehicle.model} · {vehicle.stock_code}
+                        {vehicleDisplayLabel(vehicle)}
                       </SelectItem>
                     ))}
                   </SelectGroup>
@@ -448,7 +535,7 @@ export function FieldCasesClient({
                     setCreateWorker("");
                   }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger aria-label="Select worker type">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
