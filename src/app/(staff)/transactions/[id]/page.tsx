@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { getCurrentRole } from "@/app/auth/actions";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { withSignedTransactionDocumentUrls } from "@/lib/transactions/document-media";
 
 import { StaffTransactionDetail } from "./_components/staff-transaction-detail";
 
@@ -31,6 +32,11 @@ export default async function TransactionDetailPage({ params }: { readonly param
     .select("*")
     .eq("transaction_id", id)
     .order("upload_date", { ascending: false });
+
+  const signedDocuments = await withSignedTransactionDocumentUrls(
+    supabase.storage,
+    (documents as Record<string, unknown>[] | null) ?? [],
+  );
 
   const { data: payments } = await supabase
     .from("payment_records")
@@ -88,7 +94,7 @@ export default async function TransactionDetailPage({ params }: { readonly param
       <StaffTransactionDetail
         transaction={transaction as Record<string, unknown>}
         history={(history as Record<string, unknown>[]) ?? []}
-        documents={(documents as Record<string, unknown>[]) ?? []}
+        documents={signedDocuments}
         payments={(payments as Record<string, unknown>[]) ?? []}
         installmentAccount={installmentAccount as Record<string, unknown> | null}
         paymentTerms={paymentTerms as Record<string, unknown> | null}

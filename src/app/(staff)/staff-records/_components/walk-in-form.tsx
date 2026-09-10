@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { toast } from "sonner";
 
@@ -18,12 +18,20 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-export function WalkInForm() {
-  const [open, setOpen] = useState(false);
+export function WalkInForm({ initialOpen = false }: { readonly initialOpen?: boolean }) {
+  const [open, setOpen] = useState(initialOpen);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [creating, setCreating] = useState(false);
+
+  // The deep link (/staff-records?createWalkIn=1) can be followed from an
+  // already-mounted page, where client state survives the soft navigation and
+  // the initializer above never re-runs. Sync the controlled dialog so the
+  // Account Manager's Create Walk-In entry always opens it.
+  useEffect(() => {
+    if (initialOpen) setOpen(true);
+  }, [initialOpen]);
 
   async function handleCreate() {
     if (!fullName.trim() || !email.trim() || !password.trim()) {
@@ -41,7 +49,6 @@ export function WalkInForm() {
       fullName: fullName.trim(),
       email: email.trim(),
       password: password.trim(),
-      createdBy: "staff",
     });
 
     setCreating(false);

@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 
+import { z } from "zod";
+
 import { getCurrentRole } from "@/app/auth/actions";
 import { logAuditEvent } from "@/lib/auth/audit";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -16,6 +18,21 @@ import {
   reviewSellSchema,
   transitionSchema,
 } from "@/lib/validation/transactions";
+
+const PAPERWORK_DOCUMENT_KINDS = [
+  "valid_id",
+  "proof_of_billing",
+  "invoice",
+  "receipt",
+  "sale_document",
+  "sale_certificate",
+  "payment_receipt",
+] as const;
+const paperworkSchema = z.object({
+  transaction_id: z.string().uuid(),
+  document_kind: z.enum(PAPERWORK_DOCUMENT_KINDS),
+  id_type: z.string().optional().or(z.literal("")),
+});
 
 export async function transitionTransaction(formData: FormData) {
   const supabase = await createServerSupabaseClient();
@@ -346,18 +363,44 @@ export async function recordPaperwork(formData: FormData) {
   if (!user.user) return { error: "Not authenticated" };
 
   const role = await getCurrentRole();
-  if (!role || !["ceo", "sales_manager", "account_manager"].includes(role)) {
+  if (!role || !["ceo", "sales_manager", "account_manager", "head_accountant"].includes(role)) {
     return { error: "Not authorized" };
   }
 
-  const transactionId = formData.get("transaction_id") as string;
-  const documentKind = formData.get("document_kind") as string;
-  const idType = (formData.get("id_type") as string) || null;
-  const file = formData.get("file") as File | null;
+  const parsed = paperworkSchema.safeParse({
+    transaction_id: formData.get("transaction_id"),
+    document_kind: formData.get("document_kind"),
+    id_type: formData.get("id_type") ?? "",
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid paperwork." };
+  }
+
+  const transactionId = parsed.data.transaction_id;
+  const documentKind = parsed.data.document_kind;
+  const idType = parsed.data.id_type || null;
+  const fileEntry = formData.get("file");
+  if (fileEntry !== null && !(fileEntry instanceof File)) {
+    return { error: "Select a valid file to upload." };
+  }
+  const file = fileEntry instanceof File ? fileEntry : null;
+  const requiresVerification = documentKind === "valid_id" || documentKind === "proof_of_billing";
+  if (requiresVerification && !file?.size) return { error: "Select a file to upload." };
+  if (file && file.size === 0) return { error: "Select a file to upload." };
+
+  const { data: transaction } = await supabase
+    .from("transactions")
+    .select("id, transaction_kind")
+    .eq("id", transactionId)
+    .maybeSingle();
+  if (!transaction) return { error: "Transaction not found." };
+  if (requiresVerification && transaction.transaction_kind !== "buy") {
+    return { error: "Valid IDs and proof of billing can only be recorded for purchases." };
+  }
 
   let storagePath: string | null = null;
 
-  if (file && file.size > 0) {
+  if (file) {
     const fileExt = file.name.split(".").pop() ?? "bin";
     storagePath = `${transactionId}/${documentKind}-${Date.now()}.${fileExt}`;
     const { error: uploadError } = await supabase.storage.from("transaction-documents").upload(storagePath, file);
@@ -366,8 +409,6 @@ export async function recordPaperwork(formData: FormData) {
 
   // Valid IDs and proof of billing require staff verification before the sale is
   // considered document-complete; other paperwork uploads are trusted.
-  const requiresVerification = documentKind === "valid_id" || documentKind === "proof_of_billing";
-
   const { error } = await supabase.from("transaction_documents").insert({
     transaction_id: transactionId,
     document_kind: documentKind,
@@ -377,7 +418,12 @@ export async function recordPaperwork(formData: FormData) {
     verification_state: requiresVerification ? "pending" : "verified",
   });
 
-  if (error) return { error: error.message };
+  // The metadata row is what makes the upload visible, so drop the object again
+  // when the insert fails instead of leaving an orphaned private file behind.
+  if (error) {
+    if (storagePath) await supabase.storage.from("transaction-documents").remove([storagePath]);
+    return { error: error.message };
+  }
 
   revalidatePath(`/dashboard/transactions/${transactionId}`);
   revalidatePath("/dashboard/transactions/paperwork");
@@ -390,9 +436,10 @@ export async function verifyTransactionDocument(formData: FormData) {
   if (!user.user) return { error: "Not authenticated" };
 
   const role = await getCurrentRole();
-  // Task 32: Head Accountant verifies purchase-document correctness as part of
-  // the Sales → HA verify → CEO approve flow.
-  if (!role || !["ceo", "sales_manager", "account_manager", "head_accountant"].includes(role)) {
+  // Task 32/33: the Head Accountant verifies purchase-document correctness, then
+  // the CEO approves.  Verification is deliberately not open to the approving or
+  // processing roles, so nobody can verify the paperwork for their own approval.
+  if (role !== "head_accountant") {
     return { error: "Not authorized to verify purchase documents" };
   }
 
@@ -420,28 +467,42 @@ export async function verifyTransactionDocument(formData: FormData) {
     .eq("id", documentId);
   if (error) return { error: error.message };
 
-  if (decision === "verified" && doc.document_kind === "valid_id") {
-    const { count } = await admin
-      .from("transaction_documents")
-      .select("id", { count: "exact", head: true })
-      .eq("transaction_id", doc.transaction_id)
-      .eq("document_kind", "valid_id")
-      .eq("verification_state", "verified");
-    if ((count ?? 0) >= 2) {
-      const { data: proof } = await admin
+  if (["valid_id", "proof_of_billing"].includes(doc.document_kind)) {
+    const [{ count: verifiedIds }, { count: verifiedBilling }, { count: rejectedPrerequisites }] = await Promise.all([
+      admin
         .from("transaction_documents")
-        .select("id")
+        .select("id", { count: "exact", head: true })
+        .eq("transaction_id", doc.transaction_id)
+        .eq("document_kind", "valid_id")
+        .eq("verification_state", "verified"),
+      admin
+        .from("transaction_documents")
+        .select("id", { count: "exact", head: true })
         .eq("transaction_id", doc.transaction_id)
         .eq("document_kind", "proof_of_billing")
-        .eq("verification_state", "verified")
-        .maybeSingle();
-      if (proof) {
-        await admin
-          .from("purchase_details")
-          .update({ document_check_state: "verified", checked_by: user.user.id, checked_at: new Date().toISOString() })
-          .eq("transaction_id", doc.transaction_id);
-      }
-    }
+        .eq("verification_state", "verified"),
+      admin
+        .from("transaction_documents")
+        .select("id", { count: "exact", head: true })
+        .eq("transaction_id", doc.transaction_id)
+        .in("document_kind", ["valid_id", "proof_of_billing"])
+        .eq("verification_state", "rejected"),
+    ]);
+    const documentCheckState =
+      (verifiedIds ?? 0) >= 2 && (verifiedBilling ?? 0) >= 1
+        ? "verified"
+        : (rejectedPrerequisites ?? 0) > 0
+          ? "rejected"
+          : "pending";
+
+    await admin
+      .from("purchase_details")
+      .update({
+        document_check_state: documentCheckState,
+        checked_by: user.user.id,
+        checked_at: new Date().toISOString(),
+      })
+      .eq("transaction_id", doc.transaction_id);
   }
 
   await logAuditEvent({
@@ -472,13 +533,13 @@ export async function reviewSellTransaction(formData: FormData) {
   const { data: tx } = await supabase
     .from("transactions")
     .select("current_state")
-    .eq("id", parsed.transaction_id)
+    .eq("id", parsed.data.transaction_id)
     .single();
 
   if (!tx) return { error: "Transaction not found" };
 
   const fromState = tx.current_state as TransactionState;
-  const newState = parsed.decision === "accepted" ? "approved" : "rejected";
+  const newState = parsed.data.decision === "accepted" ? "approved" : "rejected";
 
   if (!canTransition(fromState, newState as TransactionState, role)) {
     return { error: "This action is not allowed for your role." };
@@ -489,13 +550,13 @@ export async function reviewSellTransaction(formData: FormData) {
   const { error } = await admin
     .from("sell_details")
     .update({
-      valuation_amount: parsed.valuation_amount,
-      decision: parsed.decision,
-      review_notes: parsed.review_notes ?? null,
+      valuation_amount: parsed.data.valuation_amount,
+      decision: parsed.data.decision,
+      review_notes: parsed.data.review_notes ?? null,
       decision_maker_id: user.user.id,
       decision_date: new Date().toISOString(),
     })
-    .eq("transaction_id", parsed.transaction_id);
+    .eq("transaction_id", parsed.data.transaction_id);
 
   if (error) return { error: error.message };
 
@@ -505,25 +566,25 @@ export async function reviewSellTransaction(formData: FormData) {
       current_state: newState,
       completed_at: newState === "rejected" ? new Date().toISOString() : null,
     })
-    .eq("id", parsed.transaction_id);
+    .eq("id", parsed.data.transaction_id);
 
   await admin.from("transaction_status_history").insert({
-    transaction_id: parsed.transaction_id,
+    transaction_id: parsed.data.transaction_id,
     from_state: fromState,
     to_state: newState,
     actor_id: user.user.id,
-    reason: `Sell review: ${parsed.decision}. ${parsed.review_notes ?? ""}`,
+    reason: `Sell review: ${parsed.data.decision}. ${parsed.data.review_notes ?? ""}`,
   });
 
   await logAuditEvent({
     actorId: user.user.id,
-    action: parsed.decision === "accepted" ? "sell_accepted" : "sell_rejected",
+    action: parsed.data.decision === "accepted" ? "sell_accepted" : "sell_rejected",
     recordKind: "transactions",
-    recordId: parsed.transaction_id,
-    summary: `Sell transaction ${parsed.transaction_id} ${parsed.decision}`,
+    recordId: parsed.data.transaction_id,
+    summary: `Sell transaction ${parsed.data.transaction_id} ${parsed.data.decision}`,
   });
 
-  revalidatePath(`/dashboard/transactions/${parsed.transaction_id}`);
+  revalidatePath(`/dashboard/transactions/${parsed.data.transaction_id}`);
   revalidatePath("/dashboard/transactions");
   return { success: true };
 }

@@ -135,6 +135,16 @@ export async function saveBuyDetails(formData: FormData) {
     notes,
   } = parsed.data;
 
+  const { data: transaction } = await supabase
+    .from("transactions")
+    .select("id, customer_id, transaction_kind")
+    .eq("id", transactionId)
+    .maybeSingle();
+  if (!transaction || transaction.customer_id !== user.user.id) return { error: "Transaction not found." };
+  if (transaction.transaction_kind !== "buy") {
+    return { error: "Purchase details can only be saved for buy transactions." };
+  }
+
   const { error } = await supabase.from("purchase_details").upsert(
     {
       transaction_id: transactionId,

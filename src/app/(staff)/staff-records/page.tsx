@@ -10,8 +10,13 @@ import { type PerformanceReviewRow, PerformanceReviews } from "./_components/per
 import { StaffRecordsTable, type StaffTableRow } from "./_components/staff-table/table";
 import { WalkInForm } from "./_components/walk-in-form";
 
-export default async function StaffRecordsPage() {
+export default async function StaffRecordsPage({
+  searchParams,
+}: {
+  readonly searchParams: Promise<{ createWalkIn?: string }>;
+}) {
   const role = await getCurrentRole();
+  const { createWalkIn } = await searchParams;
   if (!role || !["ceo", "account_manager", "sales_manager"].includes(role)) {
     redirect("/unauthorized");
   }
@@ -73,9 +78,7 @@ export default async function StaffRecordsPage() {
           <h1 className="font-semibold text-3xl tracking-tight">Staff Records</h1>
           <p className="text-muted-foreground text-sm">Manage employee and customer accounts.</p>
         </div>
-        {/* Task 32 WS-D: page stays viewable to ceo/account_manager/sales_manager,
-            but WalkInForm renders its button only for account_manager/ceo. */}
-        {role === "account_manager" || role === "ceo" ? <WalkInForm /> : null}
+        {role === "account_manager" ? <WalkInForm initialOpen={createWalkIn === "1"} /> : null}
       </div>
 
       <TabsList className="w-fit gap-1">

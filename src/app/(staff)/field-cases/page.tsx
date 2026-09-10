@@ -34,7 +34,7 @@ export default async function FieldCasesPage() {
     supabase.rpc("get_all_user_roles"),
     supabase
       .from("transactions")
-      .select("id, transaction_kind, current_state")
+      .select("id, transaction_kind, current_state, profiles(full_name), vehicles(id, make, model, year, stock_code)")
       .order("opened_at", { ascending: false })
       .limit(100),
     supabase
@@ -66,7 +66,17 @@ export default async function FieldCasesPage() {
       mechanics={(mechanics as { id: string; full_name: string | null }[]) ?? []}
       userRole={role}
       currentUserId={currentUserId}
-      transactions={(transactions as { id: string; transaction_kind: string; current_state: string }[] | null) ?? []}
+      transactions={
+        (transactions as
+          | {
+              id: string;
+              transaction_kind: string;
+              current_state: string;
+              profiles: { full_name: string | null } | null;
+              vehicles: { id: string; make: string; model: string; year: number; stock_code: string } | null;
+            }[]
+          | null) ?? []
+      }
       vehicles={
         (vehicles as { id: string; make: string; model: string; year: number; stock_code: string }[] | null) ?? []
       }

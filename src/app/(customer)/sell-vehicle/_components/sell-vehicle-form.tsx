@@ -151,36 +151,36 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field data-invalid={!!errors.make}>
-              <FieldLabel>Make *</FieldLabel>
-              <Input {...register("make")} placeholder="e.g. Honda" />
+              <FieldLabel htmlFor="sell-make">Make *</FieldLabel>
+              <Input id="sell-make" {...register("make")} placeholder="e.g. Honda" />
               {errors.make && <FieldError errors={[{ message: errors.make.message }]} />}
             </Field>
             <Field data-invalid={!!errors.model}>
-              <FieldLabel>Model *</FieldLabel>
-              <Input {...register("model")} placeholder="e.g. Civic" />
+              <FieldLabel htmlFor="sell-model">Model *</FieldLabel>
+              <Input id="sell-model" {...register("model")} placeholder="e.g. Civic" />
               {errors.model && <FieldError errors={[{ message: errors.model.message }]} />}
             </Field>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field data-invalid={!!errors.year}>
-              <FieldLabel>Year *</FieldLabel>
-              <Input {...register("year")} type="number" placeholder="2020" />
+              <FieldLabel htmlFor="sell-year">Year *</FieldLabel>
+              <Input id="sell-year" {...register("year")} type="number" placeholder="2020" />
               {errors.year && <FieldError errors={[{ message: errors.year.message }]} />}
             </Field>
             <Field data-invalid={!!errors.mileage}>
-              <FieldLabel>Mileage (km) *</FieldLabel>
-              <Input {...register("mileage")} type="number" placeholder="50000" />
+              <FieldLabel htmlFor="sell-mileage">Mileage (km) *</FieldLabel>
+              <Input id="sell-mileage" {...register("mileage")} type="number" placeholder="50000" />
               {errors.mileage && <FieldError errors={[{ message: errors.mileage.message }]} />}
             </Field>
           </div>
           <Field data-invalid={!!errors.condition}>
-            <FieldLabel>Condition *</FieldLabel>
+            <FieldLabel htmlFor="sell-condition">Condition *</FieldLabel>
             <Controller
               control={control}
               name="condition"
               render={({ field }) => (
                 <Select value={field.value ?? ""} onValueChange={field.onChange}>
-                  <SelectTrigger>
+                  <SelectTrigger id="sell-condition">
                     <SelectValue placeholder="Select condition" />
                   </SelectTrigger>
                   <SelectContent>
@@ -197,24 +197,41 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
           </Field>
           {showDetail ? (
             <Field data-invalid={!!errors.condition_detail}>
-              <FieldLabel>Condition Detail</FieldLabel>
-              <Textarea {...register("condition_detail")} placeholder="Describe the condition..." rows={3} />
+              <FieldLabel htmlFor="sell-condition-detail">Condition Detail</FieldLabel>
+              <Textarea
+                id="sell-condition-detail"
+                {...register("condition_detail")}
+                placeholder="Describe the condition..."
+                rows={3}
+              />
               {errors.condition_detail && <FieldError errors={[{ message: errors.condition_detail.message }]} />}
             </Field>
           ) : null}
           <Field data-invalid={!!errors.offered_amount}>
-            <FieldLabel>Offered Amount (₱) *</FieldLabel>
-            <Input {...register("offered_amount")} type="number" min="0" placeholder="Your asking price" />
+            <FieldLabel htmlFor="sell-offered-amount">Offered Amount (₱) *</FieldLabel>
+            <Input
+              id="sell-offered-amount"
+              {...register("offered_amount")}
+              type="number"
+              min="0"
+              placeholder="Your asking price"
+            />
             {errors.offered_amount && <FieldError errors={[{ message: errors.offered_amount.message }]} />}
           </Field>
           <Field>
-            <FieldLabel>Description</FieldLabel>
-            <Textarea {...register("description")} placeholder="Any additional details about the vehicle..." rows={3} />
+            <FieldLabel htmlFor="sell-description">Description</FieldLabel>
+            <Textarea
+              id="sell-description"
+              {...register("description")}
+              placeholder="Any additional details about the vehicle..."
+              rows={3}
+            />
           </Field>
           <Field data-invalid={!!photoError}>
-            <FieldLabel>Vehicle Photos * (1–6 photos, JPEG/PNG/WebP, max 5MB each)</FieldLabel>
+            <FieldLabel htmlFor="sell-photos">Vehicle Photos * (1–6 photos, JPEG/PNG/WebP, max 5MB each)</FieldLabel>
             <Input
               ref={photoInputRef}
+              id="sell-photos"
               type="file"
               accept="image/jpeg,image/png,image/webp"
               multiple

@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 
 import { z } from "zod";
 
+import { authorizeAction } from "@/lib/auth/action-guard";
 import { ACCEPTED_ID_TYPES } from "@/lib/auth/roles";
 import { landingPath } from "@/lib/routing/paths";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -178,55 +179,63 @@ interface CreateWalkInAccountParams {
   email: string;
   password: string;
   fullName: string;
-  createdBy: string;
 }
 
-export async function createWalkInAccount(params: CreateWalkInAccountParams) {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user) return { error: "Not authenticated" };
+const createWalkInAccountSchema = z.object({
+  fullName: fullNameSchema,
+  email: emailSchema,
+  password: passwordSchema,
+});
 
-  const { data: roles } = await supabase.rpc("get_user_roles");
-  // Task 32 WS-D: walk-in ACCOUNT creation is an Account Manager responsibility.
-  // The CEO keeps an emergency override (ceo retained); sales_manager is removed
-  // so they can still create walk-in TRANSACTIONS but not walk-in ACCOUNTS.
-  const hasRole = (roles as { role: string }[] | undefined)?.some((r) => ["ceo", "account_manager"].includes(r.role));
-  if (!hasRole) return { error: "Not authorized" };
+export async function createWalkInAccount(params: CreateWalkInAccountParams) {
+  const parsed = createWalkInAccountSchema.safeParse(params);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid walk-in account details." };
+
+  const authorization = await authorizeAction(["account_manager"]);
+  if (!authorization.ok) return { error: authorization.message };
+  const actorId = authorization.data.userId;
 
   const admin = createAdminClient();
-
   const { data, error } = await admin.auth.admin.createUser({
-    email: params.email,
-    password: params.password,
+    email: parsed.data.email,
+    password: parsed.data.password,
     email_confirm: true,
-    user_metadata: { full_name: params.fullName },
+    user_metadata: { full_name: parsed.data.fullName },
   });
 
-  if (error) {
-    return { error: error.message };
+  if (error) return { error: error.message };
+  const createdUserId = data.user?.id;
+  if (!createdUserId) return { error: "The walk-in account could not be created." };
+
+  const profileResult = await admin
+    .from("profiles")
+    .update({
+      full_name: parsed.data.fullName,
+      account_state: "active",
+      created_by: actorId,
+      activated_at: new Date().toISOString(),
+    })
+    .eq("id", createdUserId);
+
+  if (profileResult.error) {
+    await admin.auth.admin.deleteUser(createdUserId);
+    return { error: profileResult.error.message };
   }
 
-  if (data.user) {
-    await admin
-      .from("profiles")
-      .update({
-        full_name: params.fullName,
-        account_state: "active",
-        created_by: params.createdBy,
-        activated_at: new Date().toISOString(),
-      })
-      .eq("id", data.user.id);
+  const auditResult = await admin.from("audit_events").insert({
+    actor_id: actorId,
+    action: "walk_in_account_created",
+    record_kind: "profile",
+    record_id: createdUserId,
+    summary: `Walk-in account created for ${parsed.data.fullName} (${parsed.data.email})`,
+  });
 
-    await admin.from("audit_events").insert({
-      actor_id: params.createdBy,
-      action: "walk_in_account_created",
-      record_kind: "profile",
-      record_id: data.user.id,
-      summary: `Walk-in account created for ${params.fullName} (${params.email})`,
-    });
+  if (auditResult.error) {
+    await admin.auth.admin.deleteUser(createdUserId);
+    return { error: auditResult.error.message };
   }
 
-  revalidatePath("/dashboard/users");
+  revalidatePath("/staff-records");
   return { success: true };
 }
 
