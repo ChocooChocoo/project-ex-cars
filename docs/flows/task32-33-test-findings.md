@@ -460,6 +460,14 @@ Unhandled rejections from the first error are the most likely cause of the obser
 > they were. `src/lib/supabase/server.ts`'s comment still said "middleware refreshes tokens" and now
 > names `src/proxy.ts`.
 >
+> **Independent review widened this one further, and the extra case was fixed too.** The same fault
+> existed in a second family of reads: `getTotalUnreadCount()` and `getUnreadCount()` in
+> `src/app/(customer)/my-inquiries/actions.ts` were still on the write client while
+> `getTotalUnreadCount()` is awaited during the staff layout render to feed the sidebar badge. A
+> `.catch(() => 0)` softened the symptom to a silently wrong count rather than a 500, but the render-time
+> write attempt was still reachable. Both now read through the read-only client; the mutation actions in
+> that module keep the write client, and a test asserts both halves of that split.
+>
 > **Error 2: not reachable.** `PreferencesStoreProvider` is mounted unconditionally in the single root
 > layout (`src/app/layout.tsx`) above every route group, and all three `AppSidebar` call sites sit inside
 > those groups, so the throw at `preferences-provider.tsx:118` cannot fire from `AppSidebar` in the
@@ -615,7 +623,7 @@ What was actually changed, and which non-changes were deliberate. Commits are on
 | 3.2 | **Document corrected** | The flow document's `— Buy —` illustration now shows the plain headings the UI actually renders. No UI change, because plain headings are the repo-wide convention. |
 | 3.3 | **Fixed** | The walk-in dialog consumes `?createWalkIn=1` once, on the first intentional close, via `router.replace(pathname)`. Ordinary in-card opening never touches the URL. |
 | 4.1 | **Already fixed** | Stale `.next` left behind by a renamed middleware file. No product defect; the tree is verified clean. |
-| 4.2 | **Fixed / not reachable** | Notification reads moved to the read-only Supabase client (this was the live `server.ts:48` path); `src/proxy.ts` now applies refreshed cookies to the request as well as the response. The provider error is not structurally reachable — no change, with the reasoning recorded in 4.2. |
+| 4.2 | **Fixed / not reachable** | Notification reads moved to the read-only Supabase client (this was the live `server.ts:48` path), as did the inquiry unread counts the staff layout renders; `src/proxy.ts` now applies refreshed cookies to the request as well as the response. The provider error is not structurally reachable — no change, with the reasoning recorded in 4.2. |
 | 4.3 | **Fixed** | `src/proxy.disabled.ts` and the newly found `src/lib/supabase/middleware.ts` deleted; active docs repointed at `src/proxy.ts`. |
 | 4.4 | **Resolved** | The tree is clean; every finding was re-verified against committed code rather than a mid-edit working copy. |
 
