@@ -29,7 +29,7 @@ Next.js 16 App Router, React 19 + React Compiler, Tailwind v4 (CSS-first, no con
 - `src/app/(customer)/` — customer shopping portal (showroom, recommendations, inquiries, transactions, favourites, sell-vehicle, request-a-car)
 - `src/app/(supplier)/` — isolated supplier portal (overview + messages; suppliers are staff-created and approval-gated)
 - `src/app/(external)/` — public landing pages
-- Top-level non-grouped routes: `src/app/auth/` (four auth screens), `src/app/unauthorized/`, and `src/app/template/` (upstream-template design previews — middleware skips them, so they are publicly reachable; reference only, not GCE product surface)
+- Top-level non-grouped routes: `src/app/auth/` (four auth screens), `src/app/unauthorized/`, and `src/app/template/` (upstream-template design previews — `src/proxy.ts` skips them, so they are publicly reachable; reference only, not GCE product surface)
 
 Routes are colocated: each route folder owns its `_components/`. Shared UI goes in `src/components/`. `src/components/ui/` is shadcn-generated — excluded from biome, don't hand-format.
 

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createServerSupabase, createServerSupabaseClient } from "@/lib/supabase/server";
 
 export interface NotificationRow {
   id: string;
@@ -67,8 +67,10 @@ export async function checkAndNotifyDueInstallments(): Promise<void> {
   }
 }
 
+// Awaited during Server Component renders (the staff/customer/supplier layouts), so it must
+// use the read-only client and never write cookies.
 export async function getNotifications(role: string): Promise<NotificationRow[]> {
-  const supabase = await createServerSupabaseClient();
+  const supabase = await createServerSupabase();
   const { data } = await supabase
     .from("notifications")
     .select("*")
@@ -78,8 +80,9 @@ export async function getNotifications(role: string): Promise<NotificationRow[]>
   return (data ?? []) as NotificationRow[];
 }
 
+// Also awaited during Server Component renders, same constraint as getNotifications.
 export async function getUnreadNotificationCount(role: string): Promise<number> {
-  const supabase = await createServerSupabaseClient();
+  const supabase = await createServerSupabase();
   const { count } = await supabase
     .from("notifications")
     .select("id", { count: "exact", head: true })

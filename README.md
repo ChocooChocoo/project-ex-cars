@@ -6,7 +6,7 @@ A role-based vehicle marketplace platform: a public-facing customer shopping exp
 
 | Portal | Route group | Who | Notes |
 |---|---|---|---|
-| Staff dashboard | `src/app/(staff)/` | CEO, Account Manager, Head Accountant, Confidential Informant, Marketing Specialist, Mechanic, Sales Manager, Head Security | Role-prefixed URLs (`/ceo/…`, `/mechanic/…`) are rewritten by middleware onto shared pages; access is filtered by `ROLE_NAV_ACCESS` in `src/lib/auth/roles.ts`, page-level role checks, action allowlists, and Supabase RLS |
+| Staff dashboard | `src/app/(staff)/` | CEO, Account Manager, Head Accountant, Confidential Informant, Marketing Specialist, Mechanic, Sales Manager, Head Security | Role-prefixed URLs (`/ceo/…`, `/mechanic/…`) are rewritten by `src/proxy.ts` onto shared pages; access is filtered by `ROLE_NAV_ACCESS` in `src/lib/auth/roles.ts`, page-level role checks, action allowlists, and Supabase RLS |
 | Customer portal | `src/app/(customer)/` | Customer | Showroom, Find Your Car (recommendations), inquiries chat, transactions, favourites, sell-vehicle, request-a-car |
 | Supplier portal | `src/app/(supplier)/` | Supplier | Isolated overview (profile, documents, ID-verification progress) plus messages to the CEO; suppliers are staff-created and approved before first sign-in |
 | Public/auth | `src/app/(external)/`, `src/app/auth/`, `src/app/unauthorized/` | — | The app is login-first; four auth screens under `/auth/v1` and `/auth/v2`; `src/app/template/**` holds publicly reachable upstream-template design previews that are not part of the product surface |
