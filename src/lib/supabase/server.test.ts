@@ -228,4 +228,27 @@ describe("notification client wiring", () => {
   it("checkAndNotifyDueInstallments keeps the admin client for its cross-role writes", () => {
     expect(bodyOf(notifications(), "checkAndNotifyDueInstallments")).toContain("createAdminClient()");
   });
+
+  it("keeps the inquiry unread counts off the write client, since the staff layout renders them", () => {
+    // Same hazard as the notification reads: awaited during a render in (staff)/layout.tsx,
+    // where a lazily refreshed token would attempt a cookie write.
+    const inquiries = readFileSync(resolve(process.cwd(), "src/app/(customer)/my-inquiries/actions.ts"), "utf8");
+    const bodyOfInquiry = (name: string): string => {
+      const start = inquiries.indexOf(`export async function ${name}(`);
+      expect(start, `${name} is missing from src/app/(customer)/my-inquiries/actions.ts`).toBeGreaterThan(-1);
+      const rest = inquiries.slice(start + 1);
+      const next = rest.indexOf("export async function ");
+      return rest.slice(0, next === -1 ? undefined : next);
+    };
+
+    for (const name of ["getTotalUnreadCount", "getUnreadCount"]) {
+      expect(bodyOfInquiry(name)).toContain("await createServerSupabase()");
+      expect(bodyOfInquiry(name)).not.toContain("createServerSupabaseClient");
+    }
+
+    // The mutations in the same module must keep writing.
+    for (const name of ["createInquiry", "sendMessage", "reportMessage"]) {
+      expect(bodyOfInquiry(name)).toContain("await createServerSupabaseClient()");
+    }
+  });
 });
