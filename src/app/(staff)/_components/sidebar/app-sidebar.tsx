@@ -21,7 +21,6 @@ import { type NavMainItem, sidebarItems } from "@/navigation/sidebar/sidebar-ite
 import { usePreferencesStore } from "@/stores/preferences/preferences-provider";
 
 import { NavMain } from "./nav-main";
-import { SidebarSupportCard } from "./sidebar-support-card";
 import { UserMenu } from "./user-menu";
 
 const _data = {
@@ -126,7 +125,6 @@ export function AppSidebar({
         <NavMain items={items} unreadCount={unreadCount} showQuickCreate={showQuickCreate} />
       </SidebarContent>
       <SidebarFooter>
-        <SidebarSupportCard />
         <UserMenu />
       </SidebarFooter>
     </Sidebar>
