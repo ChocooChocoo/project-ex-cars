@@ -9,8 +9,11 @@ import { Separator } from "@/components/ui/separator";
 import { requireRole } from "@/lib/auth/guards";
 import type { GceRole } from "@/lib/auth/roles";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { withSignedTransactionDocumentUrls } from "@/lib/transactions/document-media";
 
 import { type ChecklistEntry, ChecklistForm, type ChecklistResult } from "../_components/checklist-form";
+import { InspectionSellMedia } from "./_components/inspection-sell-media";
+import { getConditionItemIds, resolveConditionItemLabels } from "./inspection-sell-media-data";
 
 const INSPECTION_VIEWER_ROLES: GceRole[] = [
   "ceo",
@@ -20,7 +23,7 @@ const INSPECTION_VIEWER_ROLES: GceRole[] = [
   "sales_manager",
 ];
 
-export default async function InspectionDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function InspectionDetailPage({ params }: { readonly params: Promise<{ id: string }> }) {
   await requireRole(INSPECTION_VIEWER_ROLES);
   const { id } = await params;
   const supabase = await createServerSupabase();
@@ -49,6 +52,42 @@ export default async function InspectionDetailPage({ params }: { params: Promise
     .select("*, part_replacements(*)")
     .eq("inspection_id", id);
 
+  let sellPhotos: { id: string; is_image: boolean; signed_url: string | null }[] = [];
+  let sellConditionItems: string[] = [];
+  if (role === "mechanic" || role === "confidential_informant") {
+    const { data: submissions } = await supabase.rpc("get_inspection_sell_submission", { inspection_id: id });
+    const submission = (submissions as { transaction_id: string; condition_items: unknown }[] | null)?.[0];
+
+    if (submission) {
+      const { data: documents } = await supabase
+        .from("transaction_documents")
+        .select("id, document_kind, storage_path")
+        .eq("transaction_id", submission.transaction_id)
+        .eq("document_kind", "sell_photo")
+        .order("upload_date", { ascending: true });
+      sellPhotos = (
+        await withSignedTransactionDocumentUrls(supabase.storage, (documents as Record<string, unknown>[] | null) ?? [])
+      ).map((document) => ({
+        id: String(document.id),
+        is_image: document.is_image,
+        signed_url: document.signed_url,
+      }));
+
+      const conditionIds = getConditionItemIds(submission.condition_items);
+      let nodeNames: Record<string, string> = {};
+      if (conditionIds.length > 0) {
+        const { data: nodes } = await supabase
+          .from("inspection_checklist_nodes")
+          .select("id, name")
+          .in("id", conditionIds);
+        nodeNames = Object.fromEntries(
+          ((nodes as { id: string; name: string }[] | null) ?? []).map((node) => [node.id, node.name]),
+        );
+      }
+      sellConditionItems = resolveConditionItemLabels(submission.condition_items, nodeNames);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
@@ -60,6 +99,10 @@ export default async function InspectionDetailPage({ params }: { params: Promise
           {new Date(insp.inspection_date as string).toLocaleDateString()}
         </p>
       </div>
+
+      {role === "mechanic" || role === "confidential_informant" ? (
+        <InspectionSellMedia photos={sellPhotos} conditionItems={sellConditionItems} />
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-3">
         {role === "mechanic" ? (
