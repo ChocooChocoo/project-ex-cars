@@ -1,7 +1,7 @@
 "use client";
 "use no memo";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useRouter } from "next/navigation";
 
@@ -89,8 +89,34 @@ function transactionDisplayLabel(transaction: TransactionLookup): string {
   ].join(" · ");
 }
 
-function isSelectPortalTarget(target: EventTarget | null): boolean {
-  return target instanceof Element && Boolean(target.closest('[data-slot="select-content"]'));
+// While a Radix Select is open inside a Dialog the select becomes the top dismissable
+// layer and Radix sets pointer-events: none on the dialog content, so a click aimed at
+// a dialog control is delivered to the dialog overlay instead and reads as an outside
+// interaction. Whitelisting only the select's own portal is not enough — an empty
+// option list has nothing to hit at all.
+//
+// The state has to be sampled while the event is still travelling down: on pointerdown
+// Radix closes the select with flushSync, which removes data-state="open" before the
+// event bubbles up to the dialog's handler. Reading the DOM inside the handler sees the
+// select already closed and lets the dialog dismiss.
+export function isSelectInteraction(target: EventTarget | null, selectWasOpenAtPointerDown = false): boolean {
+  if (target instanceof Element && target.closest('[data-slot="select-content"]')) return true;
+  if (selectWasOpenAtPointerDown) return true;
+  return document.querySelector('[data-slot="select-content"][data-state="open"]') !== null;
+}
+
+function useSelectOpenAtPointerDown() {
+  const selectWasOpen = useRef(false);
+
+  useEffect(() => {
+    const capture = () => {
+      selectWasOpen.current = document.querySelector('[data-slot="select-content"][data-state="open"]') !== null;
+    };
+    document.addEventListener("pointerdown", capture, true);
+    return () => document.removeEventListener("pointerdown", capture, true);
+  }, []);
+
+  return selectWasOpen;
 }
 
 interface FieldCasesClientProps {
@@ -170,6 +196,7 @@ export function FieldCasesClient({
 
   const [mechanicTarget, setMechanicTarget] = useState<FieldCaseRow | null>(null);
   const [mechanicId, setMechanicId] = useState("");
+  const selectWasOpenAtPointerDown = useSelectOpenAtPointerDown();
 
   const allowedKinds = CASE_KIND_OPTIONS.filter((option) => CASE_KIND_RULES[option.value]?.includes(userRole)).map(
     (option) => option.value,
@@ -418,7 +445,7 @@ export function FieldCasesClient({
         <DialogContent
           className="max-h-[90vh] overflow-y-auto sm:max-w-lg"
           onInteractOutside={(event) => {
-            if (isSelectPortalTarget(event.target)) event.preventDefault();
+            if (isSelectInteraction(event.target, selectWasOpenAtPointerDown.current)) event.preventDefault();
           }}
         >
           <DialogHeader>
@@ -510,7 +537,7 @@ export function FieldCasesClient({
             </Field>
             <Field>
               <FieldLabel>Assigned Worker</FieldLabel>
-              <Select value={createWorker} onValueChange={setCreateWorker}>
+              <Select value={createWorker} onValueChange={setCreateWorker} disabled={workersForKind.length === 0}>
                 <SelectTrigger aria-label="Select worker">
                   <SelectValue placeholder="Select worker" />
                 </SelectTrigger>
@@ -524,6 +551,11 @@ export function FieldCasesClient({
                   </SelectGroup>
                 </SelectContent>
               </Select>
+              {workersForKind.length === 0 ? (
+                <p className="text-muted-foreground text-xs">
+                  No active {createWorkerKind === "mechanic" ? "mechanics" : "confidential informants"} available.
+                </p>
+              ) : null}
             </Field>
             {createKind !== "recovery" ? (
               <Field>

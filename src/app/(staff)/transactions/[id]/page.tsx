@@ -62,11 +62,15 @@ export default async function TransactionDetailPage({ params }: { readonly param
     .eq("purchase_transaction_id", id)
     .order("created_at", { ascending: false });
 
-  const { data: informants } = await supabase
-    .from("profiles")
-    .select("id, full_name, private_user_roles!inner(role)")
-    .eq("private_user_roles.role", "confidential_informant")
-    .eq("private_user_roles.active", true);
+  // profiles -> private_user_roles is not a PostgREST relationship, so the embed that
+  // used to load this list answered PGRST200 and left the repossession informant
+  // picker empty. Read the guarded worker directory instead.
+  const { data: workerDirectory } = await supabase.rpc("list_field_case_workers");
+  const informants = (
+    (workerDirectory as { account_id: string; role: string; full_name: string | null }[] | null) ?? []
+  )
+    .filter((worker) => worker.role === "confidential_informant")
+    .map((worker) => ({ id: worker.account_id, full_name: worker.full_name }));
 
   // Task 32: resolve sell condition_items ids to display names for staff.
   // sell_details is a UNIQUE-per-transaction row; the relation may still come
@@ -100,7 +104,7 @@ export default async function TransactionDetailPage({ params }: { readonly param
         paymentTerms={paymentTerms as Record<string, unknown> | null}
         viewingArrangements={(viewingArrangements as Record<string, unknown>[]) ?? []}
         userRole={role}
-        informants={(informants as { id: string; full_name: string | null }[]) ?? []}
+        informants={informants}
         checklistNameMap={checklistNameMap}
       />
     </div>

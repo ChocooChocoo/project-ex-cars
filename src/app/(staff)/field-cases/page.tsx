@@ -16,6 +16,27 @@ const FIELD_CASE_ROLES = [
 const FIELD_CASE_WORKERS = ["ceo", "confidential_informant", "mechanic", "sales_manager"];
 const FIELD_CASE_CREATORS = ["ceo", "confidential_informant", "sales_manager", "head_accountant"];
 
+export interface FieldCaseWorker {
+  account_id: string;
+  role: string;
+  full_name: string | null;
+}
+
+// list_field_case_workers() returns both worker kinds in one call; the dialog needs
+// them split so the Worker Type toggle can swap the option list.
+export function splitFieldCaseWorkers(directory: unknown): {
+  informants: { id: string; full_name: string | null }[];
+  mechanics: { id: string; full_name: string | null }[];
+} {
+  const workers = (directory as FieldCaseWorker[] | null) ?? [];
+  const toOption = (worker: FieldCaseWorker) => ({ id: worker.account_id, full_name: worker.full_name });
+
+  return {
+    informants: workers.filter((worker) => worker.role === "confidential_informant").map(toOption),
+    mechanics: workers.filter((worker) => worker.role === "mechanic").map(toOption),
+  };
+}
+
 export default async function FieldCasesPage() {
   const role = await getCurrentRole();
   if (!role || !FIELD_CASE_ROLES.includes(role)) {
@@ -29,9 +50,13 @@ export default async function FieldCasesPage() {
   ]);
   const currentUserId = userData.user?.id ?? null;
 
-  const [{ data: profiles }, { data: workerRoles }, { data: transactions }, { data: vehicles }] = await Promise.all([
-    supabase.from("profiles").select("id, full_name").order("full_name", { ascending: true }),
-    supabase.rpc("get_all_user_roles"),
+  // Role assignments live in private.user_roles, outside the exposed API schemas, so
+  // the worker directory comes from the guarded SECURITY DEFINER function instead of
+  // get_all_user_roles() — which raises 'Permission denied' for every role except the
+  // CEO and Account Manager, and left this dropdown empty for the other three roles
+  // that can create field cases.
+  const [{ data: workerDirectory }, { data: transactions }, { data: vehicles }] = await Promise.all([
+    supabase.rpc("list_field_case_workers"),
     supabase
       .from("transactions")
       .select("id, transaction_kind, current_state, profiles(full_name), vehicles(id, make, model, year, stock_code)")
@@ -44,17 +69,7 @@ export default async function FieldCasesPage() {
       .limit(100),
   ]);
 
-  const workerIdsByRole = new Map<string, Set<string>>([
-    ["confidential_informant", new Set<string>()],
-    ["mechanic", new Set<string>()],
-  ]);
-  for (const workerRole of (workerRoles as { account_id: string; role: string }[] | null) ?? []) {
-    workerIdsByRole.get(workerRole.role)?.add(workerRole.account_id);
-  }
-  const informants = (profiles ?? []).filter((profile) =>
-    workerIdsByRole.get("confidential_informant")?.has(profile.id),
-  );
-  const mechanics = (profiles ?? []).filter((profile) => workerIdsByRole.get("mechanic")?.has(profile.id));
+  const { informants, mechanics } = splitFieldCaseWorkers(workerDirectory);
 
   return (
     <FieldCasesClient
@@ -62,8 +77,8 @@ export default async function FieldCasesPage() {
       canUpdate={FIELD_CASE_WORKERS.includes(role)}
       canCreate={FIELD_CASE_CREATORS.includes(role)}
       canAssignMechanic={["confidential_informant", "ceo"].includes(role)}
-      informants={(informants as { id: string; full_name: string | null }[]) ?? []}
-      mechanics={(mechanics as { id: string; full_name: string | null }[]) ?? []}
+      informants={informants}
+      mechanics={mechanics}
       userRole={role}
       currentUserId={currentUserId}
       transactions={
