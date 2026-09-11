@@ -1,5 +1,6 @@
 import { getCurrentRole } from "@/app/auth/actions";
 import { requireRole } from "@/lib/auth/guards";
+import { TRANSACTION_VIEWER_ROLES } from "@/lib/auth/roles";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 import type { TransactionRow } from "./_components/recent-transactions-table/schema";
@@ -11,7 +12,7 @@ export default async function TransactionsPage({
 }: {
   readonly searchParams: Promise<{ state?: string }>;
 }) {
-  await requireRole(["ceo", "account_manager", "head_accountant", "confidential_informant", "sales_manager"]);
+  await requireRole(TRANSACTION_VIEWER_ROLES);
   const supabase = await createServerSupabase();
   const role = (await getCurrentRole()) ?? "customer";
   const { state } = await searchParams;

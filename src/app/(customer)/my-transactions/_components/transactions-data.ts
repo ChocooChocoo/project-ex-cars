@@ -1,3 +1,6 @@
+import { format } from "date-fns";
+
+import { transactionKindLabel } from "@/lib/transactions/labels";
 import { TRANSACTION_STATE_LABELS, type TransactionState } from "@/lib/transactions/state-machine";
 
 export interface TransactionRow {
@@ -8,6 +11,36 @@ export interface TransactionRow {
   status: TransactionState;
   openedAt: string;
   openedTimestamp: number;
+}
+
+/**
+ * Maps raw `transactions` rows (with an embedded `vehicles` relation) to table rows.
+ * The two lines must never repeat: a row with no linked vehicle used to show the kind
+ * label on both, e.g. "Request a Car" over "Request a Car".
+ */
+export function buildTransactionRows(transactions: Record<string, unknown>[]): TransactionRow[] {
+  return transactions.map((tx) => {
+    const vehicles = tx.vehicles as Record<string, unknown> | null | undefined;
+    const kind = tx.transaction_kind as string;
+    const openedAt = tx.opened_at as string;
+    const id = tx.id as string;
+    // Build the name from the parts that exist: a joined-but-empty vehicle row must
+    // degrade to the kind label rather than render "()" or "undefined".
+    const nameParts = [vehicles?.make, vehicles?.model].filter(Boolean).join(" ");
+    const yearPart = vehicles?.year ? `(${vehicles.year})` : "";
+    const vehicleName = [nameParts, yearPart].filter(Boolean).join(" ").trim();
+    const stockCode = vehicles?.stock_code;
+
+    return {
+      id,
+      vehicleLabel: vehicleName || transactionKindLabel(kind as never),
+      subLabel: stockCode ? `Stock ${stockCode as string}` : `#${id.slice(0, 8)}`,
+      kind,
+      status: (tx.current_state ?? "pending") as TransactionState,
+      openedAt: format(new Date(openedAt), "dd MMM yyyy"),
+      openedTimestamp: new Date(openedAt).getTime(),
+    };
+  });
 }
 
 export const KIND_FILTER_OPTIONS = ["All", "Buy", "Sell", "Request a Car"] as const;
