@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import type { InquiryThreadData } from "@/components/inquiries/types";
 import { type ActionResult, failure, notAuthenticated, notFound } from "@/lib/auth/action-result";
 import { getProfileAutoFill } from "@/lib/autofill";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createServerSupabase, createServerSupabaseClient } from "@/lib/supabase/server";
 import { createInquirySchema, scheduleArrangementSchema, sendMessageSchema } from "@/lib/validation/inquiries";
 
 export async function createInquiry(formData: FormData) {
@@ -319,8 +319,9 @@ export async function markMessagesRead(inquiryId: string) {
   revalidatePath("/dashboard/inquiries");
 }
 
+// Read-only; same constraint as getTotalUnreadCount.
 export async function getUnreadCount(inquiryId: string): Promise<number> {
-  const supabase = await createServerSupabaseClient();
+  const supabase = await createServerSupabase();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return 0;
 
@@ -334,8 +335,11 @@ export async function getUnreadCount(inquiryId: string): Promise<number> {
   return count ?? 0;
 }
 
+// Read-only, and awaited during the staff layout render for the sidebar badge, so it must
+// use the read-only client — a lazy token refresh here would attempt a cookie write during
+// a Server Component render, which Next.js rejects.
 export async function getTotalUnreadCount(): Promise<number> {
-  const supabase = await createServerSupabaseClient();
+  const supabase = await createServerSupabase();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return 0;
 
