@@ -68,15 +68,18 @@ export function createColumns(
       id: "vehicle",
       header: "Vehicle",
       cell: ({ row }) => {
-        const make = row.getValue("make") as string;
-        const model = row.getValue("model") as string;
-        const year = row.getValue("year") as number;
+        // Read the flat row: this column defines neither accessorKey nor accessorFn,
+        // so row.getValue("make"/"model"/"year") looked up columns that do not exist,
+        // logged a per-row console error, and left the cell body blank.
+        const make = (row.original.make as string | null) ?? "";
+        const model = (row.original.model as string | null) ?? "";
+        const year = row.original.year as number | string | null;
         return (
           <div className="grid gap-0.5">
             <span className="font-medium text-sm">
               {make} {model}
             </span>
-            <span className="text-muted-foreground text-xs">{year}</span>
+            <span className="text-muted-foreground text-xs">{year || "—"}</span>
           </div>
         );
       },

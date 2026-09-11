@@ -37,6 +37,21 @@ export const STAFF_ROLES: GceRole[] = [
   "head_security",
 ];
 
+/**
+ * Roles that may open the staff transaction list and a transaction detail page.
+ * Kept in one place so both routes deny with the same `/unauthorized` screen —
+ * a detail route without this guard answers a bare 404 for the same denial.
+ * Mechanic is deliberately absent: field roles see sell evidence through the
+ * inspection detail instead (see get_inspection_sell_submission).
+ */
+export const TRANSACTION_VIEWER_ROLES: GceRole[] = [
+  "ceo",
+  "account_manager",
+  "head_accountant",
+  "confidential_informant",
+  "sales_manager",
+];
+
 export const RBAC_MANAGED_ROLES = [
   "supplier",
   "account_manager",

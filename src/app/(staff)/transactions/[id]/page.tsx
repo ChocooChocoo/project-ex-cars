@@ -1,12 +1,17 @@
 import { notFound } from "next/navigation";
 
 import { getCurrentRole } from "@/app/auth/actions";
+import { requireRole } from "@/lib/auth/guards";
+import { TRANSACTION_VIEWER_ROLES } from "@/lib/auth/roles";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { withSignedTransactionDocumentUrls } from "@/lib/transactions/document-media";
 
 import { StaffTransactionDetail } from "./_components/staff-transaction-detail";
 
 export default async function TransactionDetailPage({ params }: { readonly params: Promise<{ id: string }> }) {
+  // Same guard as the list route: without it RLS filters the row and the caller
+  // gets a misleading 404 instead of the /unauthorized screen.
+  await requireRole(TRANSACTION_VIEWER_ROLES);
   const { id } = await params;
   const supabase = await createServerSupabase();
   const role = (await getCurrentRole()) ?? "customer";

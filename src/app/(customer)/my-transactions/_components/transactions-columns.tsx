@@ -53,9 +53,9 @@ export const transactionColumns: ColumnDef<TransactionRow>[] = [
         <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted">
           <KindIcon kind={row.original.kind} />
         </div>
-        <div className="min-w-0">
-          <div className="truncate font-medium text-foreground text-sm">{row.original.vehicleLabel}</div>
-          <div className="truncate text-muted-foreground text-sm">{row.original.subLabel}</div>
+        <div className="grid min-w-0 gap-0.5">
+          <div className="truncate font-medium text-foreground text-sm leading-none">{row.original.vehicleLabel}</div>
+          <div className="truncate text-muted-foreground text-xs leading-none">{row.original.subLabel}</div>
         </div>
       </div>
     ),
