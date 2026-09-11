@@ -10,7 +10,7 @@ import { authorizeAction } from "@/lib/auth/action-guard";
 import { ACCEPTED_ID_TYPES } from "@/lib/auth/roles";
 import { landingPath } from "@/lib/routing/paths";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createServerSupabase, createServerSupabaseClient } from "@/lib/supabase/server";
 import { emailSchema, fullNameSchema, passwordSchema } from "@/lib/validation/forms";
 
 export async function signIn(formData: FormData) {
@@ -115,7 +115,9 @@ export async function signOut() {
 }
 
 export async function getCurrentUser() {
-  const supabase = await createServerSupabaseClient();
+  // Read-only client for the same reason as getCurrentRole: this is called from Server
+  // Component renders (e.g. the staff suppliers page), where a cookie write throws.
+  const supabase = await createServerSupabase();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -123,7 +125,11 @@ export async function getCurrentUser() {
 }
 
 export async function getCurrentRole(): Promise<string | null> {
-  const supabase = await createServerSupabaseClient();
+  // Read-only client: this runs during Server Component renders, where Next.js throws
+  // on any cookie write. The read-write client refreshes and persists the rotated
+  // token, which made an expired access token a 500 instead of a page. src/proxy.ts
+  // now owns the refresh, so renders only ever read.
+  const supabase = await createServerSupabase();
   const {
     data: { user },
   } = await supabase.auth.getUser();
