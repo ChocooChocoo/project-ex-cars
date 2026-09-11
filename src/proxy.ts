@@ -48,6 +48,15 @@ async function refreshSession(request: NextRequest): Promise<ResponseCookie[]> {
   return refreshed;
 }
 
+// The refreshed cookies must ride every response, otherwise the browser keeps the spent
+// token and the session drops on the next request.
+function withSession<T extends NextResponse>(response: T, refreshed: ResponseCookie[]): T {
+  for (const { name, value, options } of refreshed) {
+    response.cookies.set(name, value, options as never);
+  }
+  return response;
+}
+
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
@@ -66,13 +75,16 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const refreshedCookies = await refreshSession(request);
-  const withSession = (response: NextResponse) => {
-    for (const { name, value, options } of refreshedCookies) {
-      response.cookies.set(name, value, options as never);
-    }
-    return response;
-  };
+  const refreshed = await refreshSession(request);
+
+  // Rotated cookies otherwise exist only on the response, while the render for this same
+  // request reads the request's own Cookie header — so it would render the pre-refresh
+  // session even though the old refresh token is already spent server-side, which the SDK
+  // can turn into a spurious logout. Putting them on the request fixes that, and the
+  // render branches below forward the resulting headers to the downstream render.
+  for (const { name, value } of refreshed) {
+    request.cookies.set(name, value);
+  }
 
   const role = request.cookies.get("gce-role")?.value ?? null;
   const url = request.nextUrl.clone();
@@ -80,13 +92,13 @@ export async function proxy(request: NextRequest) {
   // Root → redirect based on role
   if (pathname === "/") {
     url.pathname = role ? landingPath(role) : "/auth/v1/login";
-    return withSession(NextResponse.redirect(url));
+    return withSession(NextResponse.redirect(url), refreshed);
   }
 
   // No role → redirect to login for all non-auth pages
   if (!role) {
     url.pathname = "/auth/v1/login";
-    return withSession(NextResponse.redirect(url));
+    return withSession(NextResponse.redirect(url), refreshed);
   }
 
   // Role-prefixed path: /[role]/rest → strip prefix, rewrite internally
@@ -95,13 +107,13 @@ export async function proxy(request: NextRequest) {
     if (firstSegment !== role) {
       const rest = pathname.slice(firstSegment.length + 1) || "";
       url.pathname = `/${role}${rest}`;
-      return withSession(NextResponse.redirect(url));
+      return withSession(NextResponse.redirect(url), refreshed);
     }
 
     const segment = pathname.slice(firstSegment.length + 2) || "dashboard";
     const internal = resolveInternalPath(firstSegment, segment);
     url.pathname = internal;
-    return withSession(NextResponse.rewrite(url));
+    return withSession(NextResponse.rewrite(url, { request: { headers: request.headers } }), refreshed);
   }
 
   // Legacy paths → redirect to role-prefixed
@@ -110,10 +122,10 @@ export async function proxy(request: NextRequest) {
     url.pathname = isStaffRole(role)
       ? `/${role}/${segment === "default" ? "dashboard" : segment}`
       : `/${role}/showroom`;
-    return withSession(NextResponse.redirect(url));
+    return withSession(NextResponse.redirect(url), refreshed);
   }
 
-  return withSession(NextResponse.next());
+  return withSession(NextResponse.next({ request: { headers: request.headers } }), refreshed);
 }
 
 export const config = {

@@ -27,6 +27,7 @@ vi.mock("next/headers", () => ({
 }));
 
 const { createServerSupabase } = await import("./server");
+const { getNotifications, getUnreadNotificationCount } = await import("@/lib/notifications/actions");
 
 // A session whose access token is already expired, so the SDK takes the refresh path.
 function expiredSessionCookie() {
@@ -102,6 +103,37 @@ describe("server Supabase clients and expired sessions", () => {
     await expect(supabase.auth.getUser()).resolves.toBeDefined();
     expect(state.writeAttempts).toBe(0);
   });
+
+  it("notification reads awaited during a layout render survive an expired session", async () => {
+    // The list is empty by design: this asserts the read path never reaches for a cookie
+    // write, not what the rows happen to be.
+    const emptyList = vi.fn(
+      async () =>
+        new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+    const authFailure = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ error: "invalid_grant", error_description: "Invalid Refresh Token" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) =>
+        String(input).includes("/auth/v1/token") ? authFailure() : emptyList(),
+      ),
+    );
+
+    // Awaited inside src/app/(staff)/layout.tsx and the customer/supplier layouts, so a
+    // cookie write here is a 500 on every page in those groups.
+    await expect(getNotifications("ceo")).resolves.toEqual([]);
+    await expect(getUnreadNotificationCount("ceo")).resolves.toBe(0);
+    expect(state.writeAttempts).toBe(0);
+  });
 });
 
 describe("render-path wiring", () => {
@@ -139,5 +171,61 @@ describe("render-path wiring", () => {
     // Next 16 renamed the convention; leaving middleware.ts behind restores the
     // deprecation warning and splits the pipeline across two entry points.
     expect(existsSync(resolve(process.cwd(), "src/middleware.ts"))).toBe(false);
+  });
+
+  it("proxy hands the refreshed session to the render for the same request", () => {
+    const proxy = read("src/proxy.ts");
+
+    // Response-only cookies leave the render reading the pre-refresh session, so the
+    // request itself has to carry them too.
+    expect(proxy).toContain("request.cookies.set(");
+    // The response/redirect/rewrite path must keep attaching them either way.
+    expect(proxy).toContain("response.cookies.set(name, value");
+  });
+
+  it("has a single proxy entry point, with no stale disabled twin", () => {
+    // The stub's header invites renaming it to proxy.ts, which would put two candidate
+    // entry points on disk and break every route once Next picks the wrong one.
+    expect(existsSync(resolve(process.cwd(), "src/proxy.ts"))).toBe(true);
+    expect(existsSync(resolve(process.cwd(), "src/proxy.disabled.ts"))).toBe(false);
+  });
+
+  it("leaves no retired updateSession helper behind", () => {
+    expect(existsSync(resolve(process.cwd(), "src/lib/supabase/middleware.ts"))).toBe(false);
+  });
+});
+
+describe("notification client wiring", () => {
+  const notifications = () => readFileSync(resolve(process.cwd(), "src/lib/notifications/actions.ts"), "utf8");
+
+  // Every function body, from its own `export async function` to the next one.
+  function bodyOf(source: string, name: string): string {
+    const start = source.indexOf(`export async function ${name}(`);
+    expect(start, `${name} is missing from src/lib/notifications/actions.ts`).toBeGreaterThan(-1);
+    const rest = source.slice(start + 1);
+    const next = rest.indexOf("export async function ");
+    return rest.slice(0, next === -1 ? undefined : next);
+  }
+
+  it.each(["getNotifications", "getUnreadNotificationCount"])(
+    "%s reads through the read-only client, since layouts await it during a render",
+    (name) => {
+      const body = bodyOf(notifications(), name);
+
+      expect(body).toContain("await createServerSupabase()");
+      expect(body).not.toContain("createServerSupabaseClient");
+      expect(body).not.toContain("createAdminClient");
+    },
+  );
+
+  it.each(["markNotificationRead", "markAllNotificationsRead"])(
+    "%s keeps the read-write client, since it runs as a Server Action",
+    (name) => {
+      expect(bodyOf(notifications(), name)).toContain("await createServerSupabaseClient()");
+    },
+  );
+
+  it("checkAndNotifyDueInstallments keeps the admin client for its cross-role writes", () => {
+    expect(bodyOf(notifications(), "checkAndNotifyDueInstallments")).toContain("createAdminClient()");
   });
 });

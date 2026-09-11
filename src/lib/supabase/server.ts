@@ -13,7 +13,7 @@ function getEnv() {
 /**
  * Read-only server client for Server Components (pages, layouts).
  * Cookies can only be modified in Server Actions or Route Handlers,
- * so setAll is intentionally a no-op here — middleware refreshes tokens.
+ * so setAll is intentionally a no-op here — src/proxy.ts refreshes tokens.
  */
 export async function createServerSupabase() {
   const cookieStore = await cookies();
