@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+
+import { usePathname, useRouter } from "next/navigation";
 
 import { toast } from "sonner";
 
@@ -19,11 +21,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export function WalkInForm({ initialOpen = false }: { readonly initialOpen?: boolean }) {
+  const router = useRouter();
+  const pathname = usePathname();
   const [open, setOpen] = useState(initialOpen);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [creating, setCreating] = useState(false);
+  const deepLinkConsumedRef = useRef(false);
 
   // The deep link (/staff-records?createWalkIn=1) can be followed from an
   // already-mounted page, where client state survives the soft navigation and
@@ -32,6 +37,21 @@ export function WalkInForm({ initialOpen = false }: { readonly initialOpen?: boo
   useEffect(() => {
     if (initialOpen) setOpen(true);
   }, [initialOpen]);
+
+  // The query string persists in the URL, so a reload or a later visit to the
+  // same tab would reopen the dialog unasked. Spend the deep link once, the
+  // first time the dialog is closed on purpose, and drop the query while
+  // keeping the current (role-prefixed) path.
+  function consumeDeepLink() {
+    if (!initialOpen || deepLinkConsumedRef.current) return;
+    deepLinkConsumedRef.current = true;
+    if (pathname) router.replace(pathname);
+  }
+
+  function handleOpenChange(nextOpen: boolean) {
+    if (!nextOpen) consumeDeepLink();
+    setOpen(nextOpen);
+  }
 
   async function handleCreate() {
     if (!fullName.trim() || !email.trim() || !password.trim()) {
@@ -60,12 +80,12 @@ export function WalkInForm({ initialOpen = false }: { readonly initialOpen?: boo
       setFullName("");
       setEmail("");
       setPassword("");
-      setOpen(false);
+      handleOpenChange(false);
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
           Create Walk-in Account
@@ -108,7 +128,7 @@ export function WalkInForm({ initialOpen = false }: { readonly initialOpen?: boo
           </div>
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={() => setOpen(false)}>
+          <Button variant="ghost" onClick={() => handleOpenChange(false)}>
             Cancel
           </Button>
           <Button onClick={handleCreate} disabled={creating}>
