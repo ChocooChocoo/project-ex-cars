@@ -206,9 +206,9 @@ Migs the Mechanic and Ben the Confidential Informant can both **see** Juan's pho
 — but cannot change them. 🔧 *Task 32 granted this read access deliberately, so inspection can
 prioritise the damaged parts.*
 
-A mechanic or confidential informant opens the **inspection** for Juan's car and finds the section
-titled **Vehicle photos & condition** there, beside the inspection report. On the staff transaction
-page the same section appears for the roles that may open transactions.
+They open **Sell Submissions** in their left menu and find Juan's car there, with his photos and the
+issues he reported. The page is read-only: no amounts, no decisions, nothing to change. The roles that
+already work in **Transactions** keep seeing the same section on the staff transaction page.
 
 > **🔧 Fixed in Task 33 — the photos were invisible.**
 > This was the most visible complaint. The section showed a line per photo reading
@@ -217,14 +217,20 @@ page the same section appears for the roles that may open transactions.
 > **Now:** the real photos appear in the section. An **Assign Mechanic** decision can be made by
 > actually looking at the vehicle.
 
-> **🔧 Fixed after testing — the mechanic could not open the section at all.**
-> Task 32 made the photos readable to the mechanic but left them on a page he is not allowed to open:
-> the transaction list and detail are limited to the CEO, Account Manager, Head Accountant, Sales
-> Manager, and Confidential Informant. The mechanic saw a "no permission" screen on the list and a
-> **"Page not found."** on a specific transaction — two different messages for one denial.
-> **Now:** the mechanic sees the photos and the customer's condition checklist on the inspection he is
-> assigned, read-only, and both denial screens say the same thing. A mechanic still cannot browse
-> transactions, which is deliberate: he needs the car he is inspecting, not the whole ledger.
+> **🔧 Fixed after testing — the mechanic had nowhere to look.**
+> Task 32 made the photos readable to the mechanic but left them behind a page he is not allowed to
+> open: the transaction list and detail are limited to the CEO, Account Manager, Head Accountant, Sales
+> Manager, and Confidential Informant. He saw a "no permission" screen on the list and **"Page not
+> found."** on a specific transaction — two different messages for one denial.
+>
+> The first attempt at a fix hung the photos off the mechanic's **inspection** screen, assuming he
+> inspects the car a customer is selling. He does not: every inspection is on a car GCE already owns,
+> while a customer's submission keeps its own separate vehicle record and is never inspected. That
+> version showed nothing on all twelve inspections.
+> **Now:** **Sell Submissions** is its own menu item for the mechanic and the Confidential Informant,
+> listing the cars customers have sent with their photos and reported issues. The transaction-route
+> denials say one thing now instead of two. A mechanic still cannot browse transactions, which is
+> deliberate: he needs the cars customers sent, not the ledger.
 
 ### Step 4 — Patrick reviews the sell offer
 
@@ -393,8 +399,8 @@ not **see** it.
 - Images (JPEG, PNG, WebP) appear as pictures
 - PDFs appear as **Open …** links that open in a new tab
 - If a picture can't load, you see *"Preview unavailable"* — never a confusing file path
-- This works in three places: the customer's Documents, the staff Documents, and the staff
-  **Vehicle photos & condition** section
+- This works in four places: the customer's Documents, the staff Documents, the staff
+  **Vehicle photos & condition** section, and **Sell Submissions**
 
 **Two safety points worth knowing:**
 1. The pictures are shown through secure, temporary links that expire after **one hour**. Refreshing
@@ -435,7 +441,7 @@ Every step now works, and the whole chain from Maria's first click to **Sold** c
 | **Assign the mechanic** in a field case | Confidential Informant, CEO |
 | Check attendance | **Account Manager only** |
 | Read attendance | Account Manager, CEO, Head Accountant |
-| See sell photos and the condition checklist | Mechanic, Confidential Informant (view only) — on the **inspection detail** for the mechanic, on the transaction page for the Confidential Informant |
+| See sell photos and the condition checklist | **Sell Submissions** — Mechanic, Confidential Informant (view only) |
 | Open the transactions list | CEO, Account Manager, Head Accountant, Confidential Informant, Sales Manager |
 
 ---
@@ -450,7 +456,7 @@ Sell Vehicle · Buying Guide · Favourites
 **Staff transaction page:** Approval flow · Status Triage · Transaction Details · Documents ·
 Vehicle photos & condition · Record payment · Record paperwork · Verify · Reject
 
-**Inspection detail (mechanic):** Checklist · Summary · Vehicle photos & condition (read-only)
+**Inspection detail (mechanic):** Checklist · Summary
 
 **Staff transition buttons:** Move to Review · Approve (CEO) · Reject (CEO) · Complete · Cancel
 
@@ -460,6 +466,9 @@ Assign Mechanic · Update
 **Walk-in:** Create Walk-In (menu) → Create Walk-in Account (window) → Create Account
 
 **Attendance:** checked by Account Manager; readable by Account Manager, CEO, Head Accountant
+
+**Sell Submissions:** the mechanic's and Confidential Informant's read-only view of the cars customers
+have sent, with the submitted photos and reported issues
 
 ---
 
