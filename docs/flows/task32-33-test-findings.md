@@ -127,18 +127,35 @@ Three layers disagree, and only one of them is wrong:
 > vehicle without the blocked `transactions` read.
 
 **What was actually done.** The flow document was kept, and "preferred" was implemented *narrowly*
-rather than by widening the transaction policies. A new `SECURITY DEFINER` function
-(`00047_task32_inspection_sell_submission.sql`) bridges **inspection → sell submission** and returns
-only the sell `transaction_id` and the submitted `condition_items`. It authorises the assigned mechanic
-only when `vehicle_inspections.mechanic_id = auth.uid()` and the role is an active `mechanic`; an
-active `confidential_informant` may also read it. The CEO, Account Manager, Sales Manager, and Head
-Accountant are deliberately **not** granted through this function — they already have their own
-transaction access. The inspection detail page then loads only that transaction's `sell_photo`
-documents, signs the private paths server-side, resolves the checklist ids to their names, and renders
-a read-only `Vehicle photos & condition` card.
+rather than by widening the transaction policies — but **not on the inspection screen, because the
+inspection bridge cannot fire.** Verified against the live database:
 
-The mechanic still cannot browse transactions, and that remains deliberate: he needs the car he is
-inspecting, not the ledger. See 1.3 for the denial-screen half of this fix.
+- all **12** inspections sit on inventory cars GCE bought (`GCE-` stock codes), each tied to a **buy**
+  transaction;
+- the **16** sell submissions keep their own `SELL-` vehicle rows (only 7 even have a vehicle), all
+  still `listing_state = 'draft'`, with **zero** inspections between them;
+- all **11** field cases reference a **buy** transaction, never a sell.
+
+No inspection's vehicle is ever a submission's vehicle, and there is no other bridge, so the earlier
+inspection-shaped RPC returned rows for **0 of 12** inspections. The surface was therefore built where
+the role table already puts it — *"Migs | Mechanic | Inspects cars, looks at the photos customers
+sent."*
+
+Migration `00047_task32_field_sell_submissions.sql` defines `list_field_sell_submissions()` — a
+`SECURITY DEFINER`, `STABLE`, fixed-`search_path` function returning **only** the car a submission
+concerns and the checklist the customer ticked, for an active `mechanic` or `confidential_informant`.
+It deliberately returns none of the commercial fields (`offered_amount`, `valuation_amount`,
+`review_notes`, `decision`): seeing the photos should not mean seeing the negotiation. `anon` is revoked
+outright — the repo's older functions leave that grant in place. A new `/sell-submissions` route for
+both field roles lists each car with its signed photo previews and reported issues, read-only, and the
+sidebar offers it to exactly those two roles.
+
+Generic transaction access was **not** widened, and the mechanic still cannot open the transaction list.
+See 1.3 for the denial-screen half of this fix.
+
+An earlier revision of this fix put the card on `inspections/[id]` behind an inspection-scoped RPC. That
+was correct SQL modelling a workflow that does not exist, so it was dropped before merge in favour of
+this surface.
 
 **Why this matters most:** it is the only place where the shipped product and the client-facing
 document actively contradict each other.
@@ -615,7 +632,7 @@ What was actually changed, and which non-changes were deliberate. Commits are on
 
 | Finding | Outcome | What changed |
 |---|---|---|
-| 1.1 | **Fixed** | New migration `00047_task32_inspection_sell_submission.sql` adds a `SECURITY DEFINER`, `STABLE`, fixed-`search_path` function returning only the sell `transaction_id` and `condition_items` for an inspection's vehicle, authorising the assigned mechanic or an active Confidential Informant. `inspections/[id]/page.tsx` loads that transaction's `sell_photo` documents, signs the private paths server-side through the existing helper, resolves checklist ids to names, and renders a read-only `Vehicle photos & condition` card. Generic transaction access was **not** widened. |
+| 1.1 | **Fixed** | New migration `00047_task32_field_sell_submissions.sql` adds `list_field_sell_submissions()` — a `SECURITY DEFINER`, `STABLE`, fixed-`search_path` function returning only the car and the customer's condition checklist for sell submissions, to an active mechanic or Confidential Informant, with `anon` revoked. New `/sell-submissions` route (sidebar entry for exactly those two roles) lists each car with signed photo previews and reported issues, read-only. Generic transaction access was **not** widened. An earlier inspection-scoped bridge was dropped: no inspection in the live database is on a submission's vehicle. |
 | 1.2 | **Fixed** | The vehicle table's composite column now reads `make`/`model`/`year` from the row instead of looking up columns that never existed. A missing year renders an em dash. A regression test asserts both a populated cell and the absence of missing-column console output. |
 | 1.3 | **Fixed** | `TRANSACTION_VIEWER_ROLES` added to `src/lib/auth/roles.ts` and used by both the transactions list and detail routes; the detail guard runs before its row fetch, so a denial redirects to `/unauthorized` instead of 404ing. |
 | 2.1, 2.2 | **No defect** | Nothing changed. Both toasts sit on guarded success branches under the root `<Toaster />`; the original "sampling artifact" guess was correct. |
