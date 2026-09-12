@@ -1,6 +1,7 @@
 import {
   Banknote,
   Calendar,
+  Camera,
   Car,
   ChartBar,
   ClipboardList,
@@ -165,6 +166,12 @@ export const sidebarItems: NavGroup[] = [
         title: "Inspections",
         url: "/inspections",
         icon: ClipboardList,
+      },
+      {
+        id: "sell-submissions",
+        title: "Sell Submissions",
+        url: "/sell-submissions",
+        icon: Camera,
       },
       {
         id: "inquiries",

@@ -41,8 +41,8 @@ export const STAFF_ROLES: GceRole[] = [
  * Roles that may open the staff transaction list and a transaction detail page.
  * Kept in one place so both routes deny with the same `/unauthorized` screen —
  * a detail route without this guard answers a bare 404 for the same denial.
- * Mechanic is deliberately absent: field roles see sell evidence through the
- * inspection detail instead (see get_inspection_sell_submission).
+ * Mechanic is deliberately absent: he reads what a customer sent through the
+ * sell-submission list instead (see SELL_SUBMISSION_VIEWER_ROLES).
  */
 export const TRANSACTION_VIEWER_ROLES: GceRole[] = [
   "ceo",
@@ -51,6 +51,13 @@ export const TRANSACTION_VIEWER_ROLES: GceRole[] = [
   "confidential_informant",
   "sales_manager",
 ];
+
+/**
+ * Roles that may read the sell-submission list — the photos and the condition checklist a
+ * customer sent with a car. Both are documented as viewers of what a customer submitted, and
+ * neither may open the transaction list, so this surface gives them the car without the ledger.
+ */
+export const SELL_SUBMISSION_VIEWER_ROLES: GceRole[] = ["mechanic", "confidential_informant"];
 
 export const RBAC_MANAGED_ROLES = [
   "supplier",
@@ -250,6 +257,7 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
     "finance",
     "vehicles",
     "inspections",
+    "sell-submissions",
     "transactions",
     "field-cases",
     "announcements",
@@ -268,7 +276,7 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
     "staff-records",
     "announcements",
   ]),
-  mechanic: new Set(["default", "vehicles", "inspections", "field-cases", "announcements"]),
+  mechanic: new Set(["default", "vehicles", "inspections", "sell-submissions", "field-cases", "announcements"]),
   head_security: new Set([
     "default",
     "vehicles",
