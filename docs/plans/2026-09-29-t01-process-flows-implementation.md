@@ -187,6 +187,7 @@ This plan orders that work so each phase ships a complete, testable flow. Later 
 - [x] Apply `00054` to the hosted project
 - [x] e2e `src/tests/e2e/t01-phase5-financing.spec.ts` (phases A–C: request → terms chain → offer → visit → claim → downpayment → agreement → sold) passed 7/7 on 2026-09-30; installments, repossession and reconditioning are covered by unit tests
 - [x] The e2e run found that Mark Sold cleared "In-House Financing — Active"; fixed in `transitionTransaction`
+- [x] e2e `src/tests/e2e/t01-phase5-branches.spec.ts` (returned terms → buyer declines; Potential Buyer claims later and pays every installment; missed installments → repossession → reconditioning → reprice → relisted) passed 3/3 on 2026-09-30 on the hosted project, using its own `E2E-T01` test cars
 - Defaults used: Q4 7-day window; Q5 flag on the first missed installment, repossession from the 4th, no penalty amount added; Q6 the Sales Manager calculates, the Head Accountant reviews; Step 10 "Head Accountant records final details" is folded into the CEO confirmation.
 - **Gate:** the client signs off on §6 and answers Q4–Q6.
 - **Phase A–B.** The SM captures the payment duration and proposes terms. Wire the existing `createPaymentTerms` to a new form, then HA review (new `payment_terms.ha_reviewed_*`), then CEO confirm (existing `approvePaymentTerms`), then buyer decision.
