@@ -37,7 +37,7 @@ test.describe("Task 32 client feedback", () => {
     await page.getByLabel("Model *").fill("Civic");
     await page.getByLabel("Year *").fill("2020");
     await page.getByLabel("Mileage (km) *").fill("50000");
-    await page.getByRole("combobox").click();
+    await page.getByRole("combobox", { name: /^Condition/ }).click();
     await page.getByRole("option", { name: "Good" }).click();
     await page.getByLabel("Offered Amount (₱) *").fill("450000");
     await page.getByRole("button", { name: "Submit Vehicle", exact: true }).click();

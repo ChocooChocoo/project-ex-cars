@@ -16,8 +16,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { ACCEPTED_ID_TYPES, ID_LABELS } from "@/lib/auth/roles";
+import { SELL_MEETUP_METHOD_LABELS, SELL_MEETUP_METHODS } from "@/lib/transactions/sell-flow";
 import { type SellVehicleFormData, sellVehicleSchema } from "@/lib/validation/transactions";
 
 export interface ConditionChecklistNode {
@@ -43,6 +46,15 @@ export function validateSellPhotos(files: File[]): string | null {
   return null;
 }
 
+export const SELL_PAPER_ACCEPT = "image/jpeg,image/png,image/webp,application/pdf";
+
+const PAPER_FIELDS = [
+  { key: "id_file_1", label: "Valid ID #1 *" },
+  { key: "id_file_2", label: "Valid ID #2 *" },
+  { key: "orcr_file", label: "ORCR *" },
+  { key: "deed_of_sale_file", label: "Deed of Sale *" },
+] as const;
+
 export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNodes?: ConditionChecklistNode[] }) {
   const router = useRouter();
   const {
@@ -56,6 +68,11 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
   });
 
   const conditionValue = watch("condition");
+  const hasKnownIssues = watch("has_known_issues");
+
+  const [papers, setPapers] = useState<Record<string, File | null>>({});
+  const [idTypes, setIdTypes] = useState<Record<string, string>>({});
+  const [paperError, setPaperError] = useState<string | null>(null);
   const showDetail = typeof conditionValue === "string" && conditionValue.toLowerCase() === "other";
 
   const [photos, setPhotos] = useState<File[]>([]);
@@ -114,6 +131,13 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
       toast.error(photoValidationError);
       return;
     }
+    const missingPaper = PAPER_FIELDS.find((field) => !papers[field.key]);
+    if (missingPaper || !idTypes.id_type_1 || !idTypes.id_type_2) {
+      const message = "Attach two valid IDs with their ID types, the ORCR and the deed of sale.";
+      setPaperError(message);
+      toast.error(message);
+      return;
+    }
     let finalCondition = data.condition;
     const detail = data.condition_detail;
     if (typeof finalCondition === "string" && finalCondition.toLowerCase() === "other" && detail?.trim()) {
@@ -127,6 +151,12 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
     fd.set("condition", finalCondition);
     fd.set("offered_amount", String(data.offered_amount));
     if (data.description) fd.set("description", data.description);
+    fd.set("has_known_issues", data.has_known_issues);
+    if (data.declared_issues) fd.set("declared_issues", data.declared_issues);
+    fd.set("meetup_method", data.meetup_method);
+    for (const field of PAPER_FIELDS) fd.set(field.key, papers[field.key] as File);
+    fd.set("id_type_1", idTypes.id_type_1);
+    fd.set("id_type_2", idTypes.id_type_2);
     if (detail?.trim() && finalCondition !== detail.trim()) {
       fd.set("condition_detail", detail.trim());
     }
@@ -226,6 +256,103 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
               placeholder="Any additional details about the vehicle..."
               rows={3}
             />
+          </Field>
+          <Field data-invalid={!!errors.has_known_issues}>
+            <FieldLabel>Existing vehicle issues *</FieldLabel>
+            <Controller
+              control={control}
+              name="has_known_issues"
+              render={({ field }) => (
+                <RadioGroup
+                  value={field.value ?? ""}
+                  onValueChange={field.onChange}
+                  aria-label="Existing vehicle issues"
+                >
+                  <div className="flex items-center gap-2 text-sm">
+                    <RadioGroupItem id="sell-issues-yes" value="yes" />
+                    <label htmlFor="sell-issues-yes">The vehicle has known issues</label>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <RadioGroupItem id="sell-issues-no" value="no" />
+                    <label htmlFor="sell-issues-no">There is no known issue</label>
+                  </div>
+                </RadioGroup>
+              )}
+            />
+            {errors.has_known_issues && <FieldError errors={[{ message: errors.has_known_issues.message }]} />}
+          </Field>
+          {hasKnownIssues === "yes" ? (
+            <Field data-invalid={!!errors.declared_issues}>
+              <FieldLabel htmlFor="sell-declared-issues">Describe the issues *</FieldLabel>
+              <Textarea
+                id="sell-declared-issues"
+                {...register("declared_issues")}
+                placeholder="e.g. Aircon not cooling, dent on rear bumper"
+                rows={3}
+              />
+              {errors.declared_issues && <FieldError errors={[{ message: errors.declared_issues.message }]} />}
+            </Field>
+          ) : null}
+          <Field data-invalid={!!errors.meetup_method}>
+            <FieldLabel htmlFor="sell-meetup-method">Meet-up method *</FieldLabel>
+            <Controller
+              control={control}
+              name="meetup_method"
+              render={({ field }) => (
+                <Select value={field.value ?? ""} onValueChange={field.onChange}>
+                  <SelectTrigger id="sell-meetup-method">
+                    <SelectValue placeholder="Select meet-up method" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SELL_MEETUP_METHODS.map((method) => (
+                      <SelectItem key={method} value={method}>
+                        {SELL_MEETUP_METHOD_LABELS[method]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+            {errors.meetup_method && <FieldError errors={[{ message: errors.meetup_method.message }]} />}
+          </Field>
+          <Field data-invalid={!!paperError}>
+            <FieldLabel>Required papers (JPEG/PNG/WebP/PDF, max 5MB each)</FieldLabel>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {PAPER_FIELDS.map((paper, index) => (
+                <div key={paper.key} className="flex flex-col gap-1.5">
+                  <label htmlFor={`sell-${paper.key}`} className="text-sm">
+                    {paper.label}
+                  </label>
+                  <Input
+                    id={`sell-${paper.key}`}
+                    type="file"
+                    accept={SELL_PAPER_ACCEPT}
+                    onChange={(event) => {
+                      setPapers((prev) => ({ ...prev, [paper.key]: event.target.files?.[0] ?? null }));
+                      setPaperError(null);
+                    }}
+                  />
+                  {index < 2 ? (
+                    <Select
+                      value={idTypes[`id_type_${index + 1}`] ?? ""}
+                      onValueChange={(value) => setIdTypes((prev) => ({ ...prev, [`id_type_${index + 1}`]: value }))}
+                    >
+                      <SelectTrigger aria-label={`ID type #${index + 1}`}>
+                        <SelectValue placeholder="ID type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ACCEPTED_ID_TYPES.map((idType) => (
+                          <SelectItem key={idType} value={idType}>
+                            {ID_LABELS[idType]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+            {paperError && <FieldError errors={[{ message: paperError }]} />}
           </Field>
           <Field data-invalid={!!photoError}>
             <FieldLabel htmlFor="sell-photos">Vehicle Photos * (1–6 photos, JPEG/PNG/WebP, max 5MB each)</FieldLabel>

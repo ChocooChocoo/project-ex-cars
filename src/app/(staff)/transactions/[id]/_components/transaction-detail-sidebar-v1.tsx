@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ACCEPTED_ID_TYPES, ID_LABELS } from "@/lib/auth/roles";
 import { transactionDocumentLabel } from "@/lib/transactions/document-media";
 import { arrangementKindLabel, TRANSACTION_STATE_LABELS } from "@/lib/transactions/labels";
+import { SELL_PAPER_KINDS } from "@/lib/transactions/sell-flow";
 import type { TransactionState } from "@/lib/transactions/state-machine";
 import { formatCurrency } from "@/lib/utils";
 
@@ -50,7 +51,6 @@ export function TransactionDetailSidebarV1({
   conditionItems,
   checklistNameMap,
   onRecordPayment,
-  onReviewSell,
   onUploadDocument,
   onVerifyDocument,
   onRejectDocument,
@@ -79,7 +79,6 @@ export function TransactionDetailSidebarV1({
   // Optional id → display-name map for inspection_checklist_nodes.
   readonly checklistNameMap?: Record<string, string>;
   readonly onRecordPayment: (amount: string, method: string, date: string) => Promise<void>;
-  readonly onReviewSell: (decision: string, valuation: string, notes: string) => Promise<void>;
   readonly onUploadDocument: (documentKind: string, idType: string, file: File) => Promise<void>;
   readonly onVerifyDocument: (documentId: string) => Promise<void>;
   readonly onRejectDocument: (documentId: string) => Promise<void>;
@@ -92,8 +91,6 @@ export function TransactionDetailSidebarV1({
   const [payAmount, setPayAmount] = useState("");
   const [payMethod, setPayMethod] = useState("cash");
   const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10));
-  const [valuation, setValuation] = useState(sellDetails?.valuation_amount ? String(sellDetails.valuation_amount) : "");
-  const [reviewNotes, setReviewNotes] = useState((sellDetails?.review_notes as string) ?? "");
   const [docKind, setDocKind] = useState("valid_id");
   const [docIdType, setDocIdType] = useState("");
   const docFileRef = useRef<HTMLInputElement>(null);
@@ -116,6 +113,11 @@ export function TransactionDetailSidebarV1({
   // Only the Head Accountant may verify purchase documents, so the buttons match
   // the server-side guard in verifyTransactionDocument.
   const isHeadAccountant = userRole === "head_accountant";
+  // T01 Selling step 2: the Marketing Specialist verifies a seller's papers; the Head Accountant the rest.
+  const canVerify = (documentKind: unknown) =>
+    kind === "sell" && (SELL_PAPER_KINDS as readonly unknown[]).includes(documentKind)
+      ? userRole === "marketing_specialist"
+      : isHeadAccountant;
 
   const docSellPhotos = documents.filter((doc) => String(doc.document_kind) === "sell_photo");
   const photos =
@@ -327,7 +329,7 @@ export function TransactionDetailSidebarV1({
                     ) : (
                       <p className="text-muted-foreground text-xs">Preview unavailable</p>
                     )}
-                    {doc.verification_state === "pending" && isHeadAccountant ? (
+                    {doc.verification_state === "pending" && canVerify(doc.document_kind) ? (
                       <div className="flex gap-1.5">
                         <Button
                           size="sm"
@@ -406,7 +408,7 @@ export function TransactionDetailSidebarV1({
             </div>
           )}
 
-          {["approved", "completed"].includes(tState) && !isCeo && (
+          {["approved", "completed"].includes(tState) && !isCeo && kind !== "sell" && (
             <div className="space-y-2 rounded-md border bg-muted/20 px-3 py-2">
               <p className="text-muted-foreground text-xs">Record payment</p>
               <div className="flex flex-col gap-1.5">
@@ -498,56 +500,6 @@ export function TransactionDetailSidebarV1({
               </div>
             </div>
           )}
-
-          {kind === "sell" &&
-            sellDetails &&
-            !sellDetails.decision &&
-            userRole === "ceo" &&
-            tState === "under_review" && (
-              <div className="space-y-2 rounded-md border bg-muted/20 px-3 py-2">
-                <p className="text-muted-foreground text-xs">Review sell offer</p>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="valuation" className="text-xs">
-                    Valuation (₱)
-                  </Label>
-                  <Input
-                    id="valuation"
-                    type="number"
-                    className="h-7 text-xs"
-                    value={valuation}
-                    onChange={(e) => setValuation(e.target.value)}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="review_notes" className="text-xs">
-                    Notes
-                  </Label>
-                  <Input
-                    id="review_notes"
-                    className="h-7 text-xs"
-                    value={reviewNotes}
-                    onChange={(e) => setReviewNotes(e.target.value)}
-                  />
-                </div>
-                <div className="flex gap-1.5">
-                  <Button
-                    size="sm"
-                    className="h-6 flex-1 px-2 text-xs"
-                    onClick={() => onReviewSell("accepted", valuation, reviewNotes)}
-                  >
-                    Accept
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    className="h-6 flex-1 px-2 text-xs"
-                    onClick={() => onReviewSell("rejected", valuation, reviewNotes)}
-                  >
-                    Reject
-                  </Button>
-                </div>
-              </div>
-            )}
 
           <div className="flex items-center justify-between gap-2 rounded-md border bg-muted/20 px-3 py-2">
             <span className="text-muted-foreground text-xs">Transaction state</span>

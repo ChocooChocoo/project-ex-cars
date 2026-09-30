@@ -9,7 +9,7 @@ export default async function StaffChatPage({ params }: { params: Promise<{ id: 
   const { id } = await params;
   const supabase = await createServerSupabase();
   const role = await getCurrentRole();
-  if (!role || !["ceo", "account_manager", "sales_manager"].includes(role)) notFound();
+  if (!role || !["ceo", "account_manager", "sales_manager", "marketing_specialist"].includes(role)) notFound();
 
   let inquiryQuery = supabase
     .from("inquiries")
@@ -17,6 +17,8 @@ export default async function StaffChatPage({ params }: { params: Promise<{ id: 
     .eq("id", id);
 
   if (role === "sales_manager") inquiryQuery = inquiryQuery.eq("intention_kind", "buy_now");
+  // T01 Selling step 5: the Marketing Specialist negotiates in the offer's own thread only.
+  if (role === "marketing_specialist") inquiryQuery = inquiryQuery.eq("intention_kind", "sell_negotiation");
 
   const { data: inquiry } = await inquiryQuery.maybeSingle();
 

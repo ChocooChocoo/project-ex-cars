@@ -1,20 +1,20 @@
 import { describe, expect, it } from "vitest";
 
+import { TRANSACTION_VIEWER_ROLES } from "./roles";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-
-import { TRANSACTION_VIEWER_ROLES } from "./roles";
 
 const read = (relative: string) => readFileSync(resolve(process.cwd(), relative), "utf8");
 
 describe("TRANSACTION_VIEWER_ROLES", () => {
-  it("lists exactly the five documented transaction viewers, in order", () => {
+  it("lists exactly the documented transaction viewers, in order", () => {
     expect(TRANSACTION_VIEWER_ROLES).toEqual([
       "ceo",
       "account_manager",
       "head_accountant",
       "confidential_informant",
       "sales_manager",
+      "marketing_specialist",
     ]);
   });
 

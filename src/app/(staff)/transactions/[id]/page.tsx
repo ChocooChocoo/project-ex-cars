@@ -76,6 +76,29 @@ export default async function TransactionDetailPage({ params }: { readonly param
   )
     .filter((worker) => worker.role === "confidential_informant")
     .map((worker) => ({ id: worker.account_id, full_name: worker.full_name }));
+  const mechanics = ((workerDirectory as { account_id: string; role: string; full_name: string | null }[] | null) ?? [])
+    .filter((worker) => worker.role === "mechanic")
+    .map((worker) => ({ id: worker.account_id, full_name: worker.full_name }));
+
+  // T01 Selling: ceilings, the field inspection, the issue report, expenses and the negotiation thread.
+  const isSell = (transaction as Record<string, unknown>).transaction_kind === "sell";
+  const [{ data: proposals }, { data: fieldCase }, { data: issueReport }, { data: expenses }, { data: thread }] = isSell
+    ? await Promise.all([
+        supabase
+          .from("vehicle_price_proposals")
+          .select("id, proposal_kind, proposed_amount, decision, notes, created_at")
+          .eq("transaction_id", id)
+          .order("created_at", { ascending: false }),
+        supabase.from("field_cases").select("*").eq("transaction_id", id).eq("case_kind", "acquisition").maybeSingle(),
+        supabase.from("inspection_issue_reports").select("*").eq("transaction_id", id).maybeSingle(),
+        supabase
+          .from("field_case_expenses")
+          .select("id, amount, description, submitted_at, reimbursed_at, field_cases!inner(transaction_id)")
+          .eq("field_cases.transaction_id", id)
+          .order("submitted_at", { ascending: true }),
+        supabase.from("inquiries").select("id").eq("transaction_id", id).maybeSingle(),
+      ])
+    : [{ data: null }, { data: null }, { data: null }, { data: null }, { data: null }];
 
   // Task 32: resolve sell condition_items ids to display names for staff.
   // sell_details is a UNIQUE-per-transaction row; the relation may still come
@@ -111,6 +134,18 @@ export default async function TransactionDetailPage({ params }: { readonly param
         userRole={role}
         informants={informants}
         checklistNameMap={checklistNameMap}
+        sellFlow={
+          isSell
+            ? {
+                proposals: (proposals as Record<string, unknown>[] | null) ?? [],
+                fieldCase: fieldCase as Record<string, unknown> | null,
+                issueReport: issueReport as Record<string, unknown> | null,
+                expenses: (expenses as Record<string, unknown>[] | null) ?? [],
+                threadId: (thread as { id: string } | null)?.id ?? null,
+                mechanics,
+              }
+            : null
+        }
       />
     </div>
   );

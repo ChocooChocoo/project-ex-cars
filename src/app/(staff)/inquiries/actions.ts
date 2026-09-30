@@ -10,7 +10,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 const inquiryIdSchema = z.string().uuid();
 
 export async function getStaffInquiryThread(inquiryId: string): Promise<ActionResult<InquiryThreadData>> {
-  const authorization = await authorizeAction(["ceo", "account_manager", "sales_manager"]);
+  const authorization = await authorizeAction(["ceo", "account_manager", "sales_manager", "marketing_specialist"]);
   if (!authorization.ok) return authorization;
 
   const parsedId = inquiryIdSchema.safeParse(inquiryId);
@@ -24,6 +24,9 @@ export async function getStaffInquiryThread(inquiryId: string): Promise<ActionRe
 
   if (authorization.data.role === "sales_manager") {
     inquiryQuery = inquiryQuery.eq("intention_kind", "buy_now");
+  }
+  if (authorization.data.role === "marketing_specialist") {
+    inquiryQuery = inquiryQuery.eq("intention_kind", "sell_negotiation");
   }
 
   const { data: inquiry, error: inquiryError } = await inquiryQuery.maybeSingle();

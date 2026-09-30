@@ -3,6 +3,7 @@
 
 import { useRef, useState } from "react";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { format } from "date-fns";
@@ -107,6 +108,7 @@ export function TransactionDetail({
   paymentTerms,
   viewingArrangements,
   autofill,
+  negotiationThreadId = null,
 }: {
   readonly transaction: Record<string, unknown>;
   readonly history: Record<string, unknown>[];
@@ -116,6 +118,7 @@ export function TransactionDetail({
   readonly paymentTerms: Record<string, unknown> | null;
   readonly viewingArrangements: Record<string, unknown>[];
   readonly autofill: ProfileAutoFill | null;
+  readonly negotiationThreadId?: string | null;
 }) {
   const router = useRouter();
   const id = transaction.id as string;
@@ -303,6 +306,11 @@ export function TransactionDetail({
           <Badge variant="outline" className="text-sm">
             {transactionKindLabel(kind as never)}
           </Badge>
+          {negotiationThreadId ? (
+            <Button asChild variant="outline">
+              <Link href={`/my-inquiries/${negotiationThreadId}`}>Chat with GCE</Link>
+            </Button>
+          ) : null}
           {canCancel && (
             <AlertDialog>
               <AlertDialogTrigger asChild>

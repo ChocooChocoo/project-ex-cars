@@ -685,7 +685,7 @@ export function FinanceClient({
           </DialogHeader>
           <FieldGroup className="gap-4">
             <Field>
-              <FieldLabel>Buy Transaction</FieldLabel>
+              <FieldLabel>Transaction</FieldLabel>
               <Select value={fundTransactionId} onValueChange={setFundTransactionId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select transaction" />
@@ -694,7 +694,7 @@ export function FinanceClient({
                   <SelectGroup>
                     {purchaseTransactions.map((tx) => (
                       <SelectItem key={tx.id} value={tx.id}>
-                        {tx.id.slice(0, 8)}…
+                        {tx.transaction_kind === "sell" ? "Seller payment" : "Buy"} · {tx.id.slice(0, 8)}…
                       </SelectItem>
                     ))}
                   </SelectGroup>

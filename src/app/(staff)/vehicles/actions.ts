@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import { getCurrentRole } from "@/app/auth/actions";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { CEILING_PROPOSAL_KINDS } from "@/lib/transactions/sell-flow";
+import { applyCeilingDecision } from "@/lib/transactions/sell-flow-server";
 import {
   checklistAnswerSchema,
   contentItemSchema,
@@ -164,6 +166,7 @@ export async function proposePrice(formData: FormData) {
     .from("vehicle_price_proposals")
     .select("id")
     .eq("vehicle_id", parsed.data.vehicle_id)
+    .eq("proposal_kind", "selling_price")
     .eq("decision", "pending")
     .maybeSingle();
   if (existingProposal) return { error: "This vehicle already has a pending price proposal." };
@@ -206,12 +209,19 @@ export async function approvePrice(formData: FormData) {
 
   const { data: proposal, error: proposalError } = await admin
     .from("vehicle_price_proposals")
-    .select("vehicle_id, proposed_amount, decision")
+    .select("vehicle_id, proposed_amount, decision, proposal_kind, transaction_id")
     .eq("id", proposalId)
     .eq("decision", "pending")
     .maybeSingle();
   if (proposalError) return { error: proposalError.message };
   if (!proposal) return { error: "Price proposal is no longer pending." };
+
+  // Purchase and revised ceilings decide a sell offer, not a listing (D3).
+  const isCeiling = (CEILING_PROPOSAL_KINDS as readonly string[]).includes(proposal.proposal_kind);
+  if (isCeiling) {
+    const ceilingError = await applyCeilingDecision(admin, proposal, decision as "approved" | "rejected", user.user.id);
+    if (ceilingError) return { error: ceilingError };
+  }
 
   const vehicleId = proposal.vehicle_id as string;
   const { error } = await admin
@@ -226,14 +236,16 @@ export async function approvePrice(formData: FormData) {
 
   if (error) return { error: error.message };
 
-  if (decision === "approved") {
-    await admin.from("vehicles").update({ current_price: proposal.proposed_amount }).eq("id", vehicleId);
-  }
+  if (!isCeiling) {
+    if (decision === "approved") {
+      await admin.from("vehicles").update({ current_price: proposal.proposed_amount }).eq("id", vehicleId);
+    }
 
-  await admin
-    .from("vehicles")
-    .update({ listing_state: decision === "approved" ? "available" : "draft" })
-    .eq("id", vehicleId);
+    await admin
+      .from("vehicles")
+      .update({ listing_state: decision === "approved" ? "available" : "draft" })
+      .eq("id", vehicleId);
+  }
 
   await admin.from("audit_events").insert({
     actor_id: user.user.id,

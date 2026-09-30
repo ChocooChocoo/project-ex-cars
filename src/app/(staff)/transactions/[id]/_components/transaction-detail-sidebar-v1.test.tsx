@@ -20,7 +20,6 @@ function renderSidebar(documents: Record<string, unknown>[]) {
       informants={[]}
       sellDetails={{}}
       onRecordPayment={noop}
-      onReviewSell={noop}
       onUploadDocument={noop}
       onVerifyDocument={noop}
       onRejectDocument={noop}

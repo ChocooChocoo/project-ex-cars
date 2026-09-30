@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentRole } from "@/app/auth/actions";
 import { createServerSupabase } from "@/lib/supabase/server";
 
+import { type FieldExpenseRow, FieldExpensesCard } from "./_components/field-expenses-card";
 import { type DisbursementRow, FinanceClient, type FinancialEntryRow } from "./_components/finance-client";
 
 const FINANCE_ROLES = ["ceo", "head_accountant", "account_manager", "confidential_informant"];
@@ -33,7 +34,13 @@ export default async function FinancePage() {
     disbursementsQuery = disbursementsQuery.eq("requested_by", user.id);
   }
 
-  const [{ data: entries }, { data: disbursements }, { data: purchaseTransactions }] = await Promise.all([
+  const [
+    { data: entries },
+    { data: disbursements },
+    { data: purchaseTransactions },
+    { data: clearedSells },
+    { data: fieldExpenses },
+  ] = await Promise.all([
     entriesQuery,
     disbursementsQuery,
     supabase
@@ -43,21 +50,48 @@ export default async function FinancePage() {
       .not("current_state", "in", "('cancelled','rejected')")
       .order("created_at", { ascending: false })
       .limit(50),
+    // Selling step 10: seller cars cleared by the inspection or the seller's answer, awaiting payment.
+    supabase
+      .from("transactions")
+      .select("id, customer_id, transaction_kind, sell_details!inner(cleared_for_payment_at)")
+      .eq("transaction_kind", "sell")
+      .eq("current_state", "approved")
+      .not("sell_details.cleared_for_payment_at", "is", null),
+    // Selling step 13: field expenses; RLS limits this to the CEO, Head Accountant and submitters.
+    supabase
+      .from("field_case_expenses")
+      .select(
+        "id, amount, description, submitted_at, reimbursed_at, field_cases(transaction_id, vehicles(make, model, year, listing_state))",
+      )
+      .is("reimbursed_at", null)
+      .order("submitted_at", { ascending: true }),
   ]);
 
   return (
-    <FinanceClient
-      entries={(entries as unknown as FinancialEntryRow[]) ?? []}
-      disbursements={(disbursements as unknown as DisbursementRow[]) ?? []}
-      purchaseTransactions={
-        (purchaseTransactions ?? []) as { id: string; customer_id: string; transaction_kind: string }[]
-      }
-      canRecord={!isInformant && ["ceo", "head_accountant", "account_manager"].includes(role)}
-      canVerify={!isInformant && ["ceo", "head_accountant"].includes(role)}
-      canRequest={["ceo", "account_manager", "confidential_informant"].includes(role)}
-      canAdvance={!isInformant && ["ceo", "head_accountant"].includes(role)}
-      canRequestPurchaseFunds={!isInformant && ["ceo", "account_manager"].includes(role)}
-      isInformant={isInformant}
-    />
+    <div className="flex flex-col gap-6">
+      <FinanceClient
+        entries={(entries as unknown as FinancialEntryRow[]) ?? []}
+        disbursements={(disbursements as unknown as DisbursementRow[]) ?? []}
+        purchaseTransactions={
+          [...(clearedSells ?? []), ...(purchaseTransactions ?? [])] as {
+            id: string;
+            customer_id: string;
+            transaction_kind: string;
+          }[]
+        }
+        canRecord={!isInformant && ["ceo", "head_accountant", "account_manager"].includes(role)}
+        canVerify={!isInformant && ["ceo", "head_accountant"].includes(role)}
+        canRequest={["ceo", "account_manager", "confidential_informant"].includes(role)}
+        canAdvance={!isInformant && ["ceo", "head_accountant"].includes(role)}
+        canRequestPurchaseFunds={!isInformant && ["ceo", "account_manager"].includes(role)}
+        isInformant={isInformant}
+      />
+      {["ceo", "head_accountant"].includes(role) ? (
+        <FieldExpensesCard
+          expenses={(fieldExpenses as unknown as FieldExpenseRow[]) ?? []}
+          canReimburse={role === "head_accountant"}
+        />
+      ) : null}
+    </div>
   );
 }

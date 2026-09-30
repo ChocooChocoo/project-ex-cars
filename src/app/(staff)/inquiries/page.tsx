@@ -22,6 +22,9 @@ export default async function StaffInquiriesPage() {
 
   if (myRole === "sales_manager") {
     query = query.eq("intention_kind", "buy_now");
+  } else {
+    // Sell negotiation threads belong to the Marketing Specialist, who opens them from the sell offer.
+    query = query.neq("intention_kind", "sell_negotiation");
   }
 
   const { data: inquiries } = await query.order("updated_at", { ascending: false });

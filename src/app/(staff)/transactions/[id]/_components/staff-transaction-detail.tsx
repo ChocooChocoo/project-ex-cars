@@ -14,13 +14,13 @@ import {
   markInstallmentWaived,
   recordPaperwork,
   recordPayment,
-  reviewSellTransaction,
   transitionTransaction,
   verifyPayment,
   verifyTransactionDocument,
 } from "@/app/(staff)/transactions/actions";
 import type { TransactionState } from "@/lib/transactions/state-machine";
 
+import { type SellFlowData, SellFlowPanel } from "./sell-flow-panel";
 import { TransactionDetailSidebarV1 } from "./transaction-detail-sidebar-v1";
 import { TransactionOverviewV1 } from "./transaction-overview-v1";
 import { TransactionPaymentProgressV1 } from "./transaction-payment-progress-v1";
@@ -38,6 +38,7 @@ export function StaffTransactionDetail({
   userRole,
   informants,
   checklistNameMap,
+  sellFlow = null,
 }: {
   readonly transaction: Record<string, unknown>;
   readonly history: Record<string, unknown>[];
@@ -49,6 +50,7 @@ export function StaffTransactionDetail({
   readonly userRole: string;
   readonly informants: { id: string; full_name: string | null }[];
   readonly checklistNameMap?: Record<string, string>;
+  readonly sellFlow?: SellFlowData | null;
 }) {
   const router = useRouter();
   const id = transaction.id as string;
@@ -99,20 +101,6 @@ export function StaffTransactionDetail({
     if (result.error) toast.error(result.error);
     else {
       toast.success("Payment recorded.");
-      router.refresh();
-    }
-  }
-
-  async function onReviewSell(decision: string, valuation: string, notes: string) {
-    const fd = new FormData();
-    fd.set("transaction_id", id);
-    fd.set("valuation_amount", valuation);
-    fd.set("decision", decision);
-    fd.set("review_notes", notes);
-    const result = await reviewSellTransaction(fd);
-    if (result.error) toast.error(result.error);
-    else {
-      toast.success(`Sell ${decision}.`);
       router.refresh();
     }
   }
@@ -255,16 +243,27 @@ export function StaffTransactionDetail({
             vehicleRequests={vehicleRequests}
             installmentAccount={installmentAccount}
           />
-          <TransactionStatusTriageV1
-            state={state}
-            kind={kind}
-            openedAt={openedAt}
-            completedAt={completedAt}
-            updatedAt={updatedAt}
-            userRole={userRole}
-            transitioning={transitioning}
-            onTransition={doTransition}
-          />
+          {kind === "sell" && sellFlow ? (
+            <SellFlowPanel
+              transaction={transaction}
+              sellDetails={sellDetails}
+              documents={documents}
+              userRole={userRole}
+              informants={informants}
+              data={sellFlow}
+            />
+          ) : (
+            <TransactionStatusTriageV1
+              state={state}
+              kind={kind}
+              openedAt={openedAt}
+              completedAt={completedAt}
+              updatedAt={updatedAt}
+              userRole={userRole}
+              transitioning={transitioning}
+              onTransition={doTransition}
+            />
+          )}
         </div>
         <TransactionDetailSidebarV1
           kind={kind}
@@ -280,7 +279,6 @@ export function StaffTransactionDetail({
           sellDetails={sellDetails}
           checklistNameMap={checklistNameMap}
           onRecordPayment={onRecordPayment}
-          onReviewSell={onReviewSell}
           onUploadDocument={onUploadDocument}
           onVerifyDocument={onVerifyDocument}
           onRejectDocument={onRejectDocument}

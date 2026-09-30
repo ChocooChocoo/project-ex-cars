@@ -66,6 +66,13 @@ export default async function MyTransactionDetailPage({ params }: { readonly par
 
   const autofill = await getProfileAutoFill();
 
+  // Selling step 5: the offer's negotiation thread with the Marketing Specialist.
+  const { data: negotiationThread } = await supabase
+    .from("inquiries")
+    .select("id")
+    .eq("transaction_id", id)
+    .maybeSingle();
+
   return (
     <div className="flex flex-col gap-6">
       <TransactionDetail
@@ -77,6 +84,7 @@ export default async function MyTransactionDetailPage({ params }: { readonly par
         paymentTerms={paymentTerms as Record<string, unknown> | null}
         viewingArrangements={(viewingArrangements as Record<string, unknown>[]) ?? []}
         autofill={autofill}
+        negotiationThreadId={(negotiationThread as { id: string } | null)?.id ?? null}
       />
     </div>
   );

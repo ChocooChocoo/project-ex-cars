@@ -42,6 +42,8 @@ function baseData(overrides: Record<string, unknown> = {}) {
     mileage: 50000,
     condition: "excellent",
     offered_amount: 450000,
+    has_known_issues: "no",
+    meetup_method: "gce_visit",
     ...overrides,
   };
 }
@@ -214,13 +216,13 @@ describe("SellVehicleForm Select + Other detail", () => {
   it("renders condition Select with placeholder", () => {
     render(<SellVehicleForm />);
     expect(screen.getByText("Condition *")).toBeInTheDocument();
-    expect(screen.getByRole("combobox")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /^Condition/ })).toBeInTheDocument();
     expect(screen.getByText("Select condition")).toBeInTheDocument();
   });
 
   it("renders 4 enum items + Other when opened", async () => {
     render(<SellVehicleForm />);
-    fireEvent.click(screen.getByRole("combobox"));
+    fireEvent.click(screen.getByRole("combobox", { name: /^Condition/ }));
     await waitFor(() => expect(screen.getAllByText("Excellent").length).toBeGreaterThanOrEqual(1));
     expect(screen.getAllByText("Good").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("Fair").length).toBeGreaterThanOrEqual(1);
@@ -232,7 +234,7 @@ describe("SellVehicleForm Select + Other detail", () => {
 
   it("reveals detail textarea when Other selected", async () => {
     render(<SellVehicleForm />);
-    fireEvent.click(screen.getByRole("combobox"));
+    fireEvent.click(screen.getByRole("combobox", { name: /^Condition/ }));
     await waitFor(() => expect(screen.getAllByText("Other").length).toBeGreaterThanOrEqual(1));
     const otherOption = getVisibleOption("Other");
     fireEvent.click(otherOption);
@@ -242,10 +244,24 @@ describe("SellVehicleForm Select + Other detail", () => {
   it("keeps detail hidden for non-Other selection", async () => {
     render(<SellVehicleForm />);
     expect(screen.queryByPlaceholderText("Describe the condition...")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("combobox"));
+    fireEvent.click(screen.getByRole("combobox", { name: /^Condition/ }));
     await waitFor(() => expect(screen.getAllByText("Good").length).toBeGreaterThanOrEqual(1));
     const goodOption = getVisibleOption("Good");
     fireEvent.click(goodOption);
     await waitFor(() => expect(screen.queryByPlaceholderText("Describe the condition...")).not.toBeInTheDocument());
+  });
+});
+
+describe("sellVehicleSchema issue declaration (Selling step 1)", () => {
+  it("requires an explicit declaration and a meet-up method", () => {
+    expect(sellVehicleSchema.safeParse(baseData({ has_known_issues: undefined })).success).toBe(false);
+    expect(sellVehicleSchema.safeParse(baseData({ meetup_method: undefined })).success).toBe(false);
+  });
+
+  it("requires the issues to be described when the seller declares some", () => {
+    expect(sellVehicleSchema.safeParse(baseData({ has_known_issues: "yes" })).success).toBe(false);
+    expect(
+      sellVehicleSchema.safeParse(baseData({ has_known_issues: "yes", declared_issues: "Aircon not cooling" })).success,
+    ).toBe(true);
   });
 });

@@ -46,5 +46,7 @@ export function isTransactionDocumentImage(storagePath: unknown): boolean {
 
 export function transactionDocumentLabel(documentKind: unknown): string {
   const label = typeof documentKind === "string" ? documentKind.replace(/_/g, " ") : "document";
-  return label === "valid id" ? "Valid ID" : label.charAt(0).toUpperCase() + label.slice(1);
+  if (label === "valid id") return "Valid ID";
+  if (label === "orcr") return "ORCR";
+  return label.charAt(0).toUpperCase() + label.slice(1);
 }
