@@ -11,6 +11,7 @@ import { toast } from "sonner";
 
 import { cancelTransaction, saveBuyDetails, uploadPurchaseDocument } from "@/app/(customer)/my-transactions/actions";
 import { TransactionImagePreview } from "@/components/transaction-image-preview";
+import { TransactionStatusBadge } from "@/components/transaction-status-badge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,9 +39,8 @@ import {
   paymentMethodLabel,
   TRANSACTION_STATE_LABELS,
   transactionKindLabel,
-  transactionStatusBadgeVariant,
 } from "@/lib/transactions/labels";
-import type { TransactionState } from "@/lib/transactions/state-machine";
+import type { FlowStatus, TransactionFlag, TransactionState } from "@/lib/transactions/state-machine";
 import { cn, formatCurrency } from "@/lib/utils";
 
 import type { TransactionPaperProps } from "./transaction-paper";
@@ -293,9 +293,13 @@ export function TransactionDetail({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <Badge variant={transactionStatusBadgeVariant(state)} className="text-sm">
-            {TRANSACTION_STATE_LABELS[state]}
-          </Badge>
+          <TransactionStatusBadge
+            state={state}
+            flowStatus={transaction.flow_status as FlowStatus | null}
+            flag={transaction.flag as TransactionFlag | null}
+            reviewDueAt={transaction.review_due_at as string | null}
+            className="text-sm"
+          />
           <Badge variant="outline" className="text-sm">
             {transactionKindLabel(kind as never)}
           </Badge>
@@ -348,7 +352,11 @@ export function TransactionDetail({
                           <SelectItem value="cash">Cash</SelectItem>
                           <SelectItem value="financing">Financing</SelectItem>
                           <SelectItem value="cheque">Cheque</SelectItem>
-                          <SelectItem value="down_payment">Down Payment</SelectItem>
+                          <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                          {/* Legacy method: shown only so older requests still display their saved choice. */}
+                          {paymentMethod === "down_payment" && (
+                            <SelectItem value="down_payment">Down Payment</SelectItem>
+                          )}
                         </SelectGroup>
                       </SelectContent>
                     </Select>

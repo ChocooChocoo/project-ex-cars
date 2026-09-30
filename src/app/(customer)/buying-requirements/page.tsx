@@ -37,7 +37,7 @@ const PAYMENT_METHODS = [
   { label: "Cash", detail: "Pay the full amount at once." },
   { label: "Financing", detail: "Pay in monthly installments with GCE terms." },
   { label: "Cheque", detail: "Pay by cheque on the agreed date." },
-  { label: "Down payment", detail: "Pay part now and settle the balance as agreed." },
+  { label: "Bank transfer", detail: "Transfer the amount to GCE's bank account." },
 ] as const;
 
 const ARRANGEMENTS = [

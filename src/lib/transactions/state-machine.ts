@@ -14,7 +14,8 @@ export type TransactionState = (typeof TRANSACTION_STATES)[number];
 export const TRANSACTION_KINDS = ["buy", "sell", "request_a_car"] as const;
 export type TransactionKind = (typeof TRANSACTION_KINDS)[number];
 
-export const PAYMENT_METHODS = ["cash", "financing", "cheque", "down_payment"] as const;
+// down_payment stays for old rows only; new forms offer bank_transfer (a downpayment is an amount, not a method).
+export const PAYMENT_METHODS = ["cash", "financing", "cheque", "down_payment", "bank_transfer"] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
 export const ARRANGEMENT_KINDS = ["delivery", "meetup", "gce_visit"] as const;
@@ -31,6 +32,37 @@ export type FieldCaseState = (typeof FIELD_CASE_STATES)[number];
 
 export const COLLECTION_ACTION_KINDS = ["notice", "ultimatum", "recovery_instruction", "recovery_result"] as const;
 export type CollectionActionKind = (typeof COLLECTION_ACTION_KINDS)[number];
+
+// Process-doc statuses (GCE Process Flows, Appendix B) layered over the coarse current_state.
+// "Overdue — Awaiting Action" is not stored: it is derived from review_due_at by isOverdue().
+export const FLOW_STATUSES = [
+  "pending_ceo_approval",
+  "pending_sm_approval",
+  "approved_awaiting_buyer_decision",
+  "gce_visit_scheduled_dp_pending",
+  "purchase_claim",
+  "potential_buyer",
+  "initial_dp_awaiting_verification",
+  "initial_dp_confirmed",
+  "financing_active",
+  "financing_completed",
+  "repossessed",
+  "sold",
+] as const;
+export type FlowStatus = (typeof FLOW_STATUSES)[number];
+
+export const TRANSACTION_FLAGS = [
+  "declined_by_buyer",
+  "buyer_no_show",
+  "buyer_unavailable",
+  "flagged",
+  "cancelled_unprofitable",
+  "seller_refused",
+] as const;
+export type TransactionFlag = (typeof TRANSACTION_FLAGS)[number];
+
+export const QUEUE_STATES = ["active", "on_hold"] as const;
+export type QueueState = (typeof QUEUE_STATES)[number];
 
 // Staff roles that can transition transaction states.
 type TransitionRole = "ceo" | "sales_manager" | "account_manager" | "head_accountant";
@@ -88,6 +120,53 @@ export function getAllowedTransitions(from: TransactionState, role: string): Tra
 export function isTerminal(state: TransactionState): boolean {
   return state === "rejected" || state === "completed" || state === "cancelled";
 }
+
+// Review window lapsed without a decision. Decisions clear review_due_at; nothing auto-cancels.
+export function isOverdue(
+  tx: { current_state: TransactionState; review_due_at: string | null },
+  now: Date = new Date(),
+): boolean {
+  if (!tx.review_due_at || isTerminal(tx.current_state)) return false;
+  return now.getTime() > new Date(tx.review_due_at).getTime();
+}
+
+export const CANCEL_CUTOFF_HOURS = 5;
+
+// Buyers may cancel a scheduled meetup or delivery only at least 5 hours before it.
+export function canCancelScheduled(scheduledAt: string | Date, now: Date = new Date()): boolean {
+  return new Date(scheduledAt).getTime() - now.getTime() >= CANCEL_CUTOFF_HOURS * 60 * 60 * 1000;
+}
+
+// A new request is Active only when no other request for the car is Active; otherwise it waits On Hold.
+export function nextQueueState(hasActiveRequest: boolean): QueueState {
+  return hasActiveRequest ? "on_hold" : "active";
+}
+
+export const FLOW_STATUS_LABELS: Record<FlowStatus, string> = {
+  pending_ceo_approval: "Pending CEO Approval",
+  pending_sm_approval: "Pending Sales Manager Approval",
+  approved_awaiting_buyer_decision: "Approved — Awaiting Buyer Decision",
+  gce_visit_scheduled_dp_pending: "GCE Visit Scheduled — Initial Downpayment Pending",
+  purchase_claim: "Purchase Claim",
+  potential_buyer: "Potential Buyer",
+  initial_dp_awaiting_verification: "Initial Downpayment — Awaiting Verification",
+  initial_dp_confirmed: "Initial Downpayment — Confirmed",
+  financing_active: "In-House Financing — Active",
+  financing_completed: "In-House Financing — Completed",
+  repossessed: "Repossessed / Recovered by GCE",
+  sold: "Sold",
+};
+
+export const TRANSACTION_FLAG_LABELS: Record<TransactionFlag, string> = {
+  declined_by_buyer: "Declined by Buyer",
+  buyer_no_show: "Buyer Didn't Show Up",
+  buyer_unavailable: "Buyer Unavailable",
+  flagged: "Flagged",
+  cancelled_unprofitable: "Cancelled — Not Profitable",
+  seller_refused: "Seller Refused",
+};
+
+export const OVERDUE_LABEL = "Overdue — Awaiting Action";
 
 export const TRANSACTION_STATE_LABELS: Record<TransactionState, string> = {
   pending: "Pending",

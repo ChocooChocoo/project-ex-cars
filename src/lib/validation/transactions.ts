@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { PAYMENT_METHODS } from "@/lib/transactions/state-machine";
+
 export const buyTransactionSchema = z.object({
   vehicle_id: z.string().uuid(),
 });
@@ -8,7 +10,7 @@ export type BuyTransactionFormData = z.infer<typeof buyTransactionSchema>;
 
 export const buyDetailsSchema = z.object({
   transaction_id: z.string().uuid(),
-  payment_method: z.enum(["cash", "financing", "cheque", "down_payment"], {
+  payment_method: z.enum(PAYMENT_METHODS, {
     error: "Select a payment method.",
   }),
   final_price: z.coerce.number().min(0, "Price cannot be negative.").optional(),
