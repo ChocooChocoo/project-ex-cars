@@ -124,11 +124,21 @@ export async function transitionTransaction(formData: FormData) {
       };
     }
     // §2 step 6: the car is marked sold once the payment is received.
-    const { count: payments } = await admin
+    // §7–9 (Phase 6 default): a bank transfer counts only once the Head Accountant verifies it cleared.
+    const bankTransfer = purchase?.payment_method === "bank_transfer";
+    let paymentQuery = admin
       .from("payment_records")
       .select("id", { count: "exact", head: true })
       .eq("transaction_id", id);
-    if (!payments) return { error: "Record the buyer's payment before marking the car sold." };
+    if (bankTransfer) paymentQuery = paymentQuery.not("verified_by", "is", null);
+    const { count: payments } = await paymentQuery;
+    if (!payments) {
+      return {
+        error: bankTransfer
+          ? "The Head Accountant must verify the bank transfer before the car is marked sold."
+          : "Record the buyer's payment before marking the car sold.",
+      };
+    }
     // §6 step 20: a financed car is sold once the Initial Downpayment is confirmed and the account is active.
     if (financing && tx.flow_status !== "financing_active") {
       return { error: "Complete the financing agreement before marking the car sold." };

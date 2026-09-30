@@ -8,7 +8,12 @@ import { getCurrentRole } from "@/app/auth/actions";
 import { notify } from "@/lib/notifications/notify";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { addWorkingDays, DOWNPAYMENT_WORKING_DAYS, verifiedPaid } from "@/lib/transactions/buy-flow";
+import {
+  addWorkingDays,
+  balanceMethodPhrase,
+  DOWNPAYMENT_WORKING_DAYS,
+  verifiedPaid,
+} from "@/lib/transactions/buy-flow";
 import { releaseVisitSlots } from "@/lib/transactions/buy-flow-server";
 import { canCancelScheduled } from "@/lib/transactions/state-machine";
 
@@ -26,7 +31,7 @@ async function salesManager(): Promise<{ userId: string } | { error: string }> {
   return { userId: data.user.id };
 }
 
-// An approved Cash Delivery request with its terms, payments, delivery slot and field case.
+// An approved Cash or bank-transfer Delivery request with its terms, payments, delivery slot and field case.
 async function loadDelivery(admin: Admin, transactionId: unknown) {
   const id = z.string().uuid().safeParse(transactionId);
   if (!id.success) return null;
@@ -160,7 +165,7 @@ export async function setDeliveryTerms(formData: FormData): Promise<DeliveryActi
     {
       kind: "delivery_terms_set",
       title: "Your delivery is confirmed",
-      body: `Pay the delivery fee of ${peso(parsed.data.delivery_fee)} and the downpayment of ${peso(parsed.data.downpayment_amount)} by bank transfer before ${due.toLocaleDateString("en-PH")}. The balance is paid in cash on delivery.`,
+      body: `Pay the delivery fee of ${peso(parsed.data.delivery_fee)} and the downpayment of ${peso(parsed.data.downpayment_amount)} by bank transfer before ${due.toLocaleDateString("en-PH")}. The balance is paid ${balanceMethodPhrase(tx.details.payment_method)} on delivery.`,
       transactionId: tx.id,
     },
   );
@@ -222,7 +227,7 @@ export async function createDeliveryFieldCase(formData: FormData): Promise<Deliv
     schedule: tx.arrangement.schedule,
     location: tx.arrangement.location,
     state: "assigned",
-    notes: `Cash delivery. Collect the balance in cash on delivery. Delivery fee ${peso(tx.details.delivery_fee)}, downpayment ${peso(tx.details.downpayment_amount)} by bank transfer.`,
+    notes: `Delivery. Collect the balance ${balanceMethodPhrase(tx.details.payment_method)} on delivery. Delivery fee ${peso(tx.details.delivery_fee)}, downpayment ${peso(tx.details.downpayment_amount)} by bank transfer.`,
   });
   if (error) return { error: error.message };
 

@@ -9,6 +9,7 @@ import { notify } from "@/lib/notifications/notify";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
+  balanceMethodPhrase,
   DELIVERY_STATUS_LABELS,
   type DeliveryStatus,
   nextDeliveryStatus,
@@ -70,13 +71,13 @@ export async function advanceDeliveryStatus(formData: FormData): Promise<Deliver
   const { data: tx } = await admin
     .from("transactions")
     .select(
-      "id, customer_id, current_state, purchase_details(downpayment_amount), payment_records(payment_kind, amount, verified_by)",
+      "id, customer_id, current_state, purchase_details(downpayment_amount, payment_method), payment_records(payment_kind, amount, verified_by)",
     )
     .eq("id", fieldCase.transaction_id)
     .maybeSingle();
   if (tx?.current_state !== "approved") return { error: "This delivery is no longer active." };
+  const details = Array.isArray(tx.purchase_details) ? tx.purchase_details[0] : tx.purchase_details;
   if (next === "dispatched") {
-    const details = Array.isArray(tx.purchase_details) ? tx.purchase_details[0] : tx.purchase_details;
     const paid = verifiedPaid(tx.payment_records ?? [], "downpayment");
     if (!details?.downpayment_amount || paid < Number(details.downpayment_amount)) {
       return { error: "Wait for the Head Accountant to confirm the downpayment before dispatch." };
@@ -99,7 +100,7 @@ export async function advanceDeliveryStatus(formData: FormData): Promise<Deliver
       title: `Delivery: ${DELIVERY_STATUS_LABELS[next]}`,
       body:
         next === "delivered"
-          ? "Your car has arrived. Inspect it, then pay the remaining balance in cash to the delivery team."
+          ? `Your car has arrived. Inspect it, then pay the remaining balance ${balanceMethodPhrase(details?.payment_method)} to the delivery team.`
           : `Your delivery is now ${DELIVERY_STATUS_LABELS[next].toLowerCase()}.`,
       transactionId: tx.id,
     },

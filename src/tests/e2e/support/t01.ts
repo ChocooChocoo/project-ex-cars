@@ -69,7 +69,7 @@ export async function buyerRequest(
   page: Page,
   vehicleId: string,
   options: {
-    method: "Cash" | "Financing";
+    method: "Cash" | "Financing" | "Bank Transfer";
     arrangement: "GCE Visit" | "CALABARZON Meet-up" | "Delivery";
     when?: string;
   },

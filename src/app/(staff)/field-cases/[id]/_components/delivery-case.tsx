@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  balanceMethodPhrase,
   DELIVERY_STATUS_LABELS,
   DELIVERY_STATUSES,
   type DeliveryStatus,
@@ -91,7 +92,10 @@ export function DeliveryCase({
         <Card>
           <CardHeader>
             <CardTitle>Delivery pack</CardTitle>
-            <CardDescription>Collect the remaining balance in cash when the buyer accepts the car.</CardDescription>
+            <CardDescription>
+              Collect the remaining balance {balanceMethodPhrase(details?.payment_method)} when the buyer accepts the
+              car.
+            </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-2 text-sm">
             <p>

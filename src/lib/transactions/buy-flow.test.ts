@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   activeBuyerIdCount,
   addWorkingDays,
+  balanceMethodPhrase,
   canRecordNoShow,
   financingFullyPaid,
   isDeliveryCashRequest,
@@ -39,6 +40,21 @@ describe("isOnsiteCashRequest", () => {
     expect(isOnsiteCashRequest({ payment_method: "cash", arrangement_kind: "meetup" })).toBe(false);
     expect(isOnsiteCashRequest({ payment_method: "financing", arrangement_kind: "gce_visit" })).toBe(false);
     expect(isOnsiteCashRequest(null)).toBe(false);
+  });
+});
+
+describe("§7–9 bank transfer", () => {
+  it("follows the Cash flow for each arrangement", () => {
+    expect(isOnsiteCashRequest({ payment_method: "bank_transfer", arrangement_kind: "gce_visit" })).toBe(true);
+    expect(isHalfwayCashRequest({ payment_method: "bank_transfer", arrangement_kind: "meetup" })).toBe(true);
+    expect(isDeliveryCashRequest({ payment_method: "bank_transfer", arrangement_kind: "delivery" })).toBe(true);
+    expect(isQueuedRequest({ payment_method: "bank_transfer", arrangement_kind: "gce_visit" })).toBe(false);
+    expect(isOnsiteCashRequest({ payment_method: "cheque", arrangement_kind: "gce_visit" })).toBe(false);
+  });
+
+  it("words the balance by method", () => {
+    expect(balanceMethodPhrase("bank_transfer")).toBe("by bank transfer");
+    expect(balanceMethodPhrase("cash")).toBe("in cash");
   });
 });
 

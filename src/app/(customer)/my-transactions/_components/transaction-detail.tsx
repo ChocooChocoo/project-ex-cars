@@ -43,6 +43,7 @@ import { Textarea } from "@/components/ui/textarea";
 import type { ProfileAutoFill } from "@/lib/autofill";
 import {
   activeBuyerIdCount,
+  balanceMethodPhrase,
   DELIVERY_STATUS_LABELS,
   DELIVERY_STATUSES,
   type DeliveryStatus,
@@ -621,8 +622,8 @@ export function TransactionDetail({
                 <p className="text-sm">
                   Delivery fee {formatCurrency(Number(purchaseDetails.delivery_fee ?? 0))} and downpayment{" "}
                   {formatCurrency(Number(purchaseDetails.downpayment_amount ?? 0))} by bank transfer before{" "}
-                  {format(new Date(purchaseDetails.downpayment_due_at as string), "MMM d, yyyy")}. The balance is paid
-                  in cash on delivery.
+                  {format(new Date(purchaseDetails.downpayment_due_at as string), "MMM d, yyyy")}. The balance is paid{" "}
+                  {balanceMethodPhrase(purchaseDetails.payment_method)} on delivery.
                 </p>
                 {purchaseDetails.downpayment_forfeited_at ? (
                   <p className="text-destructive text-sm">Your downpayment was forfeited.</p>
