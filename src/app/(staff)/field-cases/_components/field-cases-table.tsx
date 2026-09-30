@@ -3,6 +3,8 @@
 
 import { useMemo, useState } from "react";
 
+import Link from "next/link";
+
 import {
   type ColumnDef,
   type ColumnFiltersState,
@@ -189,6 +191,11 @@ export function FieldCasesTable({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
+              {row.original.case_kind === "acquisition" ? (
+                <DropdownMenuItem asChild>
+                  <Link href={`/dashboard/field-cases/${row.original.id}`}>Open seller meet-up</Link>
+                </DropdownMenuItem>
+              ) : null}
               {canUpdate && canAssignMechanic ? (
                 <DropdownMenuItem onClick={() => onAssignMechanic(row.original)}>
                   <UsersRound data-icon="inline-start" />

@@ -130,6 +130,13 @@ export function isOverdue(
   return now.getTime() > new Date(tx.review_due_at).getTime();
 }
 
+export const REVIEW_WINDOW_DAYS = 7;
+
+// Due date of a review window opened at `from` (Pending CEO / Sales Manager approval).
+export function reviewDueAt(from: Date = new Date()): string {
+  return new Date(from.getTime() + REVIEW_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
+}
+
 export const CANCEL_CUTOFF_HOURS = 5;
 
 // Buyers may cancel a scheduled meetup or delivery only at least 5 hours before it.

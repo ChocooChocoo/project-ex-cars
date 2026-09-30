@@ -77,7 +77,8 @@ export function StaffChatView({
   const canRequestHandoff = userRole === "account_manager";
   const canAcceptHandoff = userRole === "sales_manager";
   const expectedManagerRole = intention === "buy_now" ? "sales_manager" : "account_manager";
-  const canAssign = !hasManager && userRole === expectedManagerRole;
+  // Sell negotiation threads are not assigned or handed off; the Marketing Specialist owns them.
+  const canAssign = intention !== "sell_negotiation" && !hasManager && userRole === expectedManagerRole;
 
   async function handleAssign() {
     if (assigning) return;

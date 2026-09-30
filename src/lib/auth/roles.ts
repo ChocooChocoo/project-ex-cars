@@ -43,6 +43,7 @@ export const STAFF_ROLES: GceRole[] = [
  * a detail route without this guard answers a bare 404 for the same denial.
  * Mechanic is deliberately absent: he reads what a customer sent through the
  * sell-submission list instead (see SELL_SUBMISSION_VIEWER_ROLES).
+ * The Marketing Specialist owns sell offers (T01 Q0b); RLS limits that role to sell transactions.
  */
 export const TRANSACTION_VIEWER_ROLES: GceRole[] = [
   "ceo",
@@ -50,6 +51,7 @@ export const TRANSACTION_VIEWER_ROLES: GceRole[] = [
   "head_accountant",
   "confidential_informant",
   "sales_manager",
+  "marketing_specialist",
 ];
 
 /**
@@ -262,7 +264,7 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
     "field-cases",
     "announcements",
   ]),
-  marketing_specialist: new Set(["default", "vehicles", "showroom", "content", "announcements"]),
+  marketing_specialist: new Set(["default", "vehicles", "showroom", "content", "transactions", "announcements"]),
   sales_manager: new Set([
     "default",
     "vehicles",

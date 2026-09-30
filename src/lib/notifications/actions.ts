@@ -68,6 +68,50 @@ export async function checkAndNotifyDueInstallments(): Promise<void> {
   }
 }
 
+/**
+ * Review windows that lapsed without a decision become "Overdue — Awaiting Action". Nothing is
+ * cancelled; the Marketing Specialist (sell offers) and the CEO are told once per lapsed window.
+ * Called from the dashboard and the transaction list so it runs without a cron worker.
+ */
+export async function checkAndNotifyOverdueReviews(): Promise<void> {
+  const admin = createAdminClient();
+  const now = new Date().toISOString();
+
+  const { data: overdue } = await admin
+    .from("transactions")
+    .select("id, transaction_kind, review_due_at")
+    .lt("review_due_at", now)
+    .not("current_state", "in", "('rejected','completed','cancelled')");
+  if (!overdue || overdue.length === 0) return;
+
+  const { data: existing } = await admin
+    .from("notifications")
+    .select("reference_id, created_at")
+    .eq("kind", "review_overdue")
+    .in(
+      "reference_id",
+      overdue.map((tx) => tx.id),
+    );
+
+  const toInsert = overdue
+    // A notice created after this window's due date already covers it.
+    .filter((tx) => !(existing ?? []).some((n) => n.reference_id === tx.id && n.created_at >= tx.review_due_at))
+    .flatMap((tx) =>
+      (tx.transaction_kind === "sell" ? ["marketing_specialist", "ceo"] : ["ceo"]).map((role) => ({
+        recipient_role: role,
+        kind: "review_overdue",
+        title: "Overdue — Awaiting Action",
+        body: `A ${tx.transaction_kind} transaction passed its 7-day review window without a decision. It stays open until processed.`,
+        reference_table: "transactions",
+        reference_id: tx.id,
+      })),
+    );
+
+  if (toInsert.length > 0) {
+    await admin.from("notifications").insert(toInsert);
+  }
+}
+
 // Rows for the current role, plus rows addressed to this user. RLS limits recipient_id rows to
 // recipient_id = auth.uid(), so "recipient_id not null" never reaches another user's row.
 // The role is interpolated into a PostgREST filter, so only a plain role name is accepted.

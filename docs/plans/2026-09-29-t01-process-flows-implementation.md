@@ -86,6 +86,13 @@ This plan orders that work so each phase ships a complete, testable flow. Later 
 ### Phase 1: Selling Scenario (§1, steps 1–13)
 **Gate:** Q0b answered (D2). Step numbers below map to source steps.
 
+**Status:** ✅ Implemented (2026-09-30), migration `00049_t01_phase1_selling.sql`. Q0b answered: the Marketing Specialist owns the sell offer. The Task 32 CEO "Review sell offer" (`reviewSellTransaction`) is removed, and generic triage no longer moves sell transactions.
+- [x] Items 1–13 (intake, verification, ceiling, CEO decision with D3 fix, chat, field case, checks and inspection, issue report, revised ceiling, seller response, payment, expenses, reimbursement)
+- [x] Migration + SQL test, pure-rule tests (`sell-flow.test.ts`), D3 action test, unit suite green
+- [x] Defaults used: Q9 seller sees "within 5–7 days"; Q10 seller is notified in writing and the field team is told; Q3 reimbursement records who marked it (no payee chosen)
+- [ ] e2e `src/tests/e2e/t01-phase1-selling.spec.ts` written (no-issue path) but not run: needs `00049` applied and the dev server. The issue path is covered by action code only.
+- [ ] Legacy sell offers already `under_review` from Task 32 have no ceiling proposal; they need a manual decision (cancel or re-submit).
+
 1. **Intake (step 1).** Add a required "has issues / no known issue" choice, uploads for 2 IDs + ORCR + deed of sale, and meetup method (halfway or GCE visit) to `sell-vehicle-form.tsx` and `submitSellVehicle`. Extend the sell schema in `lib/validation/transactions.ts`.
 2. **Verification (step 2).** Give the sell reviewer role from Q0b access to sell submissions and document verification (reuse `verifyTransactionDocument`). A failed check sets `flag=flagged` or rejects.
 3. **Ceiling proposal (step 3).** Add `vehicle_price_proposals.proposal_kind` (`purchase_ceiling`, `revised_ceiling`, `selling_price`, `reprice`) and `transaction_id`. Allow multiple proposals per vehicle, one pending per kind. Proposing sets `flow_status=pending_ceo_approval`, sets `review_due_at=+7d`, and notifies the seller (Q9 decides "5–7 days" vs "7 days" wording).
@@ -163,7 +170,7 @@ Plan each one only once the client supplies its text.
 | # | Question |
 |---|---|
 | Q0a | Buyer requests: does the Sales Manager approve alone, as the process doc says? Or does the Task 32 chain (Sales → HA verify → CEO approve) stay? (D1) |
-| Q0b | Sell offers: does the Marketing Specialist verify, propose the ceiling and negotiate, as the process doc says? Or does the Sales Manager keep the valuation, as Task 32 built? (D2) |
+| Q0b | Sell offers: does the Marketing Specialist verify, propose the ceiling and negotiate, as the process doc says? Or does the Sales Manager keep the valuation, as Task 32 built? (D2) **Answered 2026-09-30: Marketing Specialist.** |
 
 **From source Appendix E and the plan review**
 

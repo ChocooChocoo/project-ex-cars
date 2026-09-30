@@ -61,6 +61,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { PROPOSAL_KIND_LABELS } from "@/lib/transactions/sell-flow";
 
 export interface PriceProposalRow {
   id: string;
@@ -68,6 +69,8 @@ export interface PriceProposalRow {
   proposed_amount: number;
   notes: string | null;
   created_at: string;
+  proposal_kind?: string;
+  transaction_id?: string | null;
   vehicles: { make: string | null; model: string | null; year: number | null } | null;
 }
 
@@ -171,7 +174,17 @@ export function PendingApprovalsTable({
             <span className="font-medium text-sm">
               {vehicle ? `${vehicle.make ?? ""} ${vehicle.model ?? ""}`.trim() : row.original.vehicle_id.slice(0, 8)}
             </span>
-            <span className="text-muted-foreground text-xs">{vehicle?.year ?? "—"}</span>
+            <span className="text-muted-foreground text-xs">
+              {vehicle?.year ?? "—"} · {PROPOSAL_KIND_LABELS[row.original.proposal_kind ?? "selling_price"]}
+            </span>
+            {row.original.transaction_id ? (
+              <Link
+                href={`/dashboard/transactions/${row.original.transaction_id}`}
+                className="text-primary text-xs underline"
+              >
+                View sell offer
+              </Link>
+            ) : null}
           </div>
         );
       },

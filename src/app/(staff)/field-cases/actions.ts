@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { getCurrentRole } from "@/app/auth/actions";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { fieldCaseUpdateSchema } from "@/lib/validation/phase6";
 
@@ -31,6 +32,19 @@ export async function updateFieldCase(formData: FormData): Promise<Phase6ActionR
     updated_at: new Date().toISOString(),
   };
   if (parsed.data.state === "completed") {
+    // Selling step 11: a seller meet-up closes only once its expenses are filed, bought or not.
+    const { data: fieldCase } = await supabase
+      .from("field_cases")
+      .select("case_kind, transaction_id")
+      .eq("id", parsed.data.field_case_id)
+      .maybeSingle();
+    if (fieldCase?.case_kind === "acquisition" && fieldCase.transaction_id) {
+      const { count } = await createAdminClient()
+        .from("field_case_expenses")
+        .select("id", { count: "exact", head: true })
+        .eq("field_case_id", parsed.data.field_case_id);
+      if (!count) return { error: "File the meet-up expenses with proofs before completing this case." };
+    }
     update.completion_date = new Date().toISOString();
   }
   if (parsed.data.state === "accepted" && !raw.accepted_at) {

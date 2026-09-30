@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { SELL_MEETUP_METHODS } from "@/lib/transactions/sell-flow";
 import { PAYMENT_METHODS } from "@/lib/transactions/state-machine";
 
 export const buyTransactionSchema = z.object({
@@ -22,50 +23,58 @@ export const buyDetailsSchema = z.object({
 
 export type BuyDetailsFormData = z.infer<typeof buyDetailsSchema>;
 
-export const sellVehicleSchema = z.object({
-  make: z.string().min(1, "Make is required.").max(100),
-  model: z.string().min(1, "Model is required.").max(100),
-  year: z.coerce.number().int().min(1900).max(2100),
-  mileage: z.coerce.number().int().min(0, "Mileage cannot be negative."),
-  condition: z
-    .enum(["excellent", "good", "fair", "needs_repair"])
-    .transform((val) => {
-      const map: Record<string, string> = {
-        excellent: "Excellent",
-        good: "Good",
-        fair: "Fair",
-        needs_repair: "Needs Repair",
-      };
-      return map[val] ?? val;
-    })
-    .or(
-      z
-        .string()
-        .trim()
-        .toLowerCase()
-        .transform((val) => {
-          const map: Record<string, string> = {
-            excellent: "Excellent",
-            good: "Good",
-            fair: "Fair",
-            needs_repair: "Needs Repair",
-            "needs repair": "Needs Repair",
-            needsrepair: "Needs Repair",
-          };
-          if (map[val]) return map[val];
-          const cleaned = val.trim();
-          if (!cleaned) return cleaned;
-          return cleaned
-            .split(/[\s_]+/)
-            .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-            .join(" ");
-        })
-        .pipe(z.string().min(1, "Condition is required.").max(50)),
-    ),
-  condition_detail: z.string().max(1000).optional().or(z.literal("")),
-  offered_amount: z.coerce.number().min(0, "Amount cannot be negative."),
-  description: z.string().max(2000).optional().or(z.literal("")),
-});
+export const sellVehicleSchema = z
+  .object({
+    make: z.string().min(1, "Make is required.").max(100),
+    model: z.string().min(1, "Model is required.").max(100),
+    year: z.coerce.number().int().min(1900).max(2100),
+    mileage: z.coerce.number().int().min(0, "Mileage cannot be negative."),
+    condition: z
+      .enum(["excellent", "good", "fair", "needs_repair"])
+      .transform((val) => {
+        const map: Record<string, string> = {
+          excellent: "Excellent",
+          good: "Good",
+          fair: "Fair",
+          needs_repair: "Needs Repair",
+        };
+        return map[val] ?? val;
+      })
+      .or(
+        z
+          .string()
+          .trim()
+          .toLowerCase()
+          .transform((val) => {
+            const map: Record<string, string> = {
+              excellent: "Excellent",
+              good: "Good",
+              fair: "Fair",
+              needs_repair: "Needs Repair",
+              "needs repair": "Needs Repair",
+              needsrepair: "Needs Repair",
+            };
+            if (map[val]) return map[val];
+            const cleaned = val.trim();
+            if (!cleaned) return cleaned;
+            return cleaned
+              .split(/[\s_]+/)
+              .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+              .join(" ");
+          })
+          .pipe(z.string().min(1, "Condition is required.").max(50)),
+      ),
+    condition_detail: z.string().max(1000).optional().or(z.literal("")),
+    offered_amount: z.coerce.number().min(0, "Amount cannot be negative."),
+    description: z.string().max(2000).optional().or(z.literal("")),
+    has_known_issues: z.enum(["yes", "no"], { error: "Declare the vehicle's issues, or that it has no known issue." }),
+    declared_issues: z.string().trim().max(2000).optional().or(z.literal("")),
+    meetup_method: z.enum(SELL_MEETUP_METHODS, { error: "Choose a meet-up method." }),
+  })
+  .refine((data) => data.has_known_issues === "no" || !!data.declared_issues, {
+    message: "Describe the known issues.",
+    path: ["declared_issues"],
+  });
 
 export type SellVehicleFormData = z.infer<typeof sellVehicleSchema>;
 
@@ -120,12 +129,3 @@ export const transitionSchema = z.object({
 });
 
 export type TransitionFormData = z.infer<typeof transitionSchema>;
-
-export const reviewSellSchema = z.object({
-  transaction_id: z.string().uuid(),
-  valuation_amount: z.coerce.number().min(0, "Valuation cannot be negative."),
-  decision: z.enum(["accepted", "rejected"]),
-  review_notes: z.string().max(2000).optional().or(z.literal("")),
-});
-
-export type ReviewSellFormData = z.infer<typeof reviewSellSchema>;

@@ -9,15 +9,11 @@ import { logAuditEvent } from "@/lib/auth/audit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { generateInstallmentSchedule } from "@/lib/transactions/installments";
+import { SELL_PAPER_KINDS } from "@/lib/transactions/sell-flow";
 import type { TransactionState } from "@/lib/transactions/state-machine";
 import { canTransition } from "@/lib/transactions/state-machine";
 import { fieldCaseCreateSchema } from "@/lib/validation/phase6";
-import {
-  paymentRecordSchema,
-  paymentTermsSchema,
-  reviewSellSchema,
-  transitionSchema,
-} from "@/lib/validation/transactions";
+import { paymentRecordSchema, paymentTermsSchema, transitionSchema } from "@/lib/validation/transactions";
 
 const PAPERWORK_DOCUMENT_KINDS = [
   "valid_id",
@@ -58,6 +54,8 @@ export async function transitionTransaction(formData: FormData) {
     .single();
 
   if (!tx) return { error: "Transaction not found" };
+  // Sell offers move only through the Marketing Specialist / CEO sell steps (sell-actions.ts, approvePrice).
+  if (tx.transaction_kind === "sell") return { error: "Sell offers move through the sell review steps." };
 
   const fromState = tx.current_state as TransactionState;
 
@@ -439,7 +437,8 @@ export async function verifyTransactionDocument(formData: FormData) {
   // Task 32/33: the Head Accountant verifies purchase-document correctness, then
   // the CEO approves.  Verification is deliberately not open to the approving or
   // processing roles, so nobody can verify the paperwork for their own approval.
-  if (role !== "head_accountant") {
+  // T01 Selling step 2: the Marketing Specialist verifies a seller's papers (checked per document below).
+  if (role !== "head_accountant" && role !== "marketing_specialist") {
     return { error: "Not authorized to verify purchase documents" };
   }
 
@@ -459,6 +458,21 @@ export async function verifyTransactionDocument(formData: FormData) {
   if (!doc) return { error: "Document not found." };
   if (doc.verification_state !== "pending") {
     return { error: "Only pending documents can be verified or rejected." };
+  }
+
+  const { data: parent } = await admin
+    .from("transactions")
+    .select("transaction_kind")
+    .eq("id", doc.transaction_id)
+    .maybeSingle();
+  const isSellPaper =
+    parent?.transaction_kind === "sell" && (SELL_PAPER_KINDS as readonly string[]).includes(doc.document_kind);
+  if (isSellPaper !== (role === "marketing_specialist")) {
+    return {
+      error: isSellPaper
+        ? "The Marketing Specialist verifies a seller's papers."
+        : "The Head Accountant verifies this document.",
+    };
   }
 
   const { error } = await admin
@@ -514,78 +528,6 @@ export async function verifyTransactionDocument(formData: FormData) {
   });
 
   revalidatePath(`/dashboard/transactions/${doc.transaction_id}`);
-  return { success: true };
-}
-
-export async function reviewSellTransaction(formData: FormData) {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
-
-  const role = await getCurrentRole();
-  if (!role) return { error: "No role assigned" };
-
-  const parsed = reviewSellSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid sell review." };
-  }
-
-  const { data: tx } = await supabase
-    .from("transactions")
-    .select("current_state")
-    .eq("id", parsed.data.transaction_id)
-    .single();
-
-  if (!tx) return { error: "Transaction not found" };
-
-  const fromState = tx.current_state as TransactionState;
-  const newState = parsed.data.decision === "accepted" ? "approved" : "rejected";
-
-  if (!canTransition(fromState, newState as TransactionState, role)) {
-    return { error: "This action is not allowed for your role." };
-  }
-
-  const admin = await createAdminClient();
-
-  const { error } = await admin
-    .from("sell_details")
-    .update({
-      valuation_amount: parsed.data.valuation_amount,
-      decision: parsed.data.decision,
-      review_notes: parsed.data.review_notes ?? null,
-      decision_maker_id: user.user.id,
-      decision_date: new Date().toISOString(),
-    })
-    .eq("transaction_id", parsed.data.transaction_id);
-
-  if (error) return { error: error.message };
-
-  await admin
-    .from("transactions")
-    .update({
-      current_state: newState,
-      completed_at: newState === "rejected" ? new Date().toISOString() : null,
-    })
-    .eq("id", parsed.data.transaction_id);
-
-  await admin.from("transaction_status_history").insert({
-    transaction_id: parsed.data.transaction_id,
-    from_state: fromState,
-    to_state: newState,
-    actor_id: user.user.id,
-    reason: `Sell review: ${parsed.data.decision}. ${parsed.data.review_notes ?? ""}`,
-  });
-
-  await logAuditEvent({
-    actorId: user.user.id,
-    action: parsed.data.decision === "accepted" ? "sell_accepted" : "sell_rejected",
-    recordKind: "transactions",
-    recordId: parsed.data.transaction_id,
-    summary: `Sell transaction ${parsed.data.transaction_id} ${parsed.data.decision}`,
-  });
-
-  revalidatePath(`/dashboard/transactions/${parsed.data.transaction_id}`);
-  revalidatePath("/dashboard/transactions");
   return { success: true };
 }
 
