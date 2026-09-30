@@ -7,7 +7,8 @@ import { createServerSupabase, createServerSupabaseClient } from "@/lib/supabase
 
 export interface NotificationRow {
   id: string;
-  recipient_role: string;
+  recipient_role: string | null;
+  recipient_id: string | null;
   kind: string;
   title: string;
   body: string | null;
@@ -67,6 +68,14 @@ export async function checkAndNotifyDueInstallments(): Promise<void> {
   }
 }
 
+// Rows for the current role, plus rows addressed to this user. RLS limits recipient_id rows to
+// recipient_id = auth.uid(), so "recipient_id not null" never reaches another user's row.
+// The role is interpolated into a PostgREST filter, so only a plain role name is accepted.
+function roleOrOwnFilter(role: string): string {
+  const safeRole = /^[a-z_]+$/.test(role) ? role : "__none__";
+  return `recipient_role.eq.${safeRole},recipient_id.not.is.null`;
+}
+
 // Awaited during Server Component renders (the staff/customer/supplier layouts), so it must
 // use the read-only client and never write cookies.
 export async function getNotifications(role: string): Promise<NotificationRow[]> {
@@ -74,7 +83,7 @@ export async function getNotifications(role: string): Promise<NotificationRow[]>
   const { data } = await supabase
     .from("notifications")
     .select("*")
-    .eq("recipient_role", role)
+    .or(roleOrOwnFilter(role))
     .order("created_at", { ascending: false })
     .limit(20);
   return (data ?? []) as NotificationRow[];
@@ -86,7 +95,7 @@ export async function getUnreadNotificationCount(role: string): Promise<number> 
   const { count } = await supabase
     .from("notifications")
     .select("id", { count: "exact", head: true })
-    .eq("recipient_role", role)
+    .or(roleOrOwnFilter(role))
     .eq("is_read", false);
   return count ?? 0;
 }
@@ -106,11 +115,13 @@ export async function markNotificationRead(notificationId: string) {
 
   const { data: notification } = await supabase
     .from("notifications")
-    .select("recipient_role")
+    .select("recipient_role, recipient_id")
     .eq("id", notificationId)
     .maybeSingle();
   if (!notification) return { error: "Notification not found." };
-  if (notification.recipient_role !== userRole) return { error: "Not authorized" };
+  if (notification.recipient_role !== userRole && notification.recipient_id !== user.id) {
+    return { error: "Not authorized" };
+  }
 
   const { error } = await supabase.from("notifications").update({ is_read: true }).eq("id", notificationId);
   if (error) return { error: error.message };
@@ -135,7 +146,7 @@ export async function markAllNotificationsRead() {
   const { error } = await supabase
     .from("notifications")
     .update({ is_read: true })
-    .eq("recipient_role", userRole)
+    .or(`recipient_role.eq.${userRole},recipient_id.eq.${user.id}`)
     .eq("is_read", false);
   if (error) return { error: error.message };
 
