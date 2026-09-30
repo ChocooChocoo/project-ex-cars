@@ -19,6 +19,8 @@ export const buyDetailsSchema = z.object({
   schedule: z.string().optional().or(z.literal("")),
   location: z.string().max(500).optional().or(z.literal("")),
   notes: z.string().max(500).optional().or(z.literal("")),
+  // §3 step 3: "I have reviewed this car's condition and intend to purchase it as shown."
+  acknowledge_condition: z.literal("yes").optional().or(z.literal("")),
 });
 
 export type BuyDetailsFormData = z.infer<typeof buyDetailsSchema>;

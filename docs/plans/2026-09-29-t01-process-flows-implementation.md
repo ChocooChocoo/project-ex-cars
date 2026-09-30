@@ -130,6 +130,17 @@ This plan orders that work so each phase ships a complete, testable flow. Later 
 - **Exit:** e2e for booking, slot conflict, approve, mark sold, and the HA record.
 
 ### Phase 3: Buyer queue + Cash Meet Halfway (§3)
+
+**Status:** ✅ Implemented (2026-09-30), migration `00051_t01_phase3_halfway_queue.sql`.
+- [x] Queue: `transactions.queue_state` (not `purchase_details`: the one-Active-per-car index needs `vehicle_id`); ending a request leaves the queue (trigger); "Buyers for this car" panel with manual Make Active
+- [x] Condition acknowledgment required before Meet Halfway; halfway submit (Active or On Hold, buyer notified immediately)
+- [x] 5-hour cancellation cut-off in the action and in the database trigger (customer self-cancel only)
+- [x] `buyer_meetup` field case kind, created by the Sales Manager from Field Cases
+- [x] No-show after 2h30m (`buyer_no_show`, no-show count, GCE Visit only at 2); decline Legit / Not Legit (strike → GCE Visit only); arrangement options and submit respect `gce_visit_only`
+- [x] Mark sold notifies every other open (incl. On Hold) buyer (Phase 2 `finalizeBuySale`)
+- [x] Migration SQL test, rule tests, unit suite green
+- [ ] e2e `src/tests/e2e/t01-phase3-halfway-queue.spec.ts` written (queue, reject → promote, approve → sold) but not run; no-show needs a past meet-up, so it is covered by unit tests only
+- Defaults used: Q11 an Active request (even Overdue) blocks promotion until decided; Q1 credit score skipped (acknowledgment links to the 360° view); Q12 no expense filing for halfway meet-ups. The 00050 slot lock now applies to GCE visits only.
 - **Queue.** Add `purchase_details.queue_state` (`active`, `on_hold`) with a partial UNIQUE index (vehicle_id) WHERE `active`. Create a new request as `active` or `on_hold` using `nextQueueState`. The SM "Buyers for this car" panel manually promotes the next request. There is no auto-promote. Queue behavior while overdue depends on Q11.
 - Condition acknowledgment checkbox (store `acknowledged_at`), required before choosing halfway. Reuse the 360° viewer. The "credit score" item waits on Q1.
 - Cancellation button gated by `canCancelScheduled` (≥ 5 h), enforced in both the action and RLS/RPC.

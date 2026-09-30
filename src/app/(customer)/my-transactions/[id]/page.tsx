@@ -73,6 +73,13 @@ export default async function MyTransactionDetailPage({ params }: { readonly par
       ? await supabase.rpc("list_taken_visit_slots", { p_vehicle_id: vehicleId })
       : { data: null };
 
+  // Appendix C: after 2 no-shows or a Not Legit decline the buyer may only visit GCE.
+  const { data: standing } = await supabase
+    .from("customer_standing")
+    .select("gce_visit_only")
+    .eq("account_id", user.user.id)
+    .maybeSingle();
+
   // Selling step 5: the offer's negotiation thread with the Marketing Specialist.
   const { data: negotiationThread } = await supabase
     .from("inquiries")
@@ -92,6 +99,7 @@ export default async function MyTransactionDetailPage({ params }: { readonly par
         viewingArrangements={(viewingArrangements as Record<string, unknown>[]) ?? []}
         autofill={autofill}
         negotiationThreadId={(negotiationThread as { id: string } | null)?.id ?? null}
+        gceVisitOnly={standing?.gce_visit_only === true}
         takenSlots={((takenSlots as { schedule: string }[] | null) ?? []).map((slot) => slot.schedule)}
       />
     </div>

@@ -136,7 +136,7 @@ export const disbursementEventSchema = z.object({
 export const FIELD_CASE_STATES = ["assigned", "accepted", "in_progress", "completed", "cancelled"] as const;
 export type FieldCaseState = (typeof FIELD_CASE_STATES)[number];
 
-export const FIELD_CASE_KINDS = ["acquisition", "delivery", "recovery", "sourcing"] as const;
+export const FIELD_CASE_KINDS = ["acquisition", "delivery", "recovery", "sourcing", "buyer_meetup"] as const;
 export type FieldCaseKind = (typeof FIELD_CASE_KINDS)[number];
 
 export const fieldCaseCreateSchema = z

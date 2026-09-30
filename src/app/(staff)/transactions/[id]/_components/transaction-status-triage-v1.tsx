@@ -5,6 +5,7 @@ import { format } from "date-fns";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { canRecordNoShow } from "@/lib/transactions/buy-flow";
 import { TRANSACTION_STATE_LABELS, transactionKindLabel } from "@/lib/transactions/labels";
 import { getAllowedTransitions, type TransactionState } from "@/lib/transactions/state-machine";
 import { cn } from "@/lib/utils";
@@ -40,6 +41,8 @@ const STATE_GUIDANCE: Record<TransactionState, (kind: string) => string> = {
   completed: (kind) => `This ${kind} transaction is completed and the car is marked sold. All required steps are done.`,
 };
 
+export type VisitOutcome = "declined" | "legit" | "not_legit" | "no_show";
+
 export function TransactionStatusTriageV1({
   state,
   kind,
@@ -49,7 +52,8 @@ export function TransactionStatusTriageV1({
   userRole,
   transitioning,
   onTransition,
-  onBuyerDeclined,
+  visit = null,
+  onVisitOutcome,
 }: {
   readonly state: TransactionState;
   readonly kind: string;
@@ -59,11 +63,25 @@ export function TransactionStatusTriageV1({
   readonly userRole: string;
   readonly transitioning: boolean;
   readonly onTransition: (to: TransactionState) => Promise<void>;
-  readonly onBuyerDeclined?: () => Promise<void>;
+  readonly visit?: { kind: string; schedule: string } | null;
+  readonly onVisitOutcome?: (outcome: VisitOutcome) => Promise<void>;
 }) {
   const daysOpen = Math.max(0, Math.floor((Date.now() - new Date(openedAt).getTime()) / 86_400_000));
   const allowed = getAllowedTransitions(state, userRole);
-  const canRecordDecline = kind === "buy" && state === "approved" && ["sales_manager", "ceo"].includes(userRole);
+  const canRecordOutcome = kind === "buy" && state === "approved" && ["sales_manager", "ceo"].includes(userRole);
+  // §3 steps 6–7: a Meet Halfway decline is classified; a no-show is allowed 2h30m after the meet-up.
+  const halfway = visit?.kind === "meetup";
+  const outcomes: { outcome: VisitOutcome; label: string; detail: string }[] = !canRecordOutcome
+    ? []
+    : halfway
+      ? [
+          { outcome: "legit", label: "Declined — Legit", detail: "Legitimate surprise; no penalty" },
+          { outcome: "not_legit", label: "Declined — Not Legit", detail: "Strike; buyer limited to GCE visits" },
+          ...(visit && canRecordNoShow(visit.schedule)
+            ? [{ outcome: "no_show" as const, label: "Buyer didn't show up", detail: "Counts as one no-show" }]
+            : []),
+        ]
+      : [{ outcome: "declined", label: "Buyer declined", detail: "Close the request; the car stays listed" }];
 
   return (
     <Card className="shadow-xs">
@@ -109,18 +127,21 @@ export function TransactionStatusTriageV1({
                 </div>
               </button>
             ))}
-            {canRecordDecline && onBuyerDeclined ? (
-              <button
-                type="button"
-                disabled={transitioning}
-                onClick={() => onBuyerDeclined()}
-                className="space-y-1 rounded-md border bg-muted/20 px-2.5 py-2 text-left transition-colors hover:bg-muted/35 disabled:opacity-50"
-              >
-                <div className="text-muted-foreground text-xs">Visit outcome</div>
-                <div className="font-semibold text-sm">Buyer declined</div>
-                <div className="text-muted-foreground text-xs">Close the request; the car stays listed</div>
-              </button>
-            ) : null}
+            {onVisitOutcome
+              ? outcomes.map((item) => (
+                  <button
+                    key={item.outcome}
+                    type="button"
+                    disabled={transitioning}
+                    onClick={() => onVisitOutcome(item.outcome)}
+                    className="space-y-1 rounded-md border bg-muted/20 px-2.5 py-2 text-left transition-colors hover:bg-muted/35 disabled:opacity-50"
+                  >
+                    <div className="text-muted-foreground text-xs">Visit outcome</div>
+                    <div className="font-semibold text-sm">{item.label}</div>
+                    <div className="text-muted-foreground text-xs">{item.detail}</div>
+                  </button>
+                ))
+              : null}
           </div>
         ) : (
           <div className="space-y-1 rounded-md border border-dashed bg-muted/10 px-3 py-2.5">

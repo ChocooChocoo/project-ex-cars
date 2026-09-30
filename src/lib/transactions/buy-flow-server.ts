@@ -3,6 +3,7 @@
 
 import { notify } from "@/lib/notifications/notify";
 import type { createAdminClient } from "@/lib/supabase/admin";
+import { nextStanding, type Standing } from "@/lib/transactions/buy-flow";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -65,4 +66,21 @@ export async function finalizeBuySale(
       },
     );
   }
+}
+
+// Appendix C: no-shows and Not Legit declines go on the buyer's record; customers cannot write it.
+export async function recordStandingEvent(
+  admin: Admin,
+  customerId: string,
+  event: "no_show" | "strike",
+  actorId: string,
+): Promise<Standing> {
+  const { data: current } = await admin
+    .from("customer_standing")
+    .select("no_show_count, strike_count, gce_visit_only")
+    .eq("account_id", customerId)
+    .maybeSingle();
+  const next = nextStanding(current as Standing | null, event);
+  await admin.from("customer_standing").upsert({ account_id: customerId, ...next, updated_by: actorId });
+  return next;
 }

@@ -13,6 +13,7 @@ import {
   instructRepossession,
   markInstallmentWaived,
   recordBuyerDecline,
+  recordNoShow,
   recordPaperwork,
   recordPayment,
   transitionTransaction,
@@ -21,12 +22,13 @@ import {
 } from "@/app/(staff)/transactions/actions";
 import type { TransactionState } from "@/lib/transactions/state-machine";
 
+import { BuyersForCarPanel, type CarBuyerRow } from "./buyers-for-car-panel";
 import { type SellFlowData, SellFlowPanel } from "./sell-flow-panel";
 import { TransactionDetailSidebarV1 } from "./transaction-detail-sidebar-v1";
 import { TransactionOverviewV1 } from "./transaction-overview-v1";
 import { TransactionPaymentProgressV1 } from "./transaction-payment-progress-v1";
 import { TransactionPaymentsTableV1 } from "./transaction-payments-table-v1";
-import { TransactionStatusTriageV1 } from "./transaction-status-triage-v1";
+import { TransactionStatusTriageV1, type VisitOutcome } from "./transaction-status-triage-v1";
 
 export function StaffTransactionDetail({
   transaction,
@@ -40,6 +42,7 @@ export function StaffTransactionDetail({
   informants,
   checklistNameMap,
   sellFlow = null,
+  carBuyers = [],
 }: {
   readonly transaction: Record<string, unknown>;
   readonly history: Record<string, unknown>[];
@@ -52,6 +55,7 @@ export function StaffTransactionDetail({
   readonly informants: { id: string; full_name: string | null }[];
   readonly checklistNameMap?: Record<string, string>;
   readonly sellFlow?: SellFlowData | null;
+  readonly carBuyers?: CarBuyerRow[];
 }) {
   const router = useRouter();
   const id = transaction.id as string;
@@ -92,15 +96,20 @@ export function StaffTransactionDetail({
     }
   }
 
-  async function onBuyerDeclined() {
+  const liveVisit = viewingArrangements.find((va) =>
+    ["pending", "confirmed"].includes(va.confirmation_state as string),
+  );
+
+  async function onVisitOutcome(outcome: VisitOutcome) {
     setTransitioning(true);
     const fd = new FormData();
     fd.set("transaction_id", id);
-    const result = await recordBuyerDecline(fd);
+    if (outcome === "legit" || outcome === "not_legit") fd.set("classification", outcome);
+    const result = await (outcome === "no_show" ? recordNoShow(fd) : recordBuyerDecline(fd));
     setTransitioning(false);
-    if (result.error) toast.error(result.error);
+    if ("error" in result) toast.error(result.error);
     else {
-      toast.success("Recorded: declined by buyer.");
+      toast.success(outcome === "no_show" ? "Recorded: buyer didn't show up." : "Recorded: declined by buyer.");
       router.refresh();
     }
   }
@@ -276,7 +285,12 @@ export function StaffTransactionDetail({
               userRole={userRole}
               transitioning={transitioning}
               onTransition={doTransition}
-              onBuyerDeclined={onBuyerDeclined}
+              visit={
+                liveVisit
+                  ? { kind: liveVisit.arrangement_kind as string, schedule: liveVisit.schedule as string }
+                  : null
+              }
+              onVisitOutcome={onVisitOutcome}
             />
           )}
         </div>
@@ -304,6 +318,10 @@ export function StaffTransactionDetail({
           onInstructRepossession={onInstructRepossession}
         />
       </div>
+
+      {kind === "buy" && carBuyers.some((buyer) => buyer.queue_state) ? (
+        <BuyersForCarPanel currentId={id} buyers={carBuyers} canPromote={["sales_manager", "ceo"].includes(userRole)} />
+      ) : null}
 
       <TransactionPaymentsTableV1 payments={payments} onVerifyPayment={onVerifyPayment} />
     </div>

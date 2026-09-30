@@ -64,6 +64,11 @@ export type TransactionFlag = (typeof TRANSACTION_FLAGS)[number];
 export const QUEUE_STATES = ["active", "on_hold"] as const;
 export type QueueState = (typeof QUEUE_STATES)[number];
 
+export const QUEUE_STATE_LABELS: Record<QueueState, string> = {
+  active: "Active",
+  on_hold: "On Hold",
+};
+
 // Staff roles that can transition transaction states.
 type TransitionRole = "ceo" | "sales_manager" | "account_manager" | "head_accountant";
 

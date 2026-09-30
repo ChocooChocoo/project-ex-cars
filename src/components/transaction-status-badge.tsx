@@ -4,7 +4,10 @@ import {
   FLOW_STATUS_LABELS,
   type FlowStatus,
   isOverdue,
+  isTerminal,
   OVERDUE_LABEL,
+  QUEUE_STATE_LABELS,
+  type QueueState,
   TRANSACTION_FLAG_LABELS,
   TRANSACTION_STATE_LABELS,
   type TransactionFlag,
@@ -16,16 +19,18 @@ interface TransactionStatusBadgeProps {
   readonly flowStatus?: FlowStatus | null;
   readonly flag?: TransactionFlag | null;
   readonly reviewDueAt?: string | null;
+  readonly queueState?: QueueState | null;
   readonly className?: string;
 }
 
 // One badge for a transaction's status: a flag explains the outcome, then an overdue review window,
-// then the process-doc status, and the coarse state when no process status is set.
+// then a queued (On Hold) request, then the process-doc status, and the coarse state when none is set.
 export function TransactionStatusBadge({
   state,
   flowStatus,
   flag,
   reviewDueAt,
+  queueState,
   className,
 }: TransactionStatusBadgeProps) {
   if (flag) {
@@ -40,6 +45,14 @@ export function TransactionStatusBadge({
     return (
       <Badge variant="destructive" className={className}>
         {OVERDUE_LABEL}
+      </Badge>
+    );
+  }
+
+  if (queueState === "on_hold" && !isTerminal(state)) {
+    return (
+      <Badge variant="secondary" className={className}>
+        {QUEUE_STATE_LABELS.on_hold}
       </Badge>
     );
   }
