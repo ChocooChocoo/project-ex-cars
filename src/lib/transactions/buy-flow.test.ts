@@ -4,11 +4,16 @@ import {
   activeBuyerIdCount,
   addWorkingDays,
   canRecordNoShow,
+  financingFullyPaid,
   isDeliveryCashRequest,
+  isFinancingVisitRequest,
   isHalfwayCashRequest,
   isOnsiteCashRequest,
   isQueuedCashRequest,
+  isQueuedRequest,
   isVisitSlot,
+  MISSED_INSTALLMENTS_BEFORE_REPOSSESSION,
+  missedInstallments,
   nextDeliveryStatus,
   nextStanding,
   verifiedPaid,
@@ -120,5 +125,43 @@ describe("delivery rules", () => {
     ];
     expect(verifiedPaid(payments, "delivery_fee")).toBe(1500);
     expect(verifiedPaid(payments, "downpayment")).toBe(20000);
+  });
+});
+
+describe("financing rules", () => {
+  it("queues a financing request that inspects at a GCE visit", () => {
+    expect(isQueuedRequest({ payment_method: "financing", arrangement_kind: "gce_visit" })).toBe(true);
+    expect(isQueuedRequest({ payment_method: "cash", arrangement_kind: "gce_visit" })).toBe(false);
+    expect(isFinancingVisitRequest({ payment_method: "financing", arrangement_kind: "delivery" })).toBe(false);
+  });
+
+  it("counts unpaid installments past their due date as missed", () => {
+    const today = new Date("2026-10-15T12:00:00Z");
+    const installments = [
+      { state: "paid", due_date: "2026-07-01" },
+      { state: "overdue", due_date: "2026-08-01" },
+      { state: "upcoming", due_date: "2026-09-01" },
+      { state: "waived", due_date: "2026-09-15" },
+      { state: "upcoming", due_date: "2026-10-15" },
+      { state: "upcoming", due_date: "2026-11-01" },
+    ];
+    expect(missedInstallments(installments, today)).toBe(2);
+    expect(MISSED_INSTALLMENTS_BEFORE_REPOSSESSION).toBe(4);
+  });
+
+  it("is fully paid only when every installment is paid or waived", () => {
+    expect(
+      financingFullyPaid([
+        { state: "paid", due_date: "x" },
+        { state: "waived", due_date: "y" },
+      ]),
+    ).toBe(true);
+    expect(
+      financingFullyPaid([
+        { state: "paid", due_date: "x" },
+        { state: "due", due_date: "y" },
+      ]),
+    ).toBe(false);
+    expect(financingFullyPaid([])).toBe(false);
   });
 });

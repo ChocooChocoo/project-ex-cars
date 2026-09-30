@@ -10,6 +10,7 @@ import { type VehicleMediaItem, VehicleMediaViewer } from "@/components/vehicle-
 import { createServerSupabase } from "@/lib/supabase/server";
 import { listingStateLabel, listingStateVariant } from "@/lib/vehicles/labels";
 
+import { ReconditioningPanel } from "./_components/reconditioning-panel";
 import {
   type PendingProposal,
   PendingProposalAlert,
@@ -33,7 +34,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
 
   const v = vehicle as unknown as VehicleDetail;
 
-  const [{ data: media }, { data: proposal }] = await Promise.all([
+  const [{ data: media }, { data: proposal }, { data: reconditioning }] = await Promise.all([
     supabase
       .from("vehicle_media")
       .select("id, media_kind, storage_path, display_order")
@@ -48,6 +49,14 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
           .order("created_at", { ascending: false })
           .maybeSingle()
       : Promise.resolve({ data: null }),
+    // §6 steps 27–38: the latest reconditioning job of a repossessed car (RLS limits who sees it).
+    supabase
+      .from("reconditioning_jobs")
+      .select("*, disbursement_requests(status)")
+      .eq("vehicle_id", id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
 
   return (
@@ -88,6 +97,10 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
       <VehicleMetricCards vehicle={v} />
 
       <VehicleDescriptionCard vehicle={v} />
+
+      {reconditioning ? (
+        <ReconditioningPanel job={reconditioning as Record<string, unknown>} userRole={role ?? ""} />
+      ) : null}
 
       {MEDIA_MANAGER_ROLES.includes(role ?? "") ? (
         <VehicleMediaManager vehicleId={id} media={(media as unknown as StaffMediaRow[]) ?? []} />

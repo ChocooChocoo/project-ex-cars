@@ -116,18 +116,6 @@ export const paymentRecordSchema = z.object({
 
 export type PaymentRecordFormData = z.infer<typeof paymentRecordSchema>;
 
-export const paymentTermsSchema = z.object({
-  purchase_transaction_id: z.string().uuid(),
-  arrangement_description: z.string().min(1, "Description is required.").max(500),
-  total_amount: z.coerce.number().min(0, "Total amount cannot be negative."),
-  down_payment: z.coerce.number().min(0, "Down payment cannot be negative.").default(0),
-  number_of_payments: z.coerce.number().int().min(1, "Must have at least 1 payment.").max(60),
-  payment_frequency: z.enum(["weekly", "biweekly", "monthly", "quarterly"]),
-  first_due_date: z.string().min(1, "First due date is required."),
-});
-
-export type PaymentTermsFormData = z.infer<typeof paymentTermsSchema>;
-
 export const transitionSchema = z.object({
   id: z.string().uuid(),
   to_state: z.enum(["pending", "under_review", "approved", "rejected", "completed", "cancelled"]),

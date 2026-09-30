@@ -8,8 +8,6 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import {
-  activatePaymentTerms,
-  approvePaymentTerms,
   instructRepossession,
   markInstallmentWaived,
   recordBuyerDecline,
@@ -24,6 +22,7 @@ import type { TransactionState } from "@/lib/transactions/state-machine";
 
 import { BuyersForCarPanel, type CarBuyerRow } from "./buyers-for-car-panel";
 import { DeliveryPanel, type DeliveryTeam } from "./delivery-panel";
+import { FinancingPanel } from "./financing-panel";
 import { type SellFlowData, SellFlowPanel } from "./sell-flow-panel";
 import { TransactionDetailSidebarV1 } from "./transaction-detail-sidebar-v1";
 import { TransactionOverviewV1 } from "./transaction-overview-v1";
@@ -45,6 +44,8 @@ export function StaffTransactionDetail({
   sellFlow = null,
   carBuyers = [],
   delivery = null,
+  financing = null,
+  headSecurity = [],
 }: {
   readonly transaction: Record<string, unknown>;
   readonly history: Record<string, unknown>[];
@@ -59,6 +60,8 @@ export function StaffTransactionDetail({
   readonly sellFlow?: SellFlowData | null;
   readonly carBuyers?: CarBuyerRow[];
   readonly delivery?: { fieldCase: Record<string, unknown> | null; team: DeliveryTeam } | null;
+  readonly financing?: { hasRecoveryCase: boolean } | null;
+  readonly headSecurity?: { id: string; full_name: string | null }[];
 }) {
   const router = useRouter();
   const id = transaction.id as string;
@@ -192,24 +195,17 @@ export function StaffTransactionDetail({
     }
   }
 
-  async function onApprovePaymentTerms() {
-    const ptId = (paymentTerms as Record<string, unknown> | null)?.id as string | undefined;
-    if (!ptId) return;
-    const r = await approvePaymentTerms(ptId);
-    if (r.error) toast.error(r.error);
+  async function onRecordInstallmentPaid(installmentId: string, amount: string) {
+    const fd = new FormData();
+    fd.set("transaction_id", id);
+    fd.set("installment_id", installmentId);
+    fd.set("amount", amount);
+    fd.set("method", "bank_transfer");
+    fd.set("settlement_date", new Date().toISOString().slice(0, 10));
+    const result = await recordPayment(fd);
+    if (result.error) toast.error(result.error);
     else {
-      toast.success("Terms approved.");
-      router.refresh();
-    }
-  }
-
-  async function onActivatePaymentTerms() {
-    const ptId = (paymentTerms as Record<string, unknown> | null)?.id as string | undefined;
-    if (!ptId) return;
-    const r = await activatePaymentTerms(ptId);
-    if (r.error) toast.error(r.error);
-    else {
-      toast.success("Installments generated.");
+      toast.success("Installment recorded as paid.");
       router.refresh();
     }
   }
@@ -226,7 +222,7 @@ export function StaffTransactionDetail({
     }
   }
 
-  async function onInstructRepossession(informantId: string, reason: string) {
+  async function onInstructRepossession(informantId: string, reason: string, headSecurityId: string) {
     if (!informantId) {
       toast.error("Select a Confidential Informant.");
       return;
@@ -234,6 +230,7 @@ export function StaffTransactionDetail({
     const fd = new FormData();
     fd.set("transaction_id", id);
     fd.set("informant_id", informantId);
+    if (headSecurityId) fd.set("head_security_id", headSecurityId);
     if (reason) fd.set("reason", reason);
     const result = await instructRepossession(fd);
     if (result.error) toast.error(result.error);
@@ -310,7 +307,6 @@ export function StaffTransactionDetail({
           documents={documents}
           history={history}
           installmentAccount={installmentAccount}
-          paymentTerms={paymentTerms}
           viewingArrangements={viewingArrangements}
           informants={informants}
           sellDetails={sellDetails}
@@ -319,13 +315,25 @@ export function StaffTransactionDetail({
           onUploadDocument={onUploadDocument}
           onVerifyDocument={onVerifyDocument}
           onRejectDocument={onRejectDocument}
-          onApprovePaymentTerms={onApprovePaymentTerms}
-          onActivatePaymentTerms={onActivatePaymentTerms}
           onRecordPaperwork={onRecordPaperwork}
           onWaiveInstallment={onWaiveInstallment}
+          onRecordInstallmentPaid={onRecordInstallmentPaid}
+          headSecurity={headSecurity}
           onInstructRepossession={onInstructRepossession}
         />
       </div>
+
+      {kind === "buy" && financing ? (
+        <FinancingPanel
+          transactionId={id}
+          state={state}
+          flowStatus={(transaction.flow_status as string | null) ?? null}
+          terms={paymentTerms}
+          account={installmentAccount}
+          hasRecoveryCase={financing.hasRecoveryCase}
+          userRole={userRole}
+        />
+      ) : null}
 
       {kind === "buy" && delivery ? (
         <DeliveryPanel

@@ -43,9 +43,9 @@ export function TransactionDetailSidebarV1({
   documents,
   history,
   installmentAccount,
-  paymentTerms,
   viewingArrangements,
   informants,
+  headSecurity = [],
   sellDetails,
   sellPhotos,
   conditionItems,
@@ -54,10 +54,9 @@ export function TransactionDetailSidebarV1({
   onUploadDocument,
   onVerifyDocument,
   onRejectDocument,
-  onApprovePaymentTerms,
-  onActivatePaymentTerms,
   onRecordPaperwork,
   onWaiveInstallment,
+  onRecordInstallmentPaid,
   onInstructRepossession,
 }: {
   readonly kind: string;
@@ -67,9 +66,9 @@ export function TransactionDetailSidebarV1({
   readonly documents: Record<string, unknown>[];
   readonly history: Record<string, unknown>[];
   readonly installmentAccount: Record<string, unknown> | null;
-  readonly paymentTerms: Record<string, unknown> | null;
   readonly viewingArrangements: Record<string, unknown>[];
   readonly informants: { id: string; full_name: string | null }[];
+  readonly headSecurity?: { id: string; full_name: string | null }[];
   readonly sellDetails: Record<string, unknown> | undefined;
   // Optional Task 32 props: page.tsx (orchestrator-owned) may pass these later.
   // Falls back to deriving sell photos from `documents` (document_kind === "sell_photo").
@@ -82,11 +81,10 @@ export function TransactionDetailSidebarV1({
   readonly onUploadDocument: (documentKind: string, idType: string, file: File) => Promise<void>;
   readonly onVerifyDocument: (documentId: string) => Promise<void>;
   readonly onRejectDocument: (documentId: string) => Promise<void>;
-  readonly onApprovePaymentTerms: () => Promise<void>;
-  readonly onActivatePaymentTerms: () => Promise<void>;
   readonly onRecordPaperwork: (documentKind: string) => Promise<void>;
   readonly onWaiveInstallment: (installmentId: string) => Promise<void>;
-  readonly onInstructRepossession: (informantId: string, reason: string) => Promise<void>;
+  readonly onRecordInstallmentPaid?: (installmentId: string, amount: string) => Promise<void>;
+  readonly onInstructRepossession: (informantId: string, reason: string, headSecurityId: string) => Promise<void>;
 }) {
   const [payAmount, setPayAmount] = useState("");
   const [payMethod, setPayMethod] = useState("cash");
@@ -98,6 +96,7 @@ export function TransactionDetailSidebarV1({
   const docFileRef = useRef<HTMLInputElement>(null);
   const [repoOpen, setRepoOpen] = useState(false);
   const [repoInformant, setRepoInformant] = useState("");
+  const [repoHeadSecurity, setRepoHeadSecurity] = useState("");
   const [repoReason, setRepoReason] = useState("");
 
   const insts = installmentAccount
@@ -107,7 +106,6 @@ export function TransactionDetailSidebarV1({
     (inst: Record<string, unknown>) => inst.state === "due" || inst.state === "overdue",
   );
   const tState = state as TransactionState;
-  const pt = paymentTerms as Record<string, unknown>;
   // Task 32 role scoping: CEO approves (triage Approve/Reject + sell review), doesn't process.
   // Processing actions (upload / record payment / record paperwork) are hidden for CEO;
   // docs and payments stay visible read-only. Head Accountant verifies documents.
@@ -159,7 +157,7 @@ export function TransactionDetailSidebarV1({
       toast.error("Select a Confidential Informant.");
       return;
     }
-    await onInstructRepossession(repoInformant, repoReason);
+    await onInstructRepossession(repoInformant, repoReason, repoHeadSecurity);
     setRepoOpen(false);
     setRepoInformant("");
     setRepoReason("");
@@ -241,6 +239,20 @@ export function TransactionDetailSidebarV1({
                       >
                         {inst.state as string}
                       </Badge>
+                      {inst.state !== "paid" &&
+                      inst.state !== "waived" &&
+                      isHeadAccountant &&
+                      onRecordInstallmentPaid ? (
+                        // §6 step 23: the Head Accountant records a confirmed installment payment.
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-6 px-2 text-xs"
+                          onClick={() => onRecordInstallmentPaid(inst.id as string, String(inst.amount_due))}
+                        >
+                          Record paid
+                        </Button>
+                      ) : null}
                       {inst.state !== "paid" && inst.state !== "waived" && (
                         <Button
                           variant="ghost"
@@ -485,28 +497,6 @@ export function TransactionDetailSidebarV1({
             </div>
           )}
 
-          {kind === "buy" && paymentTerms && (
-            <div className="space-y-2 rounded-md border bg-muted/20 px-3 py-2">
-              <p className="text-muted-foreground text-xs">Payment terms</p>
-              <div className="flex items-center justify-between gap-2 rounded-md border bg-background/70 px-2.5 py-1.5">
-                <span className="font-medium text-sm tabular-nums">{formatCurrency(Number(pt.total_amount))}</span>
-                <Badge variant="secondary" className="h-5 px-2 text-[11px]">
-                  {pt.state as string}
-                </Badge>
-              </div>
-              {pt.state === "proposed" && (
-                <Button size="sm" className="h-7 w-full text-xs" onClick={() => onApprovePaymentTerms()}>
-                  Approve Terms
-                </Button>
-              )}
-              {pt.state === "approved" && (
-                <Button size="sm" className="h-7 w-full text-xs" onClick={() => onActivatePaymentTerms()}>
-                  Activate & Generate Installments
-                </Button>
-              )}
-            </div>
-          )}
-
           {tState === "completed" && !isCeo && (
             <div className="space-y-2 rounded-md border bg-muted/20 px-3 py-2">
               <p className="text-muted-foreground text-xs">Record paperwork</p>
@@ -549,6 +539,21 @@ export function TransactionDetailSidebarV1({
                   {informants.map((informant) => (
                     <SelectItem key={informant.id} value={informant.id}>
                       {informant.full_name ?? informant.id.slice(0, 8)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="repo-head-security">Head Security</Label>
+              <Select value={repoHeadSecurity} onValueChange={setRepoHeadSecurity}>
+                <SelectTrigger id="repo-head-security">
+                  <SelectValue placeholder="Select Head Security" />
+                </SelectTrigger>
+                <SelectContent>
+                  {headSecurity.map((person) => (
+                    <SelectItem key={person.id} value={person.id}>
+                      {person.full_name ?? person.id.slice(0, 8)}
                     </SelectItem>
                   ))}
                 </SelectContent>

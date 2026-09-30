@@ -9,14 +9,20 @@ import { logAuditEvent } from "@/lib/auth/audit";
 import { notify } from "@/lib/notifications/notify";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { canRecordNoShow, DOWNPAYMENT_WORKING_DAYS, verifiedPaid } from "@/lib/transactions/buy-flow";
+import {
+  canRecordNoShow,
+  DOWNPAYMENT_WORKING_DAYS,
+  MISSED_INSTALLMENTS_BEFORE_REPOSSESSION,
+  missedInstallments,
+  verifiedPaid,
+} from "@/lib/transactions/buy-flow";
 import { finalizeBuySale, recordStandingEvent, releaseVisitSlots } from "@/lib/transactions/buy-flow-server";
-import { generateInstallmentSchedule } from "@/lib/transactions/installments";
+import { closeFinancingIfPaid, confirmInitialDownpaymentIfPaid } from "@/lib/transactions/financing-server";
 import { SELL_PAPER_KINDS } from "@/lib/transactions/sell-flow";
 import type { TransactionState } from "@/lib/transactions/state-machine";
 import { canTransition, reviewDueAt } from "@/lib/transactions/state-machine";
 import { fieldCaseCreateSchema } from "@/lib/validation/phase6";
-import { paymentRecordSchema, paymentTermsSchema, transitionSchema } from "@/lib/validation/transactions";
+import { paymentRecordSchema, transitionSchema } from "@/lib/validation/transactions";
 
 const PAPERWORK_DOCUMENT_KINDS = [
   "valid_id",
@@ -52,7 +58,7 @@ export async function transitionTransaction(formData: FormData) {
 
   const { data: tx } = await supabase
     .from("transactions")
-    .select("current_state, transaction_kind, vehicle_id, customer_id")
+    .select("current_state, transaction_kind, vehicle_id, customer_id, flow_status, purchase_details(payment_method)")
     .eq("id", id)
     .single();
 
@@ -61,6 +67,8 @@ export async function transitionTransaction(formData: FormData) {
   if (tx.transaction_kind === "sell") return { error: "Sell offers move through the sell review steps." };
 
   const fromState = tx.current_state as TransactionState;
+  const purchase = Array.isArray(tx.purchase_details) ? tx.purchase_details[0] : tx.purchase_details;
+  const financing = purchase?.payment_method === "financing";
 
   if (!canTransition(fromState, toState, role)) {
     return { error: "This action is not allowed for your role." };
@@ -121,6 +129,10 @@ export async function transitionTransaction(formData: FormData) {
       .select("id", { count: "exact", head: true })
       .eq("transaction_id", id);
     if (!payments) return { error: "Record the buyer's payment before marking the car sold." };
+    // §6 step 20: a financed car is sold once the Initial Downpayment is confirmed and the account is active.
+    if (financing && tx.flow_status !== "financing_active") {
+      return { error: "Complete the financing agreement before marking the car sold." };
+    }
     // §4 step 9: a delivered car is sold only once the team has handed it over.
     const { data: deliveryCase } = await admin
       .from("field_cases")
@@ -158,7 +170,9 @@ export async function transitionTransaction(formData: FormData) {
   });
 
   if (tx.transaction_kind === "buy") {
-    if (toState === "completed") await finalizeBuySale(admin, { id, vehicle_id: tx.vehicle_id }, user.user.id);
+    if (toState === "completed") {
+      await finalizeBuySale(admin, { id, vehicle_id: tx.vehicle_id }, user.user.id, { keepFlowStatus: financing });
+    }
     if (toState === "rejected" || toState === "cancelled") await releaseVisitSlots(admin, id);
     if (toState === "approved" || toState === "rejected") {
       await notify(
@@ -169,7 +183,9 @@ export async function transitionTransaction(formData: FormData) {
           title: toState === "approved" ? "Your purchase request is approved" : "Your purchase request was rejected",
           body:
             toState === "approved"
-              ? "GCE will expect you on your scheduled visit."
+              ? financing
+                ? "The Sales Manager will now agree your payment duration and financing terms."
+                : "GCE will expect you on your scheduled visit."
               : `GCE did not approve your request.${reason ? ` Reason: ${reason}` : ""} Your visit slot has been released.`,
           transactionId: id,
         },
@@ -492,6 +508,16 @@ export async function recordPayment(formData: FormData) {
       .from("installments")
       .update({ state: "paid", payment_date: parsed.data.settlement_date })
       .eq("id", installmentId);
+    await closeFinancingIfPaid(createAdminClient(), transactionId);
+  }
+
+  // §6 step 17: the Initial Downpayment of a claimed car now waits for the Head Accountant.
+  if (parsed.data.payment_kind === "downpayment") {
+    await createAdminClient()
+      .from("transactions")
+      .update({ flow_status: "initial_dp_awaiting_verification" })
+      .eq("id", transactionId)
+      .eq("flow_status", "purchase_claim");
   }
 
   await logAuditEvent({
@@ -517,145 +543,20 @@ export async function verifyPayment(paymentId: string) {
     return { error: "Not authorized" };
   }
 
-  const { error } = await supabase.from("payment_records").update({ verified_by: user.user.id }).eq("id", paymentId);
+  const { data: payment, error } = await supabase
+    .from("payment_records")
+    .update({ verified_by: user.user.id })
+    .eq("id", paymentId)
+    .select("transaction_id")
+    .maybeSingle();
 
   if (error) return { error: error.message };
+  if (payment) {
+    await confirmInitialDownpaymentIfPaid(createAdminClient(), payment.transaction_id);
+    revalidatePath(`/dashboard/transactions/${payment.transaction_id}`);
+  }
 
   revalidatePath("/dashboard/transactions/payments");
-  return { success: true };
-}
-
-export async function createPaymentTerms(formData: FormData) {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
-
-  const role = await getCurrentRole();
-  if (!role || !["ceo", "sales_manager", "account_manager"].includes(role)) {
-    return { error: "Not authorized" };
-  }
-
-  const parsed = paymentTermsSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid payment terms." };
-  }
-
-  const { error } = await supabase.from("payment_terms").insert({
-    purchase_transaction_id: parsed.data.purchase_transaction_id,
-    arrangement_description: parsed.data.arrangement_description,
-    total_amount: parsed.data.total_amount,
-    down_payment: parsed.data.down_payment,
-    number_of_payments: parsed.data.number_of_payments,
-    payment_frequency: parsed.data.payment_frequency,
-    first_due_date: parsed.data.first_due_date,
-    agreed_by: user.user.id,
-  });
-
-  if (error) return { error: error.message };
-
-  revalidatePath(`/dashboard/transactions/${parsed.data.purchase_transaction_id}`);
-  return { success: true };
-}
-
-export async function approvePaymentTerms(termsId: string) {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
-
-  const role = await getCurrentRole();
-  if (!role || !["ceo", "account_manager", "head_accountant"].includes(role)) {
-    return { error: "Not authorized" };
-  }
-
-  const { error } = await supabase
-    .from("payment_terms")
-    .update({
-      state: "approved",
-      approver_id: user.user.id,
-      approval_date: new Date().toISOString(),
-    })
-    .eq("id", termsId);
-
-  if (error) return { error: error.message };
-
-  await logAuditEvent({
-    actorId: user.user.id,
-    action: "payment_terms_approved",
-    recordKind: "payment_terms",
-    recordId: termsId,
-    summary: `Payment terms ${termsId} approved`,
-  });
-
-  revalidatePath("/dashboard/transactions");
-  return { success: true };
-}
-
-export async function activatePaymentTerms(termsId: string) {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
-
-  const role = await getCurrentRole();
-  if (!role || !["ceo", "account_manager"].includes(role)) {
-    return { error: "Not authorized" };
-  }
-
-  const admin = await createAdminClient();
-
-  const { data: terms } = await admin.from("payment_terms").select("*").eq("id", termsId).single();
-
-  if (!terms) return { error: "Payment terms not found" };
-
-  const schedule = generateInstallmentSchedule({
-    totalAmount: Number(terms.total_amount),
-    downPayment: Number(terms.down_payment),
-    numberOfPayments: Number(terms.number_of_payments),
-    firstDueDate: new Date(terms.first_due_date as string),
-    frequency: terms.payment_frequency as never,
-  });
-
-  // Create installment account.
-  const financed = Number(terms.total_amount) - Number(terms.down_payment);
-  const { data: account, error: accountError } = await admin
-    .from("installment_accounts")
-    .insert({
-      purchase_transaction_id: terms.purchase_transaction_id,
-      financed_total: terms.total_amount,
-      down_payment: terms.down_payment,
-      opening_balance: financed,
-      start_date: terms.first_due_date,
-    })
-    .select()
-    .single();
-
-  if (accountError) return { error: accountError.message };
-
-  // Create installments.
-  const { error: instError } = await admin.from("installments").insert(
-    schedule.map((s) => ({
-      account_id: account.id,
-      sequence_no: s.sequenceNo,
-      due_date: s.dueDate,
-      amount_due: s.amountDue,
-    })),
-  );
-
-  if (instError) return { error: instError.message };
-
-  // Update terms state.
-  await admin.from("payment_terms").update({ state: "active" }).eq("id", termsId);
-
-  const userResult = await (await createServerSupabaseClient()).auth.getUser();
-  await logAuditEvent({
-    actorId: userResult.data.user?.id ?? "unknown",
-    action: "payment_terms_activated",
-    recordKind: "payment_terms",
-    recordId: termsId,
-    summary: `Payment terms ${termsId} activated, ${schedule.length} installments created`,
-  });
-
-  revalidatePath(`/dashboard/transactions/${terms.purchase_transaction_id}`);
-  revalidatePath("/dashboard/transactions/installments");
   return { success: true };
 }
 
@@ -1087,15 +988,27 @@ export async function instructRepossession(formData: FormData) {
     .maybeSingle();
   if (!account) return { error: "No installment account exists for this transaction." };
 
-  const { data: overdue } = await supabase
+  const { data: installments } = await supabase
     .from("installments")
-    .select("id")
+    .select("id, state, due_date, amount_due")
     .eq("account_id", account.id)
-    .in("state", ["due", "overdue"])
-    .order("due_date", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (!overdue) return { error: "No due or overdue installments found for this transaction." };
+    .order("due_date", { ascending: true });
+  const rows = installments ?? [];
+  // Q5 default (§6 steps 24 and 26): repossession starts from the 4th missed installment.
+  const missed = missedInstallments(rows);
+  if (missed < MISSED_INSTALLMENTS_BEFORE_REPOSSESSION) {
+    return {
+      error: `Repossession starts after ${MISSED_INSTALLMENTS_BEFORE_REPOSSESSION} missed installments; this account has ${missed}.`,
+    };
+  }
+  const overdue = rows.find((i) => !["paid", "waived"].includes(i.state));
+  if (!overdue) return { error: "No unpaid installments found for this transaction." };
+  // §6 step 26.2: the statement the recovery team carries.
+  const unpaid = rows.filter((i) => !["paid", "waived"].includes(i.state));
+  const paidTotal = rows.filter((i) => i.state === "paid").reduce((sum, i) => sum + Number(i.amount_due), 0);
+  const unpaidTotal = unpaid.reduce((sum, i) => sum + Number(i.amount_due), 0);
+  const statement = `Paid ₱${paidTotal.toLocaleString()}; unsettled ₱${unpaidTotal.toLocaleString()} over ${unpaid.length} installments (${missed} missed).`;
+  const headSecurityId = (formData.get("head_security_id") as string) || null;
 
   const { data: fieldCase, error } = await supabase
     .from("field_cases")
@@ -1103,8 +1016,9 @@ export async function instructRepossession(formData: FormData) {
       transaction_id: transactionId,
       case_kind: "recovery",
       assigned_confidential_informant: informantId,
+      head_security_id: headSecurityId,
       state: "assigned",
-      notes: reason ?? `Repossession instructed for transaction ${transactionId}`,
+      notes: `${reason ?? `Repossession instructed for transaction ${transactionId}`} ${statement}`,
     })
     .select()
     .single();

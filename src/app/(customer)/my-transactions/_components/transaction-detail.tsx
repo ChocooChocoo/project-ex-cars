@@ -12,6 +12,7 @@ import { toast } from "sonner";
 
 import {
   cancelTransaction,
+  respondToFinancingOffer,
   saveBuyDetails,
   submitBuyRequest,
   uploadPurchaseDocument,
@@ -45,8 +46,9 @@ import {
   DELIVERY_STATUS_LABELS,
   DELIVERY_STATUSES,
   type DeliveryStatus,
+  isFinancingVisitRequest,
   isOnsiteCashRequest,
-  isQueuedCashRequest,
+  isQueuedRequest,
 } from "@/lib/transactions/buy-flow";
 import { transactionDocumentLabel } from "@/lib/transactions/document-media";
 import {
@@ -228,7 +230,29 @@ export function TransactionDetail({
   // §2 steps 2–4: two IDs and a locked Cash visit slot, then the request goes to the Sales Manager.
   const activeIds = activeBuyerIdCount(documents as { document_kind: unknown; verification_state: unknown }[]);
   const onsiteCashSaved = isOnsiteCashRequest(purchaseDetails ?? null);
-  const queuedCashSaved = isQueuedCashRequest(purchaseDetails ?? null);
+  const queuedCashSaved = isQueuedRequest(purchaseDetails ?? null);
+  // §6: a financing buyer books the inspection visit only after the financing is approved.
+  const financingSaved = isFinancingVisitRequest(purchaseDetails ?? null);
+  const flowStatus = (transaction.flow_status as string | null) ?? null;
+  const [visitAt, setVisitAt] = useState("");
+  const [responding, setResponding] = useState(false);
+
+  async function handleFinancingResponse(decision: "proceed" | "decline") {
+    setResponding(true);
+    const fd = new FormData();
+    fd.set("transaction_id", id);
+    fd.set("decision", decision);
+    if (visitAt) fd.set("schedule", new Date(visitAt).toISOString());
+    const result = await respondToFinancingOffer(fd);
+    setResponding(false);
+    if (result.error) toast.error(result.error);
+    else {
+      toast.success(
+        decision === "proceed" ? "Visit booked. No payment is taken before you inspect the car." : "Request closed.",
+      );
+      router.refresh();
+    }
+  }
   const queueState = (transaction.queue_state as QueueState | null) ?? null;
   const acknowledgedAt = (purchaseDetails?.condition_acknowledged_at as string | null) ?? null;
   const [acknowledge, setAcknowledge] = useState(false);
@@ -465,7 +489,8 @@ export function TransactionDetail({
                     Your account is limited to GCE visits after missed meet-ups or a declined purchase.
                   </p>
                 ) : null}
-                {(arrangementKind === "meetup" || arrangementKind === "delivery") && !acknowledgedAt ? (
+                {(arrangementKind === "meetup" || arrangementKind === "delivery" || paymentMethod === "financing") &&
+                !acknowledgedAt ? (
                   <div className="flex items-start gap-2 rounded-md border p-3 text-sm">
                     <Checkbox
                       id="acknowledge-condition"
@@ -517,9 +542,11 @@ export function TransactionDetail({
                     <p className="font-medium">Send your request</p>
                     <p className="text-muted-foreground text-xs">
                       Valid IDs: {activeIds}/2 ·{" "}
-                      {bookedSlot
-                        ? `${queuedCashSaved ? (arrangementKind === "delivery" ? "Delivery" : "Meet-up") : "Visit slot locked"} for ${format(new Date(bookedSlot.schedule as string), "MMM d, yyyy h:mm a")}`
-                        : "No time booked yet"}
+                      {financingSaved
+                        ? "Visit booked after the financing is approved"
+                        : bookedSlot
+                          ? `${queuedCashSaved ? (arrangementKind === "delivery" ? "Delivery" : "Meet-up") : "Visit slot locked"} for ${format(new Date(bookedSlot.schedule as string), "MMM d, yyyy h:mm a")}`
+                          : "No time booked yet"}
                       {queuedCashSaved ? ` · Condition ${acknowledgedAt ? "acknowledged" : "not acknowledged"}` : ""}
                     </p>
                     {queuedCashSaved ? (
@@ -530,7 +557,12 @@ export function TransactionDetail({
                     ) : null}
                     <Button
                       onClick={handleSubmitRequest}
-                      disabled={submitting || activeIds !== 2 || !bookedSlot || (queuedCashSaved && !acknowledgedAt)}
+                      disabled={
+                        submitting ||
+                        activeIds !== 2 ||
+                        (!bookedSlot && !financingSaved) ||
+                        (queuedCashSaved && !acknowledgedAt)
+                      }
                       className="self-start"
                     >
                       {submitting ? "Sending..." : "Submit Request"}
@@ -541,6 +573,45 @@ export function TransactionDetail({
               <Separator />
             </>
           )}
+
+          {kind === "buy" && flowStatus === "approved_awaiting_buyer_decision" && paymentTerms ? (
+            <>
+              {/* §6 steps 11–12: the buyer reviews the approved financing, then books the inspection visit. */}
+              <section className="flex flex-col gap-3">
+                <h2 className="font-medium tracking-tight">Your approved financing</h2>
+                <p className="text-sm">
+                  Initial Downpayment {formatCurrency(Number(paymentTerms.down_payment))}, then{" "}
+                  {String(paymentTerms.number_of_payments)} monthly payments on a balance of{" "}
+                  {formatCurrency(Number(paymentTerms.total_amount) - Number(paymentTerms.down_payment))}. You pay the
+                  downpayment only after you inspect and accept the car at GCE.
+                </p>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="financing-visit">GCE visit (on the hour)</Label>
+                  <Input
+                    id="financing-visit"
+                    type="datetime-local"
+                    step={3600}
+                    value={visitAt}
+                    onChange={(e) => setVisitAt(e.target.value)}
+                  />
+                  {takenSlots.length > 0 ? (
+                    <p className="text-muted-foreground text-xs">
+                      Already taken: {takenSlots.map((slot) => format(new Date(slot), "MMM d, h:mm a")).join(", ")}.
+                    </p>
+                  ) : null}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button onClick={() => handleFinancingResponse("proceed")} disabled={responding || !visitAt}>
+                    Accept and book visit
+                  </Button>
+                  <Button variant="outline" onClick={() => handleFinancingResponse("decline")} disabled={responding}>
+                    Don't proceed
+                  </Button>
+                </div>
+              </section>
+              <Separator />
+            </>
+          ) : null}
 
           {kind === "buy" && purchaseDetails?.downpayment_due_at ? (
             <>

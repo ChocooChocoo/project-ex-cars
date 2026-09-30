@@ -15,7 +15,6 @@ function renderSidebar(documents: Record<string, unknown>[]) {
       documents={documents}
       history={[]}
       installmentAccount={null}
-      paymentTerms={null}
       viewingArrangements={[]}
       informants={[]}
       sellDetails={{}}
@@ -23,8 +22,6 @@ function renderSidebar(documents: Record<string, unknown>[]) {
       onUploadDocument={noop}
       onVerifyDocument={noop}
       onRejectDocument={noop}
-      onApprovePaymentTerms={noop}
-      onActivatePaymentTerms={noop}
       onRecordPaperwork={noop}
       onWaiveInstallment={noop}
       onInstructRepossession={noop}

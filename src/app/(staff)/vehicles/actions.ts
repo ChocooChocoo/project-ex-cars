@@ -162,11 +162,30 @@ export async function proposePrice(formData: FormData) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid price proposal." };
   }
 
+  // §6 steps 36–39: a repossessed car is repriced only after its reconditioning is finished and its
+  // papers are re-processed; that proposal is a "reprice".
+  const { data: jobs } = await supabase
+    .from("reconditioning_jobs")
+    .select("state, papers_processed_at, completed_at")
+    .eq("vehicle_id", parsed.data.vehicle_id)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const job = jobs?.[0];
+  if (job && job.state !== "completed") return { error: "Finish the car's reconditioning before repricing it." };
+  const { data: vehicle } = await supabase
+    .from("vehicles")
+    .select("listing_state")
+    .eq("id", parsed.data.vehicle_id)
+    .maybeSingle();
+  const reprice = Boolean(job) && vehicle?.listing_state === "repairing";
+  if (reprice && !job?.papers_processed_at) return { error: "The Sales Manager must re-process the papers first." };
+  const proposalKind = reprice ? "reprice" : "selling_price";
+
   const { data: existingProposal } = await supabase
     .from("vehicle_price_proposals")
     .select("id")
     .eq("vehicle_id", parsed.data.vehicle_id)
-    .eq("proposal_kind", "selling_price")
+    .eq("proposal_kind", proposalKind)
     .eq("decision", "pending")
     .maybeSingle();
   if (existingProposal) return { error: "This vehicle already has a pending price proposal." };
@@ -176,6 +195,7 @@ export async function proposePrice(formData: FormData) {
     proposed_amount: parsed.data.proposed_amount,
     proposer_id: user.user.id,
     decision: "pending",
+    proposal_kind: proposalKind,
     notes: parsed.data.notes || null,
   });
 
@@ -243,7 +263,11 @@ export async function approvePrice(formData: FormData) {
 
     await admin
       .from("vehicles")
-      .update({ listing_state: decision === "approved" ? "available" : "draft" })
+      // §6 step 40: a rejected reprice goes back to the Marketing Specialist; the car stays off the listing.
+      .update({
+        listing_state:
+          decision === "approved" ? "available" : proposal.proposal_kind === "reprice" ? "repairing" : "draft",
+      })
       .eq("id", vehicleId);
   }
 

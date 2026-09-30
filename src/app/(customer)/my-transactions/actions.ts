@@ -11,8 +11,9 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
   activeBuyerIdCount,
   BUYER_ID_COUNT,
+  isFinancingVisitRequest,
   isOnsiteCashRequest,
-  isQueuedCashRequest,
+  isQueuedRequest,
   isVisitSlot,
 } from "@/lib/transactions/buy-flow";
 import { releaseVisitSlots } from "@/lib/transactions/buy-flow-server";
@@ -189,8 +190,10 @@ export async function saveBuyDetails(formData: FormData) {
     if (standing?.gce_visit_only) return { error: "Your account is limited to GCE visits." };
   }
 
-  // §3 step 3 / §4 step 3: the condition acknowledgment comes before choosing Meet Halfway or Delivery.
-  if ((arrangement_kind === "meetup" || arrangement_kind === "delivery") && acknowledge_condition !== "yes") {
+  // §3/§4/§6 step 3: the condition acknowledgment comes before Meet Halfway, Delivery or financing.
+  const needsAcknowledgment =
+    arrangement_kind === "meetup" || arrangement_kind === "delivery" || payment_method === "financing";
+  if (needsAcknowledgment && acknowledge_condition !== "yes") {
     const { data: existing } = await supabase
       .from("purchase_details")
       .select("condition_acknowledged_at")
@@ -266,9 +269,14 @@ export async function submitBuyRequest(formData: FormData) {
   if (tx.current_state !== "pending" || tx.queue_state) return { error: "This request is already submitted." };
 
   const details = (Array.isArray(tx.purchase_details) ? tx.purchase_details[0] : tx.purchase_details) ?? null;
-  const queued = isQueuedCashRequest(details);
+  const queued = isQueuedRequest(details);
+  // §6: a financing buyer books the GCE visit only after the financing is approved.
+  const financing = isFinancingVisitRequest(details);
   if (!queued && !isOnsiteCashRequest(details)) {
-    return { error: "Save Cash as the payment method and GCE Visit, Meet Halfway or Delivery as the arrangement." };
+    return {
+      error:
+        "Save Cash with GCE Visit, Meet Halfway or Delivery, or In-House Financing with GCE Visit, as the arrangement.",
+    };
   }
   if (queued && !details?.condition_acknowledged_at) return { error: "Acknowledge the car's condition first." };
 
@@ -284,10 +292,14 @@ export async function submitBuyRequest(formData: FormData) {
   ]);
   if (activeBuyerIdCount(documents ?? []) !== BUYER_ID_COUNT) return { error: "Upload two valid IDs first." };
   if (queued && standing?.gce_visit_only) return { error: "Your account is limited to GCE visits." };
-  if (!slot || slot.arrangement_kind !== details?.arrangement_kind) return { error: "Book the meeting time first." };
-  const scheduledAt = new Date(slot.schedule);
-  if (queued ? scheduledAt.getTime() <= Date.now() : !isVisitSlot(scheduledAt)) {
-    return { error: "The booked time has passed. Pick a new one." };
+  const scheduledAt = slot ? new Date(slot.schedule) : null;
+  if (!financing) {
+    if (!slot || !scheduledAt || slot.arrangement_kind !== details?.arrangement_kind) {
+      return { error: "Book the meeting time first." };
+    }
+    if (queued ? scheduledAt.getTime() <= Date.now() : !isVisitSlot(scheduledAt)) {
+      return { error: "The booked time has passed. Pick a new one." };
+    }
   }
 
   // Customers cannot move their own request into review under RLS; ownership is checked above.
@@ -327,10 +339,10 @@ export async function submitBuyRequest(formData: FormData) {
     to_state: onHold ? "pending" : "under_review",
     actor_id: user.user.id,
     reason: queued
-      ? `Buyer submitted a Cash ${details?.arrangement_kind === "delivery" ? "Delivery" : "Meet Halfway"} request (${onHold ? "On Hold" : "Active"})`
+      ? `Buyer submitted ${financing ? "an In-House Financing" : `a Cash ${details?.arrangement_kind === "delivery" ? "Delivery" : "Meet Halfway"}`} request (${onHold ? "On Hold" : "Active"})`
       : "Buyer submitted a Cash request with a GCE visit slot",
   });
-  const when = scheduledAt.toLocaleString("en-PH");
+  const when = scheduledAt ? scheduledAt.toLocaleString("en-PH") : "";
   await notify(
     admin,
     { userId: user.user.id },
@@ -350,7 +362,9 @@ export async function submitBuyRequest(formData: FormData) {
       {
         kind: "buy_request_submitted",
         title: "New buyer request to review",
-        body: `A Cash buyer ${queued ? (details?.arrangement_kind === "delivery" ? "asked for delivery" : "asked to meet halfway") : "booked a GCE visit"} on ${when}. Review within 7 days.`,
+        body: financing
+          ? "A buyer asked for In-House Financing. Review within 7 days, then agree the payment duration."
+          : `A Cash buyer ${queued ? (details?.arrangement_kind === "delivery" ? "asked for delivery" : "asked to meet halfway") : "booked a GCE visit"} on ${when}. Review within 7 days.`,
         transactionId: tx.id,
       },
     );
@@ -359,6 +373,95 @@ export async function submitBuyRequest(formData: FormData) {
   revalidatePath(`/my-transactions/${tx.id}`);
   revalidatePath("/dashboard/transactions");
   return { success: true, queueState };
+}
+
+// §6 steps 11–12: the buyer reviews the approved financing. Declining closes the request with nothing
+// paid; proceeding books the inspection visit. No downpayment is taken before the car is inspected.
+export async function respondToFinancingOffer(formData: FormData) {
+  const supabase = await createServerSupabaseClient();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+
+  const parsed = z
+    .object({
+      transaction_id: z.string().uuid(),
+      decision: z.enum(["proceed", "decline"]),
+      schedule: z.string().optional().or(z.literal("")),
+    })
+    .safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: "Invalid response." };
+
+  const { data: tx } = await supabase
+    .from("transactions")
+    .select("id, customer_id, transaction_kind, current_state, flow_status")
+    .eq("id", parsed.data.transaction_id)
+    .maybeSingle();
+  if (!tx || tx.customer_id !== user.user.id || tx.transaction_kind !== "buy")
+    return { error: "Transaction not found." };
+  if (tx.flow_status !== "approved_awaiting_buyer_decision") return { error: "There is no financing offer to answer." };
+
+  const admin = createAdminClient();
+  if (parsed.data.decision === "decline") {
+    await admin
+      .from("transactions")
+      .update({ current_state: "cancelled", completed_at: new Date().toISOString(), flow_status: null })
+      .eq("id", tx.id);
+    await admin.from("transaction_status_history").insert({
+      transaction_id: tx.id,
+      from_state: tx.current_state,
+      to_state: "cancelled",
+      actor_id: user.user.id,
+      reason: "Buyer did not proceed with the approved financing",
+    });
+    await notify(
+      admin,
+      { role: "sales_manager" },
+      {
+        kind: "financing_declined",
+        title: "Buyer declined the financing offer",
+        body: "The request is closed with nothing paid. Promote the next On Hold buyer for this car.",
+        transactionId: tx.id,
+      },
+    );
+    revalidatePath(`/my-transactions/${tx.id}`);
+    return { success: true };
+  }
+
+  const visit = parsed.data.schedule ? new Date(parsed.data.schedule) : null;
+  if (!visit || !isVisitSlot(visit)) return { error: "Pick a future GCE visit slot on the hour." };
+  // A time saved before approval is replaced by the inspection appointment.
+  await releaseVisitSlots(admin, tx.id);
+  const { error: slotError } = await supabase.from("viewing_arrangements").insert({
+    inquiry_id: null,
+    purchase_transaction_id: tx.id,
+    arrangement_kind: "gce_visit",
+    schedule: visit.toISOString(),
+    notes: "Vehicle inspection and purchase decision appointment",
+  });
+  if (slotError?.code === "23505") return { error: "That visit slot is already taken. Choose another time." };
+  if (slotError) return { error: slotError.message };
+
+  await admin.from("transactions").update({ flow_status: "gce_visit_scheduled_dp_pending" }).eq("id", tx.id);
+  await admin.from("transaction_status_history").insert({
+    transaction_id: tx.id,
+    from_state: tx.current_state,
+    to_state: tx.current_state,
+    actor_id: user.user.id,
+    reason: `Buyer accepted the financing and booked a GCE visit for ${visit.toLocaleString("en-PH")}`,
+  });
+  await notify(
+    admin,
+    { role: "sales_manager" },
+    {
+      kind: "financing_visit_booked",
+      title: "Financing buyer booked a visit",
+      body: `Inspection and purchase decision appointment on ${visit.toLocaleString("en-PH")}.`,
+      transactionId: tx.id,
+    },
+  );
+  revalidatePath(`/my-transactions/${tx.id}`);
+  revalidatePath(`/dashboard/transactions/${tx.id}`);
+  return { success: true };
 }
 
 const SELL_PHOTO_MAX_COUNT = 6;
