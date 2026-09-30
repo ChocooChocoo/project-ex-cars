@@ -120,7 +120,7 @@ This plan orders that work so each phase ships a complete, testable flow. Later 
 - [x] Buyer submits Cash + GCE visit with exactly 2 IDs → `pending_sm_approval` + 7-day window; overdue notifies the Sales Manager
 - [x] Approve/reject notify the buyer; Buyer declined (`declined_by_buyer`); Mark Sold to This Buyer (needs a recorded payment; closes and notifies other open requests — Q13 default)
 - [x] Head Accountant sale records in Finance; migration SQL test, rule tests, unit suite green
-- [ ] e2e `src/tests/e2e/t01-phase2-onsite-visit.spec.ts` written, not run: it marks a showroom car Sold on the hosted project; run against a test database
+- [x] e2e `src/tests/e2e/t01-phase2-onsite-visit.spec.ts` passed 4/4 on 2026-09-30 on the hosted project, using its own `E2E-T01` test car
 - Kept from Task 32: proof of billing is still required before approval and sale (the process doc names only 2 IDs).
 - Guided buy flow in `transaction-detail.tsx`: credentials, exactly 2 IDs enforced server-side, Cash, then GCE visit slot.
 - **Slot lock.** Add `viewing_arrangements.vehicle_id` (backfill from `inquiries.vehicle_id`, NOT NULL after backfill). Add a partial UNIQUE index on (`vehicle_id`, `schedule`) WHERE `confirmation_state IN ('pending','confirmed')`. Availability check comes before submit. The lock is held from booking, released on rejection (set `confirmation_state='cancelled'`), and kept while overdue.
@@ -139,7 +139,7 @@ This plan orders that work so each phase ships a complete, testable flow. Later 
 - [x] No-show after 2h30m (`buyer_no_show`, no-show count, GCE Visit only at 2); decline Legit / Not Legit (strike → GCE Visit only); arrangement options and submit respect `gce_visit_only`
 - [x] Mark sold notifies every other open (incl. On Hold) buyer (Phase 2 `finalizeBuySale`)
 - [x] Migration SQL test, rule tests, unit suite green
-- [ ] e2e `src/tests/e2e/t01-phase3-halfway-queue.spec.ts` written (queue, reject → promote, approve → sold), not run: it marks a showroom car Sold on the hosted project; no-show needs a past meet-up, so it is covered by unit tests only
+- [x] e2e `src/tests/e2e/t01-phase3-halfway-queue.spec.ts` (queue, reject → promote, approve → sold) passed 3/3 on 2026-09-30 using its own `E2E-T01` test car; no-show needs a past meet-up, so it is covered by unit tests only
 - Defaults used: Q11 an Active request (even Overdue) blocks promotion until decided; Q1 credit score skipped (acknowledgment links to the 360° view); Q12 no expense filing for halfway meet-ups. The 00050 slot lock now applies to GCE visits only.
 - **Queue.** Add `purchase_details.queue_state` (`active`, `on_hold`) with a partial UNIQUE index (vehicle_id) WHERE `active`. Create a new request as `active` or `on_hold` using `nextQueueState`. The SM "Buyers for this car" panel manually promotes the next request. There is no auto-promote. Queue behavior while overdue depends on Q11.
 - Condition acknowledgment checkbox (store `acknowledged_at`), required before choosing halfway. Reuse the 360° viewer. The "credit score" item waits on Q1.
@@ -185,7 +185,8 @@ This plan orders that work so each phase ships a complete, testable flow. Later 
 - [x] Replaced the unused legacy payment-terms buttons and actions (`createPaymentTerms`, `approvePaymentTerms`, `activatePaymentTerms`)
 - [x] Migration SQL test, rule tests, unit suite green (319)
 - [x] Apply `00054` to the hosted project
-- [ ] e2e spec for Phase 5 (not written)
+- [x] e2e `src/tests/e2e/t01-phase5-financing.spec.ts` (phases A–C: request → terms chain → offer → visit → claim → downpayment → agreement → sold) passed 7/7 on 2026-09-30; installments, repossession and reconditioning are covered by unit tests
+- [x] The e2e run found that Mark Sold cleared "In-House Financing — Active"; fixed in `transitionTransaction`
 - Defaults used: Q4 7-day window; Q5 flag on the first missed installment, repossession from the 4th, no penalty amount added; Q6 the Sales Manager calculates, the Head Accountant reviews; Step 10 "Head Accountant records final details" is folded into the CEO confirmation.
 - **Gate:** the client signs off on §6 and answers Q4–Q6.
 - **Phase A–B.** The SM captures the payment duration and proposes terms. Wire the existing `createPaymentTerms` to a new form, then HA review (new `payment_terms.ha_reviewed_*`), then CEO confirm (existing `approvePaymentTerms`), then buyer decision.

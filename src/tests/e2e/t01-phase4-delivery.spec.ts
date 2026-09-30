@@ -1,5 +1,7 @@
 import { expect as baseExpect, type Page, test } from "@playwright/test";
 
+import { archiveListedTestVehicles, canCreateTestVehicle, createTestVehicle } from "./support/test-vehicle";
+
 // The dev server compiles each route on first use, so a refresh after a server action can take
 // longer than Playwright's default 5 s.
 const expect = baseExpect.configure({ timeout: 20_000 });
@@ -9,7 +11,7 @@ const expect = baseExpect.configure({ timeout: 20_000 });
 // records and verifies both → delivery team (CI, Mechanic, Head Security) is created → the team moves
 // the status to Delivered → the buyer declines for a legitimate reason, which queues a refund.
 // The missed-deadline path needs a deadline in the past, so it is covered by unit tests, not here.
-// Needs migration 00052 applied, an available car, and active CI, Mechanic and Head Security accounts
+// Needs migration 00052 applied (the spec lists its own E2E-T01 test car) and active CI, Mechanic and Head Security accounts
 // (the first of each in the worker directory must be the seeded @gce.local account).
 
 const seedPassword = process.env.SEED_USER_PASSWORD;
@@ -71,16 +73,18 @@ async function recordPayment(page: Page, kind: string, amount: string) {
 
 test.describe
   .serial("T01 Phase 4 cash delivery", () => {
-    test.skip(!seedPassword, "SEED_USER_PASSWORD required");
+    test.skip(
+      !seedPassword || !canCreateTestVehicle(),
+      "SEED_USER_PASSWORD and the Supabase service role are required",
+    );
+    test.afterAll(archiveListedTestVehicles);
 
     let txId = "";
     let fieldCasePath = "";
 
     test("buyer asks for delivery", async ({ page }) => {
       await signInAs(page, "customer@gce.local");
-      await page.goto("/customer/showroom");
-      const car = page.locator('a[href*="/showroom/"]').first();
-      await page.goto(new URL((await car.getAttribute("href")) ?? "", page.url()).pathname);
+      await page.goto(`/customer/showroom/${await createTestVehicle("DELIVERY")}`);
       await page.getByRole("button", { name: "Buy Now" }).click();
       await page.waitForURL(/\/my-transactions\/[0-9a-f-]{36}/, { timeout: 30_000 });
       txId = page.url().match(/[0-9a-f-]{36}/)?.[0] ?? "";
