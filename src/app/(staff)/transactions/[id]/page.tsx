@@ -77,6 +77,11 @@ export default async function TransactionDetailPage({ params }: { readonly param
   )
     .filter((worker) => worker.role === "confidential_informant")
     .map((worker) => ({ id: worker.account_id, full_name: worker.full_name }));
+  const headSecurity = (
+    (workerDirectory as { account_id: string; role: string; full_name: string | null }[] | null) ?? []
+  )
+    .filter((worker) => worker.role === "head_security")
+    .map((worker) => ({ id: worker.account_id, full_name: worker.full_name }));
   const mechanics = ((workerDirectory as { account_id: string; role: string; full_name: string | null }[] | null) ?? [])
     .filter((worker) => worker.role === "mechanic")
     .map((worker) => ({ id: worker.account_id, full_name: worker.full_name }));
@@ -93,6 +98,24 @@ export default async function TransactionDetailPage({ params }: { readonly param
           .not("current_state", "in", "('rejected','completed','cancelled')")
           .order("opened_at", { ascending: true })
       : { data: null };
+
+  // §4: the delivery field case, for a Cash Delivery request.
+  const purchaseRow = (transaction as Record<string, unknown>).purchase_details as
+    | Record<string, unknown>
+    | Record<string, unknown>[]
+    | null;
+  const isDelivery =
+    (Array.isArray(purchaseRow) ? purchaseRow[0] : purchaseRow)?.arrangement_kind === "delivery" &&
+    (transaction as Record<string, unknown>).transaction_kind === "buy";
+  const { data: deliveryCase } = isDelivery
+    ? await supabase
+        .from("field_cases")
+        .select("id, state, delivery_status, delay_note, expected_arrival")
+        .eq("transaction_id", id)
+        .eq("case_kind", "delivery")
+        .neq("state", "cancelled")
+        .maybeSingle()
+    : { data: null };
 
   // T01 Selling: ceilings, the field inspection, the issue report, expenses and the negotiation thread.
   const isSell = (transaction as Record<string, unknown>).transaction_kind === "sell";
@@ -149,6 +172,14 @@ export default async function TransactionDetailPage({ params }: { readonly param
         informants={informants}
         checklistNameMap={checklistNameMap}
         carBuyers={(carBuyers as unknown as CarBuyerRow[] | null) ?? []}
+        delivery={
+          isDelivery
+            ? {
+                fieldCase: deliveryCase as Record<string, unknown> | null,
+                team: { informants, mechanics, headSecurity },
+              }
+            : null
+        }
         sellFlow={
           isSell
             ? {

@@ -282,6 +282,7 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
   head_security: new Set([
     "default",
     "vehicles",
+    "field-cases",
     "attendance",
     "employee-requests",
     "security-duty-checks",

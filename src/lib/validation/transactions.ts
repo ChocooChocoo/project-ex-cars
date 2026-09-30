@@ -108,6 +108,10 @@ export const paymentRecordSchema = z.object({
   method: z.enum(["cash", "financing", "cheque", "bank_transfer"]),
   external_reference: z.string().max(100).optional().or(z.literal("")),
   settlement_date: z.string().min(1, "Settlement date is required."),
+  payment_kind: z
+    .enum(["full", "delivery_fee", "downpayment", "balance", "reschedule_fee"])
+    .optional()
+    .or(z.literal("")),
 });
 
 export type PaymentRecordFormData = z.infer<typeof paymentRecordSchema>;

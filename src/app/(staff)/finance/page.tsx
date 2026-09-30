@@ -71,7 +71,7 @@ export default async function FinancePage() {
     supabase
       .from("transactions")
       .select(
-        "id, completed_at, vehicles(make, model, year, stock_code), profiles(full_name), purchase_details(final_price, payment_method), payment_records(amount)",
+        "id, completed_at, vehicles(make, model, year, stock_code), profiles(full_name), purchase_details(final_price, payment_method), payment_records(amount, payment_kind)",
       )
       .eq("transaction_kind", "buy")
       .eq("current_state", "completed")

@@ -192,9 +192,11 @@ export function FieldCasesTable({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              {row.original.case_kind === "acquisition" ? (
+              {row.original.case_kind === "acquisition" || row.original.case_kind === "delivery" ? (
                 <DropdownMenuItem asChild>
-                  <Link href={`/dashboard/field-cases/${row.original.id}`}>Open seller meet-up</Link>
+                  <Link href={`/dashboard/field-cases/${row.original.id}`}>
+                    {row.original.case_kind === "delivery" ? "Open delivery" : "Open seller meet-up"}
+                  </Link>
                 </DropdownMenuItem>
               ) : null}
               {canUpdate && canAssignMechanic ? (

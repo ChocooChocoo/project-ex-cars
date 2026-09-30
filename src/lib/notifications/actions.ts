@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase, createServerSupabaseClient } from "@/lib/supabase/server";
+import { verifiedPaid } from "@/lib/transactions/buy-flow";
 
 export interface NotificationRow {
   id: string;
@@ -78,6 +79,8 @@ export async function checkAndNotifyOverdueReviews(): Promise<void> {
   const admin = createAdminClient();
   const now = new Date().toISOString();
 
+  await notifyMissedDownpayments(admin, now);
+
   const { data: overdue } = await admin
     .from("transactions")
     .select("id, transaction_kind, review_due_at")
@@ -111,6 +114,47 @@ export async function checkAndNotifyOverdueReviews(): Promise<void> {
   if (toInsert.length > 0) {
     await admin.from("notifications").insert(toInsert);
   }
+}
+
+// §4 step 5a: an approved delivery whose downpayment deadline passed unpaid. The Sales Manager is told
+// once and cancels it from the transaction page; nothing is cancelled here.
+async function notifyMissedDownpayments(admin: ReturnType<typeof createAdminClient>, now: string): Promise<void> {
+  const { data: lapsed } = await admin
+    .from("purchase_details")
+    .select(
+      "transaction_id, downpayment_amount, transactions!inner(current_state, payment_records(payment_kind, amount, verified_by))",
+    )
+    .lt("downpayment_due_at", now)
+    .is("downpayment_forfeited_at", null)
+    .eq("transactions.current_state", "approved");
+  const unpaid = (lapsed ?? []).filter((row) => {
+    const tx = row.transactions as unknown as {
+      payment_records: { payment_kind: unknown; amount: unknown; verified_by: unknown }[] | null;
+    };
+    return verifiedPaid(tx.payment_records ?? [], "downpayment") < Number(row.downpayment_amount ?? 0);
+  });
+  if (unpaid.length === 0) return;
+
+  const { data: existing } = await admin
+    .from("notifications")
+    .select("reference_id")
+    .eq("kind", "downpayment_missed")
+    .in(
+      "reference_id",
+      unpaid.map((row) => row.transaction_id),
+    );
+  const told = new Set((existing ?? []).map((n) => n.reference_id));
+  const toInsert = unpaid
+    .filter((row) => !told.has(row.transaction_id))
+    .map((row) => ({
+      recipient_role: "sales_manager",
+      kind: "downpayment_missed",
+      title: "Downpayment deadline passed",
+      body: "A delivery buyer did not pay the downpayment in time. Cancel the request and promote the next On Hold buyer.",
+      reference_table: "transactions",
+      reference_id: row.transaction_id,
+    }));
+  if (toInsert.length > 0) await admin.from("notifications").insert(toInsert);
 }
 
 // Rows for the current role, plus rows addressed to this user. RLS limits recipient_id rows to

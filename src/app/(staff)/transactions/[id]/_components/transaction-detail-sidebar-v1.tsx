@@ -78,7 +78,7 @@ export function TransactionDetailSidebarV1({
   readonly conditionItems?: unknown;
   // Optional id → display-name map for inspection_checklist_nodes.
   readonly checklistNameMap?: Record<string, string>;
-  readonly onRecordPayment: (amount: string, method: string, date: string) => Promise<void>;
+  readonly onRecordPayment: (amount: string, method: string, date: string, paymentKind: string) => Promise<void>;
   readonly onUploadDocument: (documentKind: string, idType: string, file: File) => Promise<void>;
   readonly onVerifyDocument: (documentId: string) => Promise<void>;
   readonly onRejectDocument: (documentId: string) => Promise<void>;
@@ -90,6 +90,8 @@ export function TransactionDetailSidebarV1({
 }) {
   const [payAmount, setPayAmount] = useState("");
   const [payMethod, setPayMethod] = useState("cash");
+  // §4: a delivery's fee, downpayment, balance and reschedule fee are told apart for the records.
+  const [payKind, setPayKind] = useState("full");
   const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10));
   const [docKind, setDocKind] = useState("valid_id");
   const [docIdType, setDocIdType] = useState("");
@@ -442,6 +444,25 @@ export function TransactionDetailSidebarV1({
                   </SelectContent>
                 </Select>
               </div>
+              {kind === "buy" ? (
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="pay_kind" className="text-xs">
+                    Payment for
+                  </Label>
+                  <Select value={payKind} onValueChange={setPayKind}>
+                    <SelectTrigger id="pay_kind" className="h-7 w-full text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="full">Full payment</SelectItem>
+                      <SelectItem value="delivery_fee">Delivery fee</SelectItem>
+                      <SelectItem value="downpayment">Downpayment</SelectItem>
+                      <SelectItem value="balance">Balance on delivery</SelectItem>
+                      <SelectItem value="reschedule_fee">Reschedule / redirect fee</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="pay_date" className="text-xs">
                   Date
@@ -457,7 +478,7 @@ export function TransactionDetailSidebarV1({
               <Button
                 size="sm"
                 className="h-7 w-full text-xs"
-                onClick={() => onRecordPayment(payAmount, payMethod, payDate)}
+                onClick={() => onRecordPayment(payAmount, payMethod, payDate, kind === "buy" ? payKind : "")}
               >
                 Record Payment
               </Button>

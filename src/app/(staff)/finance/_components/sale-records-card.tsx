@@ -16,7 +16,24 @@ export interface SaleRecordRow {
     | { final_price: number | null; payment_method: string }
     | { final_price: number | null; payment_method: string }[]
     | null;
-  payment_records: { amount: number }[] | null;
+  payment_records: { amount: number; payment_kind: string | null }[] | null;
+}
+
+const KIND_LABELS: Record<string, string> = {
+  delivery_fee: "delivery fee",
+  downpayment: "downpayment",
+  balance: "balance",
+  reschedule_fee: "reschedule fee",
+};
+
+function breakdown(payments: { amount: number; payment_kind: string | null }[]) {
+  const parts = Object.entries(KIND_LABELS)
+    .map(([kind, label]) => {
+      const total = payments.filter((p) => p.payment_kind === kind).reduce((sum, p) => sum + Number(p.amount), 0);
+      return total > 0 ? `${label} ${formatCurrency(total)}` : null;
+    })
+    .filter(Boolean);
+  return parts.length > 0 ? <div className="text-muted-foreground text-xs">{parts.join(" · ")}</div> : null;
 }
 
 // §2 step 7: once a car is marked sold, its sale figures are listed for the Head Accountant's records.
@@ -66,7 +83,11 @@ export function SaleRecordsCard({ sales }: { readonly sales: SaleRecordRow[] }) 
                       <TableCell className="text-right tabular-nums">
                         {details?.final_price ? formatCurrency(Number(details.final_price)) : "—"}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">{formatCurrency(received)}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatCurrency(received)}
+                        {/* §4 step 10: a delivery sale shows its fee and downpayment separately. */}
+                        {breakdown(sale.payment_records ?? [])}
+                      </TableCell>
                     </TableRow>
                   );
                 })}

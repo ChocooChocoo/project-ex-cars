@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { getProfileAutoFill } from "@/lib/autofill";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { withSignedTransactionDocumentUrls } from "@/lib/transactions/document-media";
 
@@ -73,6 +74,19 @@ export default async function MyTransactionDetailPage({ params }: { readonly par
       ? await supabase.rpc("list_taken_visit_slots", { p_vehicle_id: vehicleId })
       : { data: null };
 
+  // §4 step 7a: the buyer tracks the delivery. Customers cannot read field cases under RLS; the row
+  // above is already limited to this customer, so the status is read with the service role.
+  const { data: deliveryCase } =
+    (transaction as Record<string, unknown>).transaction_kind === "buy"
+      ? await createAdminClient()
+          .from("field_cases")
+          .select("delivery_status, delay_note, expected_arrival")
+          .eq("transaction_id", id)
+          .eq("case_kind", "delivery")
+          .neq("state", "cancelled")
+          .maybeSingle()
+      : { data: null };
+
   // Appendix C: after 2 no-shows or a Not Legit decline the buyer may only visit GCE.
   const { data: standing } = await supabase
     .from("customer_standing")
@@ -100,6 +114,15 @@ export default async function MyTransactionDetailPage({ params }: { readonly par
         autofill={autofill}
         negotiationThreadId={(negotiationThread as { id: string } | null)?.id ?? null}
         gceVisitOnly={standing?.gce_visit_only === true}
+        delivery={
+          deliveryCase
+            ? {
+                status: deliveryCase.delivery_status,
+                delay_note: deliveryCase.delay_note,
+                expected_arrival: deliveryCase.expected_arrival,
+              }
+            : null
+        }
         takenSlots={((takenSlots as { schedule: string }[] | null) ?? []).map((slot) => slot.schedule)}
       />
     </div>

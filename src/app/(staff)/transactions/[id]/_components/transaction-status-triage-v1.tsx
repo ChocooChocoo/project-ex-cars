@@ -63,22 +63,41 @@ export function TransactionStatusTriageV1({
   readonly userRole: string;
   readonly transitioning: boolean;
   readonly onTransition: (to: TransactionState) => Promise<void>;
-  readonly visit?: { kind: string; schedule: string } | null;
+  readonly visit?: { kind: string; schedule: string; deliveryStatus?: string | null } | null;
   readonly onVisitOutcome?: (outcome: VisitOutcome) => Promise<void>;
 }) {
   const daysOpen = Math.max(0, Math.floor((Date.now() - new Date(openedAt).getTime()) / 86_400_000));
   const allowed = getAllowedTransitions(state, userRole);
   const canRecordOutcome = kind === "buy" && state === "approved" && ["sales_manager", "ceo"].includes(userRole);
-  // §3 steps 6–7: a Meet Halfway decline is classified; a no-show is allowed 2h30m after the meet-up.
-  const halfway = visit?.kind === "meetup";
+  // §3 steps 6–7 / §4 steps 7c–8: Meet Halfway and Delivery declines are classified. A halfway no-show
+  // is allowed 2h30m after the meet-up; a delivery buyer is "unavailable" once the team has arrived.
+  const delivery = visit?.kind === "delivery";
+  const classified = visit?.kind === "meetup" || delivery;
+  const noShowReady = delivery
+    ? ["arriving", "delivered"].includes(visit?.deliveryStatus ?? "")
+    : Boolean(visit && canRecordNoShow(visit.schedule));
   const outcomes: { outcome: VisitOutcome; label: string; detail: string }[] = !canRecordOutcome
     ? []
-    : halfway
+    : classified
       ? [
-          { outcome: "legit", label: "Declined — Legit", detail: "Legitimate surprise; no penalty" },
-          { outcome: "not_legit", label: "Declined — Not Legit", detail: "Strike; buyer limited to GCE visits" },
-          ...(visit && canRecordNoShow(visit.schedule)
-            ? [{ outcome: "no_show" as const, label: "Buyer didn't show up", detail: "Counts as one no-show" }]
+          {
+            outcome: "legit",
+            label: "Declined — Legit",
+            detail: delivery ? "No strike; downpayment refunded" : "Legitimate surprise; no penalty",
+          },
+          {
+            outcome: "not_legit",
+            label: "Declined — Not Legit",
+            detail: delivery ? "Strike; downpayment forfeited" : "Strike; buyer limited to GCE visits",
+          },
+          ...(noShowReady
+            ? [
+                {
+                  outcome: "no_show" as const,
+                  label: delivery ? "Buyer unavailable" : "Buyer didn't show up",
+                  detail: delivery ? "No-show; downpayment forfeited" : "Counts as one no-show",
+                },
+              ]
             : []),
         ]
       : [{ outcome: "declined", label: "Buyer declined", detail: "Close the request; the car stays listed" }];

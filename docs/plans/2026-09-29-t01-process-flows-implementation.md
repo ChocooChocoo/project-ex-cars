@@ -151,6 +151,19 @@ This plan orders that work so each phase ships a complete, testable flow. Later 
 - **Exit:** e2e for two buyers queuing, reject then promote, no-show restriction, and mark sold notifying the on-hold buyer.
 
 ### Phase 4: Cash Delivery (§4)
+
+**Status:** ✅ Implemented (2026-09-30), migration `00052_t01_phase4_delivery.sql`.
+- [x] Delivery requests join the Phase 3 queue (acknowledgment, Active / On Hold, 5-hour cut-off)
+- [x] Sales Manager confirms serviceability (not serviceable ends the request) and sets fee + downpayment; deadline = 3 working days (weekends skipped)
+- [x] `payment_records.payment_kind`; Head Accountant records and verifies the fee and downpayment; delivery team created only after the fee is verified; dispatch only after the downpayment is verified
+- [x] `field_cases.head_security_id`, Head Security reads assigned cases and gets Field Cases in nav; delivery page for the team; status Dispatched → In Transit → Arriving → Delivered; buyer stepper
+- [x] CI delay report → Sales Manager relays to buyer (no penalty); reschedule/redirect ≥ 5 h ahead with fee
+- [x] Buyer unavailable (after arrival) → `buyer_unavailable`, no-show, downpayment forfeited; decline Legit → refund disbursement to the Head Accountant, Not Legit → strike + forfeit; missed deadline → Sales Manager notified, cancels from the page
+- [x] Mark sold requires Delivered; sale records show the fee / downpayment breakdown
+- [x] Fixed a Phase 2 gap: the Sales Manager can now record (not verify) a buyer's payment under RLS
+- [x] Migration SQL test, rule tests, unit suite green
+- [ ] e2e `src/tests/e2e/t01-phase4-delivery.spec.ts` written (happy path to Delivered, legit decline → refund) but not run; the missed-deadline path needs a past deadline, so it is covered by unit tests only
+- Defaults used: Q2 the fee and downpayment are two bank-transfer payments, fee first; Q8 status steps only, no live map; no public-holiday calendar for the deadline.
 - Delivery fields: address, preferred date and time. SM sets the serviceable flag and the delivery fee.
 - **Payments.** The HA records the delivery fee and the downpayment through the existing `recordPayment`/`verifyPayment` with `bank_transfer`. The downpayment deadline (2–3 working days) uses a pure helper plus the lazy-overdue pattern. Missing it forfeits and prompts the SM to promote the next request. Order and single-vs-two payments depend on Q2.
 - **Delivery field case.** Add `field_cases.head_security_id`. The case is dispatched only after the downpayment is verified.

@@ -40,7 +40,14 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import type { ProfileAutoFill } from "@/lib/autofill";
-import { activeBuyerIdCount, isHalfwayCashRequest, isOnsiteCashRequest } from "@/lib/transactions/buy-flow";
+import {
+  activeBuyerIdCount,
+  DELIVERY_STATUS_LABELS,
+  DELIVERY_STATUSES,
+  type DeliveryStatus,
+  isOnsiteCashRequest,
+  isQueuedCashRequest,
+} from "@/lib/transactions/buy-flow";
 import { transactionDocumentLabel } from "@/lib/transactions/document-media";
 import {
   arrangementKindLabel,
@@ -118,6 +125,7 @@ export function TransactionDetail({
   negotiationThreadId = null,
   takenSlots = [],
   gceVisitOnly = false,
+  delivery = null,
 }: {
   readonly transaction: Record<string, unknown>;
   readonly history: Record<string, unknown>[];
@@ -130,6 +138,7 @@ export function TransactionDetail({
   readonly negotiationThreadId?: string | null;
   readonly takenSlots?: string[];
   readonly gceVisitOnly?: boolean;
+  readonly delivery?: { status: string | null; delay_note: string | null; expected_arrival: string | null } | null;
 }) {
   const router = useRouter();
   const id = transaction.id as string;
@@ -219,7 +228,7 @@ export function TransactionDetail({
   // §2 steps 2–4: two IDs and a locked Cash visit slot, then the request goes to the Sales Manager.
   const activeIds = activeBuyerIdCount(documents as { document_kind: unknown; verification_state: unknown }[]);
   const onsiteCashSaved = isOnsiteCashRequest(purchaseDetails ?? null);
-  const halfwayCashSaved = isHalfwayCashRequest(purchaseDetails ?? null);
+  const queuedCashSaved = isQueuedCashRequest(purchaseDetails ?? null);
   const queueState = (transaction.queue_state as QueueState | null) ?? null;
   const acknowledgedAt = (purchaseDetails?.condition_acknowledged_at as string | null) ?? null;
   const [acknowledge, setAcknowledge] = useState(false);
@@ -456,7 +465,7 @@ export function TransactionDetail({
                     Your account is limited to GCE visits after missed meet-ups or a declined purchase.
                   </p>
                 ) : null}
-                {arrangementKind === "meetup" && !acknowledgedAt ? (
+                {(arrangementKind === "meetup" || arrangementKind === "delivery") && !acknowledgedAt ? (
                   <div className="flex items-start gap-2 rounded-md border p-3 text-sm">
                     <Checkbox
                       id="acknowledge-condition"
@@ -503,17 +512,17 @@ export function TransactionDetail({
                 <Button onClick={handleSaveBuyDetails} disabled={saving} className="self-start">
                   {saving ? "Saving..." : "Save Details"}
                 </Button>
-                {onsiteCashSaved || halfwayCashSaved ? (
+                {onsiteCashSaved || queuedCashSaved ? (
                   <div className="flex flex-col gap-2 rounded-md border p-3 text-sm">
                     <p className="font-medium">Send your request</p>
                     <p className="text-muted-foreground text-xs">
                       Valid IDs: {activeIds}/2 ·{" "}
                       {bookedSlot
-                        ? `${halfwayCashSaved ? "Meet-up" : "Visit slot locked"} for ${format(new Date(bookedSlot.schedule as string), "MMM d, yyyy h:mm a")}`
+                        ? `${queuedCashSaved ? (arrangementKind === "delivery" ? "Delivery" : "Meet-up") : "Visit slot locked"} for ${format(new Date(bookedSlot.schedule as string), "MMM d, yyyy h:mm a")}`
                         : "No time booked yet"}
-                      {halfwayCashSaved ? ` · Condition ${acknowledgedAt ? "acknowledged" : "not acknowledged"}` : ""}
+                      {queuedCashSaved ? ` · Condition ${acknowledgedAt ? "acknowledged" : "not acknowledged"}` : ""}
                     </p>
-                    {halfwayCashSaved ? (
+                    {queuedCashSaved ? (
                       <p className="text-muted-foreground text-xs">
                         If another buyer's request for this car is being processed, yours goes On Hold until the Sales
                         Manager picks it. You can cancel up to 5 hours before the meet-up.
@@ -521,7 +530,7 @@ export function TransactionDetail({
                     ) : null}
                     <Button
                       onClick={handleSubmitRequest}
-                      disabled={submitting || activeIds !== 2 || !bookedSlot || (halfwayCashSaved && !acknowledgedAt)}
+                      disabled={submitting || activeIds !== 2 || !bookedSlot || (queuedCashSaved && !acknowledgedAt)}
                       className="self-start"
                     >
                       {submitting ? "Sending..." : "Submit Request"}
@@ -532,6 +541,45 @@ export function TransactionDetail({
               <Separator />
             </>
           )}
+
+          {kind === "buy" && purchaseDetails?.downpayment_due_at ? (
+            <>
+              {/* §4 steps 5a–7a: what to pay, by when, and where the delivery is. */}
+              <section className="flex flex-col gap-3">
+                <h2 className="font-medium tracking-tight">Delivery</h2>
+                <p className="text-sm">
+                  Delivery fee {formatCurrency(Number(purchaseDetails.delivery_fee ?? 0))} and downpayment{" "}
+                  {formatCurrency(Number(purchaseDetails.downpayment_amount ?? 0))} by bank transfer before{" "}
+                  {format(new Date(purchaseDetails.downpayment_due_at as string), "MMM d, yyyy")}. The balance is paid
+                  in cash on delivery.
+                </p>
+                {purchaseDetails.downpayment_forfeited_at ? (
+                  <p className="text-destructive text-sm">Your downpayment was forfeited.</p>
+                ) : null}
+                <ol className="flex flex-wrap gap-2">
+                  {DELIVERY_STATUSES.map((step) => {
+                    const reached =
+                      delivery?.status &&
+                      DELIVERY_STATUSES.indexOf(step) <= DELIVERY_STATUSES.indexOf(delivery.status as DeliveryStatus);
+                    return (
+                      <li key={step}>
+                        <Badge variant={reached ? "default" : "outline"}>{DELIVERY_STATUS_LABELS[step]}</Badge>
+                      </li>
+                    );
+                  })}
+                </ol>
+                {delivery?.delay_note ? (
+                  <p className="text-muted-foreground text-xs">
+                    Running late: {delivery.delay_note}
+                    {delivery.expected_arrival
+                      ? ` · expected ${format(new Date(delivery.expected_arrival), "MMM d, h:mm a")}`
+                      : ""}
+                  </p>
+                ) : null}
+              </section>
+              <Separator />
+            </>
+          ) : null}
 
           <section className="flex flex-col gap-3">
             <h2 className="font-medium tracking-tight">Status History</h2>
