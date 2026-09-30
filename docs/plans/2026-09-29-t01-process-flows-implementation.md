@@ -175,6 +175,18 @@ This plan orders that work so each phase ships a complete, testable flow. Later 
 - **Exit:** e2e for the delivery happy path, forfeit on missed deadline, and legit-decline refund.
 
 ### Phase 5 (gated: client validation of §6): In-House Financing, GCE Visit
+
+**Status:** 🟡 Implemented on defaults (2026-09-30), migration `00054_t01_phase5_financing.sql` (**not applied** to the hosted project yet). §6 is still "For Client Validation"; built at the team's request with the defaults below, to be revised when the client signs off.
+- [x] A: financing requests (In-House Financing + GCE visit) join the per-car queue with the acknowledgment and 2 IDs; no visit is booked before approval
+- [x] B: Sales Manager proposes duration, price and Initial Downpayment → Head Accountant approves or returns → CEO confirms or returns → buyer offer ("Approved — Awaiting Buyer Decision"); buyer accepts and books the visit, or declines with nothing paid
+- [x] C: after the visit, Purchase Claim (car reserved, other buyers told) or Potential Buyer (leaves the queue, car stays listed); downpayment recorded → awaiting verification → confirmed on the Head Accountant's verify; agreement opens the account and monthly installments; Mark Sold requires "In-House Financing — Active"
+- [x] D: installments turn overdue lazily, the account is flagged on the first miss, the Head Accountant records paid installments; all paid → "In-House Financing — Completed"
+- [x] E: repossession from the 4th missed installment with a paid / unsettled statement, CI + Head Security; recovered car → reconditioning job (status report + fund request → repairs → final report), Sales Manager re-processes papers, Marketing Specialist's reprice → CEO → listed again
+- [x] Replaced the unused legacy payment-terms buttons and actions (`createPaymentTerms`, `approvePaymentTerms`, `activatePaymentTerms`)
+- [x] Migration SQL test, rule tests, unit suite green (319)
+- [ ] Apply `00054` to the hosted project
+- [ ] e2e spec for Phase 5 (not written)
+- Defaults used: Q4 7-day window; Q5 flag on the first missed installment, repossession from the 4th, no penalty amount added; Q6 the Sales Manager calculates, the Head Accountant reviews; Step 10 "Head Accountant records final details" is folded into the CEO confirmation.
 - **Gate:** the client signs off on §6 and answers Q4–Q6.
 - **Phase A–B.** The SM captures the payment duration and proposes terms. Wire the existing `createPaymentTerms` to a new form, then HA review (new `payment_terms.ha_reviewed_*`), then CEO confirm (existing `approvePaymentTerms`), then buyer decision.
 - **Phase C.** Visit; Purchase Claim vs Potential Buyer (`purchase_details.claim_state`). A Purchase Claim sets `vehicles.listing_state='reserved'`; Potential Buyer leaves it `available`. Then Initial Downpayment → HA verify → `activatePaymentTerms` → mark sold.

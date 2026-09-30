@@ -22,8 +22,13 @@ export async function finalizeBuySale(
   admin: Admin,
   sale: { id: string; vehicle_id: string | null },
   actorId: string,
+  options: { keepFlowStatus?: boolean } = {},
 ): Promise<void> {
-  await admin.from("transactions").update({ flow_status: "sold", review_due_at: null }).eq("id", sale.id);
+  // A financed sale keeps "In-House Financing — Active" as its status; the account carries on.
+  await admin
+    .from("transactions")
+    .update(options.keepFlowStatus ? { review_due_at: null } : { flow_status: "sold", review_due_at: null })
+    .eq("id", sale.id);
   await admin
     .from("viewing_arrangements")
     .update({ confirmation_state: "completed" })

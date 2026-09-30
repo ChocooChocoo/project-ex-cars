@@ -104,3 +104,31 @@ type PaymentLike = { payment_kind: unknown; amount: unknown; verified_by: unknow
 export function verifiedPaid(payments: PaymentLike[], kind: string): number {
   return payments.filter((p) => p.payment_kind === kind && p.verified_by).reduce((sum, p) => sum + Number(p.amount), 0);
 }
+
+// §6 In-House Financing: the buyer visits GCE to inspect before any downpayment. These requests queue too.
+export function isFinancingVisitRequest(
+  details: { payment_method?: unknown; arrangement_kind?: unknown } | null,
+): boolean {
+  return details?.payment_method === "financing" && details?.arrangement_kind === "gce_visit";
+}
+
+// Every request that joins the per-car Active / On Hold queue.
+export function isQueuedRequest(details: { payment_method?: unknown; arrangement_kind?: unknown } | null): boolean {
+  return isQueuedCashRequest(details) || isFinancingVisitRequest(details);
+}
+
+// Q5 default (§6 step 24, "4–5 months"): repossession may start from the 4th missed installment.
+export const MISSED_INSTALLMENTS_BEFORE_REPOSSESSION = 4;
+
+type InstallmentLike = { state: unknown; due_date: unknown };
+
+// Installments past their due date and still unpaid.
+export function missedInstallments(installments: InstallmentLike[], today: Date = new Date()): number {
+  const day = today.toISOString().slice(0, 10);
+  return installments.filter((i) => !["paid", "waived"].includes(String(i.state)) && String(i.due_date) < day).length;
+}
+
+// §6 step 25: every installment paid or waived.
+export function financingFullyPaid(installments: InstallmentLike[]): boolean {
+  return installments.length > 0 && installments.every((i) => ["paid", "waived"].includes(String(i.state)));
+}

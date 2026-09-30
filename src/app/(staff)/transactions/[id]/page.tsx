@@ -117,6 +117,19 @@ export default async function TransactionDetailPage({ params }: { readonly param
         .maybeSingle()
     : { data: null };
 
+  // §6: a financing request shows its terms, account and recovery on the page.
+  const isFinancing =
+    (Array.isArray(purchaseRow) ? purchaseRow[0] : purchaseRow)?.payment_method === "financing" &&
+    (transaction as Record<string, unknown>).transaction_kind === "buy";
+  const { count: recoveryCases } = isFinancing
+    ? await supabase
+        .from("field_cases")
+        .select("id", { count: "exact", head: true })
+        .eq("transaction_id", id)
+        .eq("case_kind", "recovery")
+        .neq("state", "cancelled")
+    : { count: 0 };
+
   // T01 Selling: ceilings, the field inspection, the issue report, expenses and the negotiation thread.
   const isSell = (transaction as Record<string, unknown>).transaction_kind === "sell";
   const [{ data: proposals }, { data: fieldCase }, { data: issueReport }, { data: expenses }, { data: thread }] = isSell
@@ -172,6 +185,8 @@ export default async function TransactionDetailPage({ params }: { readonly param
         informants={informants}
         checklistNameMap={checklistNameMap}
         carBuyers={(carBuyers as unknown as CarBuyerRow[] | null) ?? []}
+        financing={isFinancing ? { hasRecoveryCase: (recoveryCases ?? 0) > 0 } : null}
+        headSecurity={headSecurity}
         delivery={
           isDelivery
             ? {

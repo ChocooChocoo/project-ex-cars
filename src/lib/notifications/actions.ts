@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase, createServerSupabaseClient } from "@/lib/supabase/server";
-import { verifiedPaid } from "@/lib/transactions/buy-flow";
+import { MISSED_INSTALLMENTS_BEFORE_REPOSSESSION, missedInstallments, verifiedPaid } from "@/lib/transactions/buy-flow";
 
 export interface NotificationRow {
   id: string;
@@ -27,6 +27,8 @@ export interface NotificationRow {
 export async function checkAndNotifyDueInstallments(): Promise<void> {
   const admin = createAdminClient();
   const today = new Date().toISOString().slice(0, 10);
+
+  await flagMissedInstallments(admin, today);
 
   const { data: installments } = await admin
     .from("installments")
@@ -113,6 +115,50 @@ export async function checkAndNotifyOverdueReviews(): Promise<void> {
 
   if (toInsert.length > 0) {
     await admin.from("notifications").insert(toInsert);
+  }
+}
+
+// §6 step 24: unpaid installments past their due date become overdue and flag the account. The Head
+// Accountant hears once when an account is flagged and once when it reaches the repossession threshold.
+async function flagMissedInstallments(admin: ReturnType<typeof createAdminClient>, today: string): Promise<void> {
+  await admin.from("installments").update({ state: "overdue" }).lt("due_date", today).in("state", ["upcoming", "due"]);
+  await admin.from("installments").update({ state: "due" }).eq("due_date", today).eq("state", "upcoming");
+
+  const { data: accounts } = await admin
+    .from("installment_accounts")
+    .select("id, flagged_at, purchase_transaction_id, installments(state, due_date)")
+    .eq("state", "active");
+  for (const account of accounts ?? []) {
+    const missed = missedInstallments(account.installments ?? [], new Date(`${today}T12:00:00Z`));
+    if (missed === 0) continue;
+    if (!account.flagged_at) {
+      await admin.from("installment_accounts").update({ flagged_at: new Date().toISOString() }).eq("id", account.id);
+      await admin.from("notifications").insert({
+        recipient_role: "head_accountant",
+        kind: "financing_missed_payment",
+        title: "Financing account flagged",
+        body: "A buyer missed an installment. The account is flagged; follow up on the payment.",
+        reference_table: "transactions",
+        reference_id: account.purchase_transaction_id,
+      });
+    }
+    if (missed >= MISSED_INSTALLMENTS_BEFORE_REPOSSESSION) {
+      const { count } = await admin
+        .from("notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("kind", "financing_repossession_due")
+        .eq("reference_id", account.purchase_transaction_id);
+      if (!count) {
+        await admin.from("notifications").insert({
+          recipient_role: "head_accountant",
+          kind: "financing_repossession_due",
+          title: "Repossession may start",
+          body: `${missed} installments are unpaid. Prepare the statement and instruct the repossession.`,
+          reference_table: "transactions",
+          reference_id: account.purchase_transaction_id,
+        });
+      }
+    }
   }
 }
 
