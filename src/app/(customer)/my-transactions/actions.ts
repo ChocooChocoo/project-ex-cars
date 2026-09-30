@@ -8,9 +8,15 @@ import { ACCEPTED_ID_TYPES } from "@/lib/auth/roles";
 import { notify } from "@/lib/notifications/notify";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { activeBuyerIdCount, BUYER_ID_COUNT, isOnsiteCashRequest, isVisitSlot } from "@/lib/transactions/buy-flow";
+import {
+  activeBuyerIdCount,
+  BUYER_ID_COUNT,
+  isHalfwayCashRequest,
+  isOnsiteCashRequest,
+  isVisitSlot,
+} from "@/lib/transactions/buy-flow";
 import { releaseVisitSlots } from "@/lib/transactions/buy-flow-server";
-import { reviewDueAt } from "@/lib/transactions/state-machine";
+import { canCancelScheduled, nextQueueState, reviewDueAt } from "@/lib/transactions/state-machine";
 import {
   buyDetailsSchema,
   buyTransactionSchema,
@@ -149,24 +155,50 @@ export async function saveBuyDetails(formData: FormData) {
     schedule,
     location,
     notes,
+    acknowledge_condition,
   } = parsed.data;
 
   const { data: transaction } = await supabase
     .from("transactions")
-    .select("id, customer_id, transaction_kind, current_state")
+    .select("id, customer_id, transaction_kind, current_state, queue_state")
     .eq("id", transactionId)
     .maybeSingle();
   if (!transaction || transaction.customer_id !== user.user.id) return { error: "Transaction not found." };
   if (transaction.transaction_kind !== "buy") {
     return { error: "Purchase details can only be saved for buy transactions." };
   }
-  // A submitted request keeps its details and slot until the Sales Manager decides.
-  if (transaction.current_state && transaction.current_state !== "pending") {
+  // A submitted request (in review, or queued On Hold) keeps its details and time until it is decided.
+  if ((transaction.current_state && transaction.current_state !== "pending") || transaction.queue_state) {
     return { error: "This request is already under review and can no longer be changed." };
   }
   const slot = schedule ? new Date(schedule) : null;
   if (slot && arrangement_kind === "gce_visit" && !isVisitSlot(slot)) {
     return { error: "Pick a future GCE visit slot on the hour." };
+  }
+  if (slot && arrangement_kind !== "gce_visit" && slot.getTime() <= Date.now()) {
+    return { error: "Pick a future date and time." };
+  }
+
+  // Appendix C: after 2 no-shows or a Not Legit decline, a buyer may only visit GCE.
+  if (arrangement_kind && arrangement_kind !== "gce_visit") {
+    const { data: standing } = await supabase
+      .from("customer_standing")
+      .select("gce_visit_only")
+      .eq("account_id", user.user.id)
+      .maybeSingle();
+    if (standing?.gce_visit_only) return { error: "Your account is limited to GCE visits." };
+  }
+
+  // §3 step 3: the condition acknowledgment comes before choosing Meet Halfway.
+  if (arrangement_kind === "meetup" && acknowledge_condition !== "yes") {
+    const { data: existing } = await supabase
+      .from("purchase_details")
+      .select("condition_acknowledged_at")
+      .eq("transaction_id", transactionId)
+      .maybeSingle();
+    if (!existing?.condition_acknowledged_at) {
+      return { error: "Review the car's condition and 360° view, then acknowledge it before choosing Meet Halfway." };
+    }
   }
 
   const { error } = await supabase.from("purchase_details").upsert(
@@ -175,6 +207,7 @@ export async function saveBuyDetails(formData: FormData) {
       payment_method,
       final_price: final_price ?? null,
       arrangement_kind: arrangement_kind || null,
+      ...(acknowledge_condition === "yes" ? { condition_acknowledged_at: new Date().toISOString() } : {}),
     },
     { onConflict: "transaction_id" },
   );
@@ -206,8 +239,9 @@ export async function saveBuyDetails(formData: FormData) {
   return { success: true };
 }
 
-// §2 steps 3–4: a Cash + GCE visit request with two IDs and a locked slot goes to the Sales Manager,
-// who has 7 days to decide.
+// §2 steps 3–4 and §3 step 4: a Cash request with two IDs goes to the Sales Manager.
+// A GCE visit holds a locked slot; a Meet Halfway request joins the car's queue, Active if no other
+// request is Active, otherwise On Hold until the Sales Manager promotes it.
 export async function submitBuyRequest(formData: FormData) {
   const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
@@ -218,60 +252,110 @@ export async function submitBuyRequest(formData: FormData) {
 
   const { data: tx } = await supabase
     .from("transactions")
-    .select("id, customer_id, transaction_kind, current_state, purchase_details(payment_method, arrangement_kind)")
+    .select(
+      "id, customer_id, vehicle_id, transaction_kind, current_state, queue_state, purchase_details(payment_method, arrangement_kind, condition_acknowledged_at)",
+    )
     .eq("id", transactionId.data)
     .maybeSingle();
   if (!tx || tx.customer_id !== user.user.id || tx.transaction_kind !== "buy") {
     return { error: "Transaction not found." };
   }
-  if (tx.current_state !== "pending") return { error: "This request is already submitted." };
+  if (tx.current_state !== "pending" || tx.queue_state) return { error: "This request is already submitted." };
 
   const details = (Array.isArray(tx.purchase_details) ? tx.purchase_details[0] : tx.purchase_details) ?? null;
-  if (!isOnsiteCashRequest(details))
-    return { error: "Save Cash as the payment method and GCE Visit as the arrangement." };
+  const halfway = isHalfwayCashRequest(details);
+  if (!halfway && !isOnsiteCashRequest(details)) {
+    return { error: "Save Cash as the payment method and GCE Visit or Meet Halfway as the arrangement." };
+  }
+  if (halfway && !details?.condition_acknowledged_at) return { error: "Acknowledge the car's condition first." };
 
-  const [{ data: documents }, { data: slot }] = await Promise.all([
+  const [{ data: documents }, { data: slot }, { data: standing }] = await Promise.all([
     supabase.from("transaction_documents").select("document_kind, verification_state").eq("transaction_id", tx.id),
     supabase
       .from("viewing_arrangements")
-      .select("schedule")
+      .select("schedule, arrangement_kind")
       .eq("purchase_transaction_id", tx.id)
       .in("confirmation_state", ["pending", "confirmed"])
       .maybeSingle(),
+    supabase.from("customer_standing").select("gce_visit_only").eq("account_id", user.user.id).maybeSingle(),
   ]);
   if (activeBuyerIdCount(documents ?? []) !== BUYER_ID_COUNT) return { error: "Upload two valid IDs first." };
-  if (!slot || !isVisitSlot(new Date(slot.schedule))) return { error: "Book a future GCE visit slot first." };
+  if (halfway && standing?.gce_visit_only) return { error: "Your account is limited to GCE visits." };
+  if (!slot || slot.arrangement_kind !== details?.arrangement_kind) return { error: "Book the meeting time first." };
+  const scheduledAt = new Date(slot.schedule);
+  if (halfway ? scheduledAt.getTime() <= Date.now() : !isVisitSlot(scheduledAt)) {
+    return { error: "The booked time has passed. Pick a new one." };
+  }
 
   // Customers cannot move their own request into review under RLS; ownership is checked above.
   const admin = createAdminClient();
-  const { error } = await admin
-    .from("transactions")
-    .update({ current_state: "under_review", flow_status: "pending_sm_approval", review_due_at: reviewDueAt() })
-    .eq("id", tx.id)
-    .eq("current_state", "pending");
+  const review = { current_state: "under_review", flow_status: "pending_sm_approval", review_due_at: reviewDueAt() };
+  let queueState: "active" | "on_hold" | null = null;
+  let error: { code?: string; message: string } | null = null;
+
+  if (halfway) {
+    const { count: activeCount } = await admin
+      .from("transactions")
+      .select("id", { count: "exact", head: true })
+      .eq("vehicle_id", tx.vehicle_id)
+      .eq("queue_state", "active");
+    queueState = nextQueueState((activeCount ?? 0) > 0);
+    if (queueState === "active") {
+      ({ error } = await admin
+        .from("transactions")
+        .update({ ...review, queue_state: "active" })
+        .eq("id", tx.id)
+        .eq("current_state", "pending"));
+      // 23505: another request became Active a moment ago (one Active per car, 00051).
+      if (error?.code === "23505") queueState = "on_hold";
+    }
+    if (queueState === "on_hold") {
+      ({ error } = await admin.from("transactions").update({ queue_state: "on_hold" }).eq("id", tx.id));
+    }
+  } else {
+    ({ error } = await admin.from("transactions").update(review).eq("id", tx.id).eq("current_state", "pending"));
+  }
   if (error) return { error: error.message };
 
+  const onHold = queueState === "on_hold";
   await admin.from("transaction_status_history").insert({
     transaction_id: tx.id,
     from_state: "pending",
-    to_state: "under_review",
+    to_state: onHold ? "pending" : "under_review",
     actor_id: user.user.id,
-    reason: "Buyer submitted a Cash request with a GCE visit slot",
+    reason: halfway
+      ? `Buyer submitted a Cash Meet Halfway request (${onHold ? "On Hold" : "Active"})`
+      : "Buyer submitted a Cash request with a GCE visit slot",
   });
+  const when = scheduledAt.toLocaleString("en-PH");
   await notify(
     admin,
-    { role: "sales_manager" },
+    { userId: user.user.id },
     {
-      kind: "buy_request_submitted",
-      title: "New buyer request to review",
-      body: `A Cash buyer booked a GCE visit on ${new Date(slot.schedule).toLocaleString("en-PH")}. Review within 7 days.`,
+      kind: onHold ? "buy_request_on_hold" : "buy_request_submitted",
+      title: onHold ? "Your request is On Hold" : "Your request was submitted",
+      body: onHold
+        ? "Another buyer's request for this car is being processed. Yours stays in the queue and you will be notified."
+        : "The Sales Manager will review your request within 7 days.",
       transactionId: tx.id,
     },
   );
+  if (!onHold) {
+    await notify(
+      admin,
+      { role: "sales_manager" },
+      {
+        kind: "buy_request_submitted",
+        title: "New buyer request to review",
+        body: `A Cash buyer ${halfway ? "asked to meet halfway" : "booked a GCE visit"} on ${when}. Review within 7 days.`,
+        transactionId: tx.id,
+      },
+    );
+  }
 
   revalidatePath(`/my-transactions/${tx.id}`);
   revalidatePath("/dashboard/transactions");
-  return { success: true };
+  return { success: true, queueState };
 }
 
 const SELL_PHOTO_MAX_COUNT = 6;
@@ -571,6 +655,18 @@ export async function cancelTransaction(formData: FormData) {
   const currentState = tx.current_state as string;
   if (["completed", "cancelled", "rejected"].includes(currentState)) {
     return { error: "This transaction can no longer be cancelled." };
+  }
+
+  // §3 cancellation rule: a meet-up or delivery can be cancelled only 5 hours or more before it.
+  // The database enforces the same cut-off (00051); this answers with a readable message first.
+  const { data: scheduled } = await supabase
+    .from("viewing_arrangements")
+    .select("schedule")
+    .eq("purchase_transaction_id", id)
+    .in("arrangement_kind", ["meetup", "delivery"])
+    .in("confirmation_state", ["pending", "confirmed"]);
+  if ((scheduled ?? []).some((arrangement) => !canCancelScheduled(arrangement.schedule))) {
+    return { error: "Cancellation is only allowed 5 hours or more before the scheduled time." };
   }
 
   const { error } = await supabase

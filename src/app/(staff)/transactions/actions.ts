@@ -9,7 +9,8 @@ import { logAuditEvent } from "@/lib/auth/audit";
 import { notify } from "@/lib/notifications/notify";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { finalizeBuySale, releaseVisitSlots } from "@/lib/transactions/buy-flow-server";
+import { canRecordNoShow } from "@/lib/transactions/buy-flow";
+import { finalizeBuySale, recordStandingEvent, releaseVisitSlots } from "@/lib/transactions/buy-flow-server";
 import { generateInstallmentSchedule } from "@/lib/transactions/installments";
 import { SELL_PAPER_KINDS } from "@/lib/transactions/sell-flow";
 import type { TransactionState } from "@/lib/transactions/state-machine";
@@ -178,54 +179,179 @@ export async function transitionTransaction(formData: FormData) {
   return { success: true };
 }
 
-// §2 step 5: the buyer saw the car and declined. The car was never reserved, so it stays listed.
-export async function recordBuyerDecline(formData: FormData) {
+async function salesManager(): Promise<{ userId: string } | { error: string }> {
   const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
   const role = await getCurrentRole();
-  if (!role || !["sales_manager", "ceo"].includes(role))
-    return { error: "Only the Sales Manager records the visit outcome." };
+  if (!role || !["sales_manager", "ceo"].includes(role)) return { error: "Only the Sales Manager can do this." };
+  return { userId: user.user.id };
+}
 
-  const parsed = z
-    .object({ transaction_id: z.string().uuid(), reason: z.string().trim().max(500).optional().or(z.literal("")) })
-    .safeParse(Object.fromEntries(formData));
-  if (!parsed.success) return { error: "Invalid request." };
-
-  const admin = createAdminClient();
+async function loadBuyRequest(admin: ReturnType<typeof createAdminClient>, id: string) {
   const { data: tx } = await admin
     .from("transactions")
-    .select("id, current_state, transaction_kind")
-    .eq("id", parsed.data.transaction_id)
+    .select(
+      "id, customer_id, vehicle_id, current_state, queue_state, transaction_kind, viewing_arrangements(schedule, arrangement_kind, confirmation_state)",
+    )
+    .eq("id", id)
     .maybeSingle();
-  if (tx?.transaction_kind !== "buy") return { error: "Transaction not found." };
-  if (tx.current_state !== "approved") return { error: "Only an approved request can be declined at the visit." };
+  if (tx?.transaction_kind !== "buy") return null;
+  const live = (
+    (tx.viewing_arrangements ?? []) as { schedule: string; arrangement_kind: string; confirmation_state: string }[]
+  ).find((arrangement) => ["pending", "confirmed"].includes(arrangement.confirmation_state));
+  return { ...tx, arrangement: live ?? null };
+}
 
+async function closeBuyRequest(
+  admin: ReturnType<typeof createAdminClient>,
+  tx: { id: string; current_state: string },
+  actorId: string,
+  flag: "declined_by_buyer" | "buyer_no_show",
+  reason: string,
+) {
   const { error } = await admin
     .from("transactions")
     .update({
       current_state: "cancelled",
-      flag: "declined_by_buyer",
+      flag,
       flow_status: null,
       review_due_at: null,
       completed_at: new Date().toISOString(),
     })
     .eq("id", tx.id);
-  if (error) return { error: error.message };
-
+  if (error) return error.message;
   await admin.from("transaction_status_history").insert({
     transaction_id: tx.id,
-    from_state: "approved",
+    from_state: tx.current_state,
     to_state: "cancelled",
-    actor_id: user.user.id,
-    reason: `Declined by buyer${parsed.data.reason ? `: ${parsed.data.reason}` : ""}`,
+    actor_id: actorId,
+    reason,
   });
   await admin
     .from("viewing_arrangements")
     .update({ confirmation_state: "completed" })
     .eq("purchase_transaction_id", tx.id)
     .in("confirmation_state", ["pending", "confirmed"]);
+  revalidatePath("/dashboard/transactions");
+  revalidatePath(`/dashboard/transactions/${tx.id}`);
+  return null;
+}
 
+// §2 step 5 / §3 step 7: the buyer saw the car and declined. The car was never reserved, so it stays
+// listed. For a Meet Halfway request the Sales Manager classifies the reason: Not Legit is a strike
+// that restricts the buyer to GCE visits.
+export async function recordBuyerDecline(formData: FormData) {
+  const actor = await salesManager();
+  if ("error" in actor) return actor;
+
+  const parsed = z
+    .object({
+      transaction_id: z.string().uuid(),
+      classification: z.enum(["legit", "not_legit"]).optional(),
+      reason: z.string().trim().max(500).optional().or(z.literal("")),
+    })
+    .safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: "Invalid request." };
+
+  const admin = createAdminClient();
+  const tx = await loadBuyRequest(admin, parsed.data.transaction_id);
+  if (!tx) return { error: "Transaction not found." };
+  if (tx.current_state !== "approved") return { error: "Only an approved request can be declined at the visit." };
+  const halfway = tx.arrangement?.arrangement_kind === "meetup";
+  if (halfway && !parsed.data.classification) return { error: "Classify the decline as Legit or Not Legit." };
+
+  const notLegit = halfway && parsed.data.classification === "not_legit";
+  const error = await closeBuyRequest(
+    admin,
+    tx,
+    actor.userId,
+    "declined_by_buyer",
+    `Declined by buyer${halfway ? ` (${notLegit ? "Not Legit, strike" : "Legit"})` : ""}${parsed.data.reason ? `: ${parsed.data.reason}` : ""}`,
+  );
+  if (error) return { error };
+  if (notLegit) await recordStandingEvent(admin, tx.customer_id, "strike", actor.userId);
+  return { success: true };
+}
+
+// §3 step 6: the buyer did not arrive within 2 hours 30 minutes. One no-show; two restrict the buyer.
+export async function recordNoShow(formData: FormData) {
+  const actor = await salesManager();
+  if ("error" in actor) return actor;
+  const id = z.string().uuid().safeParse(formData.get("transaction_id"));
+  if (!id.success) return { error: "Invalid request." };
+
+  const admin = createAdminClient();
+  const tx = await loadBuyRequest(admin, id.data);
+  if (!tx) return { error: "Transaction not found." };
+  if (tx.current_state !== "approved" || tx.arrangement?.arrangement_kind !== "meetup") {
+    return { error: "Only an approved Meet Halfway request can be marked as a no-show." };
+  }
+  if (!canRecordNoShow(tx.arrangement.schedule)) {
+    return { error: "Wait 2 hours 30 minutes after the meet-up time before recording a no-show." };
+  }
+
+  const error = await closeBuyRequest(admin, tx, actor.userId, "buyer_no_show", "Buyer didn't show up");
+  if (error) return { error };
+  const standing = await recordStandingEvent(admin, tx.customer_id, "no_show", actor.userId);
+  await notify(
+    admin,
+    { userId: tx.customer_id },
+    {
+      kind: "buyer_no_show",
+      title: "Your meet-up was recorded as a no-show",
+      body: standing.gce_visit_only
+        ? "This is your second no-show. From now on you can only buy through a GCE visit."
+        : "This counts as one no-show. After two, you can only buy through a GCE visit.",
+      transactionId: tx.id,
+    },
+  );
+  return { success: true };
+}
+
+// §3 step 5: after a rejection, no-show or decline the Sales Manager picks the next On Hold request.
+// Q11 default: a request still Active (even Overdue) must be decided first; the database allows one.
+export async function promoteQueuedRequest(formData: FormData) {
+  const actor = await salesManager();
+  if ("error" in actor) return actor;
+  const id = z.string().uuid().safeParse(formData.get("transaction_id"));
+  if (!id.success) return { error: "Invalid request." };
+
+  const admin = createAdminClient();
+  const tx = await loadBuyRequest(admin, id.data);
+  if (!tx) return { error: "Transaction not found." };
+  if (tx.queue_state !== "on_hold" || tx.current_state !== "pending") return { error: "This request is not On Hold." };
+
+  const { error } = await admin
+    .from("transactions")
+    .update({
+      queue_state: "active",
+      current_state: "under_review",
+      flow_status: "pending_sm_approval",
+      review_due_at: reviewDueAt(),
+    })
+    .eq("id", tx.id)
+    .eq("queue_state", "on_hold");
+  if (error?.code === "23505") return { error: "Another request for this car is still Active. Decide it first." };
+  if (error) return { error: error.message };
+
+  await admin.from("transaction_status_history").insert({
+    transaction_id: tx.id,
+    from_state: "pending",
+    to_state: "under_review",
+    actor_id: actor.userId,
+    reason: "Promoted from On Hold to Active by the Sales Manager",
+  });
+  await notify(
+    admin,
+    { userId: tx.customer_id },
+    {
+      kind: "buy_request_active",
+      title: "Your request is now Active",
+      body: "The Sales Manager is now reviewing your request (up to 7 days).",
+      transactionId: tx.id,
+    },
+  );
   revalidatePath("/dashboard/transactions");
   revalidatePath(`/dashboard/transactions/${tx.id}`);
   return { success: true };
@@ -740,6 +866,7 @@ export async function createFieldCase(formData: FormData) {
     delivery: ["ceo", "confidential_informant", "sales_manager"],
     recovery: ["ceo", "head_accountant"],
     sourcing: ["ceo", "sales_manager"],
+    buyer_meetup: ["ceo", "sales_manager"],
   };
 
   const caseKind = formData.get("case_kind") as string;

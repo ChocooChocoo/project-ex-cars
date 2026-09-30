@@ -33,13 +33,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import type { ProfileAutoFill } from "@/lib/autofill";
-import { activeBuyerIdCount, isOnsiteCashRequest } from "@/lib/transactions/buy-flow";
+import { activeBuyerIdCount, isHalfwayCashRequest, isOnsiteCashRequest } from "@/lib/transactions/buy-flow";
 import { transactionDocumentLabel } from "@/lib/transactions/document-media";
 import {
   arrangementKindLabel,
@@ -47,7 +48,7 @@ import {
   TRANSACTION_STATE_LABELS,
   transactionKindLabel,
 } from "@/lib/transactions/labels";
-import type { FlowStatus, TransactionFlag, TransactionState } from "@/lib/transactions/state-machine";
+import type { FlowStatus, QueueState, TransactionFlag, TransactionState } from "@/lib/transactions/state-machine";
 import { cn, formatCurrency } from "@/lib/utils";
 
 import type { TransactionPaperProps } from "./transaction-paper";
@@ -116,6 +117,7 @@ export function TransactionDetail({
   autofill,
   negotiationThreadId = null,
   takenSlots = [],
+  gceVisitOnly = false,
 }: {
   readonly transaction: Record<string, unknown>;
   readonly history: Record<string, unknown>[];
@@ -127,6 +129,7 @@ export function TransactionDetail({
   readonly autofill: ProfileAutoFill | null;
   readonly negotiationThreadId?: string | null;
   readonly takenSlots?: string[];
+  readonly gceVisitOnly?: boolean;
 }) {
   const router = useRouter();
   const id = transaction.id as string;
@@ -216,6 +219,10 @@ export function TransactionDetail({
   // §2 steps 2–4: two IDs and a locked Cash visit slot, then the request goes to the Sales Manager.
   const activeIds = activeBuyerIdCount(documents as { document_kind: unknown; verification_state: unknown }[]);
   const onsiteCashSaved = isOnsiteCashRequest(purchaseDetails ?? null);
+  const halfwayCashSaved = isHalfwayCashRequest(purchaseDetails ?? null);
+  const queueState = (transaction.queue_state as QueueState | null) ?? null;
+  const acknowledgedAt = (purchaseDetails?.condition_acknowledged_at as string | null) ?? null;
+  const [acknowledge, setAcknowledge] = useState(false);
   const bookedSlot = viewingArrangements.find((va) =>
     ["pending", "confirmed"].includes(va.confirmation_state as string),
   );
@@ -228,7 +235,10 @@ export function TransactionDetail({
     const result = await submitBuyRequest(fd);
     setSubmitting(false);
     if (result.error) toast.error(result.error);
-    else {
+    else if (result.queueState === "on_hold") {
+      toast.success("Another buyer's request is in progress, so yours is On Hold. We'll notify you.");
+      router.refresh();
+    } else {
       toast.success("Request sent. The Sales Manager will review it within 7 days.");
       router.refresh();
     }
@@ -244,6 +254,7 @@ export function TransactionDetail({
     fd.set("schedule", schedule);
     fd.set("location", location);
     fd.set("notes", notes);
+    if (acknowledge) fd.set("acknowledge_condition", "yes");
     const result = await saveBuyDetails(fd);
     setSaving(false);
     if (result.error) {
@@ -330,6 +341,7 @@ export function TransactionDetail({
             flowStatus={transaction.flow_status as FlowStatus | null}
             flag={transaction.flag as TransactionFlag | null}
             reviewDueAt={transaction.review_due_at as string | null}
+            queueState={(transaction.queue_state as QueueState | null) ?? null}
             className="text-sm"
           />
           <Badge variant="outline" className="text-sm">
@@ -373,7 +385,7 @@ export function TransactionDetail({
       <div className="grid gap-5 xl:grid-cols-2">
         {/* Form column */}
         <div className="flex flex-col gap-4 rounded-xl border bg-card p-4">
-          {kind === "buy" && state === "pending" && (
+          {kind === "buy" && state === "pending" && !queueState && (
             <>
               <section className="flex flex-col gap-4">
                 <h2 className="font-medium tracking-tight">Purchase Details</h2>
@@ -421,8 +433,8 @@ export function TransactionDetail({
                       </SelectTrigger>
                       <SelectContent>
                         <SelectGroup>
-                          <SelectItem value="delivery">Delivery</SelectItem>
-                          <SelectItem value="meetup">CALABARZON Meet-up</SelectItem>
+                          {gceVisitOnly ? null : <SelectItem value="delivery">Delivery</SelectItem>}
+                          {gceVisitOnly ? null : <SelectItem value="meetup">CALABARZON Meet-up</SelectItem>}
                           <SelectItem value="gce_visit">GCE Visit</SelectItem>
                         </SelectGroup>
                       </SelectContent>
@@ -439,6 +451,28 @@ export function TransactionDetail({
                     />
                   </div>
                 </div>
+                {gceVisitOnly ? (
+                  <p className="text-muted-foreground text-xs">
+                    Your account is limited to GCE visits after missed meet-ups or a declined purchase.
+                  </p>
+                ) : null}
+                {arrangementKind === "meetup" && !acknowledgedAt ? (
+                  <div className="flex items-start gap-2 rounded-md border p-3 text-sm">
+                    <Checkbox
+                      id="acknowledge-condition"
+                      checked={acknowledge}
+                      onCheckedChange={(checked) => setAcknowledge(checked === true)}
+                    />
+                    <label htmlFor="acknowledge-condition" className="flex flex-col gap-1">
+                      <span>I have reviewed this car's condition and intend to purchase it as shown.</span>
+                      {transaction.vehicle_id ? (
+                        <Link href={`/showroom/${transaction.vehicle_id}`} className="text-primary text-xs underline">
+                          Review the photos and 360° view
+                        </Link>
+                      ) : null}
+                    </label>
+                  </div>
+                ) : null}
                 {arrangementKind === "gce_visit" ? (
                   <p className="text-muted-foreground text-xs">
                     GCE visits start on the hour. Once saved, your slot is locked for you.
@@ -469,18 +503,25 @@ export function TransactionDetail({
                 <Button onClick={handleSaveBuyDetails} disabled={saving} className="self-start">
                   {saving ? "Saving..." : "Save Details"}
                 </Button>
-                {onsiteCashSaved ? (
+                {onsiteCashSaved || halfwayCashSaved ? (
                   <div className="flex flex-col gap-2 rounded-md border p-3 text-sm">
                     <p className="font-medium">Send your request</p>
                     <p className="text-muted-foreground text-xs">
                       Valid IDs: {activeIds}/2 ·{" "}
                       {bookedSlot
-                        ? `Visit slot locked for ${format(new Date(bookedSlot.schedule as string), "MMM d, yyyy h:mm a")}`
-                        : "No visit slot booked yet"}
+                        ? `${halfwayCashSaved ? "Meet-up" : "Visit slot locked"} for ${format(new Date(bookedSlot.schedule as string), "MMM d, yyyy h:mm a")}`
+                        : "No time booked yet"}
+                      {halfwayCashSaved ? ` · Condition ${acknowledgedAt ? "acknowledged" : "not acknowledged"}` : ""}
                     </p>
+                    {halfwayCashSaved ? (
+                      <p className="text-muted-foreground text-xs">
+                        If another buyer's request for this car is being processed, yours goes On Hold until the Sales
+                        Manager picks it. You can cancel up to 5 hours before the meet-up.
+                      </p>
+                    ) : null}
                     <Button
                       onClick={handleSubmitRequest}
-                      disabled={submitting || activeIds !== 2 || !bookedSlot}
+                      disabled={submitting || activeIds !== 2 || !bookedSlot || (halfwayCashSaved && !acknowledgedAt)}
                       className="self-start"
                     >
                       {submitting ? "Sending..." : "Submit Request"}

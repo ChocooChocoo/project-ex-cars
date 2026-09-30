@@ -36,7 +36,7 @@ import { FieldCasesTable } from "./field-cases-table";
 
 export interface FieldCaseRow {
   id: string;
-  case_kind: "acquisition" | "delivery" | "recovery" | "sourcing";
+  case_kind: "acquisition" | "delivery" | "recovery" | "sourcing" | "buyer_meetup";
   state: FieldCaseState;
   vehicle_id: string | null;
   location: string | null;
@@ -137,6 +137,7 @@ const CASE_KIND_OPTIONS = [
   { value: "delivery", label: "Delivery" },
   { value: "recovery", label: "Recovery" },
   { value: "sourcing", label: "Sourcing" },
+  { value: "buyer_meetup", label: "Buyer meet-up" },
 ] as const;
 
 const CASE_KIND_RULES: Record<string, string[]> = {
@@ -144,6 +145,8 @@ const CASE_KIND_RULES: Record<string, string[]> = {
   delivery: ["ceo", "confidential_informant", "sales_manager"],
   recovery: ["ceo", "head_accountant"],
   sourcing: ["ceo", "sales_manager"],
+  // §3 step 6: the Sales Manager sends the field team to an approved Meet Halfway buyer.
+  buyer_meetup: ["ceo", "sales_manager"],
 };
 
 type FieldCasesQuickFilter = "all" | "needs_assignment" | "assigned_to_me";

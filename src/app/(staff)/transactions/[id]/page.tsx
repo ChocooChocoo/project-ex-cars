@@ -6,6 +6,7 @@ import { TRANSACTION_VIEWER_ROLES } from "@/lib/auth/roles";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { withSignedTransactionDocumentUrls } from "@/lib/transactions/document-media";
 
+import type { CarBuyerRow } from "./_components/buyers-for-car-panel";
 import { StaffTransactionDetail } from "./_components/staff-transaction-detail";
 
 export default async function TransactionDetailPage({ params }: { readonly params: Promise<{ id: string }> }) {
@@ -80,6 +81,19 @@ export default async function TransactionDetailPage({ params }: { readonly param
     .filter((worker) => worker.role === "mechanic")
     .map((worker) => ({ id: worker.account_id, full_name: worker.full_name }));
 
+  // §3: every open request for this car, for the Sales Manager's queue.
+  const { data: carBuyers } =
+    (transaction as Record<string, unknown>).transaction_kind === "buy" &&
+    (transaction as Record<string, unknown>).vehicle_id
+      ? await supabase
+          .from("transactions")
+          .select("id, current_state, queue_state, flow_status, flag, review_due_at, opened_at, profiles(full_name)")
+          .eq("vehicle_id", (transaction as Record<string, unknown>).vehicle_id as string)
+          .eq("transaction_kind", "buy")
+          .not("current_state", "in", "('rejected','completed','cancelled')")
+          .order("opened_at", { ascending: true })
+      : { data: null };
+
   // T01 Selling: ceilings, the field inspection, the issue report, expenses and the negotiation thread.
   const isSell = (transaction as Record<string, unknown>).transaction_kind === "sell";
   const [{ data: proposals }, { data: fieldCase }, { data: issueReport }, { data: expenses }, { data: thread }] = isSell
@@ -134,6 +148,7 @@ export default async function TransactionDetailPage({ params }: { readonly param
         userRole={role}
         informants={informants}
         checklistNameMap={checklistNameMap}
+        carBuyers={(carBuyers as unknown as CarBuyerRow[] | null) ?? []}
         sellFlow={
           isSell
             ? {

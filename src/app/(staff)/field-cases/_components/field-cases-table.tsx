@@ -73,6 +73,7 @@ const kindOptions = [
   { value: "delivery", label: "Delivery" },
   { value: "recovery", label: "Recovery" },
   { value: "sourcing", label: "Sourcing" },
+  { value: "buyer_meetup", label: "Buyer meet-up" },
 ] as const;
 
 export function FieldCasesTable({
