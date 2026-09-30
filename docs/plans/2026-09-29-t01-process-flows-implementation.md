@@ -76,7 +76,7 @@ This plan orders that work so each phase ships a complete, testable flow. Later 
 - [x] Migration + SQL test
 - [x] Pure helpers + unit tests
 - [x] Status badge (customer transaction detail)
-- [ ] Migration applied on a clean reset (not verified: no local Docker; apply with `supabase db push` before deploying the notifications change)
+- [x] Migrations `00047`–`00052` applied to the hosted project `nsdwyxwrsmtarrxgzeuj` on 2026-09-30 (`supabase db push --include-all`); a clean local reset is still unverified (no Docker)
 - Migration: `flow_status`, `flag`, `review_due_at` on `transactions`; `notifications.recipient_id` + own-row SELECT policy; `transaction_documents.document_kind` += `orcr`, `deed_of_sale`, `inspection_photo`, `expense_proof`; `purchase_details.payment_method` += `bank_transfer` (D5).
 - **Customer standing (D4):** new `customer_standing` table (`account_id` PK, `no_show_count`, `strike_count`, `gce_visit_only`). The customer can SELECT their own row. Only Sales Manager and CEO can write.
 - Pure helpers with unit tests: `isOverdue`, `canCancelScheduled(scheduledAt, now)` (5-hour rule), `nextQueueState`.
