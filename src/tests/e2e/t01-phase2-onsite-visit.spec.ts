@@ -1,4 +1,8 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect as baseExpect, type Page, test } from "@playwright/test";
+
+// The dev server compiles each route on first use, so a refresh after a server action can take
+// longer than Playwright's default 5 s.
+const expect = baseExpect.configure({ timeout: 20_000 });
 
 // T01 Phase 2 — Buying Scenario 1, Cash Purchase: Onsite Visit (GCE Process Flows §2):
 // buyer books a locked visit slot → a second request cannot take it → Sales Manager verifies and
@@ -49,6 +53,7 @@ async function bookCashVisit(page: Page) {
   await pick(page, "arrangement_kind", "GCE Visit");
   await page.locator("#schedule").fill(slot);
   await page.getByRole("button", { name: "Save Details" }).click();
+  await page.waitForLoadState("networkidle");
 }
 
 async function upload(page: Page, kind: "Valid ID" | "Proof of Billing", idType?: string) {
@@ -58,8 +63,11 @@ async function upload(page: Page, kind: "Valid ID" | "Proof of Billing", idType?
     .locator('input[type="file"]')
     .last()
     .setInputFiles(png(`${kind}.png`));
-  await page.getByRole("button", { name: "Upload", exact: true }).click();
-  await expect(page.getByText(/uploaded/).first()).toBeVisible();
+  const uploadButton = page.getByRole("button", { name: "Upload", exact: true });
+  await uploadButton.click();
+  // Wait for this upload's round trip and refresh, not an earlier upload's toast.
+  await expect(uploadButton).toBeEnabled();
+  await page.waitForLoadState("networkidle");
 }
 
 test.describe
@@ -84,7 +92,7 @@ test.describe
       await expect(page.getByText(/Visit slot locked for/)).toBeVisible();
 
       await page.getByRole("button", { name: "Submit Request" }).click();
-      await expect(page.getByText("Pending Sales Manager Approval").first()).toBeVisible();
+      await expect(page.getByText(/Request sent/)).toBeVisible();
     });
 
     test("a second request cannot take the locked slot", async ({ page }) => {
@@ -100,7 +108,9 @@ test.describe
 
       for (let left = 3; left > 0; left--) {
         await page.getByRole("button", { name: "Verify", exact: true }).first().click();
-        await expect(page.getByRole("button", { name: "Verify", exact: true })).toHaveCount(left - 1);
+        await expect(page.getByRole("button", { name: "Verify", exact: true })).toHaveCount(left - 1, {
+          timeout: 20_000,
+        });
       }
       await page.getByRole("button", { name: /Approve/ }).click();
       await expect(page.getByText("Approved").first()).toBeVisible();

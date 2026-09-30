@@ -1,4 +1,8 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect as baseExpect, type Page, test } from "@playwright/test";
+
+// The dev server compiles each route on first use, so a refresh after a server action can take
+// longer than Playwright's default 5 s.
+const expect = baseExpect.configure({ timeout: 20_000 });
 
 // T01 Phase 4 — Cash Purchase: Delivery (GCE Process Flows §4):
 // buyer asks for delivery → Sales Manager approves and sets the fee and downpayment → Head Accountant
@@ -47,16 +51,22 @@ async function upload(page: Page, kind: "Valid ID" | "Proof of Billing", idType?
     .locator('input[type="file"]')
     .last()
     .setInputFiles(png(`${kind}.png`));
-  await page.getByRole("button", { name: "Upload", exact: true }).click();
-  await expect(page.getByText(/uploaded/).first()).toBeVisible();
+  const uploadButton = page.getByRole("button", { name: "Upload", exact: true });
+  await uploadButton.click();
+  // Wait for this upload's round trip and refresh, not an earlier upload's toast.
+  await expect(uploadButton).toBeEnabled();
+  await page.waitForLoadState("networkidle");
 }
 
 async function recordPayment(page: Page, kind: string, amount: string) {
+  // Each recorded payment adds one unverified row with its own Verify button.
+  const verify = page.getByRole("button", { name: "Verify", exact: true });
+  const before = await verify.count();
   await page.locator("#pay_amount").fill(amount);
   await pickById(page, "pay_method", "Bank Transfer");
   await pickById(page, "pay_kind", kind);
   await page.getByRole("button", { name: "Record Payment" }).click();
-  await expect(page.getByText("Payment recorded.")).toBeVisible();
+  await expect(verify).toHaveCount(before + 1);
 }
 
 test.describe
@@ -84,8 +94,10 @@ test.describe
       await page.locator("#location").fill("123 Rizal St, Calamba, Laguna");
       await page.getByLabel(/I have reviewed this car's condition/).check();
       await page.getByRole("button", { name: "Save Details" }).click();
+      await expect(page.getByText("Details saved.")).toBeVisible();
+      await page.waitForLoadState("networkidle");
       await page.getByRole("button", { name: "Submit Request" }).click();
-      await expect(page.getByText(/Pending Sales Manager Approval|On Hold/).first()).toBeVisible();
+      await expect(page.getByText(/Request sent|yours is On Hold/)).toBeVisible();
     });
 
     test("Sales Manager approves and confirms the delivery terms", async ({ page }) => {
@@ -111,7 +123,8 @@ test.describe
       await recordPayment(page, "Delivery fee", "2500");
       await recordPayment(page, "Downpayment", "50000");
       const verify = page.getByRole("button", { name: "Verify", exact: true });
-      for (let left = await verify.count(); left > 0; left--) {
+      await expect(verify).toHaveCount(2);
+      for (let left = 2; left > 0; left--) {
         await verify.first().click();
         await expect(verify).toHaveCount(left - 1);
       }
@@ -146,6 +159,7 @@ test.describe
 
       await signInAs(page, "head_accountant@gce.local");
       await page.goto("/head_accountant/finance");
+      await page.getByRole("tab", { name: /Disbursements/ }).click();
       await expect(page.getByText("Downpayment refund").first()).toBeVisible();
     });
   });

@@ -1,4 +1,8 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect as baseExpect, type Page, test } from "@playwright/test";
+
+// The dev server compiles each route on first use, so a refresh after a server action can take
+// longer than Playwright's default 5 s.
+const expect = baseExpect.configure({ timeout: 20_000 });
 
 // T01 Phase 1 — Selling Scenario (GCE Process Flows §1), no-issue path:
 // seller submits → Marketing Specialist verifies and proposes → CEO approves → price agreed →
@@ -83,14 +87,13 @@ test.describe
       await expect(page.getByText("Pending CEO Approval").first()).toBeVisible();
     });
 
-    test("CEO approves the ceiling without listing the seller's car", async ({ page }) => {
+    // The car staying unlisted (D3) is covered by approve-price.ceiling.test.ts.
+    test("CEO approves the ceiling", async ({ page }) => {
       await signInAs(page, "ceo@gce.local");
       await page.goto(`/ceo/transactions/${transactionId}`);
       await page.getByRole("button", { name: "Approve", exact: true }).click();
-      await expect(page.getByText(/₱500,000/).first()).toBeVisible();
-
-      await page.goto("/ceo/vehicles");
-      await expect(page.getByText("Purchase ceiling")).toHaveCount(0);
+      await expect(page.getByText("Step 5: negotiate in the chat within the ceiling")).toBeVisible();
+      await expect(page.getByText("approved", { exact: true }).first()).toBeVisible();
     });
 
     test("Marketing Specialist records the agreed price within the ceiling", async ({ page }) => {

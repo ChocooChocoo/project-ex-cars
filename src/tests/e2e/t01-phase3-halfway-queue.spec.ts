@@ -1,4 +1,8 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect as baseExpect, type Page, test } from "@playwright/test";
+
+// The dev server compiles each route on first use, so a refresh after a server action can take
+// longer than Playwright's default 5 s.
+const expect = baseExpect.configure({ timeout: 20_000 });
 
 // T01 Phase 3 — buyer queue + Cash Meet Halfway (GCE Process Flows §3):
 // two requests for one car → the first is Active, the second On Hold → the Sales Manager rejects the
@@ -42,8 +46,11 @@ async function upload(page: Page, kind: "Valid ID" | "Proof of Billing", idType?
     .locator('input[type="file"]')
     .last()
     .setInputFiles(png(`${kind}.png`));
-  await page.getByRole("button", { name: "Upload", exact: true }).click();
-  await expect(page.getByText(/uploaded/).first()).toBeVisible();
+  const uploadButton = page.getByRole("button", { name: "Upload", exact: true });
+  await uploadButton.click();
+  // Wait for this upload's round trip and refresh, not an earlier upload's toast.
+  await expect(uploadButton).toBeEnabled();
+  await page.waitForLoadState("networkidle");
 }
 
 async function requestHalfway(page: Page, vehiclePath: string): Promise<string> {
@@ -62,7 +69,9 @@ async function requestHalfway(page: Page, vehiclePath: string): Promise<string> 
   await page.getByLabel(/I have reviewed this car's condition/).check();
   await page.getByRole("button", { name: "Save Details" }).click();
   await expect(page.getByText(/Condition acknowledged/)).toBeVisible();
+  await page.waitForLoadState("networkidle");
   await page.getByRole("button", { name: "Submit Request" }).click();
+  await expect(page.getByText(/Request sent|yours is On Hold/)).toBeVisible();
   return id;
 }
 

@@ -90,7 +90,7 @@ This plan orders that work so each phase ships a complete, testable flow. Later 
 - [x] Items 1–13 (intake, verification, ceiling, CEO decision with D3 fix, chat, field case, checks and inspection, issue report, revised ceiling, seller response, payment, expenses, reimbursement)
 - [x] Migration + SQL test, pure-rule tests (`sell-flow.test.ts`), D3 action test, unit suite green
 - [x] Defaults used: Q9 seller sees "within 5–7 days"; Q10 seller is notified in writing and the field team is told; Q3 reimbursement records who marked it (no payee chosen)
-- [ ] e2e `src/tests/e2e/t01-phase1-selling.spec.ts` written (no-issue path) but not run: needs `00049` applied and the dev server. The issue path is covered by action code only.
+- [x] e2e `src/tests/e2e/t01-phase1-selling.spec.ts` (no-issue path) passed 7/7 on 2026-09-30 against the hosted project. The issue path is covered by action code only.
 - [ ] Legacy sell offers already `under_review` from Task 32 have no ceiling proposal; they need a manual decision (cancel or re-submit).
 
 1. **Intake (step 1).** Add a required "has issues / no known issue" choice, uploads for 2 IDs + ORCR + deed of sale, and meetup method (halfway or GCE visit) to `sell-vehicle-form.tsx` and `submitSellVehicle`. Extend the sell schema in `lib/validation/transactions.ts`.
@@ -120,7 +120,7 @@ This plan orders that work so each phase ships a complete, testable flow. Later 
 - [x] Buyer submits Cash + GCE visit with exactly 2 IDs → `pending_sm_approval` + 7-day window; overdue notifies the Sales Manager
 - [x] Approve/reject notify the buyer; Buyer declined (`declined_by_buyer`); Mark Sold to This Buyer (needs a recorded payment; closes and notifies other open requests — Q13 default)
 - [x] Head Accountant sale records in Finance; migration SQL test, rule tests, unit suite green
-- [ ] e2e `src/tests/e2e/t01-phase2-onsite-visit.spec.ts` written but not run: needs `00050` applied and the dev server
+- [ ] e2e `src/tests/e2e/t01-phase2-onsite-visit.spec.ts` written, not run: it marks a showroom car Sold on the hosted project; run against a test database
 - Kept from Task 32: proof of billing is still required before approval and sale (the process doc names only 2 IDs).
 - Guided buy flow in `transaction-detail.tsx`: credentials, exactly 2 IDs enforced server-side, Cash, then GCE visit slot.
 - **Slot lock.** Add `viewing_arrangements.vehicle_id` (backfill from `inquiries.vehicle_id`, NOT NULL after backfill). Add a partial UNIQUE index on (`vehicle_id`, `schedule`) WHERE `confirmation_state IN ('pending','confirmed')`. Availability check comes before submit. The lock is held from booking, released on rejection (set `confirmation_state='cancelled'`), and kept while overdue.
@@ -139,7 +139,7 @@ This plan orders that work so each phase ships a complete, testable flow. Later 
 - [x] No-show after 2h30m (`buyer_no_show`, no-show count, GCE Visit only at 2); decline Legit / Not Legit (strike → GCE Visit only); arrangement options and submit respect `gce_visit_only`
 - [x] Mark sold notifies every other open (incl. On Hold) buyer (Phase 2 `finalizeBuySale`)
 - [x] Migration SQL test, rule tests, unit suite green
-- [ ] e2e `src/tests/e2e/t01-phase3-halfway-queue.spec.ts` written (queue, reject → promote, approve → sold) but not run; no-show needs a past meet-up, so it is covered by unit tests only
+- [ ] e2e `src/tests/e2e/t01-phase3-halfway-queue.spec.ts` written (queue, reject → promote, approve → sold), not run: it marks a showroom car Sold on the hosted project; no-show needs a past meet-up, so it is covered by unit tests only
 - Defaults used: Q11 an Active request (even Overdue) blocks promotion until decided; Q1 credit score skipped (acknowledgment links to the 360° view); Q12 no expense filing for halfway meet-ups. The 00050 slot lock now applies to GCE visits only.
 - **Queue.** Add `purchase_details.queue_state` (`active`, `on_hold`) with a partial UNIQUE index (vehicle_id) WHERE `active`. Create a new request as `active` or `on_hold` using `nextQueueState`. The SM "Buyers for this car" panel manually promotes the next request. There is no auto-promote. Queue behavior while overdue depends on Q11.
 - Condition acknowledgment checkbox (store `acknowledged_at`), required before choosing halfway. Reuse the 360° viewer. The "credit score" item waits on Q1.
@@ -162,7 +162,8 @@ This plan orders that work so each phase ships a complete, testable flow. Later 
 - [x] Mark sold requires Delivered; sale records show the fee / downpayment breakdown
 - [x] Fixed a Phase 2 gap: the Sales Manager can now record (not verify) a buyer's payment under RLS
 - [x] Migration SQL test, rule tests, unit suite green
-- [ ] e2e `src/tests/e2e/t01-phase4-delivery.spec.ts` written (happy path to Delivered, legit decline → refund) but not run; the missed-deadline path needs a past deadline, so it is covered by unit tests only
+- [x] e2e `src/tests/e2e/t01-phase4-delivery.spec.ts` (happy path to Delivered, legit decline → refund) passed 6/6 on 2026-09-30; the missed-deadline path needs a past deadline, so it is covered by unit tests only
+- [x] The e2e run found that the Sales Manager could not read buy-request arrangements under RLS (Phases 2–4); fixed by `00053_t01_buy_arrangement_read.sql`, applied to the hosted project
 - Defaults used: Q2 the fee and downpayment are two bank-transfer payments, fee first; Q8 status steps only, no live map; no public-holiday calendar for the deadline.
 - Delivery fields: address, preferred date and time. SM sets the serviceable flag and the delivery fee.
 - **Payments.** The HA records the delivery fee and the downpayment through the existing `recordPayment`/`verifyPayment` with `bank_transfer`. The downpayment deadline (2–3 working days) uses a pure helper plus the lazy-overdue pattern. Missing it forfeits and prompts the SM to promote the next request. Order and single-vs-two payments depend on Q2.
