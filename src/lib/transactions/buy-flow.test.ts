@@ -2,11 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import {
   activeBuyerIdCount,
+  addWorkingDays,
   canRecordNoShow,
+  isDeliveryCashRequest,
   isHalfwayCashRequest,
   isOnsiteCashRequest,
+  isQueuedCashRequest,
   isVisitSlot,
+  nextDeliveryStatus,
   nextStanding,
+  verifiedPaid,
 } from "./buy-flow";
 import { canTransition } from "./state-machine";
 
@@ -82,5 +87,38 @@ describe("nextStanding", () => {
 
   it("restricts a buyer immediately on a Not Legit decline", () => {
     expect(nextStanding(null, "strike")).toEqual({ no_show_count: 0, strike_count: 1, gce_visit_only: true });
+  });
+});
+
+describe("delivery rules", () => {
+  it("queues Meet Halfway and Delivery Cash requests, not GCE visits", () => {
+    expect(isQueuedCashRequest({ payment_method: "cash", arrangement_kind: "delivery" })).toBe(true);
+    expect(isQueuedCashRequest({ payment_method: "cash", arrangement_kind: "meetup" })).toBe(true);
+    expect(isQueuedCashRequest({ payment_method: "cash", arrangement_kind: "gce_visit" })).toBe(false);
+    expect(isDeliveryCashRequest({ payment_method: "financing", arrangement_kind: "delivery" })).toBe(false);
+  });
+
+  it("counts the downpayment deadline in working days", () => {
+    // Thursday 2026-10-01 + 3 working days skips the weekend: Tuesday 2026-10-06.
+    expect(addWorkingDays(new Date(2026, 9, 1, 12), 3)).toEqual(new Date(2026, 9, 6, 12));
+    // Friday + 1 working day is Monday.
+    expect(addWorkingDays(new Date(2026, 9, 2, 12), 1)).toEqual(new Date(2026, 9, 5, 12));
+  });
+
+  it("moves delivery tracking forward one step at a time", () => {
+    expect(nextDeliveryStatus(null)).toBe("dispatched");
+    expect(nextDeliveryStatus("dispatched")).toBe("in_transit");
+    expect(nextDeliveryStatus("arriving")).toBe("delivered");
+    expect(nextDeliveryStatus("delivered")).toBeNull();
+  });
+
+  it("counts only verified payments of the asked kind", () => {
+    const payments = [
+      { payment_kind: "delivery_fee", amount: 1500, verified_by: "ha" },
+      { payment_kind: "downpayment", amount: 50000, verified_by: null },
+      { payment_kind: "downpayment", amount: 20000, verified_by: "ha" },
+    ];
+    expect(verifiedPaid(payments, "delivery_fee")).toBe(1500);
+    expect(verifiedPaid(payments, "downpayment")).toBe(20000);
   });
 });

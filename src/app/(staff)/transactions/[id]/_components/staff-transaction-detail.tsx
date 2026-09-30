@@ -23,6 +23,7 @@ import {
 import type { TransactionState } from "@/lib/transactions/state-machine";
 
 import { BuyersForCarPanel, type CarBuyerRow } from "./buyers-for-car-panel";
+import { DeliveryPanel, type DeliveryTeam } from "./delivery-panel";
 import { type SellFlowData, SellFlowPanel } from "./sell-flow-panel";
 import { TransactionDetailSidebarV1 } from "./transaction-detail-sidebar-v1";
 import { TransactionOverviewV1 } from "./transaction-overview-v1";
@@ -43,6 +44,7 @@ export function StaffTransactionDetail({
   checklistNameMap,
   sellFlow = null,
   carBuyers = [],
+  delivery = null,
 }: {
   readonly transaction: Record<string, unknown>;
   readonly history: Record<string, unknown>[];
@@ -56,6 +58,7 @@ export function StaffTransactionDetail({
   readonly checklistNameMap?: Record<string, string>;
   readonly sellFlow?: SellFlowData | null;
   readonly carBuyers?: CarBuyerRow[];
+  readonly delivery?: { fieldCase: Record<string, unknown> | null; team: DeliveryTeam } | null;
 }) {
   const router = useRouter();
   const id = transaction.id as string;
@@ -114,12 +117,13 @@ export function StaffTransactionDetail({
     }
   }
 
-  async function onRecordPayment(amount: string, method: string, date: string) {
+  async function onRecordPayment(amount: string, method: string, date: string, paymentKind: string) {
     const fd = new FormData();
     fd.set("transaction_id", id);
     fd.set("amount", amount);
     fd.set("method", method);
     fd.set("settlement_date", date);
+    if (paymentKind) fd.set("payment_kind", paymentKind);
     const result = await recordPayment(fd);
     if (result.error) toast.error(result.error);
     else {
@@ -287,7 +291,11 @@ export function StaffTransactionDetail({
               onTransition={doTransition}
               visit={
                 liveVisit
-                  ? { kind: liveVisit.arrangement_kind as string, schedule: liveVisit.schedule as string }
+                  ? {
+                      kind: liveVisit.arrangement_kind as string,
+                      schedule: liveVisit.schedule as string,
+                      deliveryStatus: (delivery?.fieldCase?.delivery_status as string | null) ?? null,
+                    }
                   : null
               }
               onVisitOutcome={onVisitOutcome}
@@ -318,6 +326,19 @@ export function StaffTransactionDetail({
           onInstructRepossession={onInstructRepossession}
         />
       </div>
+
+      {kind === "buy" && delivery ? (
+        <DeliveryPanel
+          transactionId={id}
+          state={state}
+          purchaseDetails={purchaseDetails}
+          payments={payments}
+          arrangement={liveVisit ?? null}
+          fieldCase={delivery.fieldCase}
+          team={delivery.team}
+          userRole={userRole}
+        />
+      ) : null}
 
       {kind === "buy" && carBuyers.some((buyer) => buyer.queue_state) ? (
         <BuyersForCarPanel currentId={id} buyers={carBuyers} canPromote={["sales_manager", "ceo"].includes(userRole)} />

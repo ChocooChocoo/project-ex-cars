@@ -9,7 +9,7 @@ import { logAuditEvent } from "@/lib/auth/audit";
 import { notify } from "@/lib/notifications/notify";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { canRecordNoShow } from "@/lib/transactions/buy-flow";
+import { canRecordNoShow, DOWNPAYMENT_WORKING_DAYS, verifiedPaid } from "@/lib/transactions/buy-flow";
 import { finalizeBuySale, recordStandingEvent, releaseVisitSlots } from "@/lib/transactions/buy-flow-server";
 import { generateInstallmentSchedule } from "@/lib/transactions/installments";
 import { SELL_PAPER_KINDS } from "@/lib/transactions/sell-flow";
@@ -121,6 +121,17 @@ export async function transitionTransaction(formData: FormData) {
       .select("id", { count: "exact", head: true })
       .eq("transaction_id", id);
     if (!payments) return { error: "Record the buyer's payment before marking the car sold." };
+    // §4 step 9: a delivered car is sold only once the team has handed it over.
+    const { data: deliveryCase } = await admin
+      .from("field_cases")
+      .select("delivery_status")
+      .eq("transaction_id", id)
+      .eq("case_kind", "delivery")
+      .neq("state", "cancelled")
+      .maybeSingle();
+    if (deliveryCase && deliveryCase.delivery_status !== "delivered") {
+      return { error: "Mark the car sold after the delivery team reports it delivered." };
+    }
   }
 
   const { error } = await admin
@@ -207,7 +218,7 @@ async function closeBuyRequest(
   admin: ReturnType<typeof createAdminClient>,
   tx: { id: string; current_state: string },
   actorId: string,
-  flag: "declined_by_buyer" | "buyer_no_show",
+  flag: "declined_by_buyer" | "buyer_no_show" | "buyer_unavailable",
   reason: string,
 ) {
   const { error } = await admin
@@ -258,19 +269,80 @@ export async function recordBuyerDecline(formData: FormData) {
   const tx = await loadBuyRequest(admin, parsed.data.transaction_id);
   if (!tx) return { error: "Transaction not found." };
   if (tx.current_state !== "approved") return { error: "Only an approved request can be declined at the visit." };
-  const halfway = tx.arrangement?.arrangement_kind === "meetup";
-  if (halfway && !parsed.data.classification) return { error: "Classify the decline as Legit or Not Legit." };
+  // Meet Halfway and Delivery declines are classified; a GCE visit decline is not.
+  const classified = ["meetup", "delivery"].includes(tx.arrangement?.arrangement_kind ?? "");
+  const delivery = tx.arrangement?.arrangement_kind === "delivery";
+  if (classified && !parsed.data.classification) return { error: "Classify the decline as Legit or Not Legit." };
 
-  const notLegit = halfway && parsed.data.classification === "not_legit";
+  const notLegit = classified && parsed.data.classification === "not_legit";
   const error = await closeBuyRequest(
     admin,
     tx,
     actor.userId,
     "declined_by_buyer",
-    `Declined by buyer${halfway ? ` (${notLegit ? "Not Legit, strike" : "Legit"})` : ""}${parsed.data.reason ? `: ${parsed.data.reason}` : ""}`,
+    `Declined by buyer${classified ? ` (${notLegit ? "Not Legit, strike" : "Legit"})` : ""}${parsed.data.reason ? `: ${parsed.data.reason}` : ""}`,
   );
   if (error) return { error };
   if (notLegit) await recordStandingEvent(admin, tx.customer_id, "strike", actor.userId);
+
+  // §4 step 8: a Legit decline refunds the downpayment within 2–3 working days through a Head Accountant
+  // disbursement; a Not Legit decline forfeits it.
+  if (delivery) {
+    const { data: payments } = await admin
+      .from("payment_records")
+      .select("payment_kind, amount, verified_by")
+      .eq("transaction_id", tx.id);
+    const downpayment = verifiedPaid(payments ?? [], "downpayment");
+    if (notLegit) {
+      await admin
+        .from("purchase_details")
+        .update({ downpayment_forfeited_at: new Date().toISOString() })
+        .eq("transaction_id", tx.id);
+    } else if (downpayment > 0) {
+      const { data: refund } = await admin
+        .from("disbursement_requests")
+        .insert({
+          title: "Downpayment refund",
+          amount_cents: Math.round(downpayment * 100),
+          purpose: `Refund of a buyer's downpayment after a legitimate decline (transaction ${tx.id})`,
+          status: "draft",
+          requested_by: actor.userId,
+          notes: `Refund within ${DOWNPAYMENT_WORKING_DAYS} working days.`,
+        })
+        .select("id")
+        .single();
+      if (refund) {
+        await admin.from("disbursement_events").insert({
+          disbursement_id: refund.id,
+          event_kind: "submitted",
+          actor_id: actor.userId,
+          notes: "Downpayment refund — awaiting Head Accountant release.",
+        });
+      }
+      await notify(
+        admin,
+        { role: "head_accountant" },
+        {
+          kind: "downpayment_refund",
+          title: "Downpayment refund to release",
+          body: `Refund ₱${downpayment.toLocaleString()} to the buyer within ${DOWNPAYMENT_WORKING_DAYS} working days.`,
+          transactionId: tx.id,
+        },
+      );
+    }
+    await notify(
+      admin,
+      { userId: tx.customer_id },
+      {
+        kind: "delivery_declined",
+        title: "Your purchase was closed",
+        body: notLegit
+          ? "The decline was not accepted as legitimate. Your downpayment is forfeited and your account is limited to GCE visits."
+          : `Your downpayment will be refunded within ${DOWNPAYMENT_WORKING_DAYS} working days.`,
+        transactionId: tx.id,
+      },
+    );
+  }
   return { success: true };
 }
 
@@ -284,15 +356,41 @@ export async function recordNoShow(formData: FormData) {
   const admin = createAdminClient();
   const tx = await loadBuyRequest(admin, id.data);
   if (!tx) return { error: "Transaction not found." };
-  if (tx.current_state !== "approved" || tx.arrangement?.arrangement_kind !== "meetup") {
-    return { error: "Only an approved Meet Halfway request can be marked as a no-show." };
+  const kind = tx.arrangement?.arrangement_kind;
+  if (tx.current_state !== "approved" || !tx.arrangement || (kind !== "meetup" && kind !== "delivery")) {
+    return { error: "Only an approved Meet Halfway or Delivery request can be marked as a no-show." };
   }
-  if (!canRecordNoShow(tx.arrangement.schedule)) {
+  const delivery = kind === "delivery";
+  if (delivery) {
+    // §4 step 7c: the team reached the address and the buyer, without notice, was not there.
+    const { data: fieldCase } = await admin
+      .from("field_cases")
+      .select("delivery_status")
+      .eq("transaction_id", tx.id)
+      .eq("case_kind", "delivery")
+      .neq("state", "cancelled")
+      .maybeSingle();
+    if (!["arriving", "delivered"].includes(fieldCase?.delivery_status ?? "")) {
+      return { error: "Record the buyer as unavailable once the delivery team has arrived." };
+    }
+  } else if (!canRecordNoShow(tx.arrangement.schedule)) {
     return { error: "Wait 2 hours 30 minutes after the meet-up time before recording a no-show." };
   }
 
-  const error = await closeBuyRequest(admin, tx, actor.userId, "buyer_no_show", "Buyer didn't show up");
+  const error = await closeBuyRequest(
+    admin,
+    tx,
+    actor.userId,
+    delivery ? "buyer_unavailable" : "buyer_no_show",
+    delivery ? "Buyer unavailable at delivery; downpayment forfeited" : "Buyer didn't show up",
+  );
   if (error) return { error };
+  if (delivery) {
+    await admin
+      .from("purchase_details")
+      .update({ downpayment_forfeited_at: new Date().toISOString() })
+      .eq("transaction_id", tx.id);
+  }
   const standing = await recordStandingEvent(admin, tx.customer_id, "no_show", actor.userId);
   await notify(
     admin,
@@ -383,6 +481,7 @@ export async function recordPayment(formData: FormData) {
     external_reference: parsed.data.external_reference || null,
     recorded_by: user.user.id,
     settlement_date: parsed.data.settlement_date,
+    payment_kind: parsed.data.payment_kind || null,
   });
 
   if (error) return { error: error.message };

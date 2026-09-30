@@ -11,8 +11,8 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
   activeBuyerIdCount,
   BUYER_ID_COUNT,
-  isHalfwayCashRequest,
   isOnsiteCashRequest,
+  isQueuedCashRequest,
   isVisitSlot,
 } from "@/lib/transactions/buy-flow";
 import { releaseVisitSlots } from "@/lib/transactions/buy-flow-server";
@@ -189,15 +189,18 @@ export async function saveBuyDetails(formData: FormData) {
     if (standing?.gce_visit_only) return { error: "Your account is limited to GCE visits." };
   }
 
-  // §3 step 3: the condition acknowledgment comes before choosing Meet Halfway.
-  if (arrangement_kind === "meetup" && acknowledge_condition !== "yes") {
+  // §3 step 3 / §4 step 3: the condition acknowledgment comes before choosing Meet Halfway or Delivery.
+  if ((arrangement_kind === "meetup" || arrangement_kind === "delivery") && acknowledge_condition !== "yes") {
     const { data: existing } = await supabase
       .from("purchase_details")
       .select("condition_acknowledged_at")
       .eq("transaction_id", transactionId)
       .maybeSingle();
     if (!existing?.condition_acknowledged_at) {
-      return { error: "Review the car's condition and 360° view, then acknowledge it before choosing Meet Halfway." };
+      return {
+        error:
+          "Review the car's condition and 360° view, then acknowledge it before choosing Meet Halfway or Delivery.",
+      };
     }
   }
 
@@ -263,11 +266,11 @@ export async function submitBuyRequest(formData: FormData) {
   if (tx.current_state !== "pending" || tx.queue_state) return { error: "This request is already submitted." };
 
   const details = (Array.isArray(tx.purchase_details) ? tx.purchase_details[0] : tx.purchase_details) ?? null;
-  const halfway = isHalfwayCashRequest(details);
-  if (!halfway && !isOnsiteCashRequest(details)) {
-    return { error: "Save Cash as the payment method and GCE Visit or Meet Halfway as the arrangement." };
+  const queued = isQueuedCashRequest(details);
+  if (!queued && !isOnsiteCashRequest(details)) {
+    return { error: "Save Cash as the payment method and GCE Visit, Meet Halfway or Delivery as the arrangement." };
   }
-  if (halfway && !details?.condition_acknowledged_at) return { error: "Acknowledge the car's condition first." };
+  if (queued && !details?.condition_acknowledged_at) return { error: "Acknowledge the car's condition first." };
 
   const [{ data: documents }, { data: slot }, { data: standing }] = await Promise.all([
     supabase.from("transaction_documents").select("document_kind, verification_state").eq("transaction_id", tx.id),
@@ -280,10 +283,10 @@ export async function submitBuyRequest(formData: FormData) {
     supabase.from("customer_standing").select("gce_visit_only").eq("account_id", user.user.id).maybeSingle(),
   ]);
   if (activeBuyerIdCount(documents ?? []) !== BUYER_ID_COUNT) return { error: "Upload two valid IDs first." };
-  if (halfway && standing?.gce_visit_only) return { error: "Your account is limited to GCE visits." };
+  if (queued && standing?.gce_visit_only) return { error: "Your account is limited to GCE visits." };
   if (!slot || slot.arrangement_kind !== details?.arrangement_kind) return { error: "Book the meeting time first." };
   const scheduledAt = new Date(slot.schedule);
-  if (halfway ? scheduledAt.getTime() <= Date.now() : !isVisitSlot(scheduledAt)) {
+  if (queued ? scheduledAt.getTime() <= Date.now() : !isVisitSlot(scheduledAt)) {
     return { error: "The booked time has passed. Pick a new one." };
   }
 
@@ -293,7 +296,7 @@ export async function submitBuyRequest(formData: FormData) {
   let queueState: "active" | "on_hold" | null = null;
   let error: { code?: string; message: string } | null = null;
 
-  if (halfway) {
+  if (queued) {
     const { count: activeCount } = await admin
       .from("transactions")
       .select("id", { count: "exact", head: true })
@@ -323,8 +326,8 @@ export async function submitBuyRequest(formData: FormData) {
     from_state: "pending",
     to_state: onHold ? "pending" : "under_review",
     actor_id: user.user.id,
-    reason: halfway
-      ? `Buyer submitted a Cash Meet Halfway request (${onHold ? "On Hold" : "Active"})`
+    reason: queued
+      ? `Buyer submitted a Cash ${details?.arrangement_kind === "delivery" ? "Delivery" : "Meet Halfway"} request (${onHold ? "On Hold" : "Active"})`
       : "Buyer submitted a Cash request with a GCE visit slot",
   });
   const when = scheduledAt.toLocaleString("en-PH");
@@ -347,7 +350,7 @@ export async function submitBuyRequest(formData: FormData) {
       {
         kind: "buy_request_submitted",
         title: "New buyer request to review",
-        body: `A Cash buyer ${halfway ? "asked to meet halfway" : "booked a GCE visit"} on ${when}. Review within 7 days.`,
+        body: `A Cash buyer ${queued ? (details?.arrangement_kind === "delivery" ? "asked for delivery" : "asked to meet halfway") : "booked a GCE visit"} on ${when}. Review within 7 days.`,
         transactionId: tx.id,
       },
     );

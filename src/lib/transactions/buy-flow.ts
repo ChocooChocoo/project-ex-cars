@@ -54,3 +54,53 @@ export function nextStanding(current: Standing | null, event: "no_show" | "strik
   const noShows = base.no_show_count + 1;
   return { ...base, no_show_count: noShows, gce_visit_only: base.gce_visit_only || noShows >= NO_SHOW_LIMIT };
 }
+
+// §4 Delivery: Cash, delivered to the buyer's address; these requests queue like Meet Halfway.
+export function isDeliveryCashRequest(
+  details: { payment_method?: unknown; arrangement_kind?: unknown } | null,
+): boolean {
+  return details?.payment_method === "cash" && details?.arrangement_kind === "delivery";
+}
+
+// Meet Halfway and Delivery share the Active / On Hold queue and the condition acknowledgment.
+export function isQueuedCashRequest(details: { payment_method?: unknown; arrangement_kind?: unknown } | null): boolean {
+  return isHalfwayCashRequest(details) || isDeliveryCashRequest(details);
+}
+
+export const DOWNPAYMENT_WORKING_DAYS = 3;
+
+// §4 step 5a: "within 2–3 working days". Weekends are skipped.
+// ponytail: public holidays are not skipped; add a holiday list if the deadline must honour them.
+export function addWorkingDays(from: Date, days: number): Date {
+  const result = new Date(from);
+  let added = 0;
+  while (added < days) {
+    result.setDate(result.getDate() + 1);
+    const weekday = result.getDay();
+    if (weekday !== 0 && weekday !== 6) added++;
+  }
+  return result;
+}
+
+export const DELIVERY_STATUSES = ["dispatched", "in_transit", "arriving", "delivered"] as const;
+export type DeliveryStatus = (typeof DELIVERY_STATUSES)[number];
+
+export const DELIVERY_STATUS_LABELS: Record<DeliveryStatus, string> = {
+  dispatched: "Dispatched",
+  in_transit: "In Transit",
+  arriving: "Arriving",
+  delivered: "Delivered",
+};
+
+// §4 step 7a: Dispatched → In Transit → Arriving → Delivered, one step at a time.
+export function nextDeliveryStatus(current: DeliveryStatus | null): DeliveryStatus | null {
+  if (current === null) return "dispatched";
+  return DELIVERY_STATUSES[DELIVERY_STATUSES.indexOf(current) + 1] ?? null;
+}
+
+type PaymentLike = { payment_kind: unknown; amount: unknown; verified_by: unknown };
+
+// Verified total of one kind of payment (delivery fee, downpayment, ...).
+export function verifiedPaid(payments: PaymentLike[], kind: string): number {
+  return payments.filter((p) => p.payment_kind === kind && p.verified_by).reduce((sum, p) => sum + Number(p.amount), 0);
+}
