@@ -275,7 +275,7 @@ export async function submitBuyRequest(formData: FormData) {
   if (!queued && !isOnsiteCashRequest(details)) {
     return {
       error:
-        "Save Cash with GCE Visit, Meet Halfway or Delivery, or In-House Financing with GCE Visit, as the arrangement.",
+        "Save Cash or Bank Transfer with GCE Visit, Meet Halfway or Delivery, or In-House Financing with GCE Visit, as the arrangement.",
     };
   }
   if (queued && !details?.condition_acknowledged_at) return { error: "Acknowledge the car's condition first." };

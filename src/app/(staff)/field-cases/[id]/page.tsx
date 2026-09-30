@@ -49,7 +49,7 @@ export default async function FieldCasePage({ params }: { readonly params: Promi
     const { data: transaction } = await admin
       .from("transactions")
       .select(
-        "id, current_state, profiles(full_name, phone), vehicles(make, model, year, stock_code), purchase_details(final_price, delivery_fee, downpayment_amount)",
+        "id, current_state, profiles(full_name, phone), vehicles(make, model, year, stock_code), purchase_details(final_price, delivery_fee, downpayment_amount, payment_method)",
       )
       .eq("id", fieldCase.transaction_id)
       .maybeSingle();

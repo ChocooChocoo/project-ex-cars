@@ -208,6 +208,13 @@ Each flow composes existing blocks:
 
 Plan each one only once the client supplies its text.
 
+**Status (2026-10-01): §7–9 built on team defaults; §10–11 not started.** The user asked to proceed before the client text arrived, so §7–9 follow their Cash counterparts. Revisit when the client writes these sections.
+- [x] §7–9 default: a bank-transfer purchase takes the same steps as Cash in §2–4 (`DIRECT_PAYMENT_METHODS` in `buy-flow.ts`); no migration needed, since `bank_transfer` has been a valid method since 00048
+- [x] §7–9 default: a bank-transfer car is marked sold only after the Head Accountant verifies the transfer (`transitionTransaction`)
+- [x] §9 default: delivery terms, the field case and the "car arrived" message ask for the balance by bank transfer instead of cash (`balanceMethodPhrase`)
+- [x] Unit tests in `buy-flow.test.ts`; e2e `src/tests/e2e/t01-phase6-bank-transfer.spec.ts` (§7 sold only after verification, §9 wording) passed 2/2 on 2026-10-01 on the hosted project; §8 reuses §3 unchanged
+- [ ] §10 Financing + Meet Halfway, §11 Financing + Delivery: need the client's rules (see the open questions below)
+
 ---
 
 ## Open questions for the client

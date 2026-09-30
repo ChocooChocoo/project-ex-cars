@@ -9,9 +9,22 @@ export function activeBuyerIdCount(documents: DocumentLike[]): number {
   return documents.filter((doc) => doc.document_kind === "valid_id" && doc.verification_state !== "rejected").length;
 }
 
-// §2 Onsite Visit: Cash paid in person at GCE.
+// §7–9 (Phase 6 default, not yet in the source): a bank-transfer purchase follows the same steps as its
+// Cash counterpart in §2–4. The "Cash" predicates below cover both methods.
+export const DIRECT_PAYMENT_METHODS = ["cash", "bank_transfer"] as const;
+
+function paysDirect(details: { payment_method?: unknown } | null): boolean {
+  return (DIRECT_PAYMENT_METHODS as readonly unknown[]).includes(details?.payment_method);
+}
+
+// How the buyer settles the balance, for messages: "in cash" or "by bank transfer".
+export function balanceMethodPhrase(method: unknown): string {
+  return method === "bank_transfer" ? "by bank transfer" : "in cash";
+}
+
+// §2 Onsite Visit (§7 by bank transfer): paid in full at GCE.
 export function isOnsiteCashRequest(details: { payment_method?: unknown; arrangement_kind?: unknown } | null): boolean {
-  return details?.payment_method === "cash" && details?.arrangement_kind === "gce_visit";
+  return paysDirect(details) && details?.arrangement_kind === "gce_visit";
 }
 
 // Visit slots are whole hours, so two bookings cannot overlap by a few minutes.
@@ -25,11 +38,11 @@ export function isVisitSlot(schedule: Date, now: Date = new Date()): boolean {
   );
 }
 
-// §3 Meet Halfway: Cash paid at an agreed Calabarzon location; these requests queue per car.
+// §3 Meet Halfway (§8 by bank transfer): paid at an agreed Calabarzon location; these requests queue per car.
 export function isHalfwayCashRequest(
   details: { payment_method?: unknown; arrangement_kind?: unknown } | null,
 ): boolean {
-  return details?.payment_method === "cash" && details?.arrangement_kind === "meetup";
+  return paysDirect(details) && details?.arrangement_kind === "meetup";
 }
 
 export const NO_SHOW_WAIT_MINUTES = 150;
@@ -55,11 +68,11 @@ export function nextStanding(current: Standing | null, event: "no_show" | "strik
   return { ...base, no_show_count: noShows, gce_visit_only: base.gce_visit_only || noShows >= NO_SHOW_LIMIT };
 }
 
-// §4 Delivery: Cash, delivered to the buyer's address; these requests queue like Meet Halfway.
+// §4 Delivery (§9 by bank transfer): delivered to the buyer's address; these requests queue like Meet Halfway.
 export function isDeliveryCashRequest(
   details: { payment_method?: unknown; arrangement_kind?: unknown } | null,
 ): boolean {
-  return details?.payment_method === "cash" && details?.arrangement_kind === "delivery";
+  return paysDirect(details) && details?.arrangement_kind === "delivery";
 }
 
 // Meet Halfway and Delivery share the Active / On Hold queue and the condition acknowledgment.
