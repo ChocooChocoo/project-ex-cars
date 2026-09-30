@@ -12,6 +12,7 @@ import {
   approvePaymentTerms,
   instructRepossession,
   markInstallmentWaived,
+  recordBuyerDecline,
   recordPaperwork,
   recordPayment,
   transitionTransaction,
@@ -87,6 +88,19 @@ export function StaffTransactionDetail({
       toast.error(result.error);
     } else {
       toast.success(`Transaction moved to ${to.replace(/_/g, " ")}.`);
+      router.refresh();
+    }
+  }
+
+  async function onBuyerDeclined() {
+    setTransitioning(true);
+    const fd = new FormData();
+    fd.set("transaction_id", id);
+    const result = await recordBuyerDecline(fd);
+    setTransitioning(false);
+    if (result.error) toast.error(result.error);
+    else {
+      toast.success("Recorded: declined by buyer.");
       router.refresh();
     }
   }
@@ -262,6 +276,7 @@ export function StaffTransactionDetail({
               userRole={userRole}
               transitioning={transitioning}
               onTransition={doTransition}
+              onBuyerDeclined={onBuyerDeclined}
             />
           )}
         </div>

@@ -233,11 +233,16 @@ describe("Task 33 transaction paperwork actions", () => {
     );
   });
 
-  it.each([
-    "ceo",
-    "sales_manager",
-    "account_manager",
-  ])("rejects document verification for the %s role", async (role) => {
+  it("lets the Sales Manager verify a buyer's valid ID (T01 Q0a)", async () => {
+    getCurrentRole.mockResolvedValue("sales_manager");
+    pendingDocumentLookup("valid_id");
+    documentCountsReturns(2, 1, 0);
+
+    await expect(verifyTransactionDocument(verificationForm("verified"))).resolves.toEqual({ success: true });
+    expect(documentUpdate).toHaveBeenCalledWith(expect.objectContaining({ verification_state: "verified" }));
+  });
+
+  it.each(["ceo", "account_manager"])("rejects document verification for the %s role", async (role) => {
     getCurrentRole.mockResolvedValue(role);
 
     await expect(verifyTransactionDocument(verificationForm("verified"))).resolves.toEqual({

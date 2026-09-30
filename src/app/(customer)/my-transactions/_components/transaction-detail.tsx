@@ -10,7 +10,12 @@ import { format } from "date-fns";
 import { Calendar, FileText, ShieldCheck, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
-import { cancelTransaction, saveBuyDetails, uploadPurchaseDocument } from "@/app/(customer)/my-transactions/actions";
+import {
+  cancelTransaction,
+  saveBuyDetails,
+  submitBuyRequest,
+  uploadPurchaseDocument,
+} from "@/app/(customer)/my-transactions/actions";
 import { TransactionImagePreview } from "@/components/transaction-image-preview";
 import { TransactionStatusBadge } from "@/components/transaction-status-badge";
 import {
@@ -34,6 +39,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import type { ProfileAutoFill } from "@/lib/autofill";
+import { activeBuyerIdCount, isOnsiteCashRequest } from "@/lib/transactions/buy-flow";
 import { transactionDocumentLabel } from "@/lib/transactions/document-media";
 import {
   arrangementKindLabel,
@@ -109,6 +115,7 @@ export function TransactionDetail({
   viewingArrangements,
   autofill,
   negotiationThreadId = null,
+  takenSlots = [],
 }: {
   readonly transaction: Record<string, unknown>;
   readonly history: Record<string, unknown>[];
@@ -119,6 +126,7 @@ export function TransactionDetail({
   readonly viewingArrangements: Record<string, unknown>[];
   readonly autofill: ProfileAutoFill | null;
   readonly negotiationThreadId?: string | null;
+  readonly takenSlots?: string[];
 }) {
   const router = useRouter();
   const id = transaction.id as string;
@@ -201,6 +209,27 @@ export function TransactionDetail({
     } else {
       toast.success("Transaction cancelled.");
       setLocalState("cancelled");
+      router.refresh();
+    }
+  }
+
+  // §2 steps 2–4: two IDs and a locked Cash visit slot, then the request goes to the Sales Manager.
+  const activeIds = activeBuyerIdCount(documents as { document_kind: unknown; verification_state: unknown }[]);
+  const onsiteCashSaved = isOnsiteCashRequest(purchaseDetails ?? null);
+  const bookedSlot = viewingArrangements.find((va) =>
+    ["pending", "confirmed"].includes(va.confirmation_state as string),
+  );
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmitRequest() {
+    setSubmitting(true);
+    const fd = new FormData();
+    fd.set("transaction_id", id);
+    const result = await submitBuyRequest(fd);
+    setSubmitting(false);
+    if (result.error) toast.error(result.error);
+    else {
+      toast.success("Request sent. The Sales Manager will review it within 7 days.");
       router.refresh();
     }
   }
@@ -344,7 +373,7 @@ export function TransactionDetail({
       <div className="grid gap-5 xl:grid-cols-2">
         {/* Form column */}
         <div className="flex flex-col gap-4 rounded-xl border bg-card p-4">
-          {kind === "buy" && !isTerminal && (
+          {kind === "buy" && state === "pending" && (
             <>
               <section className="flex flex-col gap-4">
                 <h2 className="font-medium tracking-tight">Purchase Details</h2>
@@ -404,11 +433,20 @@ export function TransactionDetail({
                     <Input
                       id="schedule"
                       type="datetime-local"
+                      step={3600}
                       value={schedule}
                       onChange={(e) => setSchedule(e.target.value)}
                     />
                   </div>
                 </div>
+                {arrangementKind === "gce_visit" ? (
+                  <p className="text-muted-foreground text-xs">
+                    GCE visits start on the hour. Once saved, your slot is locked for you.
+                    {takenSlots.length > 0
+                      ? ` Already taken: ${takenSlots.map((slot) => format(new Date(slot), "MMM d, h:mm a")).join(", ")}.`
+                      : " No slots are taken for this car yet."}
+                  </p>
+                ) : null}
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="location">Location</Label>
                   <Input
@@ -431,6 +469,24 @@ export function TransactionDetail({
                 <Button onClick={handleSaveBuyDetails} disabled={saving} className="self-start">
                   {saving ? "Saving..." : "Save Details"}
                 </Button>
+                {onsiteCashSaved ? (
+                  <div className="flex flex-col gap-2 rounded-md border p-3 text-sm">
+                    <p className="font-medium">Send your request</p>
+                    <p className="text-muted-foreground text-xs">
+                      Valid IDs: {activeIds}/2 ·{" "}
+                      {bookedSlot
+                        ? `Visit slot locked for ${format(new Date(bookedSlot.schedule as string), "MMM d, yyyy h:mm a")}`
+                        : "No visit slot booked yet"}
+                    </p>
+                    <Button
+                      onClick={handleSubmitRequest}
+                      disabled={submitting || activeIds !== 2 || !bookedSlot}
+                      className="self-start"
+                    >
+                      {submitting ? "Sending..." : "Submit Request"}
+                    </Button>
+                  </div>
+                ) : null}
               </section>
               <Separator />
             </>

@@ -1,6 +1,7 @@
 // Server-side building blocks for the Selling Scenario. Deliberately not a "use server" module:
 // every export here writes with the service role and must only run behind a role-guarded action.
 
+import { notify } from "@/lib/notifications/notify";
 import type { createAdminClient } from "@/lib/supabase/admin";
 import type { FlowStatus, TransactionFlag, TransactionState } from "@/lib/transactions/state-machine";
 
@@ -66,22 +67,6 @@ export async function moveSellTransaction(
     reason,
   });
   return null;
-}
-
-export async function notify(
-  admin: Admin,
-  to: { role: string } | { userId: string },
-  message: { kind: string; title: string; body: string; transactionId: string },
-): Promise<void> {
-  await admin.from("notifications").insert({
-    recipient_role: "role" in to ? to.role : null,
-    recipient_id: "userId" in to ? to.userId : null,
-    kind: message.kind,
-    title: message.title,
-    body: message.body,
-    reference_table: "transactions",
-    reference_id: message.transactionId,
-  });
 }
 
 // Selling steps 4 and 8: the CEO decides a purchase or revised ceiling. The car is not GCE's yet,
