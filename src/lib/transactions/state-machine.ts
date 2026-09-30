@@ -76,11 +76,9 @@ const SCA = [...S, ...C, ...A];
 const SC = [...S, ...C];
 const SCH = [...S, ...C, ...H];
 
-// Task 32 client flow: Sales Manager processes, Head Accountant verifies,
-// CEO approves/rejects, then the car is marked sold. CEO is the sole approver:
-// under_review → approved/rejected is CEO-only (C). Sales "processing" is the
-// pending → under_review step plus sell review input; verification happens via
-// document/payment verification actions, not a separate state.
+// GCE Process Flows §2–4 (T01 Q0a): the Sales Manager reviews and approves or rejects buyer
+// requests; the CEO keeps an override. Documents are still verified before approval (see
+// transitionTransaction). Sell offers do not use these rules; they move through sell-actions.ts.
 export const TRANSITION_RULES: Record<
   TransactionState,
   Partial<Record<TransactionState, readonly TransitionRole[]>>
@@ -90,8 +88,8 @@ export const TRANSITION_RULES: Record<
     cancelled: SCA,
   },
   under_review: {
-    approved: C,
-    rejected: C,
+    approved: SC,
+    rejected: SC,
     cancelled: SC,
   },
   approved: {

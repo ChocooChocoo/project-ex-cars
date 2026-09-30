@@ -70,7 +70,8 @@ export async function checkAndNotifyDueInstallments(): Promise<void> {
 
 /**
  * Review windows that lapsed without a decision become "Overdue — Awaiting Action". Nothing is
- * cancelled; the Marketing Specialist (sell offers) and the CEO are told once per lapsed window.
+ * cancelled and a locked visit slot stays locked. Sell offers notify the Marketing Specialist and
+ * the CEO; buyer requests notify the Sales Manager. Once per lapsed window.
  * Called from the dashboard and the transaction list so it runs without a cron worker.
  */
 export async function checkAndNotifyOverdueReviews(): Promise<void> {
@@ -97,7 +98,7 @@ export async function checkAndNotifyOverdueReviews(): Promise<void> {
     // A notice created after this window's due date already covers it.
     .filter((tx) => !(existing ?? []).some((n) => n.reference_id === tx.id && n.created_at >= tx.review_due_at))
     .flatMap((tx) =>
-      (tx.transaction_kind === "sell" ? ["marketing_specialist", "ceo"] : ["ceo"]).map((role) => ({
+      (tx.transaction_kind === "sell" ? ["marketing_specialist", "ceo"] : ["sales_manager"]).map((role) => ({
         recipient_role: role,
         kind: "review_overdue",
         title: "Overdue — Awaiting Action",

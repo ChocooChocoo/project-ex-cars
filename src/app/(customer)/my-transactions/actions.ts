@@ -5,7 +5,12 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { ACCEPTED_ID_TYPES } from "@/lib/auth/roles";
+import { notify } from "@/lib/notifications/notify";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { activeBuyerIdCount, BUYER_ID_COUNT, isOnsiteCashRequest, isVisitSlot } from "@/lib/transactions/buy-flow";
+import { releaseVisitSlots } from "@/lib/transactions/buy-flow-server";
+import { reviewDueAt } from "@/lib/transactions/state-machine";
 import {
   buyDetailsSchema,
   buyTransactionSchema,
@@ -43,6 +48,17 @@ export async function uploadPurchaseDocument(formData: FormData) {
     .maybeSingle();
   if (!tx || tx.customer_id !== user.user.id) return { error: "Transaction not found." };
   if (tx.transaction_kind !== "buy") return { error: "Documents can only be uploaded for purchases." };
+
+  // Buyer identification is exactly two valid IDs; a rejected one can be replaced.
+  if (documentKind === "valid_id") {
+    const { data: existing } = await supabase
+      .from("transaction_documents")
+      .select("document_kind, verification_state")
+      .eq("transaction_id", transactionId);
+    if (activeBuyerIdCount(existing ?? []) >= BUYER_ID_COUNT) {
+      return { error: "You have already uploaded two valid IDs." };
+    }
+  }
 
   const fileExt = file.name.split(".").pop() ?? "bin";
   const storagePath = `${transactionId}/${documentKind}-${Date.now()}.${fileExt}`;
@@ -137,12 +153,20 @@ export async function saveBuyDetails(formData: FormData) {
 
   const { data: transaction } = await supabase
     .from("transactions")
-    .select("id, customer_id, transaction_kind")
+    .select("id, customer_id, transaction_kind, current_state")
     .eq("id", transactionId)
     .maybeSingle();
   if (!transaction || transaction.customer_id !== user.user.id) return { error: "Transaction not found." };
   if (transaction.transaction_kind !== "buy") {
     return { error: "Purchase details can only be saved for buy transactions." };
+  }
+  // A submitted request keeps its details and slot until the Sales Manager decides.
+  if (transaction.current_state && transaction.current_state !== "pending") {
+    return { error: "This request is already under review and can no longer be changed." };
+  }
+  const slot = schedule ? new Date(schedule) : null;
+  if (slot && arrangement_kind === "gce_visit" && !isVisitSlot(slot)) {
+    return { error: "Pick a future GCE visit slot on the hour." };
   }
 
   const { error } = await supabase.from("purchase_details").upsert(
@@ -158,21 +182,95 @@ export async function saveBuyDetails(formData: FormData) {
   if (error) return { error: error.message };
 
   // Create viewing arrangement if schedule provided.
-  if (schedule) {
+  if (slot) {
+    // Rebooking frees the buyer's previous slot. Customers have no UPDATE on arrangements, so the
+    // release runs with the service role after the ownership check above.
+    await releaseVisitSlots(createAdminClient(), transactionId);
+
     const { error: arrError } = await supabase.from("viewing_arrangements").insert({
       inquiry_id: null, // nullable — linked via purchase_transaction_id
       purchase_transaction_id: transactionId,
       arrangement_kind: arrangement_kind || "gce_visit",
-      schedule: new Date(schedule).toISOString(),
+      schedule: slot.toISOString(),
       location: location || null,
       notes,
     });
 
+    // 23505: the slot lock index (00050) — another buyer holds this car at this time.
+    if (arrError?.code === "23505") return { error: "That visit slot is already taken. Choose another time." };
     if (arrError) return { error: arrError.message };
   }
 
   revalidatePath(`/my-transactions/${transactionId}`);
   revalidatePath(`/dashboard/transactions/${transactionId}`);
+  return { success: true };
+}
+
+// §2 steps 3–4: a Cash + GCE visit request with two IDs and a locked slot goes to the Sales Manager,
+// who has 7 days to decide.
+export async function submitBuyRequest(formData: FormData) {
+  const supabase = await createServerSupabaseClient();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+
+  const transactionId = z.string().uuid().safeParse(formData.get("transaction_id"));
+  if (!transactionId.success) return { error: "Invalid request." };
+
+  const { data: tx } = await supabase
+    .from("transactions")
+    .select("id, customer_id, transaction_kind, current_state, purchase_details(payment_method, arrangement_kind)")
+    .eq("id", transactionId.data)
+    .maybeSingle();
+  if (!tx || tx.customer_id !== user.user.id || tx.transaction_kind !== "buy") {
+    return { error: "Transaction not found." };
+  }
+  if (tx.current_state !== "pending") return { error: "This request is already submitted." };
+
+  const details = (Array.isArray(tx.purchase_details) ? tx.purchase_details[0] : tx.purchase_details) ?? null;
+  if (!isOnsiteCashRequest(details))
+    return { error: "Save Cash as the payment method and GCE Visit as the arrangement." };
+
+  const [{ data: documents }, { data: slot }] = await Promise.all([
+    supabase.from("transaction_documents").select("document_kind, verification_state").eq("transaction_id", tx.id),
+    supabase
+      .from("viewing_arrangements")
+      .select("schedule")
+      .eq("purchase_transaction_id", tx.id)
+      .in("confirmation_state", ["pending", "confirmed"])
+      .maybeSingle(),
+  ]);
+  if (activeBuyerIdCount(documents ?? []) !== BUYER_ID_COUNT) return { error: "Upload two valid IDs first." };
+  if (!slot || !isVisitSlot(new Date(slot.schedule))) return { error: "Book a future GCE visit slot first." };
+
+  // Customers cannot move their own request into review under RLS; ownership is checked above.
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("transactions")
+    .update({ current_state: "under_review", flow_status: "pending_sm_approval", review_due_at: reviewDueAt() })
+    .eq("id", tx.id)
+    .eq("current_state", "pending");
+  if (error) return { error: error.message };
+
+  await admin.from("transaction_status_history").insert({
+    transaction_id: tx.id,
+    from_state: "pending",
+    to_state: "under_review",
+    actor_id: user.user.id,
+    reason: "Buyer submitted a Cash request with a GCE visit slot",
+  });
+  await notify(
+    admin,
+    { role: "sales_manager" },
+    {
+      kind: "buy_request_submitted",
+      title: "New buyer request to review",
+      body: `A Cash buyer booked a GCE visit on ${new Date(slot.schedule).toLocaleString("en-PH")}. Review within 7 days.`,
+      transactionId: tx.id,
+    },
+  );
+
+  revalidatePath(`/my-transactions/${tx.id}`);
+  revalidatePath("/dashboard/transactions");
   return { success: true };
 }
 
@@ -495,6 +593,9 @@ export async function cancelTransaction(formData: FormData) {
   });
 
   if (historyError) return { error: historyError.message };
+
+  // A cancelled request gives its visit slot back to other buyers.
+  await releaseVisitSlots(createAdminClient(), id);
 
   revalidatePath(`/my-transactions/${id}`);
   revalidatePath("/my-transactions");

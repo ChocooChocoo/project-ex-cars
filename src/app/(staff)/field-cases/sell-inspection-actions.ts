@@ -5,9 +5,9 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { getCurrentRole } from "@/app/auth/actions";
+import { notify } from "@/lib/notifications/notify";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { notify } from "@/lib/transactions/sell-flow-server";
 
 type FieldActionResult = { error: string } | { success: true };
 

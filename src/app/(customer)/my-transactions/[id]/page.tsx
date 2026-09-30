@@ -66,6 +66,13 @@ export default async function MyTransactionDetailPage({ params }: { readonly par
 
   const autofill = await getProfileAutoFill();
 
+  // §2 step 3: times already locked by other buyers for this car (no buyer details exposed).
+  const vehicleId = (transaction as Record<string, unknown>).vehicle_id as string | null;
+  const { data: takenSlots } =
+    (transaction as Record<string, unknown>).transaction_kind === "buy" && vehicleId
+      ? await supabase.rpc("list_taken_visit_slots", { p_vehicle_id: vehicleId })
+      : { data: null };
+
   // Selling step 5: the offer's negotiation thread with the Marketing Specialist.
   const { data: negotiationThread } = await supabase
     .from("inquiries")
@@ -85,6 +92,7 @@ export default async function MyTransactionDetailPage({ params }: { readonly par
         viewingArrangements={(viewingArrangements as Record<string, unknown>[]) ?? []}
         autofill={autofill}
         negotiationThreadId={(negotiationThread as { id: string } | null)?.id ?? null}
+        takenSlots={((takenSlots as { schedule: string }[] | null) ?? []).map((slot) => slot.schedule)}
       />
     </div>
   );

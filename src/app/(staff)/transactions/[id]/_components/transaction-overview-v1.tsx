@@ -27,7 +27,7 @@ export interface ApprovalStage {
   readonly status: ApprovalStageStatus;
 }
 
-// Task 32 approval provenance: Processed (Sales) → Verified (HA) → Approved (CEO) → Sold.
+// Approval provenance (T01 Q0a): Processed (Sales) → Verified → Approved (Sales Manager) → Sold.
 // History/documents are optional so the ladder also works from state alone when the
 // parent does not pass them (page.tsx is orchestrator-owned and cannot be edited here).
 export function deriveApprovalStages(args: {
@@ -74,9 +74,9 @@ export function deriveApprovalStages(args: {
 
   const defs = [
     { key: "processed", label: "Processed", owner: "Sales" },
-    { key: "verified", label: "Verified", owner: "Head Accountant" },
-    { key: "approved", label: "Approved", owner: "CEO" },
-    { key: "sold", label: "Sold", owner: "Completed" },
+    { key: "verified", label: "Verified", owner: "Sales Manager" },
+    { key: "approved", label: "Approved", owner: "Sales Manager" },
+    { key: "sold", label: "Sold", owner: "Mark Sold to This Buyer" },
   ] as const;
 
   return defs.map((def, index) => ({
@@ -152,7 +152,7 @@ export function TransactionOverviewV1({
       <Card className="shadow-xs">
         <CardHeader className="px-4">
           <CardTitle>Approval flow</CardTitle>
-          <CardDescription>Processed (Sales) → Verified (HA) → Approved (CEO) → Sold</CardDescription>
+          <CardDescription>Processed (Sales) → Verified → Approved (Sales Manager) → Sold</CardDescription>
         </CardHeader>
         <CardContent className="px-4">
           <ol className="grid grid-cols-1 gap-2 sm:grid-cols-4">

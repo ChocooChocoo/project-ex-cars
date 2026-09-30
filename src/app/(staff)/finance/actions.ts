@@ -5,9 +5,10 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { getCurrentRole } from "@/app/auth/actions";
+import { notify } from "@/lib/notifications/notify";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { loadSellTransaction, moveSellTransaction, notify } from "@/lib/transactions/sell-flow-server";
+import { loadSellTransaction, moveSellTransaction } from "@/lib/transactions/sell-flow-server";
 import { disbursementEventSchema, disbursementRequestSchema, financialEntrySchema } from "@/lib/validation/phase6";
 
 type Phase6ActionResult = { error: string } | { success: true };

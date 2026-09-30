@@ -21,24 +21,21 @@ const stateTone: Record<TransactionState, string> = {
 const TRANSACTION_ACTION_LABELS: Record<TransactionState, string> = {
   pending: "Move to Pending",
   under_review: "Move to Review",
-  // CEO-only approve: under_review → approved/rejected is restricted to the CEO in
-  // state-machine.ts, so non-CEO roles never see these buttons (no fallback label needed).
-  approved: "Approve (CEO)",
-  rejected: "Reject (CEO)",
-  completed: "Complete",
+  approved: "Approve",
+  rejected: "Reject",
+  completed: "Mark Sold to This Buyer",
   cancelled: "Cancel",
 };
 
-// Task 32 flow: Sales processes → Head Accountant verifies → CEO approves/rejects → car sold.
-// Price is proposed by Sales (valuation / price proposal) and approved by the CEO;
-// the CEO does not set the price after payment.
+// GCE Process Flows §2 (T01 Q0a): the buyer submits → the Sales Manager verifies the documents and
+// approves or rejects within 7 days → the buyer visits → Mark Sold to This Buyer once paid.
 const STATE_GUIDANCE: Record<TransactionState, (kind: string) => string> = {
-  pending: (kind) => `This ${kind} transaction is pending. Sales processes it first (pending → under review).`,
+  pending: (kind) => `This ${kind} request is still with the buyer, or waits for Sales to move it into review.`,
   under_review: (kind) =>
-    `This ${kind} transaction is under review. The Head Accountant must verify documents (2 valid IDs + proof of billing) before the CEO can approve. CEO approval is required to proceed.`,
+    `This ${kind} request is waiting for the Sales Manager (7-day window). Verify 2 valid IDs and the proof of billing, then approve or reject.`,
   approved: (kind) =>
-    `This ${kind} transaction is approved by the CEO. Complete it to mark the car sold and record final paperwork.`,
-  rejected: (kind) => `This ${kind} transaction was rejected by the CEO and can no longer be advanced.`,
+    `This ${kind} request is approved. After the visit, record the payment and mark the car sold, or record that the buyer declined.`,
+  rejected: (kind) => `This ${kind} request was rejected and its visit slot released.`,
   cancelled: (kind) => `This ${kind} transaction was cancelled and can no longer be advanced.`,
   completed: (kind) => `This ${kind} transaction is completed and the car is marked sold. All required steps are done.`,
 };
@@ -52,6 +49,7 @@ export function TransactionStatusTriageV1({
   userRole,
   transitioning,
   onTransition,
+  onBuyerDeclined,
 }: {
   readonly state: TransactionState;
   readonly kind: string;
@@ -61,13 +59,11 @@ export function TransactionStatusTriageV1({
   readonly userRole: string;
   readonly transitioning: boolean;
   readonly onTransition: (to: TransactionState) => Promise<void>;
+  readonly onBuyerDeclined?: () => Promise<void>;
 }) {
   const daysOpen = Math.max(0, Math.floor((Date.now() - new Date(openedAt).getTime()) / 86_400_000));
   const allowed = getAllowedTransitions(state, userRole);
-  // CEO-only approve: under_review → approved/rejected is CEO-only in TRANSITION_RULES,
-  // so only the CEO ever sees Approve/Reject buttons. Non-CEO viewers on under_review
-  // get an explanatory note instead.
-  const showCeoOnlyNote = userRole !== "ceo" && state === "under_review";
+  const canRecordDecline = kind === "buy" && state === "approved" && ["sales_manager", "ceo"].includes(userRole);
 
   return (
     <Card className="shadow-xs">
@@ -97,44 +93,42 @@ export function TransactionStatusTriageV1({
         <p className="text-muted-foreground text-xs">{STATE_GUIDANCE[state](kind)}</p>
 
         {allowed.length > 0 ? (
-          <>
-            {showCeoOnlyNote ? (
-              <p className="rounded-md border border-dashed bg-muted/10 px-3 py-2 text-muted-foreground text-xs">
-                Approval is CEO-only. The Head Accountant verifies documents first, then the CEO approves or rejects.
-              </p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            {allowed.map((to) => (
+              <button
+                key={to}
+                type="button"
+                disabled={transitioning}
+                onClick={() => onTransition(to)}
+                className="space-y-1 rounded-md border bg-muted/20 px-2.5 py-2 text-left transition-colors hover:bg-muted/35 disabled:opacity-50"
+              >
+                <div className="text-muted-foreground text-xs">Transition</div>
+                <div className="font-semibold text-sm capitalize">{TRANSACTION_ACTION_LABELS[to]}</div>
+                <div className="text-muted-foreground text-xs">
+                  Mark as {TRANSACTION_STATE_LABELS[to].toLowerCase()}
+                </div>
+              </button>
+            ))}
+            {canRecordDecline && onBuyerDeclined ? (
+              <button
+                type="button"
+                disabled={transitioning}
+                onClick={() => onBuyerDeclined()}
+                className="space-y-1 rounded-md border bg-muted/20 px-2.5 py-2 text-left transition-colors hover:bg-muted/35 disabled:opacity-50"
+              >
+                <div className="text-muted-foreground text-xs">Visit outcome</div>
+                <div className="font-semibold text-sm">Buyer declined</div>
+                <div className="text-muted-foreground text-xs">Close the request; the car stays listed</div>
+              </button>
             ) : null}
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              {allowed.map((to) => (
-                <button
-                  key={to}
-                  type="button"
-                  disabled={transitioning}
-                  onClick={() => onTransition(to)}
-                  className="space-y-1 rounded-md border bg-muted/20 px-2.5 py-2 text-left transition-colors hover:bg-muted/35 disabled:opacity-50"
-                >
-                  <div className="text-muted-foreground text-xs">Transition</div>
-                  <div className="font-semibold text-sm capitalize">{TRANSACTION_ACTION_LABELS[to]}</div>
-                  <div className="text-muted-foreground text-xs">
-                    Mark as {TRANSACTION_STATE_LABELS[to].toLowerCase()}
-                  </div>
-                </button>
-              ))}
-            </div>
-          </>
+          </div>
         ) : (
-          <>
-            {showCeoOnlyNote ? (
-              <p className="rounded-md border border-dashed bg-muted/10 px-3 py-2 text-muted-foreground text-xs">
-                Approval is CEO-only. The Head Accountant verifies documents first, then the CEO approves or rejects.
-              </p>
-            ) : null}
-            <div className="space-y-1 rounded-md border border-dashed bg-muted/10 px-3 py-2.5">
-              <p className="text-muted-foreground text-xs">
-                No transitions:{" "}
-                <span className="font-medium text-foreground">this transaction is in a terminal state.</span>
-              </p>
-            </div>
-          </>
+          <div className="space-y-1 rounded-md border border-dashed bg-muted/10 px-3 py-2.5">
+            <p className="text-muted-foreground text-xs">
+              No transitions:{" "}
+              <span className="font-medium text-foreground">this transaction is in a terminal state.</span>
+            </p>
+          </div>
         )}
 
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/20 px-3 py-2">

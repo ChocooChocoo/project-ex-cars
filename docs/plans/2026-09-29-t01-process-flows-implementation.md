@@ -114,6 +114,14 @@ This plan orders that work so each phase ships a complete, testable flow. Later 
 
 ### Phase 2: Buying, Cash Onsite Visit (§2)
 **Gate:** Q0a answered (D1).
+
+**Status:** ✅ Implemented (2026-09-30), migration `00050_t01_phase2_onsite_visit.sql`. Q0a chosen by the team (client to confirm): the Sales Manager approves buyer requests; the CEO keeps an override. The Sales Manager also verifies a buyer's IDs and proof of billing (Head Accountant still can).
+- [x] Slot lock (vehicle-derived `vehicle_id`, unique live booking per car and hour, taken-slot RPC), rebooking frees the old slot, release on reject/cancel, kept while overdue
+- [x] Buyer submits Cash + GCE visit with exactly 2 IDs → `pending_sm_approval` + 7-day window; overdue notifies the Sales Manager
+- [x] Approve/reject notify the buyer; Buyer declined (`declined_by_buyer`); Mark Sold to This Buyer (needs a recorded payment; closes and notifies other open requests — Q13 default)
+- [x] Head Accountant sale records in Finance; migration SQL test, rule tests, unit suite green
+- [ ] e2e `src/tests/e2e/t01-phase2-onsite-visit.spec.ts` written but not run: needs `00050` applied and the dev server
+- Kept from Task 32: proof of billing is still required before approval and sale (the process doc names only 2 IDs).
 - Guided buy flow in `transaction-detail.tsx`: credentials, exactly 2 IDs enforced server-side, Cash, then GCE visit slot.
 - **Slot lock.** Add `viewing_arrangements.vehicle_id` (backfill from `inquiries.vehicle_id`, NOT NULL after backfill). Add a partial UNIQUE index on (`vehicle_id`, `schedule`) WHERE `confirmation_state IN ('pending','confirmed')`. Availability check comes before submit. The lock is held from booking, released on rejection (set `confirmation_state='cancelled'`), and kept while overdue.
 - Review by the Q0a approver: `pending_sm_approval` with a 7-day window. Approve or reject; reject notifies the buyer and releases the slot.
@@ -169,7 +177,7 @@ Plan each one only once the client supplies its text.
 
 | # | Question |
 |---|---|
-| Q0a | Buyer requests: does the Sales Manager approve alone, as the process doc says? Or does the Task 32 chain (Sales → HA verify → CEO approve) stay? (D1) |
+| Q0a | Buyer requests: does the Sales Manager approve alone, as the process doc says? Or does the Task 32 chain (Sales → HA verify → CEO approve) stay? (D1) **Chosen 2026-09-30 by the team: Sales Manager, CEO as override — client to confirm.** |
 | Q0b | Sell offers: does the Marketing Specialist verify, propose the ceiling and negotiate, as the process doc says? Or does the Sales Manager keep the valuation, as Task 32 built? (D2) **Answered 2026-09-30: Marketing Specialist.** |
 
 **From source Appendix E and the plan review**

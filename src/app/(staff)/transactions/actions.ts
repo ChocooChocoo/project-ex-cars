@@ -6,12 +6,14 @@ import { z } from "zod";
 
 import { getCurrentRole } from "@/app/auth/actions";
 import { logAuditEvent } from "@/lib/auth/audit";
+import { notify } from "@/lib/notifications/notify";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { finalizeBuySale, releaseVisitSlots } from "@/lib/transactions/buy-flow-server";
 import { generateInstallmentSchedule } from "@/lib/transactions/installments";
 import { SELL_PAPER_KINDS } from "@/lib/transactions/sell-flow";
 import type { TransactionState } from "@/lib/transactions/state-machine";
-import { canTransition } from "@/lib/transactions/state-machine";
+import { canTransition, reviewDueAt } from "@/lib/transactions/state-machine";
 import { fieldCaseCreateSchema } from "@/lib/validation/phase6";
 import { paymentRecordSchema, paymentTermsSchema, transitionSchema } from "@/lib/validation/transactions";
 
@@ -49,7 +51,7 @@ export async function transitionTransaction(formData: FormData) {
 
   const { data: tx } = await supabase
     .from("transactions")
-    .select("current_state, transaction_kind, vehicle_id")
+    .select("current_state, transaction_kind, vehicle_id, customer_id")
     .eq("id", id)
     .single();
 
@@ -66,9 +68,8 @@ export async function transitionTransaction(formData: FormData) {
   // Use admin client for state transitions (bypass RLS for role-gated logic).
   const admin = await createAdminClient();
 
-  // Task 32: HA verification precedes CEO approval. Two verified valid IDs +
-  // proof of billing are required before a purchase is approved (not only at
-  // completion), so the CEO cannot approve an unverified transaction (G16).
+  // Two verified valid IDs + proof of billing are required before a purchase is
+  // approved (not only at completion), so no unverified request is approved (G16).
   if (toState === "approved" && tx.transaction_kind === "buy") {
     const [{ count: verifiedIds }, { count: verifiedBilling }] = await Promise.all([
       admin
@@ -87,7 +88,7 @@ export async function transitionTransaction(formData: FormData) {
     if ((verifiedIds ?? 0) < 2 || (verifiedBilling ?? 0) < 1) {
       return {
         error:
-          "Two verified valid IDs and a verified proof of billing are required before approval. Ask the Head Accountant to verify the documents first.",
+          "Two verified valid IDs and a verified proof of billing are required before approval. Verify the buyer's documents first.",
       };
     }
   }
@@ -113,6 +114,12 @@ export async function transitionTransaction(formData: FormData) {
         error: "Two verified valid IDs and a verified proof of billing are required before completing this purchase.",
       };
     }
+    // §2 step 6: the car is marked sold once the payment is received.
+    const { count: payments } = await admin
+      .from("payment_records")
+      .select("id", { count: "exact", head: true })
+      .eq("transaction_id", id);
+    if (!payments) return { error: "Record the buyer's payment before marking the car sold." };
   }
 
   const { error } = await admin
@@ -120,6 +127,10 @@ export async function transitionTransaction(formData: FormData) {
     .update({
       current_state: toState,
       completed_at: ["completed", "cancelled", "rejected"].includes(toState) ? new Date().toISOString() : null,
+      // Entering review opens the Sales Manager's 7-day window; any decision closes it.
+      ...(toState === "under_review"
+        ? { flow_status: "pending_sm_approval", review_due_at: reviewDueAt() }
+        : { flow_status: null, review_due_at: null }),
     })
     .eq("id", id);
 
@@ -134,9 +145,24 @@ export async function transitionTransaction(formData: FormData) {
     reason,
   });
 
-  // Auto-set vehicle to sold when buy is completed.
-  if (toState === "completed" && tx.transaction_kind === "buy" && tx.vehicle_id) {
-    await admin.from("vehicles").update({ listing_state: "sold" }).eq("id", tx.vehicle_id);
+  if (tx.transaction_kind === "buy") {
+    if (toState === "completed") await finalizeBuySale(admin, { id, vehicle_id: tx.vehicle_id }, user.user.id);
+    if (toState === "rejected" || toState === "cancelled") await releaseVisitSlots(admin, id);
+    if (toState === "approved" || toState === "rejected") {
+      await notify(
+        admin,
+        { userId: tx.customer_id },
+        {
+          kind: `buy_request_${toState}`,
+          title: toState === "approved" ? "Your purchase request is approved" : "Your purchase request was rejected",
+          body:
+            toState === "approved"
+              ? "GCE will expect you on your scheduled visit."
+              : `GCE did not approve your request.${reason ? ` Reason: ${reason}` : ""} Your visit slot has been released.`,
+          transactionId: id,
+        },
+      );
+    }
   }
 
   await logAuditEvent({
@@ -149,6 +175,59 @@ export async function transitionTransaction(formData: FormData) {
 
   revalidatePath("/dashboard/transactions");
   revalidatePath(`/dashboard/transactions/${id}`);
+  return { success: true };
+}
+
+// §2 step 5: the buyer saw the car and declined. The car was never reserved, so it stays listed.
+export async function recordBuyerDecline(formData: FormData) {
+  const supabase = await createServerSupabaseClient();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+  const role = await getCurrentRole();
+  if (!role || !["sales_manager", "ceo"].includes(role))
+    return { error: "Only the Sales Manager records the visit outcome." };
+
+  const parsed = z
+    .object({ transaction_id: z.string().uuid(), reason: z.string().trim().max(500).optional().or(z.literal("")) })
+    .safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: "Invalid request." };
+
+  const admin = createAdminClient();
+  const { data: tx } = await admin
+    .from("transactions")
+    .select("id, current_state, transaction_kind")
+    .eq("id", parsed.data.transaction_id)
+    .maybeSingle();
+  if (tx?.transaction_kind !== "buy") return { error: "Transaction not found." };
+  if (tx.current_state !== "approved") return { error: "Only an approved request can be declined at the visit." };
+
+  const { error } = await admin
+    .from("transactions")
+    .update({
+      current_state: "cancelled",
+      flag: "declined_by_buyer",
+      flow_status: null,
+      review_due_at: null,
+      completed_at: new Date().toISOString(),
+    })
+    .eq("id", tx.id);
+  if (error) return { error: error.message };
+
+  await admin.from("transaction_status_history").insert({
+    transaction_id: tx.id,
+    from_state: "approved",
+    to_state: "cancelled",
+    actor_id: user.user.id,
+    reason: `Declined by buyer${parsed.data.reason ? `: ${parsed.data.reason}` : ""}`,
+  });
+  await admin
+    .from("viewing_arrangements")
+    .update({ confirmation_state: "completed" })
+    .eq("purchase_transaction_id", tx.id)
+    .in("confirmation_state", ["pending", "confirmed"]);
+
+  revalidatePath("/dashboard/transactions");
+  revalidatePath(`/dashboard/transactions/${tx.id}`);
   return { success: true };
 }
 
@@ -438,7 +517,7 @@ export async function verifyTransactionDocument(formData: FormData) {
   // the CEO approves.  Verification is deliberately not open to the approving or
   // processing roles, so nobody can verify the paperwork for their own approval.
   // T01 Selling step 2: the Marketing Specialist verifies a seller's papers (checked per document below).
-  if (role !== "head_accountant" && role !== "marketing_specialist") {
+  if (!role || !["head_accountant", "marketing_specialist", "sales_manager"].includes(role)) {
     return { error: "Not authorized to verify purchase documents" };
   }
 
@@ -467,11 +546,19 @@ export async function verifyTransactionDocument(formData: FormData) {
     .maybeSingle();
   const isSellPaper =
     parent?.transaction_kind === "sell" && (SELL_PAPER_KINDS as readonly string[]).includes(doc.document_kind);
-  if (isSellPaper !== (role === "marketing_specialist")) {
+  // §2 step 4: the Sales Manager checks a buyer's IDs and proof of billing; the Head Accountant
+  // still verifies the rest.
+  const allowed = isSellPaper
+    ? role === "marketing_specialist"
+    : role === "head_accountant" ||
+      (role === "sales_manager" &&
+        parent?.transaction_kind === "buy" &&
+        ["valid_id", "proof_of_billing"].includes(doc.document_kind));
+  if (!allowed) {
     return {
       error: isSellPaper
         ? "The Marketing Specialist verifies a seller's papers."
-        : "The Head Accountant verifies this document.",
+        : "This document is verified by the Head Accountant.",
     };
   }
 

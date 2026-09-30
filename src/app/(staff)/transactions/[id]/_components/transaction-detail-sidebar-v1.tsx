@@ -114,10 +114,14 @@ export function TransactionDetailSidebarV1({
   // the server-side guard in verifyTransactionDocument.
   const isHeadAccountant = userRole === "head_accountant";
   // T01 Selling step 2: the Marketing Specialist verifies a seller's papers; the Head Accountant the rest.
+  // §2 step 4: the Sales Manager checks a buyer's IDs and proof of billing.
   const canVerify = (documentKind: unknown) =>
     kind === "sell" && (SELL_PAPER_KINDS as readonly unknown[]).includes(documentKind)
       ? userRole === "marketing_specialist"
-      : isHeadAccountant;
+      : isHeadAccountant ||
+        (userRole === "sales_manager" &&
+          kind === "buy" &&
+          ["valid_id", "proof_of_billing"].includes(String(documentKind)));
 
   const docSellPhotos = documents.filter((doc) => String(doc.document_kind) === "sell_photo");
   const photos =

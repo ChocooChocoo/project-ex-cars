@@ -5,6 +5,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 
 import { type FieldExpenseRow, FieldExpensesCard } from "./_components/field-expenses-card";
 import { type DisbursementRow, FinanceClient, type FinancialEntryRow } from "./_components/finance-client";
+import { type SaleRecordRow, SaleRecordsCard } from "./_components/sale-records-card";
 
 const FINANCE_ROLES = ["ceo", "head_accountant", "account_manager", "confidential_informant"];
 
@@ -40,6 +41,7 @@ export default async function FinancePage() {
     { data: purchaseTransactions },
     { data: clearedSells },
     { data: fieldExpenses },
+    { data: saleRecords },
   ] = await Promise.all([
     entriesQuery,
     disbursementsQuery,
@@ -65,6 +67,16 @@ export default async function FinancePage() {
       )
       .is("reimbursed_at", null)
       .order("submitted_at", { ascending: true }),
+    // §2 step 7: completed sales, for the Head Accountant's records.
+    supabase
+      .from("transactions")
+      .select(
+        "id, completed_at, vehicles(make, model, year, stock_code), profiles(full_name), purchase_details(final_price, payment_method), payment_records(amount)",
+      )
+      .eq("transaction_kind", "buy")
+      .eq("current_state", "completed")
+      .order("completed_at", { ascending: false })
+      .limit(100),
   ]);
 
   return (
@@ -86,6 +98,9 @@ export default async function FinancePage() {
         canRequestPurchaseFunds={!isInformant && ["ceo", "account_manager"].includes(role)}
         isInformant={isInformant}
       />
+      {["ceo", "head_accountant"].includes(role) ? (
+        <SaleRecordsCard sales={(saleRecords as unknown as SaleRecordRow[]) ?? []} />
+      ) : null}
       {["ceo", "head_accountant"].includes(role) ? (
         <FieldExpensesCard
           expenses={(fieldExpenses as unknown as FieldExpenseRow[]) ?? []}
