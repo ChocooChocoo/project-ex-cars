@@ -1,5 +1,7 @@
 import { expect as baseExpect, type Page, test } from "@playwright/test";
 
+import { archiveListedTestVehicles, canCreateTestVehicle, createTestVehicle } from "./support/test-vehicle";
+
 // The dev server compiles each route on first use, so a refresh after a server action can take
 // longer than Playwright's default 5 s.
 const expect = baseExpect.configure({ timeout: 20_000 });
@@ -7,7 +9,7 @@ const expect = baseExpect.configure({ timeout: 20_000 });
 // T01 Phase 2 — Buying Scenario 1, Cash Purchase: Onsite Visit (GCE Process Flows §2):
 // buyer books a locked visit slot → a second request cannot take it → Sales Manager verifies and
 // approves → payment recorded → Mark Sold to This Buyer (the other request closes) → Head Accountant
-// sees the sale. Needs migration 00050 applied and at least one available car in the showroom.
+// sees the sale. Needs migration 00050 applied; the spec lists its own E2E-T01 test car.
 
 const seedPassword = process.env.SEED_USER_PASSWORD;
 
@@ -72,7 +74,11 @@ async function upload(page: Page, kind: "Valid ID" | "Proof of Billing", idType?
 
 test.describe
   .serial("T01 Phase 2 cash onsite visit", () => {
-    test.skip(!seedPassword, "SEED_USER_PASSWORD required");
+    test.skip(
+      !seedPassword || !canCreateTestVehicle(),
+      "SEED_USER_PASSWORD and the Supabase service role are required",
+    );
+    test.afterAll(archiveListedTestVehicles);
 
     let vehiclePath = "";
     let buyId = "";
@@ -80,9 +86,7 @@ test.describe
 
     test("buyer books a locked slot and submits the request", async ({ page }) => {
       await signInAs(page, "customer@gce.local");
-      await page.goto("/customer/showroom");
-      const car = page.locator('a[href*="/showroom/"]').first();
-      vehiclePath = new URL((await car.getAttribute("href")) ?? "", page.url()).pathname;
+      vehiclePath = `/customer/showroom/${await createTestVehicle("ONSITE")}`;
       buyId = await startPurchase(page, vehiclePath);
 
       await upload(page, "Valid ID", "Passport");

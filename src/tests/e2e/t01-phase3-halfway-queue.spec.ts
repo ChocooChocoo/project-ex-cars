@@ -1,5 +1,7 @@
 import { expect as baseExpect, type Page, test } from "@playwright/test";
 
+import { archiveListedTestVehicles, canCreateTestVehicle, createTestVehicle } from "./support/test-vehicle";
+
 // The dev server compiles each route on first use, so a refresh after a server action can take
 // longer than Playwright's default 5 s.
 const expect = baseExpect.configure({ timeout: 20_000 });
@@ -8,7 +10,7 @@ const expect = baseExpect.configure({ timeout: 20_000 });
 // two requests for one car → the first is Active, the second On Hold → the Sales Manager rejects the
 // Active one and promotes the next by hand → approves it and marks the car sold.
 // The no-show path needs a meet-up 2h30m in the past, so it is covered by unit tests, not here.
-// Needs migration 00051 applied and at least one available car in the showroom.
+// Needs migration 00051 applied; the spec lists its own E2E-T01 test car.
 
 const seedPassword = process.env.SEED_USER_PASSWORD;
 
@@ -85,16 +87,18 @@ async function verifyAll(page: Page) {
 
 test.describe
   .serial("T01 Phase 3 halfway queue", () => {
-    test.skip(!seedPassword, "SEED_USER_PASSWORD required");
+    test.skip(
+      !seedPassword || !canCreateTestVehicle(),
+      "SEED_USER_PASSWORD and the Supabase service role are required",
+    );
+    test.afterAll(archiveListedTestVehicles);
 
     let firstId = "";
     let secondId = "";
 
     test("the first request is Active and the second waits On Hold", async ({ page }) => {
       await signInAs(page, "customer@gce.local");
-      await page.goto("/customer/showroom");
-      const car = page.locator('a[href*="/showroom/"]').first();
-      const vehiclePath = new URL((await car.getAttribute("href")) ?? "", page.url()).pathname;
+      const vehiclePath = `/customer/showroom/${await createTestVehicle("HALFWAY")}`;
 
       firstId = await requestHalfway(page, vehiclePath);
       await expect(page.getByText("Pending Sales Manager Approval").first()).toBeVisible();

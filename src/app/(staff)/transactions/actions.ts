@@ -151,10 +151,13 @@ export async function transitionTransaction(formData: FormData) {
     .update({
       current_state: toState,
       completed_at: ["completed", "cancelled", "rejected"].includes(toState) ? new Date().toISOString() : null,
-      // Entering review opens the Sales Manager's 7-day window; any decision closes it.
+      // Entering review opens the Sales Manager's 7-day window; any decision closes it. A financed sale
+      // keeps "In-House Financing — Active": the account carries on after the car is sold.
       ...(toState === "under_review"
         ? { flow_status: "pending_sm_approval", review_due_at: reviewDueAt() }
-        : { flow_status: null, review_due_at: null }),
+        : toState === "completed" && financing
+          ? { review_due_at: null }
+          : { flow_status: null, review_due_at: null }),
     })
     .eq("id", id);
 
