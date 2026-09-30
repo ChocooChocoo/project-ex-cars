@@ -163,7 +163,8 @@ export function createColumns(
                       Edit
                     </DropdownMenuItem>
                   ) : null}
-                  {canManage && state === "draft" && (
+                  {/* §6 step 38: a reconditioned repossessed car ("repairing") is repriced from here too. */}
+                  {canManage && (state === "draft" || state === "repairing") && (
                     <DropdownMenuItem onClick={() => onProposePrice(vehicle)}>
                       <DollarSign className="mr-2 size-4" />
                       Propose Price

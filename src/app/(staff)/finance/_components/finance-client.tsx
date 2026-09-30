@@ -84,7 +84,8 @@ const ENTRY_LABELS: Record<FinancialEntryKind, string> = {
 };
 
 const DISBURSEMENT_FLOW: Record<string, { label: string; next: string | null }> = {
-  draft: { label: "Draft", next: null },
+  // Requests are created as drafts; the server moves draft → approved, so the button must too.
+  draft: { label: "Draft", next: "approved" },
   submitted: { label: "Submitted", next: "approved" },
   approved: { label: "Approved", next: "released" },
   rejected: { label: "Rejected", next: null },
@@ -92,6 +93,12 @@ const DISBURSEMENT_FLOW: Record<string, { label: string; next: string | null }> 
   received: { label: "Received", next: "paid" },
   paid: { label: "Paid", next: null },
 };
+
+// The amount fields are entered in pesos and stored in centavos (the tables divide by 100 to display).
+function toCents(pesos: string): string {
+  const value = Number(pesos);
+  return Number.isFinite(value) ? String(Math.round(value * 100)) : pesos;
+}
 
 const DISBURSEMENT_EVENT_LABELS: Record<string, string> = {
   submitted: "Submit",
@@ -150,7 +157,7 @@ export function FinanceClient({
     setEntryError(null);
     const fd = new FormData();
     fd.set("entry_kind", entryKind);
-    fd.set("amount_cents", entryAmount);
+    fd.set("amount_cents", toCents(entryAmount));
     fd.set("description", entryDescription);
     const result = await recordFinancialEntry(fd);
     setLoading(false);
@@ -170,7 +177,7 @@ export function FinanceClient({
     setRequestError(null);
     const fd = new FormData();
     fd.set("title", requestTitle);
-    fd.set("amount_cents", requestAmount);
+    fd.set("amount_cents", toCents(requestAmount));
     fd.set("purpose", requestPurpose);
     fd.set("notes", requestNotes);
     const result = await createDisbursementRequest(fd);
@@ -193,7 +200,7 @@ export function FinanceClient({
     setFundError(null);
     const fd = new FormData();
     fd.set("transaction_id", fundTransactionId);
-    fd.set("amount_cents", fundAmount);
+    fd.set("amount_cents", toCents(fundAmount));
     fd.set("notes", fundNotes);
     const result = await requestPurchaseFunds(fd);
     setLoading(false);

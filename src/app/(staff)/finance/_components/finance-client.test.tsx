@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { FinanceClient, type FinancialEntryRow, getFinanceSummary } from "./finance-client";
@@ -157,6 +157,38 @@ describe("FinanceClient", () => {
     );
     expect(screen.getByText(/You are viewing your own disbursement requests/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Record Entry" })).not.toBeInTheDocument();
+  });
+
+  it("lets finance roles approve a draft disbursement", () => {
+    render(
+      <FinanceClient
+        entries={[]}
+        disbursements={[
+          {
+            id: "d2",
+            title: "Car purchase fund",
+            amount_cents: 48_000_000,
+            purpose: "seller payment",
+            status: "draft",
+            notes: null,
+            requested_by: "u1",
+            purchase_transaction_id: null,
+            created_at: new Date().toISOString(),
+          },
+        ]}
+        purchaseTransactions={[]}
+        canRecord
+        canVerify
+        canRequest
+        canAdvance
+        canRequestPurchaseFunds
+        isInformant={false}
+      />,
+    );
+    const tab = screen.getByRole("tab", { name: /Disbursements/ });
+    fireEvent.mouseDown(tab);
+    fireEvent.click(tab);
+    expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
   });
 
   it("finance-client informant cannot see Record button", () => {
