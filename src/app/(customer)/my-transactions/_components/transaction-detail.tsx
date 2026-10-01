@@ -43,11 +43,11 @@ import { Textarea } from "@/components/ui/textarea";
 import type { ProfileAutoFill } from "@/lib/autofill";
 import {
   activeBuyerIdCount,
-  balanceMethodPhrase,
   DELIVERY_STATUS_LABELS,
   DELIVERY_STATUSES,
   type DeliveryStatus,
-  isFinancingVisitRequest,
+  deliveryBalanceNote,
+  isFinancingRequest,
   isOnsiteCashRequest,
   isQueuedRequest,
 } from "@/lib/transactions/buy-flow";
@@ -233,7 +233,10 @@ export function TransactionDetail({
   const onsiteCashSaved = isOnsiteCashRequest(purchaseDetails ?? null);
   const queuedCashSaved = isQueuedRequest(purchaseDetails ?? null);
   // §6: a financing buyer books the inspection visit only after the financing is approved.
-  const financingSaved = isFinancingVisitRequest(purchaseDetails ?? null);
+  const financingSaved = isFinancingRequest(purchaseDetails ?? null);
+  // §10/§11: a financed meet-up or delivery books a time and place instead of a GCE visit slot.
+  const offerKind = (purchaseDetails?.arrangement_kind as string | undefined) ?? "gce_visit";
+  const financedDelivery = offerKind === "delivery";
   const flowStatus = (transaction.flow_status as string | null) ?? null;
   const [visitAt, setVisitAt] = useState("");
   const [responding, setResponding] = useState(false);
@@ -244,12 +247,17 @@ export function TransactionDetail({
     fd.set("transaction_id", id);
     fd.set("decision", decision);
     if (visitAt) fd.set("schedule", new Date(visitAt).toISOString());
+    fd.set("location", location);
     const result = await respondToFinancingOffer(fd);
     setResponding(false);
     if (result.error) toast.error(result.error);
     else {
       toast.success(
-        decision === "proceed" ? "Visit booked. No payment is taken before you inspect the car." : "Request closed.",
+        decision === "proceed"
+          ? financedDelivery
+            ? "Delivery booked. GCE will confirm the delivery terms."
+            : `${offerKind === "meetup" ? "Meet-up" : "Visit"} booked. No payment is taken before you inspect the car.`
+          : "Request closed.",
       );
       router.refresh();
     }
@@ -583,19 +591,35 @@ export function TransactionDetail({
                 <p className="text-sm">
                   Initial Downpayment {formatCurrency(Number(paymentTerms.down_payment))}, then{" "}
                   {String(paymentTerms.number_of_payments)} monthly payments on a balance of{" "}
-                  {formatCurrency(Number(paymentTerms.total_amount) - Number(paymentTerms.down_payment))}. You pay the
-                  downpayment only after you inspect and accept the car at GCE.
+                  {formatCurrency(Number(paymentTerms.total_amount) - Number(paymentTerms.down_payment))}.{" "}
+                  {financedDelivery
+                    ? "You pay the downpayment before the car is dispatched, and sign the agreement after you accept it on delivery."
+                    : `You pay the downpayment only after you inspect and accept the car at ${offerKind === "meetup" ? "the meet-up" : "GCE"}.`}
                 </p>
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="financing-visit">GCE visit (on the hour)</Label>
+                  <Label htmlFor="financing-visit">
+                    {offerKind === "gce_visit"
+                      ? "GCE visit (on the hour)"
+                      : financedDelivery
+                        ? "Delivery date and time"
+                        : "Meet-up date and time"}
+                  </Label>
                   <Input
                     id="financing-visit"
                     type="datetime-local"
-                    step={3600}
+                    step={offerKind === "gce_visit" ? 3600 : undefined}
                     value={visitAt}
                     onChange={(e) => setVisitAt(e.target.value)}
                   />
-                  {takenSlots.length > 0 ? (
+                  {offerKind !== "gce_visit" ? (
+                    <>
+                      <Label htmlFor="financing-location">
+                        {financedDelivery ? "Delivery address" : "Meet-up location (Calabarzon)"}
+                      </Label>
+                      <Input id="financing-location" value={location} onChange={(e) => setLocation(e.target.value)} />
+                    </>
+                  ) : null}
+                  {offerKind === "gce_visit" && takenSlots.length > 0 ? (
                     <p className="text-muted-foreground text-xs">
                       Already taken: {takenSlots.map((slot) => format(new Date(slot), "MMM d, h:mm a")).join(", ")}.
                     </p>
@@ -603,7 +627,11 @@ export function TransactionDetail({
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button onClick={() => handleFinancingResponse("proceed")} disabled={responding || !visitAt}>
-                    Accept and book visit
+                    {offerKind === "gce_visit"
+                      ? "Accept and book visit"
+                      : financedDelivery
+                        ? "Accept and book delivery"
+                        : "Accept and book meet-up"}
                   </Button>
                   <Button variant="outline" onClick={() => handleFinancingResponse("decline")} disabled={responding}>
                     Don't proceed
@@ -622,8 +650,8 @@ export function TransactionDetail({
                 <p className="text-sm">
                   Delivery fee {formatCurrency(Number(purchaseDetails.delivery_fee ?? 0))} and downpayment{" "}
                   {formatCurrency(Number(purchaseDetails.downpayment_amount ?? 0))} by bank transfer before{" "}
-                  {format(new Date(purchaseDetails.downpayment_due_at as string), "MMM d, yyyy")}. The balance is paid{" "}
-                  {balanceMethodPhrase(purchaseDetails.payment_method)} on delivery.
+                  {format(new Date(purchaseDetails.downpayment_due_at as string), "MMM d, yyyy")}.{" "}
+                  {deliveryBalanceNote(purchaseDetails.payment_method, "buyer")}
                 </p>
                 {purchaseDetails.downpayment_forfeited_at ? (
                   <p className="text-destructive text-sm">Your downpayment was forfeited.</p>

@@ -156,7 +156,7 @@ export const FLOW_STATUS_LABELS: Record<FlowStatus, string> = {
   pending_ceo_approval: "Pending CEO Approval",
   pending_sm_approval: "Pending Sales Manager Approval",
   approved_awaiting_buyer_decision: "Approved — Awaiting Buyer Decision",
-  gce_visit_scheduled_dp_pending: "GCE Visit Scheduled — Initial Downpayment Pending",
+  gce_visit_scheduled_dp_pending: "Visit Scheduled — Initial Downpayment Pending",
   purchase_claim: "Purchase Claim",
   potential_buyer: "Potential Buyer",
   initial_dp_awaiting_verification: "Initial Downpayment — Awaiting Verification",

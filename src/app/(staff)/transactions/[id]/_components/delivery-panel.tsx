@@ -42,6 +42,7 @@ export function DeliveryPanel({
   payments,
   arrangement,
   fieldCase,
+  flowStatus,
   team,
   userRole,
 }: {
@@ -51,6 +52,7 @@ export function DeliveryPanel({
   readonly payments: Row[];
   readonly arrangement: Row | null;
   readonly fieldCase: Row | null;
+  readonly flowStatus: string | null;
   readonly team: DeliveryTeam;
   readonly userRole: string;
 }) {
@@ -82,6 +84,8 @@ export function DeliveryPanel({
   const downpaymentPaid = verifiedPaid(paymentRows, "downpayment");
   const dueAt = purchaseDetails?.downpayment_due_at as string | null;
   const termsSet = Boolean(dueAt);
+  // §11: a financed delivery waits for the buyer to accept the financing offer and book the delivery.
+  const awaitingOffer = purchaseDetails?.payment_method === "financing" && flowStatus !== "purchase_claim" && !termsSet;
   const deadlinePassed = Boolean(dueAt && new Date(dueAt).getTime() < Date.now() && downpaymentPaid < downpayment);
   const status = (fieldCase?.delivery_status as DeliveryStatus | null) ?? null;
 
@@ -124,7 +128,14 @@ export function DeliveryPanel({
           </dl>
         ) : null}
 
-        {canManage && !termsSet ? (
+        {awaitingOffer ? (
+          <p className="text-muted-foreground text-xs">
+            Set the delivery terms after the buyer accepts the financing offer and books the delivery. The downpayment
+            is the Initial Downpayment.
+          </p>
+        ) : null}
+
+        {canManage && !termsSet && !awaitingOffer ? (
           <section className="flex flex-col gap-2 rounded-md border p-3">
             <p className="font-medium">Confirm the delivery</p>
             <div className="grid gap-2 sm:grid-cols-3">

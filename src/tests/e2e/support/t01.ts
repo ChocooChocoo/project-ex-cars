@@ -116,6 +116,30 @@ export async function approveAsSalesManager(page: Page, transactionId: string) {
   await page.waitForLoadState("networkidle");
 }
 
+// §6 steps 6–10: the Sales Manager proposes terms, the Head Accountant approves, the CEO confirms.
+export async function proposeTerms(page: Page, months: number, price: number, downpayment: number) {
+  await page.getByLabel("Payment duration (months)").fill(String(months));
+  await page.getByLabel("Vehicle price (₱)").fill(String(price));
+  await page.getByLabel("Initial Downpayment (₱)").fill(String(downpayment));
+  await page.getByLabel("First installment due").fill("2033-12-01");
+  await page.getByRole("button", { name: "Send to Head Accountant" }).click();
+  await expect(page.getByText("Terms sent to the Head Accountant.")).toBeVisible();
+}
+
+export async function headAccountantApproves(page: Page, id: string) {
+  await signInAs(page, "head_accountant@gce.local");
+  await open(page, `/head_accountant/transactions/${id}`);
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
+  await expect(page.getByText("Terms sent to the CEO.")).toBeVisible();
+}
+
+export async function ceoConfirms(page: Page, id: string) {
+  await signInAs(page, "ceo@gce.local");
+  await open(page, `/ceo/transactions/${id}`);
+  await page.getByRole("button", { name: "Confirm", exact: true }).click();
+  await expect(page.getByText("Financing confirmed; the buyer is notified.")).toBeVisible();
+}
+
 // ---------------------------------------------------------------------------------------------
 // Service-role helpers. Used only to move the clock forward for time-based rules (backdating a
 // meet-up, a deadline or installments) and to reset test state; never to perform a flow step.

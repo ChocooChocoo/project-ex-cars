@@ -9,9 +9,9 @@ import { notify } from "@/lib/notifications/notify";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
-  balanceMethodPhrase,
   DELIVERY_STATUS_LABELS,
   type DeliveryStatus,
+  deliveryBalanceNote,
   nextDeliveryStatus,
   verifiedPaid,
 } from "@/lib/transactions/buy-flow";
@@ -100,7 +100,7 @@ export async function advanceDeliveryStatus(formData: FormData): Promise<Deliver
       title: `Delivery: ${DELIVERY_STATUS_LABELS[next]}`,
       body:
         next === "delivered"
-          ? `Your car has arrived. Inspect it, then pay the remaining balance ${balanceMethodPhrase(details?.payment_method)} to the delivery team.`
+          ? `Your car has arrived. Inspect it before you accept it. ${deliveryBalanceNote(details?.payment_method, "buyer")}`
           : `Your delivery is now ${DELIVERY_STATUS_LABELS[next].toLowerCase()}.`,
       transactionId: tx.id,
     },
