@@ -280,6 +280,21 @@ export async function completeFinancingAgreement(formData: FormData): Promise<Fi
   if (tx.flow_status !== "initial_dp_confirmed" || tx.terms.state !== "approved") {
     return { error: "Complete the agreement after the Initial Downpayment is confirmed." };
   }
+  // §11 (Phase 6 default): a financed delivery is signed after the buyer accepts the car at the door, so a
+  // decline on delivery never leaves an open account.
+  const details = Array.isArray(tx.purchase_details) ? tx.purchase_details[0] : tx.purchase_details;
+  if (details?.arrangement_kind === "delivery") {
+    const { data: delivery } = await admin
+      .from("field_cases")
+      .select("delivery_status")
+      .eq("transaction_id", tx.id)
+      .eq("case_kind", "delivery")
+      .neq("state", "cancelled")
+      .maybeSingle();
+    if (delivery?.delivery_status !== "delivered") {
+      return { error: "Complete the agreement after the car is delivered and the buyer accepts it." };
+    }
+  }
 
   const error = await openFinancingAccount(admin, tx.terms);
   if (error) return { error };

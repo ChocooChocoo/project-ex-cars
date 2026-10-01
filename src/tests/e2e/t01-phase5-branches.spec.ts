@@ -3,11 +3,14 @@ import { type Page, test } from "@playwright/test";
 import {
   approveAsSalesManager,
   buyerRequest,
+  ceoConfirms,
   db,
   expect,
   futureSlot,
+  headAccountantApproves,
   open,
   pick,
+  proposeTerms,
   seedPassword,
   signInAs,
   verifyAll,
@@ -28,29 +31,6 @@ async function requestFinancing(page: Page, label: string) {
   const id = await buyerRequest(page, vehicleId, { method: "Financing", arrangement: "GCE Visit" });
   await approveAsSalesManager(page, id);
   return { id, vehicleId };
-}
-
-async function proposeTerms(page: Page, months: number, price: number, downpayment: number) {
-  await page.getByLabel("Payment duration (months)").fill(String(months));
-  await page.getByLabel("Vehicle price (₱)").fill(String(price));
-  await page.getByLabel("Initial Downpayment (₱)").fill(String(downpayment));
-  await page.getByLabel("First installment due").fill("2033-12-01");
-  await page.getByRole("button", { name: "Send to Head Accountant" }).click();
-  await expect(page.getByText("Terms sent to the Head Accountant.")).toBeVisible();
-}
-
-async function headAccountantApproves(page: Page, id: string) {
-  await signInAs(page, "head_accountant@gce.local");
-  await open(page, `/head_accountant/transactions/${id}`);
-  await page.getByRole("button", { name: "Approve", exact: true }).click();
-  await expect(page.getByText("Terms sent to the CEO.")).toBeVisible();
-}
-
-async function ceoConfirms(page: Page, id: string) {
-  await signInAs(page, "ceo@gce.local");
-  await open(page, `/ceo/transactions/${id}`);
-  await page.getByRole("button", { name: "Confirm", exact: true }).click();
-  await expect(page.getByText("Financing confirmed; the buyer is notified.")).toBeVisible();
 }
 
 async function buyerBooksVisit(page: Page, id: string) {

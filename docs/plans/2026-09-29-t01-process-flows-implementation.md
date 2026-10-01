@@ -208,12 +208,18 @@ Each flow composes existing blocks:
 
 Plan each one only once the client supplies its text.
 
-**Status (2026-10-01): §7–9 built on team defaults; §10–11 not started.** The user asked to proceed before the client text arrived, so §7–9 follow their Cash counterparts. Revisit when the client writes these sections.
+**Status (2026-10-01): §7–11 built on team defaults.** The user asked to proceed before the client text arrived, so §7–9 follow their Cash counterparts. Revisit when the client writes these sections.
 - [x] §7–9 default: a bank-transfer purchase takes the same steps as Cash in §2–4 (`DIRECT_PAYMENT_METHODS` in `buy-flow.ts`); no migration needed, since `bank_transfer` has been a valid method since 00048
 - [x] §7–9 default: a bank-transfer car is marked sold only after the Head Accountant verifies the transfer (`transitionTransaction`)
 - [x] §9 default: delivery terms, the field case and the "car arrived" message ask for the balance by bank transfer instead of cash (`balanceMethodPhrase`)
 - [x] Unit tests in `buy-flow.test.ts`; e2e `src/tests/e2e/t01-phase6-bank-transfer.spec.ts` (§7 sold only after verification, §9 wording) passed 2/2 on 2026-10-01 on the hosted project; §8 reuses §3 unchanged
-- [ ] §10 Financing + Meet Halfway, §11 Financing + Delivery: need the client's rules (see the open questions below)
+- [x] §10–11 default: In-House Financing accepts a GCE visit, a meet-up or a delivery (`isFinancingRequest`); the §6 terms chain is unchanged
+- [x] §10 default: after the CEO confirms the terms, the buyer books a Calabarzon meet-up (time and place) instead of a GCE visit; the §3 rules then apply (cancellation cut-off, no-show, Legit / Not Legit decline), and the Purchase Claim, Initial Downpayment and agreement follow at the meet-up as in §6
+- [x] §11 default: accepting the offer books the delivery and counts as the Purchase Claim (the car is not reserved, as in §4); the delivery downpayment must equal the Initial Downpayment; the delivery fee is paid separately and is not financed; the car is dispatched once the downpayment is verified; the financing agreement is completed only after the car is delivered, so a decline at the door never leaves an open account
+- [x] §11 default: delivery messages tell the buyer the balance is paid in installments and tell the team to collect nothing (`deliveryBalanceNote`)
+- [x] The "GCE Visit Scheduled — Initial Downpayment Pending" label reads "Visit Scheduled — Initial Downpayment Pending", since it now covers meet-ups too
+- [x] e2e `src/tests/e2e/t01-phase6-financing-arrangements.spec.ts` (§10 meet-up → claim → downpayment → agreement → sold; §11 wrong downpayment refused → terms → fee and downpayment verified → agreement refused before delivery → delivered → agreement → sold) passed 2/2 on 2026-10-01 on the hosted project
+- [ ] Client confirmation of every §7–11 default above
 
 ---
 

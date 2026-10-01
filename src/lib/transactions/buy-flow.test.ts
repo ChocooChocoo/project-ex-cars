@@ -3,11 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
   activeBuyerIdCount,
   addWorkingDays,
-  balanceMethodPhrase,
   canRecordNoShow,
+  deliveryBalanceNote,
   financingFullyPaid,
   isDeliveryCashRequest,
-  isFinancingVisitRequest,
+  isFinancingRequest,
   isHalfwayCashRequest,
   isOnsiteCashRequest,
   isQueuedCashRequest,
@@ -52,9 +52,14 @@ describe("§7–9 bank transfer", () => {
     expect(isOnsiteCashRequest({ payment_method: "cheque", arrangement_kind: "gce_visit" })).toBe(false);
   });
 
-  it("words the balance by method", () => {
-    expect(balanceMethodPhrase("bank_transfer")).toBe("by bank transfer");
-    expect(balanceMethodPhrase("cash")).toBe("in cash");
+  it("words the delivery balance by method", () => {
+    expect(deliveryBalanceNote("bank_transfer", "buyer")).toBe("The balance is paid by bank transfer on delivery.");
+    expect(deliveryBalanceNote("cash", "team")).toBe(
+      "Collect the remaining balance in cash when the buyer accepts the car.",
+    );
+    expect(deliveryBalanceNote("financing", "team")).toBe(
+      "Collect nothing on delivery: the balance is financed by GCE.",
+    );
   });
 });
 
@@ -148,7 +153,15 @@ describe("financing rules", () => {
   it("queues a financing request that inspects at a GCE visit", () => {
     expect(isQueuedRequest({ payment_method: "financing", arrangement_kind: "gce_visit" })).toBe(true);
     expect(isQueuedRequest({ payment_method: "cash", arrangement_kind: "gce_visit" })).toBe(false);
-    expect(isFinancingVisitRequest({ payment_method: "financing", arrangement_kind: "delivery" })).toBe(false);
+  });
+
+  it("accepts a GCE visit, a meet-up (§10) or a delivery (§11) for financing", () => {
+    for (const arrangement_kind of ["gce_visit", "meetup", "delivery"]) {
+      expect(isFinancingRequest({ payment_method: "financing", arrangement_kind })).toBe(true);
+      expect(isQueuedRequest({ payment_method: "financing", arrangement_kind })).toBe(true);
+    }
+    expect(isFinancingRequest({ payment_method: "financing", arrangement_kind: null })).toBe(false);
+    expect(isFinancingRequest({ payment_method: "cash", arrangement_kind: "delivery" })).toBe(false);
   });
 
   it("counts unpaid installments past their due date as missed", () => {

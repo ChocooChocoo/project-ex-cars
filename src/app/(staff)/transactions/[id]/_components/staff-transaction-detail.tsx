@@ -343,6 +343,7 @@ export function StaffTransactionDetail({
           payments={payments}
           arrangement={liveVisit ?? null}
           fieldCase={delivery.fieldCase}
+          flowStatus={(transaction.flow_status as string | null) ?? null}
           team={delivery.team}
           userRole={userRole}
         />

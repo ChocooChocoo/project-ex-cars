@@ -17,9 +17,18 @@ function paysDirect(details: { payment_method?: unknown } | null): boolean {
   return (DIRECT_PAYMENT_METHODS as readonly unknown[]).includes(details?.payment_method);
 }
 
-// How the buyer settles the balance, for messages: "in cash" or "by bank transfer".
-export function balanceMethodPhrase(method: unknown): string {
-  return method === "bank_transfer" ? "by bank transfer" : "in cash";
+// What a delivery message says about the balance: paid on delivery in cash or by bank transfer, or, for
+// In-House Financing (§11), paid later in installments, so the delivery team collects nothing.
+export function deliveryBalanceNote(method: unknown, audience: "buyer" | "team"): string {
+  if (method === "financing") {
+    return audience === "buyer"
+      ? "The balance is paid in monthly installments under your financing agreement."
+      : "Collect nothing on delivery: the balance is financed by GCE.";
+  }
+  const how = method === "bank_transfer" ? "by bank transfer" : "in cash";
+  return audience === "buyer"
+    ? `The balance is paid ${how} on delivery.`
+    : `Collect the remaining balance ${how} when the buyer accepts the car.`;
 }
 
 // §2 Onsite Visit (§7 by bank transfer): paid in full at GCE.
@@ -118,16 +127,19 @@ export function verifiedPaid(payments: PaymentLike[], kind: string): number {
   return payments.filter((p) => p.payment_kind === kind && p.verified_by).reduce((sum, p) => sum + Number(p.amount), 0);
 }
 
-// §6 In-House Financing: the buyer visits GCE to inspect before any downpayment. These requests queue too.
-export function isFinancingVisitRequest(
-  details: { payment_method?: unknown; arrangement_kind?: unknown } | null,
-): boolean {
-  return details?.payment_method === "financing" && details?.arrangement_kind === "gce_visit";
+// §6 In-House Financing: the buyer inspects the car at a GCE visit before any downpayment. §10 and §11
+// (Phase 6 defaults, not yet in the source) swap the visit for a Calabarzon meet-up or a delivery; the
+// financing steps are the same. These requests queue too.
+export function isFinancingRequest(details: { payment_method?: unknown; arrangement_kind?: unknown } | null): boolean {
+  return (
+    details?.payment_method === "financing" &&
+    ["gce_visit", "meetup", "delivery"].includes(String(details?.arrangement_kind))
+  );
 }
 
 // Every request that joins the per-car Active / On Hold queue.
 export function isQueuedRequest(details: { payment_method?: unknown; arrangement_kind?: unknown } | null): boolean {
-  return isQueuedCashRequest(details) || isFinancingVisitRequest(details);
+  return isQueuedCashRequest(details) || isFinancingRequest(details);
 }
 
 // Q5 default (§6 step 24, "4–5 months"): repossession may start from the 4th missed installment.

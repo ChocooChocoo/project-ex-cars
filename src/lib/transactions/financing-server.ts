@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { notify } from "@/lib/notifications/notify";
 import type { createAdminClient } from "@/lib/supabase/admin";
-import { financingFullyPaid, isFinancingVisitRequest, verifiedPaid } from "@/lib/transactions/buy-flow";
+import { financingFullyPaid, isFinancingRequest, verifiedPaid } from "@/lib/transactions/buy-flow";
 import { generateInstallmentSchedule } from "@/lib/transactions/installments";
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -58,7 +58,7 @@ export async function openFinancingAccount(admin: Admin, terms: FinancingTerms):
   return error?.message ?? null;
 }
 
-// A financing request (In-House Financing + GCE visit) with its terms and payments.
+// A financing request (In-House Financing with a GCE visit, meet-up or delivery) with its terms and payments.
 export async function loadFinancing(admin: Admin, transactionId: unknown) {
   const id = z.string().uuid().safeParse(transactionId);
   if (!id.success) return null;
@@ -71,7 +71,7 @@ export async function loadFinancing(admin: Admin, transactionId: unknown) {
     .maybeSingle();
   if (tx?.transaction_kind !== "buy") return null;
   const details = Array.isArray(tx.purchase_details) ? tx.purchase_details[0] : tx.purchase_details;
-  if (!isFinancingVisitRequest(details ?? null)) return null;
+  if (!isFinancingRequest(details ?? null)) return null;
   const { data: terms } = await admin
     .from("payment_terms")
     .select("*")

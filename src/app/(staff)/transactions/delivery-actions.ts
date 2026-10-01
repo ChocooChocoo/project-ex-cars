@@ -10,8 +10,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
   addWorkingDays,
-  balanceMethodPhrase,
   DOWNPAYMENT_WORKING_DAYS,
+  deliveryBalanceNote,
   verifiedPaid,
 } from "@/lib/transactions/buy-flow";
 import { releaseVisitSlots } from "@/lib/transactions/buy-flow-server";
@@ -38,7 +38,7 @@ async function loadDelivery(admin: Admin, transactionId: unknown) {
   const { data: tx } = await admin
     .from("transactions")
     .select(
-      "id, customer_id, vehicle_id, current_state, transaction_kind, purchase_details(*), payment_records(payment_kind, amount, verified_by), viewing_arrangements(id, schedule, location, arrangement_kind, confirmation_state)",
+      "id, customer_id, vehicle_id, current_state, flow_status, transaction_kind, purchase_details(*), payment_records(payment_kind, amount, verified_by), viewing_arrangements(id, schedule, location, arrangement_kind, confirmation_state)",
     )
     .eq("id", id.data)
     .maybeSingle();
@@ -110,6 +110,9 @@ export async function setDeliveryTerms(formData: FormData): Promise<DeliveryActi
   if (!tx) return { error: "Delivery request not found." };
   if (tx.current_state !== "approved") return { error: "Set delivery terms after approving the request." };
   if (tx.details?.downpayment_due_at) return { error: "Delivery terms are already set." };
+  if (tx.details?.payment_method === "financing" && tx.flow_status !== "purchase_claim") {
+    return { error: "Wait for the buyer to accept the financing offer and book the delivery." };
+  }
 
   if (parsed.data.serviceable === "no") {
     await admin.from("purchase_details").update({ delivery_serviceable: false }).eq("transaction_id", tx.id);
@@ -141,6 +144,17 @@ export async function setDeliveryTerms(formData: FormData): Promise<DeliveryActi
   if (parsed.data.delivery_fee === "" || parsed.data.delivery_fee === undefined || !parsed.data.downpayment_amount) {
     return { error: "Set the delivery fee and the downpayment." };
   }
+  // §11 (Phase 6 default): a financed delivery's downpayment is the Initial Downpayment of the approved terms.
+  if (tx.details?.payment_method === "financing") {
+    const { data: terms } = await admin
+      .from("payment_terms")
+      .select("down_payment")
+      .eq("purchase_transaction_id", tx.id)
+      .maybeSingle();
+    if (!terms || Number(terms.down_payment) !== parsed.data.downpayment_amount) {
+      return { error: `Set the downpayment to the Initial Downpayment of ${peso(terms?.down_payment ?? 0)}.` };
+    }
+  }
   const due = addWorkingDays(new Date(), DOWNPAYMENT_WORKING_DAYS);
   const { error } = await admin
     .from("purchase_details")
@@ -165,7 +179,7 @@ export async function setDeliveryTerms(formData: FormData): Promise<DeliveryActi
     {
       kind: "delivery_terms_set",
       title: "Your delivery is confirmed",
-      body: `Pay the delivery fee of ${peso(parsed.data.delivery_fee)} and the downpayment of ${peso(parsed.data.downpayment_amount)} by bank transfer before ${due.toLocaleDateString("en-PH")}. The balance is paid ${balanceMethodPhrase(tx.details.payment_method)} on delivery.`,
+      body: `Pay the delivery fee of ${peso(parsed.data.delivery_fee)} and the downpayment of ${peso(parsed.data.downpayment_amount)} by bank transfer before ${due.toLocaleDateString("en-PH")}. ${deliveryBalanceNote(tx.details.payment_method, "buyer")}`,
       transactionId: tx.id,
     },
   );
@@ -227,7 +241,7 @@ export async function createDeliveryFieldCase(formData: FormData): Promise<Deliv
     schedule: tx.arrangement.schedule,
     location: tx.arrangement.location,
     state: "assigned",
-    notes: `Delivery. Collect the balance ${balanceMethodPhrase(tx.details.payment_method)} on delivery. Delivery fee ${peso(tx.details.delivery_fee)}, downpayment ${peso(tx.details.downpayment_amount)} by bank transfer.`,
+    notes: `Delivery. ${deliveryBalanceNote(tx.details.payment_method, "team")} Delivery fee ${peso(tx.details.delivery_fee)}, downpayment ${peso(tx.details.downpayment_amount)} by bank transfer.`,
   });
   if (error) return { error: error.message };
 

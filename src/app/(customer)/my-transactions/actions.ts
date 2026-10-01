@@ -11,7 +11,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
   activeBuyerIdCount,
   BUYER_ID_COUNT,
-  isFinancingVisitRequest,
+  isFinancingRequest,
   isOnsiteCashRequest,
   isQueuedRequest,
   isVisitSlot,
@@ -271,7 +271,7 @@ export async function submitBuyRequest(formData: FormData) {
   const details = (Array.isArray(tx.purchase_details) ? tx.purchase_details[0] : tx.purchase_details) ?? null;
   const queued = isQueuedRequest(details);
   // §6: a financing buyer books the GCE visit only after the financing is approved.
-  const financing = isFinancingVisitRequest(details);
+  const financing = isFinancingRequest(details);
   if (!queued && !isOnsiteCashRequest(details)) {
     return {
       error:
@@ -387,13 +387,14 @@ export async function respondToFinancingOffer(formData: FormData) {
       transaction_id: z.string().uuid(),
       decision: z.enum(["proceed", "decline"]),
       schedule: z.string().optional().or(z.literal("")),
+      location: z.string().trim().max(300).optional().or(z.literal("")),
     })
     .safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: "Invalid response." };
 
   const { data: tx } = await supabase
     .from("transactions")
-    .select("id, customer_id, transaction_kind, current_state, flow_status")
+    .select("id, customer_id, transaction_kind, current_state, flow_status, purchase_details(arrangement_kind)")
     .eq("id", parsed.data.transaction_id)
     .maybeSingle();
   if (!tx || tx.customer_id !== user.user.id || tx.transaction_kind !== "buy")
@@ -427,35 +428,55 @@ export async function respondToFinancingOffer(formData: FormData) {
     return { success: true };
   }
 
+  // §6 books a GCE visit. Phase 6 defaults: §10 books a Calabarzon meet-up instead, and §11 a delivery,
+  // which goes straight to the claim: the Sales Manager then sets the delivery terms (§4) and the
+  // Initial Downpayment is the delivery downpayment.
+  const details = Array.isArray(tx.purchase_details) ? tx.purchase_details[0] : tx.purchase_details;
+  const kind = (details?.arrangement_kind as "gce_visit" | "meetup" | "delivery" | undefined) ?? "gce_visit";
+  const label = { gce_visit: "GCE visit", meetup: "meet-up", delivery: "delivery" }[kind];
   const visit = parsed.data.schedule ? new Date(parsed.data.schedule) : null;
-  if (!visit || !isVisitSlot(visit)) return { error: "Pick a future GCE visit slot on the hour." };
-  // A time saved before approval is replaced by the inspection appointment.
+  if (!visit || (kind === "gce_visit" ? !isVisitSlot(visit) : visit.getTime() <= Date.now())) {
+    return {
+      error: kind === "gce_visit" ? "Pick a future GCE visit slot on the hour." : `Pick a future ${label} time.`,
+    };
+  }
+  if (kind !== "gce_visit" && !parsed.data.location) {
+    return { error: kind === "delivery" ? "Enter the delivery address." : "Enter the meet-up location." };
+  }
+  // A time saved before approval is replaced by this appointment.
   await releaseVisitSlots(admin, tx.id);
   const { error: slotError } = await supabase.from("viewing_arrangements").insert({
     inquiry_id: null,
     purchase_transaction_id: tx.id,
-    arrangement_kind: "gce_visit",
+    arrangement_kind: kind,
     schedule: visit.toISOString(),
-    notes: "Vehicle inspection and purchase decision appointment",
+    location: kind === "gce_visit" ? null : parsed.data.location,
+    notes: kind === "delivery" ? "Financed delivery" : "Vehicle inspection and purchase decision appointment",
   });
   if (slotError?.code === "23505") return { error: "That visit slot is already taken. Choose another time." };
   if (slotError) return { error: slotError.message };
 
-  await admin.from("transactions").update({ flow_status: "gce_visit_scheduled_dp_pending" }).eq("id", tx.id);
+  await admin
+    .from("transactions")
+    .update({ flow_status: kind === "delivery" ? "purchase_claim" : "gce_visit_scheduled_dp_pending" })
+    .eq("id", tx.id);
   await admin.from("transaction_status_history").insert({
     transaction_id: tx.id,
     from_state: tx.current_state,
     to_state: tx.current_state,
     actor_id: user.user.id,
-    reason: `Buyer accepted the financing and booked a GCE visit for ${visit.toLocaleString("en-PH")}`,
+    reason: `Buyer accepted the financing and booked a ${label} for ${visit.toLocaleString("en-PH")}`,
   });
   await notify(
     admin,
     { role: "sales_manager" },
     {
       kind: "financing_visit_booked",
-      title: "Financing buyer booked a visit",
-      body: `Inspection and purchase decision appointment on ${visit.toLocaleString("en-PH")}.`,
+      title: `Financing buyer booked a ${label}`,
+      body:
+        kind === "delivery"
+          ? `Delivery on ${visit.toLocaleString("en-PH")}. Confirm the address and set the delivery terms.`
+          : `Inspection and purchase decision ${label} on ${visit.toLocaleString("en-PH")}.`,
       transactionId: tx.id,
     },
   );
