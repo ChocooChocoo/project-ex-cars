@@ -10,10 +10,14 @@ export const seedPassword = process.env.SEED_USER_PASSWORD;
 export const png = (name: string) => ({
   name,
   mimeType: "image/png",
-  buffer: Buffer.from(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
-    "base64",
-  ),
+  // Padded to 2 MB, the size of a phone photo: tiny fixtures hid the 1 MB Server Action body limit.
+  buffer: Buffer.concat([
+    Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+      "base64",
+    ),
+    Buffer.alloc(2 * 1024 * 1024),
+  ]),
 });
 
 // A future whole-hour slot; the offset keeps parallel requests in one run apart.

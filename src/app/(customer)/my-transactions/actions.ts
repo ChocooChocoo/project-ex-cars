@@ -17,6 +17,7 @@ import {
   isVisitSlot,
 } from "@/lib/transactions/buy-flow";
 import { releaseVisitSlots } from "@/lib/transactions/buy-flow-server";
+import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_SIZE } from "@/lib/transactions/document-media";
 import { canCancelScheduled, nextQueueState, reviewDueAt } from "@/lib/transactions/state-machine";
 import {
   buyDetailsSchema,
@@ -44,8 +45,11 @@ export async function uploadPurchaseDocument(formData: FormData) {
   }
   const { transaction_id: transactionId, document_kind: documentKind, id_type: idType } = parsed.data;
 
-  const file = formData.get("file") as File | null;
-  if (!file?.size) return { error: "Select a file to upload." };
+  // The browser uploads the file to storage first; only its path comes through here.
+  const storagePath = formData.get("storage_path");
+  if (typeof storagePath !== "string" || !storagePath.startsWith(`${transactionId}/${documentKind}-`)) {
+    return { error: "Select a file to upload." };
+  }
   if (documentKind === "valid_id" && !idType) return { error: "Select the ID type." };
 
   const { data: tx } = await supabase
@@ -66,12 +70,6 @@ export async function uploadPurchaseDocument(formData: FormData) {
       return { error: "You have already uploaded two valid IDs." };
     }
   }
-
-  const fileExt = file.name.split(".").pop() ?? "bin";
-  const storagePath = `${transactionId}/${documentKind}-${Date.now()}.${fileExt}`;
-
-  const { error: uploadError } = await supabase.storage.from("transaction-documents").upload(storagePath, file);
-  if (uploadError) return { error: uploadError.message };
 
   const { error: dbError } = await supabase.from("transaction_documents").insert({
     transaction_id: transactionId,
@@ -486,48 +484,90 @@ export async function respondToFinancingOffer(formData: FormData) {
 }
 
 const SELL_PHOTO_MAX_COUNT = 6;
-const SELL_PHOTO_MAX_SIZE = 5 * 1024 * 1024;
-const SELL_PHOTO_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
-const SELL_PHOTO_EXTENSIONS: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/webp": "webp",
-};
+const SELL_PHOTO_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const SELL_PAPER_EXTENSIONS: Record<string, string> = { ...SELL_PHOTO_EXTENSIONS, "application/pdf": "pdf" };
 const idTypeSchema = z.enum(ACCEPTED_ID_TYPES);
 
-type SellUpload = {
-  file: File;
-  document_kind: "sell_photo" | "valid_id" | "orcr" | "deed_of_sale";
-  id_type: string | null;
-};
-
+type SellDocumentKind = "sell_photo" | "valid_id" | "orcr" | "deed_of_sale";
 // Selling step 1: two valid IDs, the ORCR and the deed of sale are required with every offer.
-function readSellPapers(formData: FormData): { papers: SellUpload[] } | { error: string } {
-  const fileAt = (key: string) => {
-    const entry = formData.get(key);
-    return entry instanceof File && entry.size > 0 ? entry : null;
-  };
-  const papers: SellUpload[] = [];
-  for (const n of [1, 2]) {
-    const file = fileAt(`id_file_${n}`);
-    const idType = idTypeSchema.safeParse(formData.get(`id_type_${n}`));
-    if (!file || !idType.success) return { error: "Two valid IDs, each with its ID type, are required." };
-    papers.push({ file, document_kind: "valid_id", id_type: idType.data });
-  }
-  const orcr = fileAt("orcr_file");
-  if (!orcr) return { error: "The ORCR is required." };
-  papers.push({ file: orcr, document_kind: "orcr", id_type: null });
-  const deed = fileAt("deed_of_sale_file");
-  if (!deed) return { error: "The deed of sale is required." };
-  papers.push({ file: deed, document_kind: "deed_of_sale", id_type: null });
+const SELL_PAPER_KINDS: SellDocumentKind[] = ["valid_id", "valid_id", "orcr", "deed_of_sale"];
 
-  for (const paper of papers) {
-    if (!SELL_PAPER_EXTENSIONS[paper.file.type]) return { error: "Papers must be JPEG, PNG, WebP or PDF files." };
-    if (paper.file.size > SELL_PHOTO_MAX_SIZE) return { error: "Each paper must be 5MB or smaller." };
+type SellUpload = { path: string; document_kind: SellDocumentKind; id_type: string | null };
+export type SellFileMeta = { kind: SellDocumentKind; type: string; size: number };
+
+const sellPathPrefix = (transactionId: string, kind: SellDocumentKind) =>
+  `${transactionId}/${kind.replace(/_/g, "-")}-`;
+
+// Files are listed as photos first, then the papers in SELL_PAPER_KINDS order.
+function sellFilesError(files: SellFileMeta[]): string | null {
+  const photos = files.filter((f) => f.kind === "sell_photo");
+  const papers = files.filter((f) => f.kind !== "sell_photo");
+  if (photos.length === 0) return "At least one vehicle photo is required.";
+  if (photos.length > SELL_PHOTO_MAX_COUNT) return `You can upload at most ${SELL_PHOTO_MAX_COUNT} photos.`;
+  if (papers.length !== SELL_PAPER_KINDS.length || papers.some((f, i) => f.kind !== SELL_PAPER_KINDS[i])) {
+    return "Attach two valid IDs with their ID types, the ORCR and the deed of sale.";
   }
-  return { papers };
+  for (const file of files) {
+    if (file.kind === "sell_photo" && !SELL_PHOTO_MIME_TYPES.includes(file.type)) {
+      return "Photos must be JPEG, PNG, or WebP images.";
+    }
+    if (!DOCUMENT_EXTENSIONS[file.type]) return "Papers must be JPEG, PNG, WebP or PDF files.";
+    if (file.size <= 0 || file.size > MAX_DOCUMENT_SIZE) return "Each file must be 5MB or smaller.";
+  }
+  return null;
+}
+
+// Vercel rejects function request bodies over 4.5 MB, so the browser uploads the photos and
+// papers straight to storage with these signed URLs, into the folder of the transaction id
+// that submitSellVehicle later creates.
+// ponytail: an abandoned form leaves its files in an unused folder; add a cleanup job if storage grows.
+export async function prepareSellUploads(files: SellFileMeta[]) {
+  const supabase = await createServerSupabaseClient();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+
+  const fileError = sellFilesError(files);
+  if (fileError) return { error: fileError };
+
+  const transactionId = randomUUID();
+  const admin = createAdminClient();
+  const uploads: { path: string; token: string }[] = [];
+  for (const file of files) {
+    const path = `${sellPathPrefix(transactionId, file.kind)}${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${DOCUMENT_EXTENSIONS[file.type]}`;
+    const { data, error } = await admin.storage.from("transaction-documents").createSignedUploadUrl(path);
+    if (error || !data) return { error: error?.message ?? "Could not prepare the upload." };
+    uploads.push({ path: data.path, token: data.token });
+  }
+  return { transactionId, uploads };
+}
+
+function readSellUploads(formData: FormData, transactionId: string): { uploads: SellUpload[] } | { error: string } {
+  const pathOf = (value: FormDataEntryValue | null, kind: SellDocumentKind) =>
+    typeof value === "string" && value.startsWith(sellPathPrefix(transactionId, kind)) ? value : null;
+
+  const photoPaths = formData.getAll("photo_paths").map((value) => pathOf(value, "sell_photo"));
+  if (photoPaths.length === 0) return { error: "At least one vehicle photo is required." };
+  if (photoPaths.length > SELL_PHOTO_MAX_COUNT) {
+    return { error: `You can upload at most ${SELL_PHOTO_MAX_COUNT} photos.` };
+  }
+  const uploads: SellUpload[] = [];
+  for (const path of photoPaths) {
+    if (!path) return { error: "Invalid vehicle photo." };
+    uploads.push({ path, document_kind: "sell_photo", id_type: null });
+  }
+  for (const n of [1, 2]) {
+    const path = pathOf(formData.get(`id_path_${n}`), "valid_id");
+    const idType = idTypeSchema.safeParse(formData.get(`id_type_${n}`));
+    if (!path || !idType.success) return { error: "Two valid IDs, each with its ID type, are required." };
+    uploads.push({ path, document_kind: "valid_id", id_type: idType.data });
+  }
+  const orcr = pathOf(formData.get("orcr_path"), "orcr");
+  if (!orcr) return { error: "The ORCR is required." };
+  uploads.push({ path: orcr, document_kind: "orcr", id_type: null });
+  const deed = pathOf(formData.get("deed_of_sale_path"), "deed_of_sale");
+  if (!deed) return { error: "The deed of sale is required." };
+  uploads.push({ path: deed, document_kind: "deed_of_sale", id_type: null });
+  return { uploads };
 }
 
 export async function submitSellVehicle(formData: FormData) {
@@ -540,22 +580,19 @@ export async function submitSellVehicle(formData: FormData) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid vehicle details." };
   }
 
-  // Files cannot ride the zod schema (FormData parsed via Object.fromEntries
-  // drops File values), so validate them separately here.
-  const photos = formData.getAll("photos").filter((entry): entry is File => entry instanceof File && entry.size > 0);
-  if (photos.length === 0) return { error: "At least one vehicle photo is required." };
-  if (photos.length > SELL_PHOTO_MAX_COUNT) {
-    return { error: `You can upload at most ${SELL_PHOTO_MAX_COUNT} photos.` };
+  // The files are already in storage (prepareSellUploads); only their paths come through here.
+  const transactionId = formData.get("transaction_id");
+  if (typeof transactionId !== "string" || !UUID_PATTERN.test(transactionId)) {
+    return { error: "Invalid upload. Please try again." };
   }
-  for (const photo of photos) {
-    if (!(SELL_PHOTO_MIME_TYPES as readonly string[]).includes(photo.type)) {
-      return { error: "Photos must be JPEG, PNG, or WebP images." };
-    }
-    if (photo.size > SELL_PHOTO_MAX_SIZE) return { error: "Each photo must be 5MB or smaller." };
-  }
-
-  const paperResult = readSellPapers(formData);
-  if ("error" in paperResult) return { error: paperResult.error };
+  const uploadResult = readSellUploads(formData, transactionId);
+  if ("error" in uploadResult) return { error: uploadResult.error };
+  const { uploads } = uploadResult;
+  // Customers have no DELETE policy on storage, so clean-up runs as admin.
+  const removeUploads = () =>
+    createAdminClient()
+      .storage.from("transaction-documents")
+      .remove(uploads.map((upload) => upload.path));
 
   // Optional condition parts/issues checklist: JSON string of node ids.
   let conditionItems: string[] = [];
@@ -593,10 +630,11 @@ export async function submitSellVehicle(formData: FormData) {
     finalCondition = map[lower] ?? trimmed;
   }
 
-  // Create the sell transaction.
+  // Create the sell transaction under the id its files were uploaded for.
   const { data: transaction, error } = await supabase
     .from("transactions")
     .insert({
+      id: transactionId,
       customer_id: user.user.id,
       transaction_kind: "sell",
       current_state: "pending",
@@ -605,36 +643,8 @@ export async function submitSellVehicle(formData: FormData) {
     .select()
     .single();
 
+  // No file clean-up here: a failed insert may mean the id belongs to someone else's transaction.
   if (error) return { error: error.message };
-
-  // Upload the photos and papers to the transaction-documents bucket BEFORE any child
-  // rows exist (existing customer-own-folder INSERT/SELECT policies from 00028
-  // apply). There is no customer DELETE policy on transactions, so a customer-issued
-  // DELETE cannot roll the parent row back under RLS (it would delete 0 rows with no
-  // error). Ordering the fallible uploads first means a failure only leaves the bare
-  // pending transaction row plus already-uploaded storage objects, which are removed
-  // below. Staff can cancel/delete the leftover pending row if needed.
-  const uploads: SellUpload[] = [
-    ...photos.map((file) => ({ file, document_kind: "sell_photo" as const, id_type: null })),
-    ...paperResult.papers,
-  ];
-  const uploadedPaths: string[] = [];
-  for (const upload of uploads) {
-    const ext = SELL_PAPER_EXTENSIONS[upload.file.type] ?? "jpg";
-    const prefix = upload.document_kind.replace(/_/g, "-");
-    const storagePath = `${transaction.id}/${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-    const { error: uploadError } = await supabase.storage
-      .from("transaction-documents")
-      .upload(storagePath, upload.file);
-    if (uploadError) {
-      if (uploadedPaths.length > 0) await supabase.storage.from("transaction-documents").remove(uploadedPaths);
-      await supabase.from("transactions").delete().eq("id", transaction.id);
-      return {
-        error: `${uploadError.message} Your sell request was not created — please try again.`,
-      };
-    }
-    uploadedPaths.push(storagePath);
-  }
 
   const { error: detailError } = await supabase.from("sell_details").insert({
     transaction_id: transaction.id,
@@ -646,23 +656,23 @@ export async function submitSellVehicle(formData: FormData) {
   });
 
   if (detailError) {
-    if (uploadedPaths.length > 0) await supabase.storage.from("transaction-documents").remove(uploadedPaths);
+    await removeUploads();
     await supabase.from("transactions").delete().eq("id", transaction.id);
     return { error: detailError.message };
   }
 
-  for (const [index, upload] of uploads.entries()) {
+  for (const upload of uploads) {
     // Photos are attachments and land verified; the papers wait for the Marketing Specialist.
     const { error: docError } = await supabase.from("transaction_documents").insert({
       transaction_id: transaction.id,
       document_kind: upload.document_kind,
       id_type: upload.id_type,
-      storage_path: uploadedPaths[index],
+      storage_path: upload.path,
       uploader_id: user.user.id,
       verification_state: upload.document_kind === "sell_photo" ? "verified" : "pending",
     });
     if (docError) {
-      await supabase.storage.from("transaction-documents").remove(uploadedPaths);
+      await removeUploads();
       await supabase.from("transactions").delete().eq("id", transaction.id);
       return { error: docError.message };
     }

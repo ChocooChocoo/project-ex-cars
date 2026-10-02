@@ -31,6 +31,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/app/(customer)/my-transactions/actions", () => ({
+  prepareSellUploads: vi.fn(),
   submitSellVehicle: vi.fn(async () => ({ success: true, id: "00000000-0000-4000-a000-000000000001" })),
 }));
 

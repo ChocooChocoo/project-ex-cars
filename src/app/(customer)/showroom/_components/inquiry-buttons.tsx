@@ -28,7 +28,7 @@ export function InquiryButtons({ vehicleId }: { readonly vehicleId: string }) {
       if (result.error) {
         toast.error(result.error);
       } else if (result.id) {
-        toast.success("Buy Now request sent!");
+        toast.success("Add your details, then submit the request.");
         router.push(`/my-transactions/${result.id}`);
       }
     } else {
