@@ -124,7 +124,9 @@ test.describe
       await page.getByRole("button", { name: /Mark Sold to This Buyer/ }).click();
       await expect(page.getByText("Sold").first()).toBeVisible();
 
-      await page.goto(`/sales_manager/transactions/${rivalId}`);
+      // The rival never submitted, so only the buyer can see it closed (00055).
+      await signInAs(page, "customer@gce.local");
+      await page.goto(`/customer/my-transactions/${rivalId}`);
       await expect(page.getByText("Cancelled").first()).toBeVisible();
     });
 

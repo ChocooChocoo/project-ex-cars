@@ -41,6 +41,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import type { ProfileAutoFill } from "@/lib/autofill";
+import { createClient } from "@/lib/supabase/client";
 import {
   activeBuyerIdCount,
   DELIVERY_STATUS_LABELS,
@@ -51,7 +52,7 @@ import {
   isOnsiteCashRequest,
   isQueuedRequest,
 } from "@/lib/transactions/buy-flow";
-import { transactionDocumentLabel } from "@/lib/transactions/document-media";
+import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_SIZE, transactionDocumentLabel } from "@/lib/transactions/document-media";
 import {
   arrangementKindLabel,
   paymentMethodLabel,
@@ -180,17 +181,41 @@ export function TransactionDetail({
       toast.error("Select the ID type.");
       return;
     }
-    setUploading(true);
-    const fd = new FormData();
-    fd.set("transaction_id", id);
-    fd.set("document_kind", docKind);
-    fd.set("id_type", docIdType);
-    fd.set("file", file);
-    const result = await uploadPurchaseDocument(fd);
-    setUploading(false);
-    if (result.error) {
-      toast.error(result.error);
+    const ext = DOCUMENT_EXTENSIONS[file.type];
+    if (!ext) {
+      toast.error("Files must be JPEG, PNG, WebP or PDF.");
       return;
+    }
+    if (file.size > MAX_DOCUMENT_SIZE) {
+      toast.error("Each file must be 5MB or smaller.");
+      return;
+    }
+    setUploading(true);
+    try {
+      // Straight to storage: a Vercel function rejects request bodies over 4.5 MB.
+      const storagePath = `${id}/${docKind}-${Date.now()}.${ext}`;
+      const { error: uploadError } = await createClient()
+        .storage.from("transaction-documents")
+        .upload(storagePath, file);
+      if (uploadError) {
+        toast.error(uploadError.message);
+        return;
+      }
+      const fd = new FormData();
+      fd.set("transaction_id", id);
+      fd.set("document_kind", docKind);
+      fd.set("id_type", docIdType);
+      fd.set("storage_path", storagePath);
+      const result = await uploadPurchaseDocument(fd);
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+    } catch {
+      toast.error("Upload failed. Check your connection and try again.");
+      return;
+    } finally {
+      setUploading(false);
     }
     toast.success(
       docKind === "valid_id"

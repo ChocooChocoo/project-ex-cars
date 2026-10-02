@@ -9,7 +9,7 @@ import { ChevronDown, X } from "lucide-react";
 import { Controller, type Resolver, useForm } from "react-hook-form";
 import { toast } from "sonner";
 
-import { submitSellVehicle } from "@/app/(customer)/my-transactions/actions";
+import { prepareSellUploads, submitSellVehicle } from "@/app/(customer)/my-transactions/actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -20,6 +20,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ACCEPTED_ID_TYPES, ID_LABELS } from "@/lib/auth/roles";
+import { createClient } from "@/lib/supabase/client";
 import { SELL_MEETUP_METHOD_LABELS, SELL_MEETUP_METHODS } from "@/lib/transactions/sell-flow";
 import { type SellVehicleFormData, sellVehicleSchema } from "@/lib/validation/transactions";
 
@@ -49,10 +50,10 @@ export function validateSellPhotos(files: File[]): string | null {
 export const SELL_PAPER_ACCEPT = "image/jpeg,image/png,image/webp,application/pdf";
 
 const PAPER_FIELDS = [
-  { key: "id_file_1", label: "Valid ID #1 *" },
-  { key: "id_file_2", label: "Valid ID #2 *" },
-  { key: "orcr_file", label: "ORCR *" },
-  { key: "deed_of_sale_file", label: "Deed of Sale *" },
+  { key: "id_file_1", label: "Valid ID #1 *", kind: "valid_id", pathKey: "id_path_1" },
+  { key: "id_file_2", label: "Valid ID #2 *", kind: "valid_id", pathKey: "id_path_2" },
+  { key: "orcr_file", label: "ORCR *", kind: "orcr", pathKey: "orcr_path" },
+  { key: "deed_of_sale_file", label: "Deed of Sale *", kind: "deed_of_sale", pathKey: "deed_of_sale_path" },
 ] as const;
 
 export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNodes?: ConditionChecklistNode[] }) {
@@ -154,21 +155,47 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
     fd.set("has_known_issues", data.has_known_issues);
     if (data.declared_issues) fd.set("declared_issues", data.declared_issues);
     fd.set("meetup_method", data.meetup_method);
-    for (const field of PAPER_FIELDS) fd.set(field.key, papers[field.key] as File);
     fd.set("id_type_1", idTypes.id_type_1);
     fd.set("id_type_2", idTypes.id_type_2);
     if (detail?.trim() && finalCondition !== detail.trim()) {
       fd.set("condition_detail", detail.trim());
     }
-    for (const photo of photos) fd.append("photos", photo);
     if (selectedConditionItems.length > 0) fd.set("condition_items", JSON.stringify(selectedConditionItems));
 
-    const result = await submitSellVehicle(fd);
-    if (result.error) {
-      toast.error(result.error);
-    } else if (result.id) {
-      toast.success("Vehicle submitted for evaluation!");
-      router.push(`/my-transactions/${result.id}`);
+    // The files go straight to storage: a Vercel function rejects request bodies over 4.5 MB.
+    const files = [
+      ...photos.map((file) => ({ file, kind: "sell_photo" as const, pathKey: "photo_paths" })),
+      ...PAPER_FIELDS.map((field) => ({ file: papers[field.key] as File, kind: field.kind, pathKey: field.pathKey })),
+    ];
+    try {
+      const prepared = await prepareSellUploads(
+        files.map(({ file, kind }) => ({ kind, type: file.type, size: file.size })),
+      );
+      if ("error" in prepared) {
+        toast.error(prepared.error);
+        return;
+      }
+      const bucket = createClient().storage.from("transaction-documents");
+      for (const [index, { file, pathKey }] of files.entries()) {
+        const { path, token } = prepared.uploads[index];
+        const { error: uploadError } = await bucket.uploadToSignedUrl(path, token, file);
+        if (uploadError) {
+          toast.error(`${uploadError.message} Your sell request was not created — please try again.`);
+          return;
+        }
+        fd.append(pathKey, path);
+      }
+      fd.set("transaction_id", prepared.transactionId);
+
+      const result = await submitSellVehicle(fd);
+      if (result.error) {
+        toast.error(result.error);
+      } else if (result.id) {
+        toast.success("Vehicle submitted for evaluation!");
+        router.push(`/my-transactions/${result.id}`);
+      }
+    } catch {
+      toast.error("Upload failed. Check your connection and try again.");
     }
   }
 

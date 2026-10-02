@@ -1,6 +1,15 @@
 const TRANSACTION_DOCUMENTS_BUCKET = "transaction-documents";
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
 
+// Customer uploads go browser -> storage; the bucket enforces the same 5 MB cap (00055).
+export const MAX_DOCUMENT_SIZE = 5 * 1024 * 1024;
+export const DOCUMENT_EXTENSIONS: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "application/pdf": "pdf",
+};
+
 type TransactionDocument = Record<string, unknown> & { storage_path?: unknown };
 
 export type SignedTransactionDocument = Omit<TransactionDocument, "storage_path"> & {
