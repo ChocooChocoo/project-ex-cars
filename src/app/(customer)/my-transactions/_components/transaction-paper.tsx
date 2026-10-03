@@ -14,6 +14,8 @@ export interface TransactionPaperProps {
   stateLabel: string;
   items: TransactionPaperLineItem[];
   total: number;
+  // Payments already received against the total; the balance due is what is left.
+  paid?: number;
   from: {
     name: string;
     email: string;
@@ -41,6 +43,7 @@ export function TransactionPaper({
   stateLabel,
   items,
   total,
+  paid = 0,
   from,
   billTo,
 }: TransactionPaperProps) {
@@ -122,11 +125,17 @@ export function TransactionPaper({
                 <span>Net amount</span>
                 <span>{formatInvoiceCurrency(total)}</span>
               </div>
+              {paid > 0 ? (
+                <div className="flex justify-between gap-8">
+                  <span>Payments received</span>
+                  <span>{formatInvoiceCurrency(paid)}</span>
+                </div>
+              ) : null}
             </div>
             <div className="border-current border-y-2 py-3">
               <div className="flex justify-between gap-8">
                 <span className="font-semibold uppercase">Balance due</span>
-                <span className="font-semibold">{formatInvoiceCurrency(total)}</span>
+                <span className="font-semibold">{formatInvoiceCurrency(Math.max(0, total - paid))}</span>
               </div>
             </div>
           </section>
