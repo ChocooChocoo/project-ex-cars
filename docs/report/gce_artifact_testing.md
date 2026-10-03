@@ -2,7 +2,7 @@
 
 Date: October 3, 2026
 
-Each scenario has its own table, with results and notes kept together. Scenarios 3, 4, and 5 show the latest results and have no remaining problems from the checks performed. Every item that failed earlier was checked again after a fix and passed. No ❌ Fail rows remain. The rechecks used a local copy of the app, and the fixes are not yet on the shared app.
+Each scenario has its own table, with results and notes kept together. Scenarios 3 through 6 show the latest results and have no remaining problems from the checks performed. Every item that failed earlier was checked again after a fix and passed. No ❌ Fail rows remain. The rechecks used a local copy of the app, and the fixes are not yet on the shared app.
 
 ✅ Passed means the action worked. ❌ Fail means a problem was observed. ℹ️ Note gives context, not another failure. ⬜ Not tested means there is not enough evidence to decide.
 
@@ -126,6 +126,42 @@ Each scenario has its own table, with results and notes kept together. Scenarios
 | 5 | Records left in the app | Test conditions | ℹ️ Note | The S5 car is sold. The S5b car is still listed and its request is rejected. One extra request, used to check the visit time, was cancelled. |
 | 5 | Where this was tested | Test conditions | ℹ️ Note | All steps ran on a local copy of the app against the shared test data. The fixes are not yet on the shared app. |
 
+## Scenario 6: Maria buys in monthly instalments and visits GCE
+
+| Scenario | Step or item | Who | Status | Notes |
+| --- | --- | --- | --- | --- |
+| 6. Maria buys in monthly instalments and visits GCE | Latest result | All required accounts | ✅ Passed | All nine steps passed at about 5:10 PM to 5:40 PM. Two problems seen along the way were fixed and checked again. The two items GCE staff marked Fail on this scenario were also checked. |
+| 6 | Test cars | Test setup | ℹ️ Note | Used GCE Test Artifact S6 20261003 for the main steps, after the CEO approved its ₱500,000 price. Two extra test cars, S6b and S6c, were added for the returned-terms, Don't proceed, and Potential Buyer checks. |
+| 6 | GCE staff feedback on step 1 | Customer | ✅ Passed | On 2 October, GCE staff reported that Save Details asked for a future visit hour. In this scenario the request is sent with no visit time, and it saved and sent without that message. The visit is booked later, in step 5, where the same message did appear. See the row on the visit time below. |
+| 6 | GCE staff feedback on step 2 | Sales Manager | ✅ Passed | On 1 October, GCE staff reported that a request reached the Sales Manager before the buyer filled it in. A request that was started but not sent showed Page not found for the Sales Manager. The sent request opened normally. |
+| 6 | 1. Ask for instalments and send the request | Customer | ✅ Passed | Clicked Buy Now. Added a Passport, a Driver's License, and Proof of Billing. Chose Financing and GCE Visit with no time, ticked the condition box, saved, and sent. The app said the request was sent. |
+| 6 | 2. Approve and propose the plan | Sales Manager | ✅ Passed | Checked the three papers and approved. Entered 12 months, ₱500,000 price, ₱100,000 Initial Downpayment, and a first instalment on November 3. The app said the terms were sent to the Head Accountant. The page showed a ₱400,000 balance at ₱33,333.33 a month. |
+| 6 | 3. Approve the plan | Head Accountant | ✅ Passed | The app said the terms were sent to the CEO. The plan then showed Waiting for the CEO. |
+| 6 | 3. Return the plan for revision | Head Accountant and Sales Manager | ✅ Passed | On the S6b request, Return for revision with a reason said the terms were returned to the Sales Manager. The Sales Manager saw Returned for revision, changed the downpayment to ₱150,000, and sent it again. It was then approved and confirmed. |
+| 6 | 4. Confirm the plan | CEO | ✅ Passed | The app said the financing was confirmed and the buyer was notified. The plan showed Confirmed. |
+| 6 | 5. Read the approved financing | Customer | ✅ Passed | The request showed Your approved financing: ₱100,000 Initial Downpayment, then 12 monthly payments on a ₱400,000 balance, paid only after inspecting the car at GCE. |
+| 6 | 5. Accept and book the visit | Customer | ✅ Passed | After a fix, the visit was booked and the app said no payment is taken before inspecting the car. The request showed Visit Scheduled, Initial Downpayment Pending. |
+| 6 | 5. Visit time that is not on the hour | Customer | ✅ Passed | First seen as a problem: a visit entered as 10:25 AM was refused with "Pick a future GCE visit slot on the hour", the same message GCE staff reported. The earlier fix covered only the first booking form. After a second fix, 10:25 AM was booked as 10:00 AM. |
+| 6 | 5. Choose Don't proceed | Customer | ✅ Passed | On the S6b request, the app said the request was closed. It changed to Cancelled with nothing paid and Balance due ₱0. |
+| 6 | 6. Record the Purchase Claim and the downpayment | Sales Manager | ✅ Passed | The app said the Purchase Claim was recorded. Recorded ₱100,000 by Bank Transfer as Downpayment. The request showed Initial Downpayment, Awaiting Verification. |
+| 6 | 6. Hold the car and tell the waiting buyer | Customer | ✅ Passed | A second request was waiting On Hold for the same car. The car was marked reserved, and the waiting buyer received a notice that the car was under a Purchase Claim and that their request stays open. |
+| 6 | 6. Choose Needs time: Potential Buyer | Sales Manager | ✅ Passed | On the S6c request, the app said it was recorded as Potential Buyer. The car stayed in the Showroom. |
+| 6 | 7. Check the payment and complete the agreement | Head Accountant | ✅ Passed | Complete financing agreement was not offered until the downpayment was checked. After checking it, the app said the financing account was opened. A 12-row monthly schedule appeared, each row with Record paid. |
+| 6 | 8. Mark the car sold | Sales Manager | ✅ Passed | The request changed to Completed. The buyer's page showed In-House Financing, Active. The waiting request changed to Cancelled. |
+| 6 | 9. Record a monthly payment | Head Accountant | ✅ Passed | Record paid on the first instalment said it was recorded as paid. The account showed ₱33,333.33 paid and ₱366,666.67 remaining. |
+| 6 | 9. A missed month flags the account | Head Accountant | ✅ Passed | With one instalment overdue, the account showed Flagged: missed payment and Missed installments 1. |
+| 6 | 9. Taking the car back only from the 4th missed month | Head Accountant | ✅ Passed | With one missed month, Instruct Repossession was refused: it said repossession starts after 4 missed installments and this account has 1. With four missed months, the account showed Missed installments 4 and the option was offered. The repossession was not carried out. |
+| 6 | Sale in Finance | Head Accountant | ✅ Passed | Sale records listed the car as Financing at a ₱500,000 sale price with ₱100,000 received as downpayment. |
+| 6 | Amounts on the buyer's page | Customer | ✅ Passed | The summary showed ₱500,000, Payments received ₱133,333.33, and Balance due ₱366,666.67 after the downpayment and one instalment. First seen as a problem: the buyer's page labelled the ₱500,000 car price as Financed and the ₱400,000 financed amount as Balance. After a fix, they read Vehicle Price and Amount Financed, matching the staff page. |
+| 6 | Instruct Repossession shown early | Head Accountant | ℹ️ Note | The Instruct Repossession button appears from the first missed month and can be opened. The app only refuses when Instruct is clicked. |
+| 6 | Wording after approval | Sales Manager | ℹ️ Note | Right after approval, the page told the Sales Manager to record the payment and mark the car sold after the visit. For instalments, the plan has to be agreed first. |
+| 6 | Reserved car in the Showroom | Sales Manager | ℹ️ Note | After the Purchase Claim, the car was still listed in the Showroom. Its record was marked reserved. Whether the page shows it as reserved to buyers was not checked. |
+| 6 | Reason for returning the plan | Sales Manager | ℹ️ Note | The Sales Manager's page showed Returned for revision. Whether the Head Accountant's reason was also shown was not checked. |
+| 6 | Moving the dates | Test conditions | ℹ️ Note | The missed months were not waited out. Instalment due dates were moved into the past in the test data, first one and then four, and put back afterwards. The missed-payment flag was cleared. Notices sent to staff during that check remain. |
+| 6 | Not tested | Test conditions | ⬜ Not tested | The full repossession, the Waive option on an instalment, and paying all twelve instalments were not tried by hand. |
+| 6 | Records left in the app | Test conditions | ℹ️ Note | The S6 car is sold on instalments with one instalment paid. The S6b request is cancelled and the car is still listed. The S6c request is still open as a Potential Buyer with a visit booked for October 10. One extra unsent request was cancelled. No real visit or payment took place. |
+| 6 | Where this was tested | Test conditions | ℹ️ Note | All steps ran on a local copy of the app against the shared test data. The fixes are not yet on the shared app. |
+
 ## General testing results and notes
 
 | Scenario | Step or item | Who | Status | Notes |
@@ -140,11 +176,11 @@ Each scenario has its own table, with results and notes kept together. Scenarios
 | Earlier testing | Pauses during testing | Tester | ℹ️ Note | Some attempts waited for the wrong page or message. Later checks confirmed successful actions. These pauses were not counted as app failures. |
 | All tests | Test conditions | Tester | ℹ️ Note | Cars, amounts, papers, and visits were for testing. No real money moved. No physical inspection occurred. |
 | All tests | Earlier pause after Scenario 2 | Tester | ℹ️ Note | The Scenario 1 car was listed for ₱500,000. Its unfinished purchase request was later completed in Scenario 3. After the pause, no buying or selling continued until the user requested it. |
-| All tests | Preparation for later scenarios | Tester | ℹ️ Note | Six test cars were created for Scenarios 4 through 9 with proposed prices of ₱500,000. The Scenario 8 and 9 cars appeared in the Showroom. The Scenario 4 car was approved and sold during Scenario 4. The Scenario 5 car was approved and sold during Scenario 5. The Scenario 6 and 7 cars were still awaiting price approval. |
-| All tests | Current stopping point | Tester | ℹ️ Note | Testing stopped after Scenario 5. Earlier failed items from Scenarios 1 to 3 were rechecked before that. Test records remain in the app. Fixes were made for the failed items and checked on a local copy of the app. They are not yet on the shared app. |
+| All tests | Preparation for later scenarios | Tester | ℹ️ Note | Six test cars were created for Scenarios 4 through 9 with proposed prices of ₱500,000. The Scenario 8 and 9 cars appeared in the Showroom. The Scenario 4 car was approved and sold during Scenario 4. The Scenario 5 car was approved and sold during Scenario 5. The Scenario 6 car was approved and sold on instalments during Scenario 6. The Scenario 7 car was still awaiting price approval. |
+| All tests | Current stopping point | Tester | ℹ️ Note | Testing stopped after Scenario 6. Earlier failed items from Scenarios 1 to 3 were rechecked before that. Test records remain in the app. Fixes were made for the failed items and checked on a local copy of the app. They are not yet on the shared app. |
 
-## Scenarios 6 through 9: Not tested
+## Scenarios 7 through 9: Not tested
 
 | Scenario | Step or item | Who | Status | Notes |
 | --- | --- | --- | --- | --- |
-| 6 through 9 | Scenario steps | All required accounts | ⬜ Not tested | These scenarios were not continued. Preparation alone does not count as testing the steps. |
+| 7 through 9 | Scenario steps | All required accounts | ⬜ Not tested | These scenarios were not continued. Preparation alone does not count as testing the steps. |
