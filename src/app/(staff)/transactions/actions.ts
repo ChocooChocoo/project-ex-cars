@@ -198,7 +198,7 @@ export async function transitionTransaction(formData: FormData) {
             toState === "approved"
               ? financing
                 ? "The Sales Manager will now agree your payment duration and financing terms."
-                : "GCE will expect you on your scheduled visit."
+                : "GCE will expect you at the scheduled date and time."
               : `GCE did not approve your request.${reason ? ` Reason: ${reason}` : ""} Your visit slot has been released.`,
           transactionId: id,
         },

@@ -16,6 +16,8 @@ export interface TransactionPaperProps {
   total: number;
   // Payments already received against the total; the balance due is what is left.
   paid?: number;
+  // A cancelled or rejected transaction owes nothing, whatever was paid.
+  closed?: boolean;
   from: {
     name: string;
     email: string;
@@ -44,6 +46,7 @@ export function TransactionPaper({
   items,
   total,
   paid = 0,
+  closed = false,
   from,
   billTo,
 }: TransactionPaperProps) {
@@ -135,7 +138,7 @@ export function TransactionPaper({
             <div className="border-current border-y-2 py-3">
               <div className="flex justify-between gap-8">
                 <span className="font-semibold uppercase">Balance due</span>
-                <span className="font-semibold">{formatInvoiceCurrency(Math.max(0, total - paid))}</span>
+                <span className="font-semibold">{formatInvoiceCurrency(closed ? 0 : Math.max(0, total - paid))}</span>
               </div>
             </div>
           </section>
