@@ -9,11 +9,10 @@ import {
   open,
   pick,
   pickByLabel,
-  resetCustomerStanding,
   seedPassword,
   signInAs,
 } from "./support/t01";
-import { archiveListedTestVehicles, canCreateTestVehicle, createTestVehicle } from "./support/test-vehicle";
+import { canCreateTestVehicle, createTestVehicle } from "./support/test-vehicle";
 
 // T01 Phase 6, §7–9 (Phase 6 default until the client writes these sections): a bank-transfer purchase
 // follows its Cash counterpart. §7: the car is marked sold only after the Head Accountant verifies the
@@ -27,17 +26,47 @@ test.describe
     );
     // A click that cannot land fails in a minute instead of holding the run until the test timeout.
     test.use({ actionTimeout: 60_000 });
-    test.beforeAll(resetCustomerStanding);
-    test.afterAll(archiveListedTestVehicles);
+    test.setTimeout(300_000);
+    const vehicleIds: string[] = [];
+    test.afterAll(async () => {
+      if (vehicleIds.length) {
+        await db()
+          .from("vehicles")
+          .update({ listing_state: "archived" })
+          .in("id", vehicleIds)
+          .eq("listing_state", "available");
+      }
+    });
 
     let visitId = "";
 
-    test("§7: a GCE visit paid by bank transfer is sold only once the transfer is verified", async ({ page }) => {
+    test("an unfinished buyer request is hidden from the Sales Manager", async ({ page }) => {
+      const vehicleId = await createTestVehicle("S7-DRAFT");
+      vehicleIds.push(vehicleId);
       await signInAs(page, "customer@gce.local");
-      visitId = await buyerRequest(page, await createTestVehicle("BANK-VISIT"), {
+      await open(page, `/customer/showroom/${vehicleId}`);
+      await page.getByRole("button", { name: "Buy Now" }).click();
+      await page.waitForURL(/\/my-transactions\/[0-9a-f-]{36}/);
+      const id = page.url().match(/[0-9a-f-]{36}/)?.[0] ?? "";
+      await signInAs(page, "sales_manager@gce.local");
+      await open(page, "/sales_manager/transactions");
+      await expect(page.locator(`a[href$="/${id}"]`)).toHaveCount(0);
+      await open(page, `/sales_manager/transactions/${id}`);
+      await expect(page.getByText("Page not found", { exact: false })).toBeVisible();
+      await db()
+        .from("transactions")
+        .update({ current_state: "cancelled", completed_at: new Date().toISOString() })
+        .eq("id", id);
+    });
+
+    test("§7: a GCE visit paid by bank transfer is sold only once the transfer is verified", async ({ page }) => {
+      const vehicleId = await createTestVehicle("BANK-VISIT");
+      vehicleIds.push(vehicleId);
+      await signInAs(page, "customer@gce.local");
+      visitId = await buyerRequest(page, vehicleId, {
         method: "Bank Transfer",
         arrangement: "GCE Visit",
-        when: futureSlot(),
+        when: futureSlot().replace(":00", ":25"),
       });
       await approveAsSalesManager(page, visitId);
 
@@ -64,11 +93,18 @@ test.describe
       await expect(page.getByText("Transaction moved to completed.")).toBeVisible();
       const { data } = await db().from("transactions").select("current_state").eq("id", visitId).single();
       expect(data?.current_state).toBe("completed");
+      const { data: vehicle } = await db().from("vehicles").select("listing_state").eq("id", vehicleId).single();
+      expect(vehicle?.listing_state).toBe("sold");
+      await signInAs(page, "customer@gce.local");
+      await open(page, `/customer/my-transactions/${visitId}`);
+      await expect(page.getByRole("article").getByText("₱0.00", { exact: true })).toBeVisible();
     });
 
     test("§9: a bank-transfer delivery asks for the balance by bank transfer", async ({ page }) => {
+      const vehicleId = await createTestVehicle("BANK-DELIVERY");
+      vehicleIds.push(vehicleId);
       await signInAs(page, "customer@gce.local");
-      const id = await buyerRequest(page, await createTestVehicle("BANK-DELIVERY"), {
+      const id = await buyerRequest(page, vehicleId, {
         method: "Bank Transfer",
         arrangement: "Delivery",
         when: futureSlot(),
