@@ -356,7 +356,8 @@ export function TransactionDetail({
           id: "vehicle",
           description: `Vehicle sale — ${vehicleName || transactionKindLabel(kind as never)}`,
           quantity: 1,
-          unitPrice: Number(sellDetails?.offered_amount ?? 0),
+          // The asking price until the Marketing Specialist records the agreed one.
+          unitPrice: Number(sellDetails?.agreed_price || sellDetails?.offered_amount || 0),
         },
       ];
     }
@@ -370,19 +371,24 @@ export function TransactionDetail({
     ];
   })();
 
+  const paperTotal = paperItems.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
   const paper: TransactionPaperProps = {
     reference: id.slice(0, 8).toUpperCase(),
     issuedDate: format(new Date(openedAt), "yyyy-MM-dd"),
     stateLabel: TRANSACTION_STATE_LABELS[state],
     items: paperItems,
-    total: paperItems.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0),
+    total: paperTotal,
     // The delivery and reschedule fees are paid on top of the car price, so they do not reduce it.
+    // A seller is paid through a disbursement, not a payment record: a sell offer only becomes
+    // Completed once the Head Accountant has paid the agreed price in full.
     paid:
       kind === "buy"
         ? payments
             .filter((p) => !["delivery_fee", "reschedule_fee"].includes(p.payment_kind as string))
             .reduce((sum, p) => sum + Number(p.amount ?? 0), 0)
-        : 0,
+        : kind === "sell" && state === "completed"
+          ? paperTotal
+          : 0,
     from: {
       name: "GCE Auto",
       email: "sales@gceauto.ph",
@@ -753,16 +759,20 @@ export function TransactionDetail({
                   value={sellDetails.offered_amount ? `₱${Number(sellDetails.offered_amount).toLocaleString()}` : "—"}
                 />
                 <DetailRow
-                  label="Valuation"
+                  label="Agreed Price"
                   value={
-                    sellDetails.valuation_amount
-                      ? `₱${Number(sellDetails.valuation_amount).toLocaleString()}`
-                      : "Pending"
+                    sellDetails.agreed_price
+                      ? `₱${Number(sellDetails.agreed_price).toLocaleString()}`
+                      : "Not yet agreed"
                   }
                 />
                 <DetailRow
                   label="Decision"
-                  value={sellDetails.decision ? String(sellDetails.decision).replace("_", " ") : "Pending"}
+                  value={
+                    sellDetails.decision
+                      ? String(sellDetails.decision).replace("_", " ")
+                      : TRANSACTION_STATE_LABELS[state]
+                  }
                 />
                 <DetailRow label="Review Notes" value={(sellDetails.review_notes as string) ?? "—"} />
               </section>

@@ -10,7 +10,11 @@ vi.mock("@/app/(customer)/my-transactions/actions", () => ({
   saveBuyDetails: vi.fn(),
   uploadPurchaseDocument: vi.fn(),
 }));
-vi.mock("./transaction-preview", () => ({ TransactionPreview: () => null }));
+vi.mock("./transaction-preview", () => ({
+  TransactionPreview: ({ paper }: { paper: { total: number; paid?: number } }) => (
+    <div data-testid="paper">{`${paper.total}/${paper.paid}`}</div>
+  ),
+}));
 
 const transaction = {
   id: "transaction-1",
@@ -35,6 +39,32 @@ function renderDetail(documents: Record<string, unknown>[]) {
     />,
   );
 }
+
+describe("TransactionDetail completed sell offer", () => {
+  it("shows the agreed price as paid in full, not the asking price as due", () => {
+    render(
+      <TransactionDetail
+        transaction={{
+          ...transaction,
+          transaction_kind: "sell",
+          current_state: "completed",
+          sell_details: { offered_amount: 520000, agreed_price: 450000 },
+        }}
+        history={[]}
+        documents={[]}
+        payments={[]}
+        installmentAccount={null}
+        paymentTerms={null}
+        viewingArrangements={[]}
+        autofill={null}
+      />,
+    );
+
+    expect(screen.getByText("Agreed Price").nextElementSibling).toHaveTextContent("₱450,000");
+    expect(screen.getByText("Decision").nextElementSibling).toHaveTextContent("Completed");
+    expect(screen.getByTestId("paper")).toHaveTextContent("450000/450000");
+  });
+});
 
 describe("TransactionDetail document previews", () => {
   it("renders a signed image preview without exposing its private path", () => {
