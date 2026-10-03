@@ -1,0 +1,150 @@
+# GCE Testing Report
+
+Date: October 3, 2026
+
+Each scenario has its own table, with results and notes kept together. Scenarios 3, 4, and 5 show the latest results and have no remaining problems from the checks performed. Every item that failed earlier was checked again after a fix and passed. No ❌ Fail rows remain. The rechecks used a local copy of the app, and the fixes are not yet on the shared app.
+
+✅ Passed means the action worked. ❌ Fail means a problem was observed. ℹ️ Note gives context, not another failure. ⬜ Not tested means there is not enough evidence to decide.
+
+## Scenario 1: Juan sells his car, with no problems found
+
+| Scenario | Step or item | Who | Status | Notes |
+| --- | --- | --- | --- | --- |
+| 1. Juan sells his car, with no problems found | Test car and agreed price | Test setup | ℹ️ Note | Used GCE Test Artifact S1 20261003. Juan asked for ₱520,000. The maximum approved price was ₱500,000. The agreed price was ₱480,000. |
+| 1 | 1. Submit the car, papers, and photo | Customer | ✅ Passed | The offer page opened with Chat with GCE. The meeting option was GCE Visit. |
+| 1 | 1. Submit without the ORCR | Customer | ✅ Passed | The app stopped the submission and asked for the required papers. Adding the ORCR allowed submission. |
+| 1 | 2. Check the papers and ask for price approval | Marketing Specialist | ✅ Passed | The approval button was unavailable until all four papers were checked. The ₱500,000 request showed Pending CEO Approval. |
+| 1 | 3. Approve the maximum price | CEO | ✅ Passed | The app accepted approval. The car did not appear in the Showroom at this point. |
+| 1 | 4. Send a message about the price | Customer | ✅ Passed | The message appeared in Chat with GCE. |
+| 1 | 5. Reply, save the price, and arrange the inspection | Marketing Specialist | ✅ Passed | The app saved the reply, ₱480,000 price, meeting details, and assigned staff. An inspection visit link appeared. |
+| 1 | 5. Try a price above the approved maximum | Marketing Specialist | ⬜ Not tested | A ₱600,000 attempt did not create a visit. Other required details were missing during some attempts. The reason was not clear enough to decide. |
+| 1 | 6. Confirm Juan's identity and record the expense | Confidential Informant | ✅ Passed | The app recorded the identity check and ₱850 fuel and toll expense, with a picture as proof. |
+| 1 | 7. Check the plate and report no problems | Mechanic | ✅ Passed | The app recorded the plate check and showed that the car was ready for payment. |
+| 1 | 8. Ask for money to pay Juan | Account Manager | ✅ Passed | The app accepted the ₱480,000 request and waited for the Head Accountant. |
+| 1 | 9. Approve the money request and record payment | Head Accountant | ✅ Passed | Payment showed paid. The offer showed Completed. The CEO received a payment notice. |
+| 1 | 10. Prevent payment of the expense before resale | Head Accountant | ✅ Passed | The expense could not be paid yet. The button was visible but unavailable, rather than hidden as the instructions suggested. |
+| 1 | 10. Pay back the expense after resale | Head Accountant | ⬜ Not tested | The car was later sold during Scenario 3, but paying back the expense was not tested. |
+| 1 | Details on the completed offer | Customer | ✅ Passed | Checked again at about 12:21 PM after a fix. The completed offer showed Agreed Price ₱480,000 and Decision Completed. Earlier it showed both as Pending. |
+| 1 | Amount on the payment summary | Customer | ✅ Passed | Checked again at about 12:21 PM after a fix. The summary showed ₱480,000, Payments received ₱480,000, and Balance due ₱0. Earlier it showed ₱520,000 due. |
+| 1 | Records checked | Test conditions | ℹ️ Note | The recheck reopened the completed Scenario 1 offer on a local copy of the app. The selling steps were not repeated. The fix is not yet on the shared app. |
+
+## Scenario 2: Juan sells his car, but inspection finds a problem
+
+| Scenario | Step or item | Who | Status | Notes |
+| --- | --- | --- | --- | --- |
+| 2. Juan sells his car, but inspection finds a problem | Test car and revised price | Test setup | ℹ️ Note | Used GCE Test Artifact S2 20261003. The asking price was ₱520,000 and first agreed price was ₱480,000. The repair estimate was ₱30,000. The revised maximum was ₱460,000 and final agreed price was ₱450,000. |
+| 2 | 1. Submit a car with a known problem | Customer | ✅ Passed | The offer opened with the papers and photo. The problem was a weak air conditioner. The meeting option was Meet Halfway within Calabarzon. |
+| 2 | 2. Check the papers, approve the price, and arrange inspection | Marketing Specialist and CEO | ✅ Passed | The papers were checked. The CEO approved ₱500,000. The app saved the ₱480,000 price and inspection visit. The Confidential Informant confirmed Juan's identity. |
+| 2 | 3. Report the inspection problem | Mechanic | ✅ Passed | The app saved the plate check, air conditioner problem, ₱30,000 repair estimate, and photo. The report appeared on the offer. |
+| 2 | 4. Send the lower price to the CEO | Marketing Specialist | ✅ Passed | The app accepted the explanation, ₱450,000 proposed price, and ₱460,000 maximum price. It sent the request to the CEO. |
+| 2 | 4. End an offer that is no longer worthwhile | Marketing Specialist | ⬜ Not tested | This alternative was not tested on another offer. |
+| 2 | 5. Approve the new maximum price | CEO | ✅ Passed | The app accepted ₱460,000 and showed the approval in the offer history. |
+| 2 | 6. Record Juan's agreement | Marketing Specialist | ✅ Passed | The agreed price changed to ₱450,000. The app showed that the car was ready for payment. |
+| 2 | 6. End the offer when Juan refuses | Marketing Specialist | ⬜ Not tested | This alternative was not tested on another offer. |
+| 2 | 7. Ask for the money and record payment | Account Manager and Head Accountant | ✅ Passed | The app recorded ₱450,000 paid. The offer showed Completed. Its history included Juan's agreement and payment. |
+| 2 | Details on the completed offer | Customer | ✅ Passed | Checked again at about 12:06 PM after a fix. The completed offer showed Agreed Price ₱450,000 and Decision Completed. Earlier it showed both as Pending. |
+| 2 | Amount on the payment summary | Customer | ✅ Passed | Checked again at about 12:06 PM after a fix. The summary showed ₱450,000, Payments received ₱450,000, and Balance due ₱0. Earlier it showed ₱520,000 due. |
+| 2 | Records checked | Test conditions | ℹ️ Note | The recheck reopened the completed Scenario 2 offer on a local copy of the app. The selling steps were not repeated. The fix is not yet on the shared app. |
+
+## Scenario 3: Maria buys with cash and visits GCE
+
+| Scenario | Step or item | Who | Status | Notes |
+| --- | --- | --- | --- | --- |
+| 3. Maria buys with cash and visits GCE | Latest result | All required accounts | ✅ Passed | The purchase steps and final payment summary passed. No problems remain from the Scenario 3 checks performed. |
+| 3 | Test car and visit | Test setup | ℹ️ Note | Used GCE Test Artifact S3 Retry 20261003, listed at ₱500,000. The visit was booked for 1:00 PM. Leaving Final Price empty kept the correct price. |
+| 3 | 1. Open the car, add papers, and book the visit | Customer | ✅ Passed | Clicked Buy Now. Added a Passport, a Driver's License, and Proof of Billing. Saved Cash and GCE Visit. The app locked 1:00 PM. |
+| 3 | 2. Send the request | Customer | ✅ Passed | The app said the request was sent and would be reviewed within seven days. |
+| 3 | 3. Try booking the same car and time again | Customer | ✅ Passed | The app refused the second booking and asked for another time. |
+| 3 | 4. Try approving before checking the papers | Sales Manager | ✅ Passed | The app refused approval until both IDs and Proof of Billing were checked. |
+| 3 | 4. Check the papers and approve | Sales Manager | ✅ Passed | The request changed to Approved. The Customer received an approval notice. |
+| 3 | 5. Record payment and complete the sale | Sales Manager | ✅ Passed | Recorded ₱500,000 as Cash and Full payment. The request showed Completed. The staff page showed ₱500,000 paid and nothing left to pay. |
+| 3 | 5. Remove the sold car from the Showroom | Customer and Sales Manager | ✅ Passed | Neither Showroom listed the car after the sale. The Customer's request page showed Sold. |
+| 3 | 5. Close the other request | Sales Manager | ✅ Passed | The second request changed to Cancelled. Its history said the car was sold to another buyer. |
+| 3 | 5. Try Buyer declined on another request | Sales Manager | ✅ Passed | The other request closed. The car stayed in the Showroom until the main purchase completed. |
+| 3 | 6. Find the sale in Finance | Head Accountant | ✅ Passed | The sale listed the car, buyer, and Cash payment method. Sale price and Payments received both showed ₱500,000. |
+| 3 | Amount left to pay on the printable summary | Customer | ✅ Passed | Checked again at about 11:28 AM. Car price and Payments received showed ₱500,000. Balance due showed ₱0, including after refreshing. |
+| 3 | Cash payment label | Sales Manager | ℹ️ Note | During the full retry, the payment record showed Pending. The instructions did not include a separate payment check. The label was not checked again during the final summary check. |
+| 3 | Visit timing | Test conditions | ℹ️ Note | The sale completed at about 11:16 AM, before the 1:00 PM visit. No physical visit or real cash payment occurred. |
+| 3 | Records checked | Test conditions | ℹ️ Note | The full retry used fresh requests. The final summary check reopened that completed purchase. First-test records were not checked again. |
+| 3 | Records left in the app | Test conditions | ℹ️ Note | Both Scenario 3 test cars are sold. The extra requests from both tests are closed. No payments were recorded for those extra requests. |
+
+## Scenario 4: Two buyers want the same car and meet halfway
+
+| Scenario | Step or item | Who | Status | Notes |
+| --- | --- | --- | --- | --- |
+| 4. Two buyers want the same car and meet halfway | Latest result | All required accounts | ✅ Passed | All eight steps passed at about 12:35 PM to 12:55 PM. Two small problems seen along the way were fixed and checked again. |
+| 4 | Test cars | Test setup | ℹ️ Note | Used GCE Test Artifact S4 20261003 for the main steps, after the CEO approved its ₱500,000 price. Four extra test cars, S4b to S4e, were added for the cancel, no-show, and decline steps. |
+| 4 | 1. Ask to meet halfway and send the request | Customer | ✅ Passed | Clicked Buy Now. Added a Passport, a Driver's License, and Proof of Billing. Chose Cash and CALABARZON Meet-up with a time and place. The app said the request was sent. |
+| 4 | 1. Try saving without the condition tick | Customer | ✅ Passed | The app refused to save. It asked the buyer to review the car's condition and acknowledge it first. |
+| 4 | 2. Send a second request for the same car | Customer | ✅ Passed | The app said another buyer's request was in progress and this one was On Hold. The request page showed On Hold. |
+| 4 | 3. Check the waiting buyer cannot be made active yet | Sales Manager | ✅ Passed | The Buyers for this car panel listed both requests. Make Active was unavailable while the first request was still open. |
+| 4 | 3. Reject the first request and make the second active | Sales Manager | ✅ Passed | The first request changed to Rejected. Make Active then worked, and the app said the request was now Active. |
+| 4 | 4. Try cancelling a meet-up about 3 hours away | Customer | ✅ Passed | The app refused. It said cancellation is only allowed 5 hours or more before the scheduled time. The request stayed open. |
+| 4 | 5. Try recording a no-show too early | Sales Manager | ✅ Passed | Before the meet-up, and again 2 hours after it, the Buyer didn't show up option was not offered at all. The instructions expected it to be refused; it was hidden, which has the same effect. |
+| 4 | 5. Record a no-show after 2½ hours | Sales Manager | ✅ Passed | With the meet-up 3 hours in the past, the option appeared. The app recorded that the buyer didn't show up and closed the request. The buyer's record showed one no-show. |
+| 4 | 6. Limit the buyer after a second no-show | Customer | ✅ Passed | After a second no-show, a note said the account was limited to GCE visits. The Arrangement Type list offered GCE Visit only. |
+| 4 | 7. Record Declined, Not Legit | Sales Manager | ✅ Passed | The app recorded the decline. The buyer got one strike and was limited to GCE visits straight away. |
+| 4 | 7. Record Declined, Legit | Sales Manager | ✅ Passed | The app recorded the decline and closed the request. The buyer's record did not change, so there was no penalty. |
+| 4 | 8. Approve, record payment, and mark the car sold | Sales Manager | ✅ Passed | Recorded ₱500,000 as Cash and Full payment. The request changed to Completed with nothing left to pay. The car left the Showroom. |
+| 4 | 8. Tell the waiting buyer | Customer | ✅ Passed | A third request was waiting On Hold. It changed to Cancelled, its history said the car was sold to another buyer, and the buyer received a notice that the car had been sold. |
+| 4 | Amount due on a closed request | Customer | ✅ Passed | First seen as a problem: the printable summary of a cancelled, rejected, or no-show request still showed ₱500,000 due. After a fix, those summaries showed Balance due ₱0. Open requests still show the full amount due. |
+| 4 | Wording of the approval notice | Customer | ✅ Passed | First seen as a problem: the notice for an approved meet-up said GCE would expect the buyer on the "scheduled visit". After a fix, a newly approved meet-up said "at the scheduled date and time". |
+| 4 | Label for the active request | Sales Manager | ℹ️ Note | After Make Active, the panel showed the request as Pending Sales Manager Approval, not as Active. The message did say the request was now Active. |
+| 4 | Moving the clock | Test conditions | ℹ️ Note | The 5-hour and 2½-hour rules were not waited out. Each meet-up was booked through the app, then its time was moved directly in the test data: to 3 hours ahead for the cancel step, and to 2 and 3 hours in the past for the no-show steps. |
+| 4 | Buyer account reset | Test conditions | ℹ️ Note | The Customer's no-shows, strike, and GCE-visit-only limit were cleared after the test, as the instructions ask. The limit was also cleared once mid-test so that a waiting request could be made for step 8. |
+| 4 | Records left in the app | Test conditions | ℹ️ Note | The S4 car is sold. S4b to S4e are still listed, and every request made on them is closed. One extra request was approved to recheck the notice wording, then closed with Declined, Legit. No real meet-up or payment took place. |
+| 4 | Where this was tested | Test conditions | ℹ️ Note | All steps ran on a local copy of the app against the shared test data. The two fixes are not yet on the shared app. |
+
+## Scenario 5: Maria buys with cash and has the car delivered
+
+| Scenario | Step or item | Who | Status | Notes |
+| --- | --- | --- | --- | --- |
+| 5. Maria buys with cash and has the car delivered | Latest result | All required accounts | ✅ Passed | All seven steps passed at about 1:05 PM to 1:20 PM. One problem seen along the way was fixed and checked again. The two items GCE staff marked Fail on this scenario were also checked. |
+| 5 | Test cars | Test setup | ℹ️ Note | Used GCE Test Artifact S5 20261003 for the main steps, after the CEO approved its ₱500,000 price. One extra test car, S5b, was added for the not-serviceable check. |
+| 5 | GCE staff feedback on step 1 | Customer | ✅ Passed | On 2 October, GCE staff reported that Save Details asked for a future visit hour even with a future time. That message appears when a GCE visit time is not exactly on the hour. After a fix, a visit entered as 10:25 AM was saved and locked as 10:00 AM. The cause of the staff report was not confirmed, so this is the most likely one, not a proven one. |
+| 5 | GCE staff feedback on step 2 | Sales Manager | ✅ Passed | On 1 October, GCE staff reported that a request reached the Sales Manager before the buyer filled it in. A request that was started but not sent did not appear in the Sales Manager's Transactions list, and its page said Page not found. The sent request appeared. |
+| 5 | 1. Ask for delivery and send the request | Customer | ✅ Passed | Clicked Buy Now. Added a Passport, a Driver's License, and Proof of Billing. Chose Cash and Delivery for October 8 at 10:30 AM with an address in Calamba. Ticked the condition box. The app saved the details and said the request was sent. |
+| 5 | 2. Approve and set the delivery terms | Sales Manager | ✅ Passed | Checked the three papers and approved. Chose Yes, we can deliver, with a ₱2,500 delivery fee and ₱50,000 downpayment. The app said the terms were sent to the buyer. |
+| 5 | 2. Show the buyer what to pay and by when | Customer | ✅ Passed | The request page showed the ₱2,500 fee and ₱50,000 downpayment by bank transfer before October 7, three working days after the test date. It said the balance is paid in cash on delivery. |
+| 5 | 2. Reject an address that cannot be served | Sales Manager | ✅ Passed | On the S5b request, choosing No, not serviceable offered only Reject: not serviceable. The app said the request was closed as not serviceable, and it changed to Rejected. |
+| 5 | 3. Record and check the fee and downpayment | Head Accountant | ✅ Passed | Recorded ₱2,500 as Delivery fee and ₱50,000 as Downpayment, both by Bank Transfer. After checking each one, both showed as verified. |
+| 5 | 4. Hold the delivery team until the fee is checked | Sales Manager | ✅ Passed | While the delivery fee was still unchecked, Create delivery field case was unavailable. |
+| 5 | 4. Create the delivery team | Sales Manager | ✅ Passed | Chose a Confidential Informant, a Mechanic, and a Head Security. The app said the delivery field case was created, and an Open field case link appeared. |
+| 5 | 4. Reschedule the delivery | Sales Manager | ✅ Passed | Entered October 9 at 3:00 PM and a ₱500 fee. The app said the delivery was rescheduled, and the new date showed on the staff, team, and buyer pages. |
+| 5 | 5. Report a delay and tell the buyer | Confidential Informant and Sales Manager | ✅ Passed | The Confidential Informant reported a traffic delay. The Sales Manager then clicked Tell the buyer about the delay. The buyer's page showed the Running late note. |
+| 5 | 6. Move the delivery to Delivered | Head Security | ✅ Passed | Mark Dispatched, Mark In Transit, Mark Arriving, and Mark Delivered each showed its Marked message. The buyer's page lit up each step in turn. |
+| 5 | 6. Refuse Mark Dispatched before the downpayment is checked | Head Security | ⬜ Not tested | The downpayment was checked before the delivery team existed, so this could not be tried on the main request. |
+| 5 | 7. Refuse Mark Sold before Delivered | Sales Manager | ✅ Passed | Before the delivery was marked Delivered, the app refused and said to mark the car sold after the delivery team reports it delivered. |
+| 5 | 7. Record the balance and mark the car sold | Sales Manager | ✅ Passed | Recorded ₱450,000 as Cash, Balance on delivery. The request changed to Completed. The car left both Showrooms. The buyer's summary showed ₱500,000 received and ₱0 due. |
+| 5 | 7. The other endings | Sales Manager | ⬜ Not tested | Buyer unavailable, Declined, Legit with a downpayment refund, and Declined, Not Legit were not tried by hand on delivery requests. The team's automated checks did run two of them and both passed: Buyer unavailable kept the downpayment, and Declined, Legit put a Downpayment refund in Finance. Declined, Not Legit on a delivery was not checked either way. |
+| 5 | Sale in Finance | Head Accountant | ✅ Passed | Sale records listed the car at a ₱500,000 sale price with ₱502,500 received, split into delivery fee ₱2,500, downpayment ₱50,000, and balance ₱450,000. |
+| 5 | Amount still to pay on the staff page | Sales Manager | ✅ Passed | First seen as a problem: the delivery fee was counted toward the car price. Before the balance was paid, the staff page showed ₱447,500 left to pay, not ₱450,000. After the sale it showed ₱502,500 paid on a ₱500,000 car. After a fix, it showed ₱500,000 paid, ₱0 left, and a note that ₱2,500 in fees is not counted. |
+| 5 | Reschedule fee | Sales Manager | ℹ️ Note | The ₱500 reschedule fee was entered but never asked for or recorded. The sale still completed. The app leaves it to the Head Accountant to record that fee by hand. |
+| 5 | Payment rows | Head Accountant | ℹ️ Note | The payment table shows the amount, method, and date of each payment, but not what the payment was for. With two bank transfers waiting, the fee and the downpayment can only be told apart by amount. |
+| 5 | Wording on the rejected request | Sales Manager | ℹ️ Note | The not-serviceable delivery request said its visit slot was released. A delivery has no visit slot. |
+| 5 | Delivery timing | Test conditions | ℹ️ Note | The delivery was dated October 9. It was marked Delivered and the sale completed on October 3. No real delivery or payment took place. |
+| 5 | Records left in the app | Test conditions | ℹ️ Note | The S5 car is sold. The S5b car is still listed and its request is rejected. One extra request, used to check the visit time, was cancelled. |
+| 5 | Where this was tested | Test conditions | ℹ️ Note | All steps ran on a local copy of the app against the shared test data. The fixes are not yet on the shared app. |
+
+## General testing results and notes
+
+| Scenario | Step or item | Who | Status | Notes |
+| --- | --- | --- | --- | --- |
+| Earlier testing | Open the instructions and GCE app | Tester | ✅ Passed | Both opened. Results are saved in this report, not in the shared instructions page. |
+| Earlier testing | Sign in with the required accounts | Tester | ✅ Passed | All accounts needed for Scenarios 1, 2, and 3 worked. The password is not included here. |
+| Earlier testing | Customer menu after switching accounts | Customer | ✅ Passed | Checked again at about 12:08 PM after a fix. Switching between the Customer, Sales Manager, Marketing Specialist, and Head Accountant accounts showed the correct menu each time, including Sell Vehicle for the Customer. The earlier problem happened once and could not be made to happen again, so the fix was not seen correcting it directly. |
+| Earlier testing | Warning while preparing test cars | Tester | ✅ Passed | Checked again at about 12:08 PM after a fix. The warning appeared when typing in the Mileage or Price box. After the fix, typing in the add-car and edit-car forms showed no warning. Nothing was saved during this check. |
+| Earlier testing | Open the sign-out menu | Tester | ℹ️ Note | A small testing tool blocked a mouse click. The keyboard opened the menu. |
+| Earlier testing | Browser tab name | Tester | ℹ️ Note | The tab showed Studio Admin rather than the GCE name. |
+| Earlier testing | Warnings on the instructions page | Tester | ℹ️ Note | The page showed warnings but opened. These were separate from the GCE app. |
+| Earlier testing | Pauses during testing | Tester | ℹ️ Note | Some attempts waited for the wrong page or message. Later checks confirmed successful actions. These pauses were not counted as app failures. |
+| All tests | Test conditions | Tester | ℹ️ Note | Cars, amounts, papers, and visits were for testing. No real money moved. No physical inspection occurred. |
+| All tests | Earlier pause after Scenario 2 | Tester | ℹ️ Note | The Scenario 1 car was listed for ₱500,000. Its unfinished purchase request was later completed in Scenario 3. After the pause, no buying or selling continued until the user requested it. |
+| All tests | Preparation for later scenarios | Tester | ℹ️ Note | Six test cars were created for Scenarios 4 through 9 with proposed prices of ₱500,000. The Scenario 8 and 9 cars appeared in the Showroom. The Scenario 4 car was approved and sold during Scenario 4. The Scenario 5 car was approved and sold during Scenario 5. The Scenario 6 and 7 cars were still awaiting price approval. |
+| All tests | Current stopping point | Tester | ℹ️ Note | Testing stopped after Scenario 5. Earlier failed items from Scenarios 1 to 3 were rechecked before that. Test records remain in the app. Fixes were made for the failed items and checked on a local copy of the app. They are not yet on the shared app. |
+
+## Scenarios 6 through 9: Not tested
+
+| Scenario | Step or item | Who | Status | Notes |
+| --- | --- | --- | --- | --- |
+| 6 through 9 | Scenario steps | All required accounts | ⬜ Not tested | These scenarios were not continued. Preparation alone does not count as testing the steps. |
