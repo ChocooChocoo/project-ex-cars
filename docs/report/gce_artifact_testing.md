@@ -162,6 +162,26 @@ Each scenario has its own table, with results and notes kept together. Scenarios
 | 6 | Records left in the app | Test conditions | ℹ️ Note | The S6 car is sold on instalments with one instalment paid. The S6b request is cancelled and the car is still listed. The S6c request is still open as a Potential Buyer with a visit booked for October 10. One extra unsent request was cancelled. No real visit or payment took place. |
 | 6 | Where this was tested | Test conditions | ℹ️ Note | All steps ran on a local copy of the app against the shared test data. The fixes are not yet on the shared app. |
 
+## Scenario 7: Maria pays by bank transfer
+
+| Scenario | Step or item | Who | Status | Notes |
+| --- | --- | --- | --- | --- |
+| 7. Maria pays by bank transfer | Latest result | All required accounts | ✅ Passed | All four steps and the delivery wording check passed in the final browser test run on October 3. Both client-reported failures were checked on the local app and did not recur. No new product-code fix was needed. |
+| 7 | Test cars | Test setup | ℹ️ Note | Created dedicated E2E-T01 test cars for the draft, bank-transfer visit, and bank-transfer delivery checks. The visit car price was ₱500,000. The previously prepared Scenario 7 car was not used. |
+| 7 | GCE staff feedback on step 1 | Customer | ✅ Passed | The client reported that Save Details asked for a future visit hour despite a future or same-day schedule. A future visit entered at 25 minutes past the hour saved and submitted successfully with Bank Transfer. Existing local fixes handle the whole-hour booking. Same-day scheduling was not separately tested, and the exact cause of the original report was not confirmed. |
+| 7 | GCE staff feedback on step 2 | Sales Manager | ✅ Passed | The client reported that a request appeared before the buyer filled it in. After Buy Now, before any details or papers were added, the draft had no link in the Sales Manager's Transactions list. Opening its page directly showed Page not found. The submitted request later opened normally. |
+| 7 | 1. Add papers, book the visit, and submit | Customer | ✅ Passed | Added a Passport, a Driver's License, and Proof of Billing. Chose Bank Transfer and GCE Visit, saved a future schedule entered at :25, and submitted. The app showed Details saved and Request sent. |
+| 7 | 2. Approve and record the bank transfer | Sales Manager | ✅ Passed | Checked all three papers and approved. Recorded ₱500,000 by Bank Transfer. No payment Verify button was offered to the Sales Manager. |
+| 7 | 2. Refuse the sale before checking the transfer | Sales Manager | ✅ Passed | Mark Sold to This Buyer was refused with: The Head Accountant must verify the bank transfer before the car is marked sold. |
+| 7 | 3. Check the bank transfer | Head Accountant | ✅ Passed | One payment Verify button appeared. Clicking it removed the button; the sale could then proceed. |
+| 7 | 4. Mark the car sold | Sales Manager | ✅ Passed | The app showed Transaction moved to completed. The transaction record showed completed and the car record showed sold. |
+| 7 | Balance on the buyer's summary | Customer | ✅ Passed | Reopened the completed request. Its summary showed ₱0.00 due. |
+| 7 | 4. Bank-transfer delivery wording | Customer and Sales Manager | ✅ Passed | On a separate Bank Transfer and Delivery request, the Sales Manager approved and confirmed a ₱2,500 delivery fee and ₱50,000 downpayment. The buyer's page said: The balance is paid by bank transfer on delivery. |
+| 7 | Earlier test attempts | Test conditions | ℹ️ Note | The first run hit the two-minute test limit during approval. The next reached completion but failed because the test selected two zero-balance labels. Increased the test limit and scoped the assertion to the summary. The final run passed all three tests in 3.8 minutes. These were test-run issues, not confirmed product failures. |
+| 7 | Test evidence | Test conditions | ℹ️ Note | Ran src/tests/e2e/t01-phase6-bank-transfer.spec.ts through Playwright with the local environment loaded. The three tests cover draft visibility, the visit payment flow, and delivery wording. A later visible-browser run also passed all three tests in 3.5 minutes. The delivery was not carried through dispatch or final sale; a bank-transfer meet-up was not separately tested. |
+| 7 | Records left in the app | Test conditions | ℹ️ Note | Draft requests were cancelled. Three visit purchases completed across the retries and visible-browser run and remain sold. Completed delivery-wording checks ended with cancelled requests. Cleanup archived only available test cars created by each run; it did not reset the Customer's standing or archive unrelated test cars. No real visit, delivery, or payment occurred. |
+| 7 | Where this was tested | Test conditions | ℹ️ Note | Browser tests used the local app against shared test data. This does not prove that the fixes are deployed to the shared app. The shared artifact was later updated to four Pass marks, with original client feedback preserved and local-test limitations recorded. All four marks and notes persisted after reload. |
+
 ## General testing results and notes
 
 | Scenario | Step or item | Who | Status | Notes |
@@ -177,10 +197,10 @@ Each scenario has its own table, with results and notes kept together. Scenarios
 | All tests | Test conditions | Tester | ℹ️ Note | Cars, amounts, papers, and visits were for testing. No real money moved. No physical inspection occurred. |
 | All tests | Earlier pause after Scenario 2 | Tester | ℹ️ Note | The Scenario 1 car was listed for ₱500,000. Its unfinished purchase request was later completed in Scenario 3. After the pause, no buying or selling continued until the user requested it. |
 | All tests | Preparation for later scenarios | Tester | ℹ️ Note | Six test cars were created for Scenarios 4 through 9 with proposed prices of ₱500,000. The Scenario 8 and 9 cars appeared in the Showroom. The Scenario 4 car was approved and sold during Scenario 4. The Scenario 5 car was approved and sold during Scenario 5. The Scenario 6 car was approved and sold on instalments during Scenario 6. The Scenario 7 car was still awaiting price approval. |
-| All tests | Current stopping point | Tester | ℹ️ Note | Testing stopped after Scenario 6. Earlier failed items from Scenarios 1 to 3 were rechecked before that. Test records remain in the app. Fixes were made for the failed items and checked on a local copy of the app. They are not yet on the shared app. |
+| All tests | Current stopping point | Tester | ℹ️ Note | Testing stopped after Scenario 7. Its four steps, both reported failures, and delivery wording were checked on the local app. Test records remain in the app. Deployment of earlier fixes to the shared app was not verified. |
 
-## Scenarios 7 through 9: Not tested
+## Scenarios 8 through 9: Not tested
 
 | Scenario | Step or item | Who | Status | Notes |
 | --- | --- | --- | --- | --- |
-| 7 through 9 | Scenario steps | All required accounts | ⬜ Not tested | These scenarios were not continued. Preparation alone does not count as testing the steps. |
+| 8 through 9 | Scenario steps | All required accounts | ⬜ Not tested | These scenarios were not continued. Preparation alone does not count as testing the steps. |
