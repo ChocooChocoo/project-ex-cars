@@ -112,7 +112,7 @@ export function VehicleForm({ defaultValues, onSuccess, onCancel }: VehicleFormP
                 render={({ field, fieldState }) => (
                   <Field data-invalid={fieldState.invalid}>
                     <FieldLabel>Stock Code</FieldLabel>
-                    <Input {...field} placeholder="GCE-001" />
+                    <Input {...field} value={field.value ?? ""} placeholder="GCE-001" />
                     {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                   </Field>
                 )}
@@ -123,7 +123,7 @@ export function VehicleForm({ defaultValues, onSuccess, onCancel }: VehicleFormP
                 render={({ field, fieldState }) => (
                   <Field data-invalid={fieldState.invalid}>
                     <FieldLabel>VIN (optional)</FieldLabel>
-                    <Input {...field} placeholder="Vehicle Identification Number" />
+                    <Input {...field} value={field.value ?? ""} placeholder="Vehicle Identification Number" />
                     {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                   </Field>
                 )}
@@ -135,7 +135,7 @@ export function VehicleForm({ defaultValues, onSuccess, onCancel }: VehicleFormP
                   render={({ field, fieldState }) => (
                     <Field data-invalid={fieldState.invalid}>
                       <FieldLabel>Make</FieldLabel>
-                      <Input {...field} placeholder="Toyota" />
+                      <Input {...field} value={field.value ?? ""} placeholder="Toyota" />
                       {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                     </Field>
                   )}
@@ -146,7 +146,7 @@ export function VehicleForm({ defaultValues, onSuccess, onCancel }: VehicleFormP
                   render={({ field, fieldState }) => (
                     <Field data-invalid={fieldState.invalid}>
                       <FieldLabel>Model</FieldLabel>
-                      <Input {...field} placeholder="Vios" />
+                      <Input {...field} value={field.value ?? ""} placeholder="Vios" />
                       {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                     </Field>
                   )}
@@ -159,7 +159,7 @@ export function VehicleForm({ defaultValues, onSuccess, onCancel }: VehicleFormP
                   render={({ field, fieldState }) => (
                     <Field data-invalid={fieldState.invalid}>
                       <FieldLabel>Year</FieldLabel>
-                      <Input {...field} type="number" />
+                      <Input {...field} value={field.value ?? ""} type="number" />
                       {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                     </Field>
                   )}
@@ -201,7 +201,7 @@ export function VehicleForm({ defaultValues, onSuccess, onCancel }: VehicleFormP
                     <Field data-invalid={fieldState.invalid}>
                       <FieldLabel>Mileage (km)</FieldLabel>
                       <InputGroup>
-                        <InputGroupInput {...field} type="number" placeholder="50000" />
+                        <InputGroupInput {...field} value={field.value ?? ""} type="number" placeholder="50000" />
                         <InputGroupAddon align="inline-end">km</InputGroupAddon>
                       </InputGroup>
                       {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
@@ -289,7 +289,7 @@ export function VehicleForm({ defaultValues, onSuccess, onCancel }: VehicleFormP
                 render={({ field, fieldState }) => (
                   <Field data-invalid={fieldState.invalid}>
                     <FieldLabel>Engine</FieldLabel>
-                    <Input {...field} placeholder="1.5L 4-cylinder" />
+                    <Input {...field} value={field.value ?? ""} placeholder="1.5L 4-cylinder" />
                     {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                   </Field>
                 )}
@@ -301,7 +301,7 @@ export function VehicleForm({ defaultValues, onSuccess, onCancel }: VehicleFormP
                   render={({ field, fieldState }) => (
                     <Field data-invalid={fieldState.invalid}>
                       <FieldLabel>Exterior Color</FieldLabel>
-                      <Input {...field} placeholder="White" />
+                      <Input {...field} value={field.value ?? ""} placeholder="White" />
                       {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                     </Field>
                   )}
@@ -312,7 +312,7 @@ export function VehicleForm({ defaultValues, onSuccess, onCancel }: VehicleFormP
                   render={({ field, fieldState }) => (
                     <Field data-invalid={fieldState.invalid}>
                       <FieldLabel>Interior Color</FieldLabel>
-                      <Input {...field} placeholder="Black" />
+                      <Input {...field} value={field.value ?? ""} placeholder="Black" />
                       {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                     </Field>
                   )}
@@ -334,7 +334,7 @@ export function VehicleForm({ defaultValues, onSuccess, onCancel }: VehicleFormP
                     <FieldLabel>Price</FieldLabel>
                     <InputGroup className="[&>[data-slot=input-group-addon]]:absolute [&>[data-slot=input-group-addon]]:inset-y-0 [&>[data-slot=input-group-addon]]:left-0 [&>[data-slot=input-group-addon]]:z-10 [&>[data-slot=input-group-control]]:pl-8">
                       <InputGroupAddon align="inline-start">₱</InputGroupAddon>
-                      <InputGroupInput {...field} type="number" placeholder="500000" />
+                      <InputGroupInput {...field} value={field.value ?? ""} type="number" placeholder="500000" />
                     </InputGroup>
                     {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                   </Field>
@@ -367,7 +367,7 @@ export function VehicleForm({ defaultValues, onSuccess, onCancel }: VehicleFormP
                 render={({ field, fieldState }) => (
                   <Field data-invalid={fieldState.invalid}>
                     <FieldLabel>Warranty Details</FieldLabel>
-                    <Input {...field} placeholder="1 year engine warranty" />
+                    <Input {...field} value={field.value ?? ""} placeholder="1 year engine warranty" />
                     {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                   </Field>
                 )}
@@ -378,7 +378,7 @@ export function VehicleForm({ defaultValues, onSuccess, onCancel }: VehicleFormP
                 render={({ field, fieldState }) => (
                   <Field data-invalid={fieldState.invalid}>
                     <FieldLabel>Promotional Offer</FieldLabel>
-                    <Input {...field} placeholder="Free registration for first 10 buyers" />
+                    <Input {...field} value={field.value ?? ""} placeholder="Free registration for first 10 buyers" />
                     {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                   </Field>
                 )}
@@ -395,6 +395,7 @@ export function VehicleForm({ defaultValues, onSuccess, onCancel }: VehicleFormP
                 <Field data-invalid={fieldState.invalid}>
                   <Textarea
                     {...field}
+                    value={field.value ?? ""}
                     rows={6}
                     placeholder="Describe the vehicle condition, features, and other details..."
                   />

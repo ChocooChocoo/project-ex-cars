@@ -52,7 +52,13 @@ export default async function CustomerLayout({ children }: Readonly<{ children: 
         } as React.CSSProperties
       }
     >
-      <AppSidebar variant={variant} collapsible={collapsible} userRole={role} showQuickCreate={false} />
+      {/* A failed role lookup must not swap the menu: fall back to the role saved at sign-in. Menu only. */}
+      <AppSidebar
+        variant={variant}
+        collapsible={collapsible}
+        userRole={role ?? cookieStore.get("gce-role")?.value ?? null}
+        showQuickCreate={false}
+      />
       <SidebarInset
         className={cn(
           "[html[data-content-layout=centered]_&>*]:mx-auto",
