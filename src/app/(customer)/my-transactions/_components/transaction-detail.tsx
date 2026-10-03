@@ -52,6 +52,7 @@ import {
   isOnsiteCashRequest,
   isQueuedRequest,
   paidTowardPrice,
+  pickedTime,
 } from "@/lib/transactions/buy-flow";
 import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_SIZE, transactionDocumentLabel } from "@/lib/transactions/document-media";
 import {
@@ -272,7 +273,11 @@ export function TransactionDetail({
     const fd = new FormData();
     fd.set("transaction_id", id);
     fd.set("decision", decision);
-    if (visitAt) fd.set("schedule", new Date(visitAt).toISOString());
+    const visit = pickedTime(visitAt, offerKind);
+    if (visit) {
+      setVisitAt(format(visit, "yyyy-MM-dd'T'HH:mm"));
+      fd.set("schedule", visit.toISOString());
+    }
     fd.set("location", location);
     const result = await respondToFinancingOffer(fd);
     setResponding(false);
@@ -319,17 +324,10 @@ export function TransactionDetail({
     fd.set("payment_method", paymentMethod);
     fd.set("final_price", finalPrice);
     fd.set("arrangement_kind", arrangementKind);
-    // The picked time is the buyer's local time: send it as an instant, so a server in another
-    // timezone books the same moment. GCE visits are whole hours, and a phone's time picker lets
-    // any minute through, so the minutes are dropped instead of refusing the save.
-    const when = schedule ? new Date(schedule) : null;
-    if (when && !Number.isNaN(when.getTime())) {
-      if (arrangementKind === "gce_visit") when.setMinutes(0, 0, 0);
-      setSchedule(format(when, "yyyy-MM-dd'T'HH:mm"));
-      fd.set("schedule", when.toISOString());
-    } else {
-      fd.set("schedule", "");
-    }
+    // Sent as an instant, so a server in another timezone books the moment the buyer picked.
+    const when = pickedTime(schedule, arrangementKind);
+    if (when) setSchedule(format(when, "yyyy-MM-dd'T'HH:mm"));
+    fd.set("schedule", when ? when.toISOString() : "");
     fd.set("location", location);
     fd.set("notes", notes);
     if (acknowledge) fd.set("acknowledge_condition", "yes");
@@ -946,7 +944,7 @@ export function TransactionDetail({
             {installmentAccount && (
               <div className="flex flex-col gap-2 text-sm">
                 <DetailRow
-                  label="Financed"
+                  label="Vehicle Price"
                   value={`₱${Number((installmentAccount as Record<string, unknown>).financed_total).toLocaleString()}`}
                 />
                 <DetailRow
@@ -954,7 +952,7 @@ export function TransactionDetail({
                   value={`₱${Number((installmentAccount as Record<string, unknown>).down_payment).toLocaleString()}`}
                 />
                 <DetailRow
-                  label="Balance"
+                  label="Amount Financed"
                   value={`₱${Number((installmentAccount as Record<string, unknown>).opening_balance).toLocaleString()}`}
                 />
                 <DetailRow label="Status" value={(installmentAccount as Record<string, unknown>).state as string} />
