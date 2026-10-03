@@ -205,6 +205,31 @@ Each scenario has its own table, with results and notes kept together. Scenarios
 | 8 | Records and timing | Test conditions | ℹ️ Note | Three financed meet-up purchases completed across the runs and remain sold with active accounts. Draft requests were cancelled. The meet-ups were in the future but the purchases completed during testing. No physical inspection, real payment, or signed agreement occurred. |
 | 8 | Where this was tested and shared results | Test conditions | ℹ️ Note | Tested local app against shared test data. Shared-app deployment was not verified. Updated artifact to four Pass marks with original feedback preserved, local-only verification notes, and untested alternatives recorded. All marks and notes persisted after reload. |
 
+## Scenario 9: Maria pays in instalments and has the car delivered
+
+| Scenario | Step or item | Who | Status | Notes |
+| --- | --- | --- | --- | --- |
+| 9. Maria pays in instalments and has the car delivered | Latest result | All required accounts | ✅ Passed | All eight artifact steps passed locally in a visible Playwright run on October 3. Both client-reported failures did not recur. No new product-code fix was needed. |
+| 9 | Test cars and amounts | Test setup | ℹ️ Note | Created dedicated E2E-T01-S9-DRAFT and E2E-T01-S9-DELIVERY cars. Used ₱500,000 price, 12 months, ₱100,000 Initial Downpayment, ₱400,000 financed, and ₱2,500 delivery fee. The previously prepared Scenario 9 car was not used. |
+| 9 | GCE staff feedback on step 1 | Customer | ✅ Passed | The client reported a future visit-hour error. Financing and Delivery saved and submitted with no schedule at this stage. Delivery was booked later in step 3. The original cause was not confirmed; same-day scheduling was not separately tested. |
+| 9 | GCE staff feedback on step 2 | Sales Manager | ✅ Passed | A Buy Now draft had no link in the Sales Manager's Transactions list. Opening its page directly showed Page not found. The submitted request opened normally. |
+| 9 | 1. Add papers, choose financing and delivery, and submit | Customer | ✅ Passed | Added Passport, Driver's License and Proof of Billing. Chose Financing and Delivery, acknowledged condition, saved, and submitted. Details saved and Request sent appeared. |
+| 9 | 2. Approve and confirm the plan | Sales Manager, Head Accountant and CEO | ✅ Passed | Checked papers and approved. Proposed 12 months, ₱500,000 price and ₱100,000 downpayment. Head Accountant approved and CEO confirmed. The app said the buyer was notified; receipt of the notification was not separately checked. |
+| 9 | 2. Wait for buyer acceptance and booking | Sales Manager | ✅ Passed | Before buyer booking, the delivery panel said to set terms after the buyer accepts the financing offer and books delivery. |
+| 9 | 3. Accept and book delivery | Customer | ✅ Passed | Entered a future delivery time at :25 and SM Calamba parking, Laguna as the address. The app said Delivery booked. GCE will confirm the delivery terms. |
+| 9 | 4. Reject the wrong downpayment | Sales Manager | ✅ Passed | With ₱2,500 delivery fee and ₱50,000 downpayment, confirmation was refused: Set the downpayment to the Initial Downpayment of ₱100,000. |
+| 9 | 4. Confirm matching downpayment | Sales Manager | ✅ Passed | Changed downpayment to ₱100,000. The app said Delivery terms sent to the buyer. |
+| 9 | 5. Explain the remaining balance | Customer | ✅ Passed | Buyer page said The balance is paid in monthly installments under your financing agreement. |
+| 9 | 6. Record and verify both upfront payments | Head Accountant | ✅ Passed | Recorded ₱2,500 Delivery fee and ₱100,000 Downpayment by Bank Transfer. Verified both payment records. |
+| 9 | 6. Block agreement completion before delivery | Head Accountant | ✅ Passed | Complete financing agreement was refused with Complete the agreement after the car is delivered and the buyer accepts it. |
+| 9 | 7. Create team and progress delivery | Sales Manager and Head Security | ✅ Passed | Assigned Confidential Informant, Mechanic and Head Security. Created delivery field case. Head Security saw Collect nothing on delivery: the balance is financed by GCE. Dispatched, In Transit, Arriving and Delivered each succeeded. |
+| 9 | 8. Complete financing and sale | Head Accountant and Sales Manager | ✅ Passed | After Delivered, Complete financing agreement showed Financing account opened. Mark Sold showed Transaction moved to completed. Record showed completed and financing_active; car record showed sold. |
+| 9 | 8. Show active financing to buyer | Customer | ✅ Passed | Reopened buyer page and confirmed In-House Financing, Active. |
+| 9 | Test evidence | Test conditions | ℹ️ Note | Added src/tests/e2e/scenario-9-financing-delivery.spec.ts. Both tests passed in headed Playwright in 3.8 minutes: draft visibility and the eight-step financing delivery flow. Cleanup archived only available cars created by this run; customer standing and unrelated test cars were not changed. |
+| 9 | Scope limits | Test conditions | ⬜ Not tested | Separate buyer-acceptance enforcement after Delivered, instalment collection, missed payments, refund/decline alternatives, and blocking dispatch with an unchecked downpayment were not separately exercised. Both payments were verified before team creation. |
+| 9 | Records and timing | Test conditions | ℹ️ Note | One financed delivery car remains sold with an active account and both upfront payments recorded. Draft request was cancelled. Future delivery was marked Delivered during testing. No physical delivery, real payment or signed agreement occurred. |
+| 9 | Local app and shared artifact | Test conditions | ℹ️ Note | Tested local app against shared test data. Shared-app deployment not verified. Artifact updated to eight Pass marks with original client feedback and local-test caveats preserved. All eight marks and notes persisted after reload. |
+
 ## General testing results and notes
 
 | Scenario | Step or item | Who | Status | Notes |
@@ -220,10 +245,4 @@ Each scenario has its own table, with results and notes kept together. Scenarios
 | All tests | Test conditions | Tester | ℹ️ Note | Cars, amounts, papers, and visits were for testing. No real money moved. No physical inspection occurred. |
 | All tests | Earlier pause after Scenario 2 | Tester | ℹ️ Note | The Scenario 1 car was listed for ₱500,000. Its unfinished purchase request was later completed in Scenario 3. After the pause, no buying or selling continued until the user requested it. |
 | All tests | Preparation for later scenarios | Tester | ℹ️ Note | Six test cars were created for Scenarios 4 through 9 with proposed prices of ₱500,000. The Scenario 8 and 9 cars appeared in the Showroom. The Scenario 4 car was approved and sold during Scenario 4. The Scenario 5 car was approved and sold during Scenario 5. The Scenario 6 car was approved and sold on instalments during Scenario 6. The Scenario 7 car was still awaiting price approval. |
-| All tests | Current stopping point | Tester | ℹ️ Note | Testing stopped after Scenario 8. Its four main steps and both reported failures were checked on the local app. Alternative endings are listed as untested in that section. Test records remain in the app. Deployment of earlier fixes to the shared app was not verified. |
-
-## Scenario 9: Not tested
-
-| Scenario | Step or item | Who | Status | Notes |
-| --- | --- | --- | --- | --- |
-| 9 | Scenario steps | All required accounts | ⬜ Not tested | This scenario was not continued. Preparation alone does not count as testing the steps. |
+| All tests | Current stopping point | Tester | ℹ️ Note | Testing stopped after Scenario 9. Its eight main steps and both reported failures were checked on the local app. Untested alternatives and scope limits remain listed within each scenario. Test records remain in the app. Deployment of earlier fixes to the shared app was not verified. |
