@@ -17,9 +17,24 @@ import {
   missedInstallments,
   nextDeliveryStatus,
   nextStanding,
+  paidTowardPrice,
   verifiedPaid,
 } from "./buy-flow";
 import { canTransition } from "./state-machine";
+
+describe("paidTowardPrice", () => {
+  it("leaves the delivery and reschedule fees out of what was paid for the car", () => {
+    expect(
+      paidTowardPrice([
+        { payment_kind: "delivery_fee", amount: 2500 },
+        { payment_kind: "downpayment", amount: 50000 },
+        { payment_kind: "reschedule_fee", amount: 500 },
+        { payment_kind: "balance", amount: 450000 },
+        { payment_kind: null, amount: 1000 },
+      ]),
+    ).toBe(501000);
+  });
+});
 
 describe("activeBuyerIdCount", () => {
   it("counts pending and verified IDs but not rejected ones or other papers", () => {

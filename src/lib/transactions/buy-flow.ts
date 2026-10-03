@@ -127,6 +127,14 @@ export function verifiedPaid(payments: PaymentLike[], kind: string): number {
   return payments.filter((p) => p.payment_kind === kind && p.verified_by).reduce((sum, p) => sum + Number(p.amount), 0);
 }
 
+// What the buyer has paid toward the car itself. The delivery and reschedule fees are charged on top
+// of the car price, so they do not reduce it.
+export function paidTowardPrice(payments: { payment_kind?: unknown; amount?: unknown }[]): number {
+  return payments
+    .filter((p) => p.payment_kind !== "delivery_fee" && p.payment_kind !== "reschedule_fee")
+    .reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
+}
+
 // §6 In-House Financing: the buyer inspects the car at a GCE visit before any downpayment. §10 and §11
 // (Phase 6 defaults, not yet in the source) swap the visit for a Calabarzon meet-up or a delivery; the
 // financing steps are the same. These requests queue too.

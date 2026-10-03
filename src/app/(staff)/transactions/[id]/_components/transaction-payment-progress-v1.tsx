@@ -2,6 +2,7 @@
 "use no memo";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { paidTowardPrice } from "@/lib/transactions/buy-flow";
 import { formatCurrency } from "@/lib/utils";
 
 export function TransactionPaymentProgressV1({
@@ -20,7 +21,10 @@ export function TransactionPaymentProgressV1({
   readonly installmentAccount: Record<string, unknown> | null;
 }) {
   const total = purchaseDetails?.final_price ?? sellDetails?.offered_amount ?? vehicleRequests?.budget ?? null;
-  const paid = payments.reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
+  const received = payments.reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
+  // A buyer pays the delivery and reschedule fees on top of the car price.
+  const paid = kind === "buy" ? paidTowardPrice(payments) : received;
+  const fees = received - paid;
   const remaining = total !== null ? Math.max(0, Number(total) - paid) : null;
   const insts = installmentAccount
     ? (((installmentAccount as Record<string, unknown>).installments as Record<string, unknown>[]) ?? [])
@@ -41,7 +45,11 @@ export function TransactionPaymentProgressV1({
             value={total !== null ? formatCurrency(Number(total)) : "—"}
             note={totalNote}
           />
-          <MetricChip label="Total Paid" value={formatCurrency(paid)} note={`${payments.length} payment record(s)`} />
+          <MetricChip
+            label="Total Paid"
+            value={formatCurrency(paid)}
+            note={`${payments.length} payment record(s)${fees > 0 ? `, ${formatCurrency(fees)} in fees not counted` : ""}`}
+          />
           <MetricChip
             label="Remaining"
             value={remaining !== null ? formatCurrency(remaining) : "—"}

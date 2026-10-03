@@ -1,5 +1,7 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+
+import { saveBuyDetails } from "@/app/(customer)/my-transactions/actions";
 
 import { TransactionDetail } from "./transaction-detail";
 
@@ -63,6 +65,31 @@ describe("TransactionDetail completed sell offer", () => {
     expect(screen.getByText("Agreed Price").nextElementSibling).toHaveTextContent("₱450,000");
     expect(screen.getByText("Decision").nextElementSibling).toHaveTextContent("Completed");
     expect(screen.getByTestId("paper")).toHaveTextContent("450000/450000");
+  });
+});
+
+describe("TransactionDetail visit time", () => {
+  it("books a GCE visit on the hour and sends the time as an instant", async () => {
+    vi.mocked(saveBuyDetails).mockResolvedValue({ success: true });
+    render(
+      <TransactionDetail
+        transaction={{ ...transaction, current_state: "pending", purchase_details: { arrangement_kind: "gce_visit" } }}
+        history={[]}
+        documents={[]}
+        payments={[]}
+        installmentAccount={null}
+        paymentTerms={null}
+        viewingArrangements={[]}
+        autofill={null}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Schedule"), { target: { value: "2033-03-05T10:25" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Details" }));
+
+    await waitFor(() => expect(saveBuyDetails).toHaveBeenCalled());
+    const sent = vi.mocked(saveBuyDetails).mock.calls[0][0] as FormData;
+    expect(sent.get("schedule")).toBe(new Date("2033-03-05T10:00").toISOString());
   });
 });
 

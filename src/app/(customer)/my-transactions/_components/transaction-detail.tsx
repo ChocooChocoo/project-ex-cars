@@ -51,6 +51,7 @@ import {
   isFinancingRequest,
   isOnsiteCashRequest,
   isQueuedRequest,
+  paidTowardPrice,
 } from "@/lib/transactions/buy-flow";
 import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_SIZE, transactionDocumentLabel } from "@/lib/transactions/document-media";
 import {
@@ -318,7 +319,17 @@ export function TransactionDetail({
     fd.set("payment_method", paymentMethod);
     fd.set("final_price", finalPrice);
     fd.set("arrangement_kind", arrangementKind);
-    fd.set("schedule", schedule);
+    // The picked time is the buyer's local time: send it as an instant, so a server in another
+    // timezone books the same moment. GCE visits are whole hours, and a phone's time picker lets
+    // any minute through, so the minutes are dropped instead of refusing the save.
+    const when = schedule ? new Date(schedule) : null;
+    if (when && !Number.isNaN(when.getTime())) {
+      if (arrangementKind === "gce_visit") when.setMinutes(0, 0, 0);
+      setSchedule(format(when, "yyyy-MM-dd'T'HH:mm"));
+      fd.set("schedule", when.toISOString());
+    } else {
+      fd.set("schedule", "");
+    }
     fd.set("location", location);
     fd.set("notes", notes);
     if (acknowledge) fd.set("acknowledge_condition", "yes");
@@ -378,17 +389,9 @@ export function TransactionDetail({
     stateLabel: TRANSACTION_STATE_LABELS[state],
     items: paperItems,
     total: paperTotal,
-    // The delivery and reschedule fees are paid on top of the car price, so they do not reduce it.
     // A seller is paid through a disbursement, not a payment record: a sell offer only becomes
     // Completed once the Head Accountant has paid the agreed price in full.
-    paid:
-      kind === "buy"
-        ? payments
-            .filter((p) => !["delivery_fee", "reschedule_fee"].includes(p.payment_kind as string))
-            .reduce((sum, p) => sum + Number(p.amount ?? 0), 0)
-        : kind === "sell" && state === "completed"
-          ? paperTotal
-          : 0,
+    paid: kind === "buy" ? paidTowardPrice(payments) : kind === "sell" && state === "completed" ? paperTotal : 0,
     closed: state === "cancelled" || state === "rejected",
     from: {
       name: "GCE Auto",

@@ -88,6 +88,8 @@ test.describe
     });
 
     test("a rescheduled, late delivery with an absent buyer forfeits the downpayment", async ({ page }) => {
+      // Seven sign-ins and a full delivery in one test: the default 120 s budget runs out on a dev server.
+      test.slow();
       const id = await requestDelivery(page, "DELIVERY-UNAVAILABLE");
       await confirmTerms(page);
 
