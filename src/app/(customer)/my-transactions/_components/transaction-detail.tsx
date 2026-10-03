@@ -204,7 +204,7 @@ export function TransactionDetail({
       const fd = new FormData();
       fd.set("transaction_id", id);
       fd.set("document_kind", docKind);
-      fd.set("id_type", docIdType);
+      fd.set("id_type", docKind === "valid_id" ? docIdType : "");
       fd.set("storage_path", storagePath);
       const result = await uploadPurchaseDocument(fd);
       if (result.error) {
@@ -340,7 +340,7 @@ export function TransactionDetail({
 
   const paperItems: TransactionPaperProps["items"] = (() => {
     if (kind === "buy") {
-      const unitPrice = Number(purchaseDetails?.final_price ?? vehicles?.current_price ?? 0);
+      const unitPrice = Number(purchaseDetails?.final_price || vehicles?.current_price || 0);
       return [
         {
           id: "vehicle",
@@ -376,6 +376,13 @@ export function TransactionDetail({
     stateLabel: TRANSACTION_STATE_LABELS[state],
     items: paperItems,
     total: paperItems.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0),
+    // The delivery and reschedule fees are paid on top of the car price, so they do not reduce it.
+    paid:
+      kind === "buy"
+        ? payments
+            .filter((p) => !["delivery_fee", "reschedule_fee"].includes(p.payment_kind as string))
+            .reduce((sum, p) => sum + Number(p.amount ?? 0), 0)
+        : 0,
     from: {
       name: "GCE Auto",
       email: "sales@gceauto.ph",

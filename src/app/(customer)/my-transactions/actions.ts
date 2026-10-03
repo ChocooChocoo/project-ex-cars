@@ -74,7 +74,8 @@ export async function uploadPurchaseDocument(formData: FormData) {
   const { error: dbError } = await supabase.from("transaction_documents").insert({
     transaction_id: transactionId,
     document_kind: documentKind,
-    id_type: idType || null,
+    // Only a valid ID carries an ID type; the form can still hold the last one picked.
+    id_type: documentKind === "valid_id" ? idType || null : null,
     storage_path: storagePath,
     uploader_id: user.user.id,
     verification_state: "pending",
@@ -159,10 +160,11 @@ export async function saveBuyDetails(formData: FormData) {
 
   const { data: transaction } = await supabase
     .from("transactions")
-    .select("id, customer_id, transaction_kind, current_state, queue_state")
+    .select("id, customer_id, transaction_kind, current_state, queue_state, vehicles(current_price)")
     .eq("id", transactionId)
     .maybeSingle();
   if (!transaction || transaction.customer_id !== user.user.id) return { error: "Transaction not found." };
+  const vehicle = Array.isArray(transaction.vehicles) ? transaction.vehicles[0] : transaction.vehicles;
   if (transaction.transaction_kind !== "buy") {
     return { error: "Purchase details can only be saved for buy transactions." };
   }
@@ -209,7 +211,8 @@ export async function saveBuyDetails(formData: FormData) {
     {
       transaction_id: transactionId,
       payment_method,
-      final_price: final_price ?? null,
+      // A blank Final Price arrives as 0 (coerced ""); the sale is then at the Showroom price.
+      final_price: final_price || vehicle?.current_price || null,
       arrangement_kind: arrangement_kind || null,
       ...(acknowledge_condition === "yes" ? { condition_acknowledged_at: new Date().toISOString() } : {}),
     },

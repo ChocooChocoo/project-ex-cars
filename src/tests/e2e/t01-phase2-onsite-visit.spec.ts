@@ -120,9 +120,12 @@ test.describe
       await expect(page.getByText("Approved").first()).toBeVisible();
 
       await page.locator("#pay_amount").fill("500000");
+      // Wait for each action's own toast: a "Sold" label is on the page from the start, and signing
+      // out before the actions finish drops them.
       await page.getByRole("button", { name: "Record Payment" }).click();
+      await expect(page.getByText("Payment recorded.")).toBeVisible({ timeout: 30_000 });
       await page.getByRole("button", { name: /Mark Sold to This Buyer/ }).click();
-      await expect(page.getByText("Sold").first()).toBeVisible();
+      await expect(page.getByText("Transaction moved to completed.")).toBeVisible({ timeout: 30_000 });
 
       // The rival never submitted, so only the buyer can see it closed (00055).
       await signInAs(page, "customer@gce.local");
