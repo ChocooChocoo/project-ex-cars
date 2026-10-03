@@ -36,6 +36,15 @@ export function isOnsiteCashRequest(details: { payment_method?: unknown; arrange
   return paysDirect(details) && details?.arrangement_kind === "gce_visit";
 }
 
+// The time a buyer picked in a datetime-local field, as an instant. GCE visits are whole hours and a
+// phone's time picker lets any minute through, so a visit drops its minutes instead of being refused.
+export function pickedTime(local: string, arrangementKind: string): Date | null {
+  const when = new Date(local);
+  if (!local || Number.isNaN(when.getTime())) return null;
+  if (arrangementKind === "gce_visit") when.setMinutes(0, 0, 0);
+  return when;
+}
+
 // Visit slots are whole hours, so two bookings cannot overlap by a few minutes.
 export function isVisitSlot(schedule: Date, now: Date = new Date()): boolean {
   return (

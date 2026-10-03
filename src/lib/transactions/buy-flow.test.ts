@@ -18,9 +18,19 @@ import {
   nextDeliveryStatus,
   nextStanding,
   paidTowardPrice,
+  pickedTime,
   verifiedPaid,
 } from "./buy-flow";
 import { canTransition } from "./state-machine";
+
+describe("pickedTime", () => {
+  it("drops the minutes of a GCE visit and keeps them for a meet-up or delivery", () => {
+    expect(pickedTime("2033-03-05T10:25", "gce_visit")).toEqual(new Date("2033-03-05T10:00"));
+    expect(pickedTime("2033-03-05T10:25", "delivery")).toEqual(new Date("2033-03-05T10:25"));
+    expect(pickedTime("", "gce_visit")).toBeNull();
+    expect(pickedTime("not a date", "meetup")).toBeNull();
+  });
+});
 
 describe("paidTowardPrice", () => {
   it("leaves the delivery and reschedule fees out of what was paid for the car", () => {
