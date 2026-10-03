@@ -182,6 +182,29 @@ Each scenario has its own table, with results and notes kept together. Scenarios
 | 7 | Records left in the app | Test conditions | ℹ️ Note | Draft requests were cancelled. Three visit purchases completed across the retries and visible-browser run and remain sold. Completed delivery-wording checks ended with cancelled requests. Cleanup archived only available test cars created by each run; it did not reset the Customer's standing or archive unrelated test cars. No real visit, delivery, or payment occurred. |
 | 7 | Where this was tested | Test conditions | ℹ️ Note | Browser tests used the local app against shared test data. This does not prove that the fixes are deployed to the shared app. The shared artifact was later updated to four Pass marks, with original client feedback preserved and local-test limitations recorded. All four marks and notes persisted after reload. |
 
+## Scenario 8: Maria pays in instalments and meets halfway
+
+| Scenario | Step or item | Who | Status | Notes |
+| --- | --- | --- | --- | --- |
+| 8. Maria pays in instalments and meets halfway | Latest result | All required accounts | ✅ Passed | All four main steps passed on the local app in a visible Playwright run on October 3. Both client-reported problems did not recur. No new product-code fix was needed. Some alternative endings remain untested, as listed below. |
+| 8 | Test cars and financing | Test setup | ℹ️ Note | Used dedicated E2E-T01-S8-DRAFT and E2E-T01-S8-MEETUP cars, not the previously prepared car. Financing was 12 months on a ₱500,000 car, with ₱100,000 downpayment and ₱400,000 financed. |
+| 8 | GCE staff feedback on step 1 | Customer | ✅ Passed | The client reported a future visit-hour error. Financing and CALABARZON Meet-up saved and submitted without a schedule at this stage, as the instructions require. The time was entered later in step 3. The original cause was not confirmed; same-day scheduling was not separately tested. |
+| 8 | GCE staff feedback on step 2 | Sales Manager | ✅ Passed | A Buy Now draft, before details or papers were added, had no link in the Sales Manager's Transactions list. Opening its page directly showed Page not found. After submission, the request opened normally. |
+| 8 | 1. Add papers, choose financing and meet-up, and submit | Customer | ✅ Passed | Added a Passport, a Driver's License, and Proof of Billing. Chose Financing and CALABARZON Meet-up, acknowledged the condition, saved, and submitted. The app showed Details saved and Request sent. |
+| 8 | 2. Approve and propose financing | Sales Manager | ✅ Passed | Checked three papers, approved, and proposed 12 months, ₱500,000 price, and ₱100,000 Initial Downpayment. Terms were sent to the Head Accountant. |
+| 8 | 2. Approve and confirm financing | Head Accountant and CEO | ✅ Passed | The Head Accountant sent the terms to the CEO. The CEO confirmed financing and the app said the buyer was notified. Receipt of that notification was not separately checked. |
+| 8 | 3. Accept and book the meet-up | Customer | ✅ Passed | Booked a future time at 25 minutes past the hour, with SM Calamba parking, Laguna as the location. The app said Meet-up booked. No payment is taken before you inspect the car. There were zero payment records at this point. |
+| 8 | 4. Record the Purchase Claim and downpayment | Sales Manager | ✅ Passed | The app recorded the Purchase Claim. Recorded ₱100,000 by Bank Transfer as Downpayment. |
+| 8 | 4. Verify downpayment and complete agreement | Head Accountant | ✅ Passed | Complete financing agreement was not offered before verification. After verifying the one payment, the agreement completed and the app said Financing account opened. |
+| 8 | 4. Complete the sale and show active financing | Sales Manager and Customer | ✅ Passed | Mark Sold showed Transaction moved to completed. The record showed completed and financing_active; the car record showed sold. The buyer page showed In-House Financing, Active. |
+| 8 | Refuse cancellation within five hours | Customer | ✅ Passed | Temporarily moved the booked meet-up to three hours ahead in test data. Cancel Transaction was refused with the five-hour message. Restored the original schedule afterwards. |
+| 8 | Refuse a premature no-show | Sales Manager | ✅ Passed | With the meet-up still in the future, Buyer didn't show up was not offered. |
+| 8 | Alternative endings and optional visit | Test conditions | ⬜ Not tested | Optional Buyer meet-up field-case logging, a no-show after 2½ hours, the second-no-show account limit, Declined, Legit, Declined, Not Legit, and cancellation outside five hours were not separately tested on financing meet-up requests. Scenario 4 results are not counted as fresh Scenario 8 proof. |
+| 8 | First attempt and rerun | Test evidence | ℹ️ Note | The first visible run completed the sale but its final assertion expected separate In-House Financing and Active labels. The UI combines them. Corrected the test selector, added the cancellation cutoff check, and reran. Both browser tests passed in 3.0 minutes. This was a test-selector issue, not a product failure. |
+| 8 | Test file | Test evidence | ℹ️ Note | Added src/tests/e2e/scenario-8-financing-meetup.spec.ts. Ran it with Playwright in headed mode and the local environment loaded. A further visible rerun with fresh cars passed both tests in 3.6 minutes. Cleanup is scoped to cars created by the run; it does not archive unrelated test cars or reset customer standing. |
+| 8 | Records and timing | Test conditions | ℹ️ Note | Three financed meet-up purchases completed across the runs and remain sold with active accounts. Draft requests were cancelled. The meet-ups were in the future but the purchases completed during testing. No physical inspection, real payment, or signed agreement occurred. |
+| 8 | Where this was tested and shared results | Test conditions | ℹ️ Note | Tested local app against shared test data. Shared-app deployment was not verified. Updated artifact to four Pass marks with original feedback preserved, local-only verification notes, and untested alternatives recorded. All marks and notes persisted after reload. |
+
 ## General testing results and notes
 
 | Scenario | Step or item | Who | Status | Notes |
@@ -197,10 +220,10 @@ Each scenario has its own table, with results and notes kept together. Scenarios
 | All tests | Test conditions | Tester | ℹ️ Note | Cars, amounts, papers, and visits were for testing. No real money moved. No physical inspection occurred. |
 | All tests | Earlier pause after Scenario 2 | Tester | ℹ️ Note | The Scenario 1 car was listed for ₱500,000. Its unfinished purchase request was later completed in Scenario 3. After the pause, no buying or selling continued until the user requested it. |
 | All tests | Preparation for later scenarios | Tester | ℹ️ Note | Six test cars were created for Scenarios 4 through 9 with proposed prices of ₱500,000. The Scenario 8 and 9 cars appeared in the Showroom. The Scenario 4 car was approved and sold during Scenario 4. The Scenario 5 car was approved and sold during Scenario 5. The Scenario 6 car was approved and sold on instalments during Scenario 6. The Scenario 7 car was still awaiting price approval. |
-| All tests | Current stopping point | Tester | ℹ️ Note | Testing stopped after Scenario 7. Its four steps, both reported failures, and delivery wording were checked on the local app. Test records remain in the app. Deployment of earlier fixes to the shared app was not verified. |
+| All tests | Current stopping point | Tester | ℹ️ Note | Testing stopped after Scenario 8. Its four main steps and both reported failures were checked on the local app. Alternative endings are listed as untested in that section. Test records remain in the app. Deployment of earlier fixes to the shared app was not verified. |
 
-## Scenarios 8 through 9: Not tested
+## Scenario 9: Not tested
 
 | Scenario | Step or item | Who | Status | Notes |
 | --- | --- | --- | --- | --- |
-| 8 through 9 | Scenario steps | All required accounts | ⬜ Not tested | These scenarios were not continued. Preparation alone does not count as testing the steps. |
+| 9 | Scenario steps | All required accounts | ⬜ Not tested | This scenario was not continued. Preparation alone does not count as testing the steps. |
