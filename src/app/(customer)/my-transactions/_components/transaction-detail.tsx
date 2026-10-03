@@ -389,6 +389,7 @@ export function TransactionDetail({
         : kind === "sell" && state === "completed"
           ? paperTotal
           : 0,
+    closed: state === "cancelled" || state === "rejected",
     from: {
       name: "GCE Auto",
       email: "sales@gceauto.ph",
