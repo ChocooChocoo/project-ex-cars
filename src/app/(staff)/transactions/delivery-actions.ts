@@ -10,8 +10,12 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
   addWorkingDays,
+  DELIVERY_LEAD_MESSAGE,
   DOWNPAYMENT_WORKING_DAYS,
   deliveryBalanceNote,
+  isBusinessSlot,
+  isDeliveryDate,
+  SLOT_RULE_MESSAGE,
   verifiedPaid,
 } from "@/lib/transactions/buy-flow";
 import { releaseVisitSlots } from "@/lib/transactions/buy-flow-server";
@@ -38,7 +42,7 @@ async function loadDelivery(admin: Admin, transactionId: unknown) {
   const { data: tx } = await admin
     .from("transactions")
     .select(
-      "id, customer_id, vehicle_id, current_state, flow_status, transaction_kind, purchase_details(*), payment_records(payment_kind, amount, verified_by), viewing_arrangements(id, schedule, location, arrangement_kind, confirmation_state)",
+      "id, customer_id, vehicle_id, current_state, flow_status, transaction_kind, opened_at, purchase_details(*), payment_records(payment_kind, amount, verified_by), viewing_arrangements(id, schedule, location, arrangement_kind, confirmation_state)",
     )
     .eq("id", id.data)
     .maybeSingle();
@@ -276,10 +280,12 @@ export async function rescheduleDelivery(formData: FormData): Promise<DeliveryAc
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid reschedule." };
   const schedule = new Date(parsed.data.schedule);
   if (Number.isNaN(schedule.getTime()) || schedule.getTime() <= Date.now()) return { error: "Pick a future date." };
+  if (!isBusinessSlot(schedule)) return { error: SLOT_RULE_MESSAGE };
 
   const admin = createAdminClient();
   const tx = await loadDelivery(admin, formData.get("transaction_id"));
   if (!tx?.arrangement) return { error: "Delivery request not found." };
+  if (!isDeliveryDate(schedule, new Date(tx.opened_at))) return { error: DELIVERY_LEAD_MESSAGE };
   if (tx.current_state !== "approved") return { error: "Only an approved delivery can be rescheduled." };
   if (!canCancelScheduled(tx.arrangement.schedule)) {
     return { error: "A change must be asked 5 hours or more before the scheduled delivery." };

@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const notify = vi.hoisted(() => vi.fn());
+
 const {
   authGetUser,
   from,
@@ -45,6 +47,7 @@ const {
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/app/auth/actions", () => ({ getCurrentRole }));
 vi.mock("@/lib/auth/audit", () => ({ logAuditEvent }));
+vi.mock("@/lib/notifications/notify", () => ({ notify }));
 vi.mock("@/lib/supabase/server", () => ({
   createServerSupabaseClient: vi.fn(async () => ({
     auth: { getUser: authGetUser },
@@ -240,6 +243,30 @@ describe("Task 33 transaction paperwork actions", () => {
 
     await expect(verifyTransactionDocument(verificationForm("verified"))).resolves.toEqual({ success: true });
     expect(documentUpdate).toHaveBeenCalledWith(expect.objectContaining({ verification_state: "verified" }));
+  });
+
+  it("stores the reason and tells the buyer when the Sales Manager asks for a resubmission", async () => {
+    getCurrentRole.mockResolvedValue("sales_manager");
+    pendingDocumentLookup("valid_id");
+    transactionEq.mockReturnValue({
+      maybeSingle: vi.fn().mockResolvedValue({
+        data: { id: transactionId, transaction_kind: "buy", customer_id: "buyer-1" },
+        error: null,
+      }),
+    });
+    documentCountsReturns(1, 1, 1);
+    const form = verificationForm("rejected");
+    form.set("reason", "The photo is blurred");
+
+    await expect(verifyTransactionDocument(form)).resolves.toEqual({ success: true });
+    expect(documentUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ verification_state: "rejected", rejection_reason: "The photo is blurred" }),
+    );
+    expect(notify).toHaveBeenCalledWith(
+      expect.anything(),
+      { userId: "buyer-1" },
+      expect.objectContaining({ body: expect.stringContaining("The photo is blurred") }),
+    );
   });
 
   it.each(["ceo", "account_manager"])("rejects document verification for the %s role", async (role) => {

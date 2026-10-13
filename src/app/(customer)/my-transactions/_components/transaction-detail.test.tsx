@@ -69,7 +69,7 @@ describe("TransactionDetail completed sell offer", () => {
 });
 
 describe("TransactionDetail visit time", () => {
-  it("books a GCE visit on the hour and sends the time as an instant", async () => {
+  it("sends the picked GCE visit time unrounded, as an instant", async () => {
     vi.mocked(saveBuyDetails).mockResolvedValue({ success: true });
     render(
       <TransactionDetail
@@ -89,7 +89,7 @@ describe("TransactionDetail visit time", () => {
 
     await waitFor(() => expect(saveBuyDetails).toHaveBeenCalled());
     const sent = vi.mocked(saveBuyDetails).mock.calls[0][0] as FormData;
-    expect(sent.get("schedule")).toBe(new Date("2033-03-05T10:00").toISOString());
+    expect(sent.get("schedule")).toBe(new Date("2033-03-05T10:25").toISOString());
   });
 });
 

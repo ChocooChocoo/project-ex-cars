@@ -273,11 +273,8 @@ export function TransactionDetail({
     const fd = new FormData();
     fd.set("transaction_id", id);
     fd.set("decision", decision);
-    const visit = pickedTime(visitAt, offerKind);
-    if (visit) {
-      setVisitAt(format(visit, "yyyy-MM-dd'T'HH:mm"));
-      fd.set("schedule", visit.toISOString());
-    }
+    const visit = pickedTime(visitAt);
+    if (visit) fd.set("schedule", visit.toISOString());
     fd.set("location", location);
     const result = await respondToFinancingOffer(fd);
     setResponding(false);
@@ -325,8 +322,7 @@ export function TransactionDetail({
     fd.set("final_price", finalPrice);
     fd.set("arrangement_kind", arrangementKind);
     // Sent as an instant, so a server in another timezone books the moment the buyer picked.
-    const when = pickedTime(schedule, arrangementKind);
-    if (when) setSchedule(format(when, "yyyy-MM-dd'T'HH:mm"));
+    const when = pickedTime(schedule);
     fd.set("schedule", when ? when.toISOString() : "");
     fd.set("location", location);
     fd.set("notes", notes);
@@ -556,9 +552,13 @@ export function TransactionDetail({
                     </label>
                   </div>
                 ) : null}
+                <p className="text-muted-foreground text-xs">
+                  Pick a time on the hour, 9 AM to 9 PM, Monday to Saturday.
+                  {arrangementKind === "delivery" ? " Delivery needs at least 7 days from today." : ""}
+                </p>
                 {arrangementKind === "gce_visit" ? (
                   <p className="text-muted-foreground text-xs">
-                    GCE visits start on the hour. Once saved, your slot is locked for you.
+                    Once saved, your slot is locked for you.
                     {takenSlots.length > 0
                       ? ` Already taken: ${takenSlots.map((slot) => format(new Date(slot), "MMM d, h:mm a")).join(", ")}.`
                       : " No slots are taken for this car yet."}
@@ -639,7 +639,7 @@ export function TransactionDetail({
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="financing-visit">
                     {offerKind === "gce_visit"
-                      ? "GCE visit (on the hour)"
+                      ? "GCE visit date and time"
                       : financedDelivery
                         ? "Delivery date and time"
                         : "Meet-up date and time"}
@@ -647,10 +647,14 @@ export function TransactionDetail({
                   <Input
                     id="financing-visit"
                     type="datetime-local"
-                    step={offerKind === "gce_visit" ? 3600 : undefined}
+                    step={3600}
+                    aria-describedby="financing-visit-rule"
                     value={visitAt}
                     onChange={(e) => setVisitAt(e.target.value)}
                   />
+                  <p id="financing-visit-rule" className="text-muted-foreground text-xs">
+                    Pick a time on the hour, 9 AM to 9 PM, Monday to Saturday.
+                  </p>
                   {offerKind !== "gce_visit" ? (
                     <>
                       <Label htmlFor="financing-location">
@@ -904,6 +908,11 @@ export function TransactionDetail({
                           {doc.verification_state as string}
                         </Badge>
                       </div>
+                      {doc.verification_state === "rejected" ? (
+                        <p className="text-destructive text-xs">
+                          Please upload a new one.{doc.rejection_reason ? ` What to fix: ${doc.rejection_reason}` : ""}
+                        </p>
+                      ) : null}
                       {signedUrl ? (
                         doc.is_image === true ? (
                           <TransactionImagePreview src={signedUrl} alt={`${label} preview`} />

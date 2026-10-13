@@ -36,24 +36,41 @@ export function isOnsiteCashRequest(details: { payment_method?: unknown; arrange
   return paysDirect(details) && details?.arrangement_kind === "gce_visit";
 }
 
-// The time a buyer picked in a datetime-local field, as an instant. GCE visits are whole hours and a
-// phone's time picker lets any minute through, so a visit drops its minutes instead of being refused.
-export function pickedTime(local: string, arrangementKind: string): Date | null {
+// The time a buyer picked in a datetime-local field, as an instant. The minutes are kept: a time off
+// the hour is refused with the slot rule, not rounded.
+export function pickedTime(local: string): Date | null {
   const when = new Date(local);
-  if (!local || Number.isNaN(when.getTime())) return null;
-  if (arrangementKind === "gce_visit") when.setMinutes(0, 0, 0);
-  return when;
+  return !local || Number.isNaN(when.getTime()) ? null : when;
 }
 
-// Visit slots are whole hours, so two bookings cannot overlap by a few minutes.
-export function isVisitSlot(schedule: Date, now: Date = new Date()): boolean {
+export const SLOT_RULE_MESSAGE = "Please choose a time on the hour, between 9 AM and 9 PM, Monday to Saturday.";
+
+// Every schedule (visit, meet-up, delivery): on the hour, 9 AM to 9 PM, Monday to Saturday. Read in
+// Manila time (UTC+8, no daylight saving), whatever time zone the server runs in.
+export function isBusinessSlot(schedule: Date): boolean {
+  const manila = new Date(schedule.getTime() + 8 * 60 * 60 * 1000);
+  const hour = manila.getUTCHours();
   return (
-    !Number.isNaN(schedule.getTime()) &&
-    schedule.getTime() > now.getTime() &&
-    schedule.getMinutes() === 0 &&
-    schedule.getSeconds() === 0 &&
-    schedule.getMilliseconds() === 0
+    manila.getUTCMinutes() === 0 &&
+    manila.getUTCSeconds() === 0 &&
+    manila.getUTCMilliseconds() === 0 &&
+    hour >= 9 &&
+    hour <= 21 &&
+    manila.getUTCDay() !== 0
   );
+}
+
+// A bookable slot: still ahead, and inside GCE's hours. Whole hours keep two bookings from overlapping.
+export function isVisitSlot(schedule: Date, now: Date = new Date()): boolean {
+  return schedule.getTime() > now.getTime() && isBusinessSlot(schedule);
+}
+
+export const DELIVERY_LEAD_DAYS = 7;
+export const DELIVERY_LEAD_MESSAGE = "Delivery must be scheduled at least 7 days after your request date.";
+
+// A delivery is booked at least 7 days after the request date.
+export function isDeliveryDate(schedule: Date, requestedAt: Date = new Date()): boolean {
+  return schedule.getTime() >= requestedAt.getTime() + DELIVERY_LEAD_DAYS * 24 * 60 * 60 * 1000;
 }
 
 // §3 Meet Halfway (§8 by bank transfer): paid at an agreed Calabarzon location; these requests queue per car.

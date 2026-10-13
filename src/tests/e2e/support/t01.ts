@@ -24,6 +24,8 @@ export const png = (name: string) => ({
 export function futureSlot(offsetHours = 0): string {
   const base = new Date(2033, Math.floor(Math.random() * 12), 1 + Math.floor(Math.random() * 27), 9, 0, 0);
   base.setHours(base.getHours() + offsetHours + Math.floor(Math.random() * 6));
+  // GCE is closed on Sundays.
+  if (base.getDay() === 0) base.setDate(base.getDate() + 1);
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${base.getFullYear()}-${pad(base.getMonth() + 1)}-${pad(base.getDate())}T${pad(base.getHours())}:00`;
 }
