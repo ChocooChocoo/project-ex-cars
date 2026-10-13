@@ -14,6 +14,7 @@ import {
   DOWNPAYMENT_WORKING_DAYS,
   MISSED_INSTALLMENTS_BEFORE_REPOSSESSION,
   missedInstallments,
+  papersReadyForSale,
   verifiedPaid,
 } from "@/lib/transactions/buy-flow";
 import { finalizeBuySale, recordStandingEvent, releaseVisitSlots } from "@/lib/transactions/buy-flow-server";
@@ -58,7 +59,9 @@ export async function transitionTransaction(formData: FormData) {
 
   const { data: tx } = await supabase
     .from("transactions")
-    .select("current_state, transaction_kind, vehicle_id, customer_id, flow_status, purchase_details(payment_method)")
+    .select(
+      "current_state, transaction_kind, vehicle_id, customer_id, flow_status, purchase_details(payment_method, arrangement_kind)",
+    )
     .eq("id", id)
     .single();
 
@@ -153,6 +156,17 @@ export async function transitionTransaction(formData: FormData) {
       .maybeSingle();
     if (deliveryCase && deliveryCase.delivery_status !== "delivered") {
       return { error: "Mark the car sold after the delivery team reports it delivered." };
+    }
+    // Papers release: received by the Sales Manager at a GCE visit, or handed to the buyer in the field.
+    const { data: handover } = await admin
+      .from("sale_handovers")
+      .select("papers_status")
+      .eq("transaction_id", id)
+      .maybeSingle();
+    if (!papersReadyForSale(purchase ?? null, handover)) {
+      return {
+        error: "The Confidential Informant must release the vehicle papers before the car is marked sold.",
+      };
     }
   }
 
@@ -273,6 +287,12 @@ async function closeBuyRequest(
     .update({ confirmation_state: "completed" })
     .eq("purchase_transaction_id", tx.id)
     .in("confirmation_state", ["pending", "confirmed"]);
+  // The sale is off: papers that were requested or taken out go back under the Confidential Informant.
+  await admin
+    .from("sale_handovers")
+    .update({ papers_status: "returned", papers_updated_at: new Date().toISOString() })
+    .eq("transaction_id", tx.id)
+    .in("papers_status", ["requested", "released_to_ci", "handed_over"]);
   revalidatePath("/dashboard/transactions");
   revalidatePath(`/dashboard/transactions/${tx.id}`);
   return null;

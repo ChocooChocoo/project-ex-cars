@@ -9,6 +9,7 @@ import {
   isBusinessSlot,
   isDeliveryCashRequest,
   isDeliveryDate,
+  isFieldArrangement,
   isFinancingRequest,
   isHalfwayCashRequest,
   isOnsiteCashRequest,
@@ -20,6 +21,7 @@ import {
   nextDeliveryStatus,
   nextStanding,
   paidTowardPrice,
+  papersReadyForSale,
   pickedTime,
   verifiedPaid,
 } from "./buy-flow";
@@ -245,5 +247,30 @@ describe("financing rules", () => {
       ]),
     ).toBe(false);
     expect(financingFullyPaid([])).toBe(false);
+  });
+});
+
+describe("vehicle papers custody", () => {
+  it("treats a meet-up and a delivery as field arrangements", () => {
+    expect(isFieldArrangement({ arrangement_kind: "meetup" })).toBe(true);
+    expect(isFieldArrangement({ arrangement_kind: "delivery" })).toBe(true);
+    expect(isFieldArrangement({ arrangement_kind: "gce_visit" })).toBe(false);
+    expect(isFieldArrangement(null)).toBe(false);
+  });
+
+  it("lets a GCE visit sale close only once the Sales Manager has received the papers", () => {
+    const visit = { arrangement_kind: "gce_visit" };
+    expect(papersReadyForSale(visit, null)).toBe(false);
+    expect(papersReadyForSale(visit, { papers_status: "requested" })).toBe(false);
+    expect(papersReadyForSale(visit, { papers_status: "handed_over" })).toBe(false);
+    expect(papersReadyForSale(visit, { papers_status: "received" })).toBe(true);
+  });
+
+  it("lets a meet-up or delivery sale close only once the CI has handed the papers to the buyer", () => {
+    for (const arrangement_kind of ["meetup", "delivery"]) {
+      expect(papersReadyForSale({ arrangement_kind }, { papers_status: "released_to_ci" })).toBe(false);
+      expect(papersReadyForSale({ arrangement_kind }, { papers_status: "returned" })).toBe(false);
+      expect(papersReadyForSale({ arrangement_kind }, { papers_status: "handed_over" })).toBe(true);
+    }
   });
 });

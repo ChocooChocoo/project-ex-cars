@@ -3,8 +3,10 @@ import { notFound, redirect } from "next/navigation";
 import { getCurrentRole } from "@/app/auth/actions";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
+import type { PapersStatus } from "@/lib/transactions/buy-flow";
 import { withSignedTransactionDocumentUrls } from "@/lib/transactions/document-media";
 
+import { BuyerMeetupCase } from "./_components/buyer-meetup-case";
 import { DeliveryCase } from "./_components/delivery-case";
 import { SellMeetupCase } from "./_components/sell-meetup-case";
 
@@ -12,6 +14,7 @@ import { SellMeetupCase } from "./_components/sell-meetup-case";
 const OVERSEERS: Record<string, string[]> = {
   acquisition: ["ceo", "marketing_specialist"],
   delivery: ["ceo", "sales_manager"],
+  buyer_meetup: ["ceo", "sales_manager"],
 };
 const FIELD_TEAM = ["confidential_informant", "mechanic", "head_security"];
 
@@ -33,7 +36,7 @@ export default async function FieldCasePage({ params }: { readonly params: Promi
     .from("field_cases")
     .select("*")
     .eq("id", id)
-    .in("case_kind", ["acquisition", "delivery"])
+    .in("case_kind", ["acquisition", "delivery", "buyer_meetup"])
     .maybeSingle();
   if (!fieldCase?.transaction_id) notFound();
 
@@ -44,6 +47,38 @@ export default async function FieldCasePage({ params }: { readonly params: Promi
   ].includes(user.id);
   const overseer = OVERSEERS[fieldCase.case_kind]?.includes(role) ?? false;
   if (!overseer && !(assigned && FIELD_TEAM.includes(role))) redirect("/unauthorized");
+
+  // The papers the Confidential Informant carries to a meet-up or a delivery.
+  const { data: handover } =
+    fieldCase.case_kind === "acquisition"
+      ? { data: null }
+      : await admin
+          .from("sale_handovers")
+          .select("papers_status")
+          .eq("transaction_id", fieldCase.transaction_id)
+          .maybeSingle();
+  const papersStatus = (handover?.papers_status as PapersStatus | null | undefined) ?? null;
+
+  if (fieldCase.case_kind === "buyer_meetup") {
+    const { data: transaction } = await admin
+      .from("transactions")
+      .select("id, current_state, profiles(full_name, phone), vehicles(make, model, year, stock_code)")
+      .eq("id", fieldCase.transaction_id)
+      .maybeSingle();
+    if (!transaction) notFound();
+    return (
+      <BuyerMeetupCase
+        fieldCase={fieldCase}
+        transaction={transaction as Record<string, unknown>}
+        papersStatus={papersStatus}
+        canRecordPapers={
+          role === "confidential_informant" &&
+          fieldCase.assigned_confidential_informant === user.id &&
+          transaction.current_state === "approved"
+        }
+      />
+    );
+  }
 
   if (fieldCase.case_kind === "delivery") {
     const { data: transaction } = await admin
@@ -58,6 +93,7 @@ export default async function FieldCasePage({ params }: { readonly params: Promi
       <DeliveryCase
         fieldCase={fieldCase}
         transaction={transaction as Record<string, unknown>}
+        papersStatus={papersStatus}
         userRole={role}
         userId={user.id}
       />

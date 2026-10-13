@@ -191,3 +191,31 @@ export function missedInstallments(installments: InstallmentLike[], today: Date 
 export function financingFullyPaid(installments: InstallmentLike[]): boolean {
   return installments.length > 0 && installments.every((i) => ["paid", "waived"].includes(String(i.state)));
 }
+
+// Vehicle papers (OR/CR, Deed of Sale and related documents) stay with the Confidential Informant
+// until a sale. No handover row means the papers are still with the CI.
+export const PAPERS_STATUSES = ["requested", "released_to_ci", "handed_over", "received", "returned"] as const;
+export type PapersStatus = (typeof PAPERS_STATUSES)[number];
+
+export const PAPERS_STATUS_LABELS: Record<PapersStatus, string> = {
+  requested: "Papers Requested",
+  released_to_ci: "Papers Released to CI",
+  handed_over: "Papers Handed Over",
+  received: "Papers Received",
+  returned: "Papers Returned to CI",
+};
+
+// Meet Halfway and Delivery: the CI carries the papers to the buyer. A GCE visit hands them to the
+// Sales Manager instead.
+export function isFieldArrangement(details: { arrangement_kind?: unknown } | null): boolean {
+  return details?.arrangement_kind === "meetup" || details?.arrangement_kind === "delivery";
+}
+
+// "Mark as Sold" waits for the papers: received by the Sales Manager at a GCE visit, or handed to the
+// buyer by the CI at a meet-up or delivery.
+export function papersReadyForSale(
+  details: { arrangement_kind?: unknown } | null,
+  handover: { papers_status?: unknown } | null,
+): boolean {
+  return handover?.papers_status === (isFieldArrangement(details) ? "handed_over" : "received");
+}
