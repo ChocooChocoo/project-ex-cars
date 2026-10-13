@@ -51,6 +51,8 @@ import {
   isFinancingRequest,
   isOnsiteCashRequest,
   isQueuedRequest,
+  PAPERS_STATUS_LABELS,
+  type PapersStatus,
   paidTowardPrice,
   pickedTime,
 } from "@/lib/transactions/buy-flow";
@@ -155,6 +157,10 @@ export function TransactionDetail({
   const vehicleRequests = transaction.vehicle_requests as Record<string, unknown> | undefined;
   const openedAt = transaction.opened_at as string;
   const completedAt = transaction.completed_at as string | null;
+  const handoverRaw = transaction.sale_handovers as Record<string, unknown> | Record<string, unknown>[] | null;
+  const papersStatus =
+    ((Array.isArray(handoverRaw) ? handoverRaw[0] : handoverRaw)?.papers_status as PapersStatus | null | undefined) ??
+    null;
 
   const [localState, setLocalState] = useState<TransactionState | null>(null);
   const state = localState ?? ((transaction.current_state ?? "pending") as TransactionState);
@@ -425,6 +431,11 @@ export function TransactionDetail({
           <Badge variant="outline" className="text-sm">
             {transactionKindLabel(kind as never)}
           </Badge>
+          {papersStatus ? (
+            <Badge variant="outline" className="text-sm">
+              {PAPERS_STATUS_LABELS[papersStatus]}
+            </Badge>
+          ) : null}
           {negotiationThreadId ? (
             <Button asChild variant="outline">
               <Link href={`/my-inquiries/${negotiationThreadId}`}>Chat with GCE</Link>

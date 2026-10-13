@@ -1,9 +1,11 @@
 import { redirect } from "next/navigation";
 
 import { getCurrentRole } from "@/app/auth/actions";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 import { type FieldCaseRow, FieldCasesClient } from "./_components/field-cases-client";
+import { type PapersRequestRow, PapersRequests } from "./_components/papers-requests";
 
 const FIELD_CASE_ROLES = [
   "ceo",
@@ -73,30 +75,55 @@ export default async function FieldCasesPage() {
 
   const { informants, mechanics } = splitFieldCaseWorkers(workerDirectory);
 
+  // GCE visit sales waiting for their papers. The Confidential Informant cannot read transactions
+  // under RLS, so the list is read with the service role, for that role only.
+  let papersRequests: PapersRequestRow[] | null = null;
+  if (role === "confidential_informant") {
+    const { data: waiting } = await createAdminClient()
+      .from("sale_handovers")
+      .select("transaction_id, transactions(profiles(full_name), vehicles(make, model, year, stock_code))")
+      .eq("papers_status", "requested")
+      .order("papers_updated_at", { ascending: true });
+    const one = (value: unknown) => (Array.isArray(value) ? value[0] : value) as Record<string, unknown> | null;
+    papersRequests = ((waiting as Record<string, unknown>[] | null) ?? []).map((row) => {
+      const sale = one(row.transactions);
+      const buyer = one(sale?.profiles);
+      const car = one(sale?.vehicles);
+      return {
+        transactionId: row.transaction_id as string,
+        buyer: String(buyer?.full_name ?? "the buyer"),
+        vehicle: car ? `${car.year} ${car.make} ${car.model} (${car.stock_code})` : "A sold car",
+      };
+    });
+  }
+
   return (
-    <FieldCasesClient
-      cases={(cases as unknown as FieldCaseRow[]) ?? []}
-      canUpdate={FIELD_CASE_WORKERS.includes(role)}
-      canCreate={FIELD_CASE_CREATORS.includes(role)}
-      canAssignMechanic={["confidential_informant", "ceo"].includes(role)}
-      informants={informants}
-      mechanics={mechanics}
-      userRole={role}
-      currentUserId={currentUserId}
-      transactions={
-        (transactions as
-          | {
-              id: string;
-              transaction_kind: string;
-              current_state: string;
-              profiles: { full_name: string | null } | null;
-              vehicles: { id: string; make: string; model: string; year: number; stock_code: string } | null;
-            }[]
-          | null) ?? []
-      }
-      vehicles={
-        (vehicles as { id: string; make: string; model: string; year: number; stock_code: string }[] | null) ?? []
-      }
-    />
+    <div className="flex flex-col gap-4">
+      {papersRequests ? <PapersRequests requests={papersRequests} /> : null}
+      <FieldCasesClient
+        cases={(cases as unknown as FieldCaseRow[]) ?? []}
+        canUpdate={FIELD_CASE_WORKERS.includes(role)}
+        canCreate={FIELD_CASE_CREATORS.includes(role)}
+        canAssignMechanic={["confidential_informant", "ceo"].includes(role)}
+        informants={informants}
+        mechanics={mechanics}
+        userRole={role}
+        currentUserId={currentUserId}
+        transactions={
+          (transactions as
+            | {
+                id: string;
+                transaction_kind: string;
+                current_state: string;
+                profiles: { full_name: string | null } | null;
+                vehicles: { id: string; make: string; model: string; year: number; stock_code: string } | null;
+              }[]
+            | null) ?? []
+        }
+        vehicles={
+          (vehicles as { id: string; make: string; model: string; year: number; stock_code: string }[] | null) ?? []
+        }
+      />
+    </div>
   );
 }

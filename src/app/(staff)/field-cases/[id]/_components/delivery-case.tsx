@@ -21,8 +21,11 @@ import {
   type DeliveryStatus,
   deliveryBalanceNote,
   nextDeliveryStatus,
+  type PapersStatus,
 } from "@/lib/transactions/buy-flow";
 import { formatCurrency } from "@/lib/utils";
+
+import { PapersCard } from "./papers-card";
 
 type Row = Record<string, unknown>;
 
@@ -30,11 +33,13 @@ type Row = Record<string, unknown>;
 export function DeliveryCase({
   fieldCase,
   transaction,
+  papersStatus,
   userRole,
   userId,
 }: {
   readonly fieldCase: Row;
   readonly transaction: Row;
+  readonly papersStatus: PapersStatus | null;
   readonly userRole: string;
   readonly userId: string;
 }) {
@@ -120,7 +125,7 @@ export function DeliveryCase({
           <CardHeader>
             <CardTitle>Tracking</CardTitle>
             <CardDescription>
-              The buyer sees each step. Dispatch only after the downpayment is confirmed.
+              The buyer sees each step. Dispatch only after the downpayment is confirmed and the papers are released.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3 text-sm">
@@ -187,6 +192,12 @@ export function DeliveryCase({
             ) : null}
           </CardContent>
         </Card>
+
+        <PapersCard
+          transactionId={transaction.id as string}
+          papersStatus={papersStatus}
+          canRecord={isInformant && transaction.current_state === "approved"}
+        />
       </div>
     </div>
   );

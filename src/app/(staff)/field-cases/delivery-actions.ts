@@ -82,6 +82,15 @@ export async function advanceDeliveryStatus(formData: FormData): Promise<Deliver
     if (!details?.downpayment_amount || paid < Number(details.downpayment_amount)) {
       return { error: "Wait for the Head Accountant to confirm the downpayment before dispatch." };
     }
+    // The car leaves with its papers: the Confidential Informant records the release first.
+    const { data: handover } = await admin
+      .from("sale_handovers")
+      .select("papers_status")
+      .eq("transaction_id", tx.id)
+      .maybeSingle();
+    if (handover?.papers_status !== "released_to_ci") {
+      return { error: "The Confidential Informant must record the vehicle papers as released before dispatch." };
+    }
   }
 
   const { error } = await admin
