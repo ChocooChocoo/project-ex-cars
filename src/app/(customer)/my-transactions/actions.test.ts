@@ -115,3 +115,68 @@ describe("saveBuyDetails ownership guard", () => {
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({ document_kind: "proof_of_billing", id_type: null }));
   });
 });
+
+describe("saveBuyDetails schedule rules", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const refusal = "Please choose a time on the hour, between 9 AM and 9 PM, Monday to Saturday.";
+
+  // A Manila time on a far-future week: 2030-01-08 is a Tuesday, 2030-01-06 a Sunday.
+  const manila = (day: string, time: string) => new Date(`${day}T${time}:00+08:00`).toISOString();
+
+  function scheduleForm(arrangement: string, schedule: string) {
+    const form = new FormData();
+    form.set("transaction_id", transactionId);
+    form.set("payment_method", "cash");
+    form.set("arrangement_kind", arrangement);
+    form.set("schedule", schedule);
+    form.set("location", "SM Calamba parking");
+    form.set("acknowledge_condition", "yes");
+    return form;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getUser.mockResolvedValue({ data: { user: { id: customerId } }, error: null });
+    select.mockReturnValue({ eq });
+    eq.mockReturnValue({ maybeSingle });
+    maybeSingle.mockResolvedValue({
+      data: {
+        id: transactionId,
+        customer_id: customerId,
+        transaction_kind: "buy",
+        current_state: "pending",
+        queue_state: null,
+        vehicles: { current_price: 500000 },
+      },
+      error: null,
+    });
+    from.mockImplementation((table: string) => {
+      if (table === "transactions") return { select };
+      if (table === "purchase_details") return { upsert };
+      throw new Error(`Unexpected table: ${table}`);
+    });
+  });
+
+  it.each(["gce_visit", "meetup", "delivery"])("refuses off-hours and Sunday times for %s", async (arrangement) => {
+    for (const schedule of [
+      manila("2030-01-08", "10:30"),
+      manila("2030-01-08", "08:00"),
+      manila("2030-01-08", "22:00"),
+      manila("2030-01-06", "10:00"),
+    ]) {
+      await expect(saveBuyDetails(scheduleForm(arrangement, schedule))).resolves.toEqual({ error: refusal });
+    }
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
+  it("refuses a delivery sooner than 7 days after the request", async () => {
+    // Three days ahead at 10 AM Manila, moved off a Sunday.
+    const soon = new Date(Math.floor((Date.now() + 3 * DAY) / DAY) * DAY + 2 * 60 * 60 * 1000);
+    if (new Date(soon.getTime() + 8 * 60 * 60 * 1000).getUTCDay() === 0) soon.setTime(soon.getTime() + DAY);
+
+    await expect(saveBuyDetails(scheduleForm("delivery", soon.toISOString()))).resolves.toEqual({
+      error: "Delivery must be scheduled at least 7 days after your request date.",
+    });
+    expect(upsert).not.toHaveBeenCalled();
+  });
+});

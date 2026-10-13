@@ -6,7 +6,9 @@ import {
   canRecordNoShow,
   deliveryBalanceNote,
   financingFullyPaid,
+  isBusinessSlot,
   isDeliveryCashRequest,
+  isDeliveryDate,
   isFinancingRequest,
   isHalfwayCashRequest,
   isOnsiteCashRequest,
@@ -24,11 +26,10 @@ import {
 import { canTransition } from "./state-machine";
 
 describe("pickedTime", () => {
-  it("drops the minutes of a GCE visit and keeps them for a meet-up or delivery", () => {
-    expect(pickedTime("2033-03-05T10:25", "gce_visit")).toEqual(new Date("2033-03-05T10:00"));
-    expect(pickedTime("2033-03-05T10:25", "delivery")).toEqual(new Date("2033-03-05T10:25"));
-    expect(pickedTime("", "gce_visit")).toBeNull();
-    expect(pickedTime("not a date", "meetup")).toBeNull();
+  it("keeps the minutes the buyer picked, so an off-the-hour time is refused instead of rounded", () => {
+    expect(pickedTime("2033-03-05T10:25")).toEqual(new Date("2033-03-05T10:25"));
+    expect(pickedTime("")).toBeNull();
+    expect(pickedTime("not a date")).toBeNull();
   });
 });
 
@@ -88,17 +89,44 @@ describe("§7–9 bank transfer", () => {
   });
 });
 
+// 2026-10-01 is a Thursday and 2026-10-04 a Sunday; times are Manila time.
+const manila = (day: string, time: string) => new Date(`${day}T${time}:00+08:00`);
+
 describe("isVisitSlot", () => {
-  const now = new Date(2026, 8, 30, 12, 0, 0);
+  const now = manila("2026-09-30", "12:00");
 
   it("accepts a future whole hour", () => {
-    expect(isVisitSlot(new Date(2026, 9, 1, 10, 0, 0), now)).toBe(true);
+    expect(isVisitSlot(manila("2026-10-01", "10:00"), now)).toBe(true);
   });
 
   it("refuses past times and times off the hour", () => {
-    expect(isVisitSlot(new Date(2026, 8, 30, 11, 0, 0), now)).toBe(false);
-    expect(isVisitSlot(new Date(2026, 9, 1, 10, 30, 0), now)).toBe(false);
+    expect(isVisitSlot(manila("2026-09-30", "11:00"), now)).toBe(false);
+    expect(isVisitSlot(manila("2026-10-01", "10:30"), now)).toBe(false);
     expect(isVisitSlot(new Date("not a date"), now)).toBe(false);
+  });
+});
+
+describe("isBusinessSlot", () => {
+  it("accepts whole hours from 9 AM to 9 PM, Monday to Saturday", () => {
+    expect(isBusinessSlot(manila("2026-10-01", "09:00"))).toBe(true);
+    expect(isBusinessSlot(manila("2026-10-01", "21:00"))).toBe(true);
+    expect(isBusinessSlot(manila("2026-10-03", "10:00"))).toBe(true);
+  });
+
+  it("refuses earlier, later, off-the-hour and Sunday times", () => {
+    expect(isBusinessSlot(manila("2026-10-01", "08:00"))).toBe(false);
+    expect(isBusinessSlot(manila("2026-10-01", "22:00"))).toBe(false);
+    expect(isBusinessSlot(manila("2026-10-01", "10:30"))).toBe(false);
+    expect(isBusinessSlot(manila("2026-10-04", "10:00"))).toBe(false);
+  });
+});
+
+describe("isDeliveryDate", () => {
+  const requested = manila("2026-10-01", "10:00");
+
+  it("needs at least 7 days after the request date", () => {
+    expect(isDeliveryDate(manila("2026-10-07", "10:00"), requested)).toBe(false);
+    expect(isDeliveryDate(manila("2026-10-08", "10:00"), requested)).toBe(true);
   });
 });
 

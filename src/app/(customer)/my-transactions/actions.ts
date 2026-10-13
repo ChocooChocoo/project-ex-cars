@@ -11,10 +11,14 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
   activeBuyerIdCount,
   BUYER_ID_COUNT,
+  DELIVERY_LEAD_MESSAGE,
+  isBusinessSlot,
+  isDeliveryDate,
   isFinancingRequest,
   isOnsiteCashRequest,
   isQueuedRequest,
   isVisitSlot,
+  SLOT_RULE_MESSAGE,
 } from "@/lib/transactions/buy-flow";
 import { releaseVisitSlots } from "@/lib/transactions/buy-flow-server";
 import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_SIZE } from "@/lib/transactions/document-media";
@@ -173,12 +177,9 @@ export async function saveBuyDetails(formData: FormData) {
     return { error: "This request is already under review and can no longer be changed." };
   }
   const slot = schedule ? new Date(schedule) : null;
-  if (slot && arrangement_kind === "gce_visit" && !isVisitSlot(slot)) {
-    return { error: "Pick a future GCE visit slot on the hour." };
-  }
-  if (slot && arrangement_kind !== "gce_visit" && slot.getTime() <= Date.now()) {
-    return { error: "Pick a future date and time." };
-  }
+  if (slot && slot.getTime() <= Date.now()) return { error: "Pick a future date and time." };
+  if (slot && !isBusinessSlot(slot)) return { error: SLOT_RULE_MESSAGE };
+  if (slot && arrangement_kind === "delivery" && !isDeliveryDate(slot)) return { error: DELIVERY_LEAD_MESSAGE };
 
   // Appendix C: after 2 no-shows or a Not Legit decline, a buyer may only visit GCE.
   if (arrangement_kind && arrangement_kind !== "gce_visit") {
@@ -298,9 +299,8 @@ export async function submitBuyRequest(formData: FormData) {
     if (!slot || !scheduledAt || slot.arrangement_kind !== details?.arrangement_kind) {
       return { error: "Book the meeting time first." };
     }
-    if (queued ? scheduledAt.getTime() <= Date.now() : !isVisitSlot(scheduledAt)) {
-      return { error: "The booked time has passed. Pick a new one." };
-    }
+    if (scheduledAt.getTime() <= Date.now()) return { error: "The booked time has passed. Pick a new one." };
+    if (!isBusinessSlot(scheduledAt)) return { error: SLOT_RULE_MESSAGE };
   }
 
   // Customers cannot move their own request into review under RLS; ownership is checked above.
@@ -436,9 +436,12 @@ export async function respondToFinancingOffer(formData: FormData) {
   const kind = (details?.arrangement_kind as "gce_visit" | "meetup" | "delivery" | undefined) ?? "gce_visit";
   const label = { gce_visit: "GCE visit", meetup: "meet-up", delivery: "delivery" }[kind];
   const visit = parsed.data.schedule ? new Date(parsed.data.schedule) : null;
-  if (!visit || (kind === "gce_visit" ? !isVisitSlot(visit) : visit.getTime() <= Date.now())) {
+  if (!visit || !isVisitSlot(visit)) {
     return {
-      error: kind === "gce_visit" ? "Pick a future GCE visit slot on the hour." : `Pick a future ${label} time.`,
+      error:
+        kind === "gce_visit"
+          ? "Pick a future GCE visit slot on the hour."
+          : `Pick a future ${label} time. ${SLOT_RULE_MESSAGE}`,
     };
   }
   if (kind !== "gce_visit" && !parsed.data.location) {

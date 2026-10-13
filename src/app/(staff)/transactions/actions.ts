@@ -665,6 +665,13 @@ export async function verifyTransactionDocument(formData: FormData) {
   if (!documentId || !["verified", "rejected"].includes(decision)) {
     return { error: "Invalid verification request." };
   }
+  // A rejection asks the uploader to resubmit; the reason tells them what to fix.
+  const reason =
+    decision === "rejected"
+      ? String(formData.get("reason") ?? "")
+          .trim()
+          .slice(0, 500)
+      : "";
 
   const admin = createAdminClient();
 
@@ -680,7 +687,7 @@ export async function verifyTransactionDocument(formData: FormData) {
 
   const { data: parent } = await admin
     .from("transactions")
-    .select("transaction_kind")
+    .select("transaction_kind, customer_id")
     .eq("id", doc.transaction_id)
     .maybeSingle();
   const isSellPaper =
@@ -703,9 +710,22 @@ export async function verifyTransactionDocument(formData: FormData) {
 
   const { error } = await admin
     .from("transaction_documents")
-    .update({ verification_state: decision, verifier_id: user.user.id })
+    .update({ verification_state: decision, verifier_id: user.user.id, rejection_reason: reason || null })
     .eq("id", documentId);
   if (error) return { error: error.message };
+
+  if (decision === "rejected" && parent?.customer_id) {
+    await notify(
+      admin,
+      { userId: parent.customer_id },
+      {
+        kind: "document_resubmission_requested",
+        title: "Please resubmit a document",
+        body: `GCE could not accept your ${doc.document_kind.replace(/_/g, " ")}.${reason ? ` What to fix: ${reason}` : ""} Upload a new one on your request page.`,
+        transactionId: doc.transaction_id,
+      },
+    );
+  }
 
   if (["valid_id", "proof_of_billing"].includes(doc.document_kind)) {
     const [{ count: verifiedIds }, { count: verifiedBilling }, { count: rejectedPrerequisites }] = await Promise.all([

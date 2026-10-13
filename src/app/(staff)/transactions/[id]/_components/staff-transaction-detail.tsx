@@ -165,14 +165,15 @@ export function StaffTransactionDetail({
     }
   }
 
-  async function onRejectDocument(documentId: string) {
+  async function onRejectDocument(documentId: string, reason: string) {
     const fd = new FormData();
     fd.set("document_id", documentId);
     fd.set("decision", "rejected");
+    fd.set("reason", reason);
     const result = await verifyTransactionDocument(fd);
     if (result.error) toast.error(result.error);
     else {
-      toast.success("Document rejected.");
+      toast.success("Resubmission requested. The uploader is notified.");
       router.refresh();
     }
   }

@@ -80,7 +80,7 @@ export function TransactionDetailSidebarV1({
   readonly onRecordPayment: (amount: string, method: string, date: string, paymentKind: string) => Promise<void>;
   readonly onUploadDocument: (documentKind: string, idType: string, file: File) => Promise<void>;
   readonly onVerifyDocument: (documentId: string) => Promise<void>;
-  readonly onRejectDocument: (documentId: string) => Promise<void>;
+  readonly onRejectDocument: (documentId: string, reason: string) => Promise<void>;
   readonly onRecordPaperwork: (documentKind: string) => Promise<void>;
   readonly onWaiveInstallment: (installmentId: string) => Promise<void>;
   readonly onRecordInstallmentPaid?: (installmentId: string, amount: string) => Promise<void>;
@@ -93,6 +93,7 @@ export function TransactionDetailSidebarV1({
   const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10));
   const [docKind, setDocKind] = useState("valid_id");
   const [docIdType, setDocIdType] = useState("");
+  const [resubmitReasons, setResubmitReasons] = useState<Record<string, string>>({});
   const docFileRef = useRef<HTMLInputElement>(null);
   const [repoOpen, setRepoOpen] = useState(false);
   const [repoInformant, setRepoInformant] = useState("");
@@ -347,23 +348,41 @@ export function TransactionDetailSidebarV1({
                     ) : (
                       <p className="text-muted-foreground text-xs">Preview unavailable</p>
                     )}
+                    {doc.verification_state === "rejected" && doc.rejection_reason ? (
+                      <p className="text-muted-foreground text-xs">To fix: {doc.rejection_reason as string}</p>
+                    ) : null}
                     {doc.verification_state === "pending" && canVerify(doc.document_kind) ? (
-                      <div className="flex gap-1.5">
-                        <Button
-                          size="sm"
-                          className="h-6 px-2 text-xs"
-                          onClick={() => onVerifyDocument(doc.id as string)}
-                        >
-                          Verify
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-6 px-2 text-xs"
-                          onClick={() => onRejectDocument(doc.id as string)}
-                        >
-                          Reject
-                        </Button>
+                      <div className="space-y-1.5">
+                        <Label htmlFor={`resubmit-${doc.id as string}`} className="text-xs">
+                          What to fix<span className="sr-only"> on {label}</span>
+                        </Label>
+                        <Input
+                          id={`resubmit-${doc.id as string}`}
+                          placeholder="Only if the image is unclear"
+                          className="h-8 text-xs"
+                          value={resubmitReasons[doc.id as string] ?? ""}
+                          onChange={(e) =>
+                            setResubmitReasons((reasons) => ({ ...reasons, [doc.id as string]: e.target.value }))
+                          }
+                        />
+                        <div className="flex gap-1.5">
+                          <Button
+                            size="sm"
+                            className="h-8 px-2.5 text-xs"
+                            onClick={() => onVerifyDocument(doc.id as string)}
+                          >
+                            Verify
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 px-2.5 text-xs"
+                            disabled={!resubmitReasons[doc.id as string]?.trim()}
+                            onClick={() => onRejectDocument(doc.id as string, resubmitReasons[doc.id as string].trim())}
+                          >
+                            Ask to resubmit
+                          </Button>
+                        </div>
                       </div>
                     ) : null}
                   </div>
