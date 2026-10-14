@@ -164,3 +164,38 @@ export async function reportDeliveryDelay(formData: FormData): Promise<DeliveryF
   );
   return done(fieldCase.id, fieldCase.transaction_id as string);
 }
+
+// Meet Halfway and Delivery: the assigned Confidential Informant and Mechanic each acknowledge the case.
+export async function receiveFieldCase(formData: FormData): Promise<DeliveryFieldResult> {
+  const supabase = await createServerSupabaseClient();
+  const { data } = await supabase.auth.getUser();
+  if (!data.user) return { error: "Not authenticated" };
+  const role = await getCurrentRole();
+  const id = z.string().uuid().safeParse(formData.get("field_case_id"));
+  if (!id.success) return { error: "Invalid field case." };
+
+  const admin = createAdminClient();
+  const { data: fieldCase } = await admin
+    .from("field_cases")
+    .select("id, transaction_id, case_kind, state, assigned_confidential_informant, mechanic_id")
+    .eq("id", id.data)
+    .maybeSingle();
+  if (!fieldCase?.transaction_id || !["buyer_meetup", "delivery"].includes(fieldCase.case_kind)) {
+    return { error: "Field case not found." };
+  }
+  const column =
+    role === "confidential_informant" && fieldCase.assigned_confidential_informant === data.user.id
+      ? "ci_received_at"
+      : role === "mechanic" && fieldCase.mechanic_id === data.user.id
+        ? "mechanic_received_at"
+        : null;
+  if (!column) return { error: "Only the team assigned to this field case can receive it." };
+  if (["completed", "cancelled"].includes(fieldCase.state)) return { error: "This field case is closed." };
+
+  const { error } = await admin
+    .from("field_cases")
+    .update({ [column]: new Date().toISOString() })
+    .eq("id", fieldCase.id);
+  if (error) return { error: error.message };
+  return done(fieldCase.id, fieldCase.transaction_id);
+}

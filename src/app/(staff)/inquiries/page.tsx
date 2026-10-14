@@ -21,7 +21,7 @@ export default async function StaffInquiriesPage() {
   let query = supabase.from("inquiries").select("*, vehicles(make, model, year), profiles(full_name)");
 
   if (myRole === "sales_manager") {
-    query = query.eq("intention_kind", "buy_now");
+    query = query.in("intention_kind", ["buy_now", "buy_financing"]);
   } else {
     // Sell negotiation threads belong to the Marketing Specialist, who opens them from the sell offer.
     query = query.neq("intention_kind", "sell_negotiation");

@@ -301,6 +301,18 @@ export function TransactionDetail({
   const queueState = (transaction.queue_state as QueueState | null) ?? null;
   const acknowledgedAt = (purchaseDetails?.condition_acknowledged_at as string | null) ?? null;
   const [acknowledge, setAcknowledge] = useState(false);
+  // Delivery: a fee and a downpayment are paid first, and the buyer agrees to that before sending.
+  const deliveryTermsAgreedAt = (purchaseDetails?.delivery_terms_agreed_at as string | null) ?? null;
+  const [agreeDeliveryTerms, setAgreeDeliveryTerms] = useState(false);
+  // Financed meet-up: the term the buyer asks for. The amount is an estimate until GCE confirms it.
+  const [termMonths, setTermMonths] = useState(
+    purchaseDetails?.requested_term_months ? String(purchaseDetails.requested_term_months) : "",
+  );
+  const financedMeetupPicked = paymentMethod === "financing" && arrangementKind === "meetup";
+  const priceForEstimate = Number(finalPrice || vehicles?.current_price || 0);
+  // A delivery is dated at request, financed or not; other financing books after the approval.
+  const savedDelivery = purchaseDetails?.arrangement_kind === "delivery";
+  const booksAfterApproval = financingSaved && !savedDelivery;
   const bookedSlot = viewingArrangements.find((va) =>
     ["pending", "confirmed"].includes(va.confirmation_state as string),
   );
@@ -335,6 +347,8 @@ export function TransactionDetail({
     fd.set("location", location);
     fd.set("notes", notes);
     if (acknowledge) fd.set("acknowledge_condition", "yes");
+    if (agreeDeliveryTerms) fd.set("agree_delivery_terms", "yes");
+    if (financedMeetupPicked) fd.set("requested_term_months", termMonths);
     const result = await saveBuyDetails(fd);
     setSaving(false);
     if (result.error) {
@@ -565,6 +579,48 @@ export function TransactionDetail({
                     </label>
                   </div>
                 ) : null}
+                {financedMeetupPicked ? (
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="requested_term">Payment term</Label>
+                    <Select value={termMonths} onValueChange={setTermMonths}>
+                      <SelectTrigger id="requested_term" aria-describedby="requested-term-estimate">
+                        <SelectValue placeholder="Select term" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectItem value="12">1 year</SelectItem>
+                          <SelectItem value="24">2 years</SelectItem>
+                          <SelectItem value="36">3 years</SelectItem>
+                          <SelectItem value="60">5 years</SelectItem>
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                    <p id="requested-term-estimate" className="text-muted-foreground text-xs">
+                      {termMonths && priceForEstimate > 0
+                        ? `About ${formatCurrency(priceForEstimate / Number(termMonths))} a month for ${termMonths} months. The Sales Manager confirms the final amount.`
+                        : "Pick a term to see the monthly payment. No date or time is needed yet."}
+                    </p>
+                  </div>
+                ) : null}
+                {arrangementKind === "delivery" && !deliveryTermsAgreedAt ? (
+                  <div className="flex items-start gap-2 rounded-md border p-3 text-sm">
+                    <Checkbox
+                      id="agree-delivery-terms"
+                      checked={agreeDeliveryTerms}
+                      onCheckedChange={(checked) => setAgreeDeliveryTerms(checked === true)}
+                    />
+                    <label htmlFor="agree-delivery-terms" className="flex flex-col gap-1">
+                      <span>
+                        Delivery has a delivery fee and a downpayment. The downpayment and fee are paid first through
+                        PayMongo.{" "}
+                        {paymentMethod === "financing"
+                          ? "The rest is paid in monthly instalments."
+                          : "The rest is paid in cash when the car arrives."}
+                      </span>
+                      <span className="font-medium">I agree</span>
+                    </label>
+                  </div>
+                ) : null}
                 <p className="text-muted-foreground text-xs">
                   Pick a time on the hour, 9 AM to 9 PM, Monday to Saturday.
                   {arrangementKind === "delivery" ? " Delivery needs at least 7 days from today." : ""}
@@ -604,12 +660,13 @@ export function TransactionDetail({
                     <p className="font-medium">Send your request</p>
                     <p className="text-muted-foreground text-xs">
                       Valid IDs: {activeIds}/2 ·{" "}
-                      {financingSaved
-                        ? "Visit booked after the financing is approved"
+                      {booksAfterApproval
+                        ? "Time booked after the financing is approved"
                         : bookedSlot
                           ? `${queuedCashSaved ? (arrangementKind === "delivery" ? "Delivery" : "Meet-up") : "Visit slot locked"} for ${format(new Date(bookedSlot.schedule as string), "MMM d, yyyy h:mm a")}`
                           : "No time booked yet"}
                       {queuedCashSaved ? ` · Condition ${acknowledgedAt ? "acknowledged" : "not acknowledged"}` : ""}
+                      {savedDelivery ? ` · Delivery terms ${deliveryTermsAgreedAt ? "agreed" : "not agreed"}` : ""}
                     </p>
                     {queuedCashSaved ? (
                       <p className="text-muted-foreground text-xs">
@@ -622,8 +679,9 @@ export function TransactionDetail({
                       disabled={
                         submitting ||
                         activeIds !== 2 ||
-                        (!bookedSlot && !financingSaved) ||
-                        (queuedCashSaved && !acknowledgedAt)
+                        (!bookedSlot && !booksAfterApproval) ||
+                        (queuedCashSaved && !acknowledgedAt) ||
+                        (savedDelivery && !deliveryTermsAgreedAt)
                       }
                       className="self-start"
                     >
@@ -656,12 +714,15 @@ export function TransactionDetail({
               <section className="flex flex-col gap-3">
                 <h2 className="font-medium tracking-tight">Your approved financing</h2>
                 <p className="text-sm">
-                  Initial Downpayment {formatCurrency(Number(paymentTerms.down_payment))}, then{" "}
-                  {String(paymentTerms.number_of_payments)} monthly payments on a balance of{" "}
-                  {formatCurrency(Number(paymentTerms.total_amount) - Number(paymentTerms.down_payment))}.{" "}
-                  {financedDelivery
-                    ? "You pay the downpayment before the car is dispatched, and sign the agreement after you accept it on delivery."
-                    : `You pay the downpayment only after you inspect and accept the car at ${offerKind === "meetup" ? "the meet-up" : "GCE"}.`}
+                  {offerKind === "meetup"
+                    ? "No downpayment. "
+                    : `Initial Downpayment ${formatCurrency(Number(paymentTerms.down_payment))}, then `}
+                  {String(paymentTerms.number_of_payments)} monthly payments
+                  {paymentTerms.monthly_payment ? ` of ${formatCurrency(Number(paymentTerms.monthly_payment))}` : ""} on
+                  a balance of {formatCurrency(Number(paymentTerms.total_amount) - Number(paymentTerms.down_payment))}.{" "}
+                  {offerKind === "meetup"
+                    ? "Nothing is paid before you inspect the car at the meet-up and sign the contract."
+                    : "You pay the downpayment only after you inspect and accept the car at GCE."}
                 </p>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="financing-visit">

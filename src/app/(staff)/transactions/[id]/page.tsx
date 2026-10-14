@@ -130,6 +130,25 @@ export default async function TransactionDetailPage({ params }: { readonly param
         .neq("state", "cancelled")
     : { count: 0 };
 
+  // Financing is agreed in chat: the request's own thread with the buyer.
+  const { data: financingThread } = isFinancing
+    ? await supabase.from("inquiries").select("id").eq("transaction_id", id).maybeSingle()
+    : { data: null };
+
+  // Meet Halfway: the field case of the Confidential Informant and the Mechanic who meet the buyer.
+  const isMeetup =
+    (Array.isArray(purchaseRow) ? purchaseRow[0] : purchaseRow)?.arrangement_kind === "meetup" &&
+    (transaction as Record<string, unknown>).transaction_kind === "buy";
+  const { data: meetupCase } = isMeetup
+    ? await supabase
+        .from("field_cases")
+        .select("id, state, ci_received_at, mechanic_received_at")
+        .eq("transaction_id", id)
+        .eq("case_kind", "buyer_meetup")
+        .neq("state", "cancelled")
+        .maybeSingle()
+    : { data: null };
+
   // T01 Selling: ceilings, the field inspection, the issue report, expenses and the negotiation thread.
   const isSell = (transaction as Record<string, unknown>).transaction_kind === "sell";
   const [{ data: proposals }, { data: fieldCase }, { data: issueReport }, { data: expenses }, { data: thread }] = isSell
@@ -185,7 +204,15 @@ export default async function TransactionDetailPage({ params }: { readonly param
         informants={informants}
         checklistNameMap={checklistNameMap}
         carBuyers={(carBuyers as unknown as CarBuyerRow[] | null) ?? []}
-        financing={isFinancing ? { hasRecoveryCase: (recoveryCases ?? 0) > 0 } : null}
+        financing={
+          isFinancing
+            ? {
+                hasRecoveryCase: (recoveryCases ?? 0) > 0,
+                threadId: (financingThread as { id: string } | null)?.id ?? null,
+              }
+            : null
+        }
+        meetup={isMeetup ? { fieldCase: meetupCase as Record<string, unknown> | null, informants, mechanics } : null}
         headSecurity={headSecurity}
         delivery={
           isDelivery

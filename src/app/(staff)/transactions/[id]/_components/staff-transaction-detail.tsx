@@ -18,13 +18,20 @@ import {
   verifyPayment,
   verifyTransactionDocument,
 } from "@/app/(staff)/transactions/actions";
-import { contractTemplate, isFieldArrangement, needsContract, type PapersStatus } from "@/lib/transactions/buy-flow";
+import {
+  contractTemplate,
+  isFieldArrangement,
+  isHalfwayCashRequest,
+  needsContract,
+  type PapersStatus,
+} from "@/lib/transactions/buy-flow";
 import type { TransactionState } from "@/lib/transactions/state-machine";
 
 import { BuyersForCarPanel, type CarBuyerRow } from "./buyers-for-car-panel";
 import { DeliveryPanel, type DeliveryTeam } from "./delivery-panel";
 import { FinancingPanel } from "./financing-panel";
 import { ContractCard, HandoverPanel } from "./handover-panel";
+import { type MeetupPick, MeetupTeamPanel } from "./meetup-team-panel";
 import { type SellFlowData, SellFlowPanel } from "./sell-flow-panel";
 import { TransactionDetailSidebarV1 } from "./transaction-detail-sidebar-v1";
 import { TransactionOverviewV1 } from "./transaction-overview-v1";
@@ -47,6 +54,7 @@ export function StaffTransactionDetail({
   carBuyers = [],
   delivery = null,
   financing = null,
+  meetup = null,
   headSecurity = [],
 }: {
   readonly transaction: Record<string, unknown>;
@@ -62,7 +70,12 @@ export function StaffTransactionDetail({
   readonly sellFlow?: SellFlowData | null;
   readonly carBuyers?: CarBuyerRow[];
   readonly delivery?: { fieldCase: Record<string, unknown> | null; team: DeliveryTeam } | null;
-  readonly financing?: { hasRecoveryCase: boolean } | null;
+  readonly financing?: { hasRecoveryCase: boolean; threadId?: string | null } | null;
+  readonly meetup?: {
+    fieldCase: Record<string, unknown> | null;
+    informants: { id: string; full_name: string | null }[];
+    mechanics: { id: string; full_name: string | null }[];
+  } | null;
   readonly headSecurity?: { id: string; full_name: string | null }[];
 }) {
   const router = useRouter();
@@ -91,12 +104,29 @@ export function StaffTransactionDetail({
   const updatedAt = transaction.updated_at as string;
 
   const [transitioning, setTransitioning] = useState(false);
+  // Meet Halfway: the team the Sales Manager names, with the approval (cash) or after it (financing).
+  const [meetupPick, setMeetupPick] = useState<MeetupPick>({});
+  const isSalesManager = ["sales_manager", "ceo"].includes(userRole);
+  const cashMeetup = isHalfwayCashRequest(purchaseDetails ?? null);
+  const meetupMode = meetup?.fieldCase
+    ? "assigned"
+    : !isSalesManager
+      ? null
+      : cashMeetup && state === "under_review"
+        ? "approval"
+        : state === "approved"
+          ? "assign"
+          : null;
 
   async function doTransition(to: TransactionState) {
     setTransitioning(true);
     const fd = new FormData();
     fd.set("id", id);
     fd.set("to_state", to);
+    if (to === "approved" && cashMeetup) {
+      fd.set("informant_id", meetupPick.informant_id ?? "");
+      fd.set("mechanic_id", meetupPick.mechanic_id ?? "");
+    }
     const result = await transitionTransaction(fd);
     setTransitioning(false);
     if (result.error) {
@@ -338,6 +368,30 @@ export function StaffTransactionDetail({
           account={installmentAccount}
           hasRecoveryCase={financing.hasRecoveryCase}
           userRole={userRole}
+          threadId={financing.threadId ?? null}
+          arrangementKind={(purchaseDetails?.arrangement_kind as string | undefined) ?? "gce_visit"}
+          signingReported={Boolean(handover.signing_reported_at)}
+        />
+      ) : null}
+
+      {kind === "buy" && meetup && meetupMode ? (
+        <MeetupTeamPanel
+          transactionId={id}
+          mode={meetupMode}
+          informants={meetup.informants}
+          mechanics={meetup.mechanics}
+          pick={meetupPick}
+          onPick={setMeetupPick}
+          fieldCase={meetup.fieldCase}
+          waitingFor={
+            cashMeetup
+              ? null
+              : !["approved", "signed"].includes(String(handover.contract_state ?? ""))
+                ? "Available once the Head Accountant approves the contract."
+                : liveVisit
+                  ? null
+                  : "Available once the buyer books the meet-up."
+          }
         />
       ) : null}
 

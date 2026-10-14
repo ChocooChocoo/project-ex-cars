@@ -78,6 +78,8 @@ export async function buyerRequest(
     method: "Cash" | "Financing" | "Bank Transfer";
     arrangement: "GCE Visit" | "CALABARZON Meet-up" | "Delivery";
     when?: string;
+    // A financed meet-up: the payment term the buyer asks for.
+    term?: "1 year" | "2 years" | "3 years" | "5 years";
   },
 ): Promise<string> {
   await open(page, `/customer/showroom/${vehicleId}`);
@@ -93,8 +95,12 @@ export async function buyerRequest(
   await pick(page, "arrangement_kind", options.arrangement);
   if (options.when) await page.locator("#schedule").fill(options.when);
   if (options.arrangement !== "GCE Visit") await page.locator("#location").fill("SM Calamba parking, Laguna");
+  if (options.term) await pick(page, "requested_term", options.term);
   const acknowledge = page.getByLabel(/I have reviewed this car's condition/);
   if (await acknowledge.isVisible()) await acknowledge.check();
+  // Delivery: the buyer agrees to the delivery terms notice before the request can be sent.
+  const agree = page.locator("#agree-delivery-terms");
+  if (await agree.isVisible()) await agree.check();
   await page.getByRole("button", { name: "Save Details" }).click();
   await expect(page.getByText("Details saved.")).toBeVisible();
   await page.waitForLoadState("networkidle");
@@ -117,6 +123,13 @@ export async function approveAsSalesManager(page: Page, transactionId: string) {
   await signInAs(page, "sales_manager@gce.local");
   await open(page, `/sales_manager/transactions/${transactionId}`);
   await verifyAll(page, 3);
+  // The last verification must have landed before the approval counts the verified papers.
+  await page.waitForLoadState("networkidle");
+  // A cash Meet Halfway is approved together with its team.
+  if (await page.getByText("Meet-up team", { exact: true }).isVisible()) {
+    await pickByLabel(page, "Confidential Informant");
+    await pickByLabel(page, "Mechanic");
+  }
   await page.getByRole("button", { name: /^Transition Approve/ }).click();
   await expect(page.getByText("Transaction moved to approved.")).toBeVisible();
   await page.waitForLoadState("networkidle");
@@ -127,7 +140,9 @@ export async function proposeTerms(page: Page, months: number, price: number, do
   await page.getByLabel("Payment duration (months)").fill(String(months));
   await page.getByLabel("Vehicle price (₱)").fill(String(price));
   await page.getByLabel("Initial Downpayment (₱)").fill(String(downpayment));
+  await page.getByLabel("Monthly payment (₱)").fill(String(Math.ceil((price - downpayment) / months)));
   await page.getByLabel("First installment due").fill("2033-12-01");
+  await page.getByLabel("Missed payment policy").fill("From the 4th missed month GCE takes back the vehicle.");
   await page.getByRole("button", { name: "Send to Head Accountant" }).click();
   await expect(page.getByText("Terms sent to the Head Accountant.")).toBeVisible();
 }

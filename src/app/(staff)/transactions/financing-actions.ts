@@ -8,6 +8,7 @@ import { getCurrentRole } from "@/app/auth/actions";
 import { notify } from "@/lib/notifications/notify";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { addWorkingDays, DOWNPAYMENT_WORKING_DAYS } from "@/lib/transactions/buy-flow";
 import { loadFinancing, openFinancingAccount } from "@/lib/transactions/financing-server";
 
 type FinancingResult = { error: string } | { success: true };
@@ -34,6 +35,13 @@ async function history(admin: Admin, tx: { id: string; current_state: string }, 
   });
 }
 
+function arrangementKind(tx: { purchase_details: unknown }): string | null {
+  const details = (Array.isArray(tx.purchase_details) ? tx.purchase_details[0] : tx.purchase_details) as {
+    arrangement_kind?: string;
+  } | null;
+  return details?.arrangement_kind ?? null;
+}
+
 function done(transactionId: string): FinancingResult {
   revalidatePath("/dashboard/transactions");
   revalidatePath(`/dashboard/transactions/${transactionId}`);
@@ -50,15 +58,15 @@ export async function proposeFinancingTerms(formData: FormData): Promise<Financi
     .object({
       duration_months: z.coerce.number().int().min(1, "Choose a payment duration.").max(84),
       total_amount: z.coerce.number().positive("Enter the vehicle price."),
-      down_payment: z.coerce.number().min(0),
+      down_payment: z.coerce.number().min(0).optional(),
+      monthly_payment: z.coerce.number().positive("Enter the monthly payment."),
       first_due_date: z.string().min(1, "Set the first due date."),
+      missed_payment_policy: z.string().trim().min(1, "State the missed payment policy.").max(1000),
+      delivery_fee: z.coerce.number().min(0).optional(),
       notes: z.string().trim().max(500).optional().or(z.literal("")),
     })
     .safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid terms." };
-  if (parsed.data.down_payment >= parsed.data.total_amount) {
-    return { error: "The Initial Downpayment must be below the vehicle price." };
-  }
 
   const admin = createAdminClient();
   const tx = await loadFinancing(admin, formData.get("transaction_id"));
@@ -66,11 +74,24 @@ export async function proposeFinancingTerms(formData: FormData): Promise<Financi
   if (tx.current_state !== "approved") return { error: "Approve the request before proposing terms." };
   if (tx.terms && !["returned"].includes(tx.terms.state)) return { error: "Terms are already in review." };
 
+  // A meet-up takes no downpayment. A delivery's fee and downpayment are approved with the terms.
+  const kind = arrangementKind(tx);
+  const delivery = kind === "delivery";
+  if (delivery && !String(formData.get("delivery_fee") ?? "").trim()) return { error: "Enter the delivery fee." };
+  const downPayment = kind === "meetup" ? 0 : (parsed.data.down_payment ?? 0);
+  if (delivery && downPayment <= 0) return { error: "Enter the downpayment." };
+  if (downPayment >= parsed.data.total_amount) {
+    return { error: "The Initial Downpayment must be below the vehicle price." };
+  }
+
   const row = {
     purchase_transaction_id: tx.id,
     arrangement_description: parsed.data.notes || `${parsed.data.duration_months}-month In-House Financing`,
     total_amount: parsed.data.total_amount,
-    down_payment: parsed.data.down_payment,
+    down_payment: downPayment,
+    monthly_payment: parsed.data.monthly_payment,
+    missed_payment_policy: parsed.data.missed_payment_policy,
+    delivery_fee: delivery ? (parsed.data.delivery_fee ?? 0) : null,
     number_of_payments: parsed.data.duration_months,
     duration_months: parsed.data.duration_months,
     payment_frequency: "monthly",
@@ -90,7 +111,7 @@ export async function proposeFinancingTerms(formData: FormData): Promise<Financi
     admin,
     tx,
     who.userId,
-    `Financing proposed: ${parsed.data.duration_months} months, downpayment ${peso(parsed.data.down_payment)}`,
+    `Financing proposed: ${parsed.data.duration_months} months, downpayment ${peso(downPayment)}`,
   );
   await notify(
     admin,
@@ -98,7 +119,7 @@ export async function proposeFinancingTerms(formData: FormData): Promise<Financi
     {
       kind: "financing_terms_proposed",
       title: "Financing terms to review",
-      body: `${parsed.data.duration_months} months on ${peso(parsed.data.total_amount)}, Initial Downpayment ${peso(parsed.data.down_payment)}.`,
+      body: `${parsed.data.duration_months} months on ${peso(parsed.data.total_amount)}, Initial Downpayment ${peso(downPayment)}.`,
       transactionId: tx.id,
     },
   );
@@ -190,22 +211,81 @@ export async function confirmFinancingTerms(formData: FormData): Promise<Financi
     return done(tx.id);
   }
 
+  // A delivery was dated at request, so the confirmation sets its payment terms and holds the car.
+  const kind = arrangementKind(tx);
+  const delivery = kind === "delivery";
+  let deliveryOn = "";
+  if (delivery) {
+    const { data: slot } = await admin
+      .from("viewing_arrangements")
+      .select("schedule, location")
+      .eq("purchase_transaction_id", tx.id)
+      .eq("arrangement_kind", "delivery")
+      .in("confirmation_state", ["pending", "confirmed"])
+      .maybeSingle();
+    if (!slot) return { error: "The request has no delivery date." };
+    deliveryOn = new Date(slot.schedule).toLocaleString("en-PH");
+  }
+
   const { error } = await admin
     .from("payment_terms")
     .update({ state: "approved", approver_id: who.userId, approval_date: new Date().toISOString() })
     .eq("id", tx.terms.id);
   if (error) return { error: error.message };
-  await admin.from("transactions").update({ flow_status: "approved_awaiting_buyer_decision" }).eq("id", tx.id);
   await history(admin, tx, who.userId, "CEO confirmed the financing terms");
 
   const remaining = Number(tx.terms.total_amount) - Number(tx.terms.down_payment);
+  const monthly = tx.terms.monthly_payment
+    ? `${peso(tx.terms.monthly_payment)} a month for ${tx.terms.number_of_payments} months`
+    : `${tx.terms.number_of_payments} monthly payments`;
+
+  if (delivery) {
+    const fee = Number(tx.terms.delivery_fee ?? 0);
+    const due = addWorkingDays(new Date(), DOWNPAYMENT_WORKING_DAYS);
+    await admin
+      .from("purchase_details")
+      .update({
+        delivery_serviceable: true,
+        delivery_fee: fee,
+        downpayment_amount: tx.terms.down_payment,
+        downpayment_due_at: due.toISOString(),
+      })
+      .eq("transaction_id", tx.id);
+    await admin.from("transactions").update({ flow_status: "purchase_claim" }).eq("id", tx.id);
+    await notify(
+      admin,
+      { userId: tx.customer_id },
+      {
+        kind: "financing_offer",
+        title: "Your financing and delivery are confirmed",
+        body: `Delivery fee ${peso(fee)} and downpayment ${peso(tx.terms.down_payment)}: pay ${peso(fee + Number(tx.terms.down_payment))} now through PayMongo, by ${due.toLocaleDateString("en-PH")}. Amount financed ${peso(remaining)}, ${monthly}. Delivery on ${deliveryOn}.`,
+        transactionId: tx.id,
+      },
+    );
+    await notify(
+      admin,
+      { role: "head_accountant" },
+      {
+        kind: "delivery_payment_expected",
+        title: "Delivery payments expected",
+        body: `A buyer will pay a delivery fee of ${peso(fee)} and a downpayment of ${peso(tx.terms.down_payment)}. Record and verify them on the transaction.`,
+        transactionId: tx.id,
+      },
+    );
+    return done(tx.id);
+  }
+
+  await admin.from("transactions").update({ flow_status: "approved_awaiting_buyer_decision" }).eq("id", tx.id);
   await notify(
     admin,
     { userId: tx.customer_id },
     {
       kind: "financing_offer",
       title: "Your financing is approved",
-      body: `Initial Downpayment ${peso(tx.terms.down_payment)}, then ${tx.terms.number_of_payments} monthly payments on a balance of ${peso(remaining)}. Review it and book your GCE visit, or decline.`,
+      body:
+        kind === "meetup"
+          ? `No downpayment. ${peso(remaining)} financed, ${monthly}. Review it and book your meet-up, or decline.`
+          : `Initial Downpayment ${peso(tx.terms.down_payment)}, then ${monthly} on a balance of ${peso(remaining)}. Review it and book your GCE visit, or decline.`,
       transactionId: tx.id,
     },
   );
@@ -277,13 +357,19 @@ export async function completeFinancingAgreement(formData: FormData): Promise<Fi
   const admin = createAdminClient();
   const tx = await loadFinancing(admin, formData.get("transaction_id"));
   if (!tx?.terms) return { error: "Financing request not found." };
-  if (tx.flow_status !== "initial_dp_confirmed" || tx.terms.state !== "approved") {
-    return { error: "Complete the agreement after the Initial Downpayment is confirmed." };
+  // A meet-up takes no downpayment: its agreement waits only for the signing.
+  const kind = arrangementKind(tx);
+  if (tx.terms.state !== "approved" || (kind !== "meetup" && tx.flow_status !== "initial_dp_confirmed")) {
+    return {
+      error:
+        kind === "meetup"
+          ? "Complete the agreement after the financing is confirmed."
+          : "Complete the agreement after the Initial Downpayment is confirmed.",
+    };
   }
   // §11 (Phase 6 default): a financed delivery is signed after the buyer accepts the car at the door, so a
   // decline on delivery never leaves an open account.
-  const details = Array.isArray(tx.purchase_details) ? tx.purchase_details[0] : tx.purchase_details;
-  if (details?.arrangement_kind === "delivery") {
+  if (kind === "delivery") {
     const { data: delivery } = await admin
       .from("field_cases")
       .select("delivery_status")
@@ -293,6 +379,17 @@ export async function completeFinancingAgreement(formData: FormData): Promise<Fi
       .maybeSingle();
     if (delivery?.delivery_status !== "delivered") {
       return { error: "Complete the agreement after the car is delivered and the buyer accepts it." };
+    }
+  }
+  // In the field the Confidential Informant reports the signing before the account opens.
+  if (kind === "meetup" || kind === "delivery") {
+    const { data: handover } = await admin
+      .from("sale_handovers")
+      .select("signing_reported_at")
+      .eq("transaction_id", tx.id)
+      .maybeSingle();
+    if (!handover?.signing_reported_at) {
+      return { error: "Complete the agreement after the Confidential Informant reports that the buyer signed." };
     }
   }
 

@@ -23,7 +23,7 @@ export async function getStaffInquiryThread(inquiryId: string): Promise<ActionRe
     .eq("id", parsedId.data);
 
   if (authorization.data.role === "sales_manager") {
-    inquiryQuery = inquiryQuery.eq("intention_kind", "buy_now");
+    inquiryQuery = inquiryQuery.in("intention_kind", ["buy_now", "buy_financing"]);
   }
   if (authorization.data.role === "marketing_specialist") {
     inquiryQuery = inquiryQuery.eq("intention_kind", "sell_negotiation");

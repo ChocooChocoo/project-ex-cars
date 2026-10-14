@@ -160,6 +160,8 @@ export async function saveBuyDetails(formData: FormData) {
     location,
     notes,
     acknowledge_condition,
+    agree_delivery_terms,
+    requested_term_months,
   } = parsed.data;
 
   const { data: transaction } = await supabase
@@ -194,19 +196,27 @@ export async function saveBuyDetails(formData: FormData) {
   // §3/§4/§6 step 3: the condition acknowledgment comes before Meet Halfway, Delivery or financing.
   const needsAcknowledgment =
     arrangement_kind === "meetup" || arrangement_kind === "delivery" || payment_method === "financing";
-  if (needsAcknowledgment && acknowledge_condition !== "yes") {
+  const needsDeliveryTerms = arrangement_kind === "delivery";
+  if ((needsAcknowledgment && acknowledge_condition !== "yes") || (needsDeliveryTerms && !agree_delivery_terms)) {
     const { data: existing } = await supabase
       .from("purchase_details")
-      .select("condition_acknowledged_at")
+      .select("condition_acknowledged_at, delivery_terms_agreed_at")
       .eq("transaction_id", transactionId)
       .maybeSingle();
-    if (!existing?.condition_acknowledged_at) {
+    if (needsAcknowledgment && acknowledge_condition !== "yes" && !existing?.condition_acknowledged_at) {
       return {
         error:
           "Review the car's condition and 360° view, then acknowledge it before choosing Meet Halfway or Delivery.",
       };
     }
+    // A delivery has a fee and a downpayment paid first; the buyer agrees to that before the request is sent.
+    if (needsDeliveryTerms && !agree_delivery_terms && !existing?.delivery_terms_agreed_at) {
+      return { error: "Read the delivery terms and tick I agree." };
+    }
   }
+  // A financed meet-up: the buyer says how long they want to pay.
+  const financedMeetup = payment_method === "financing" && arrangement_kind === "meetup";
+  if (financedMeetup && !requested_term_months) return { error: "Choose a payment term." };
 
   const { error } = await supabase.from("purchase_details").upsert(
     {
@@ -216,6 +226,8 @@ export async function saveBuyDetails(formData: FormData) {
       final_price: final_price || vehicle?.current_price || null,
       arrangement_kind: arrangement_kind || null,
       ...(acknowledge_condition === "yes" ? { condition_acknowledged_at: new Date().toISOString() } : {}),
+      ...(needsDeliveryTerms && agree_delivery_terms ? { delivery_terms_agreed_at: new Date().toISOString() } : {}),
+      ...(financedMeetup ? { requested_term_months } : {}),
     },
     { onConflict: "transaction_id" },
   );
@@ -261,7 +273,7 @@ export async function submitBuyRequest(formData: FormData) {
   const { data: tx } = await supabase
     .from("transactions")
     .select(
-      "id, customer_id, vehicle_id, transaction_kind, current_state, queue_state, purchase_details(payment_method, arrangement_kind, condition_acknowledged_at)",
+      "id, customer_id, vehicle_id, transaction_kind, current_state, queue_state, purchase_details(payment_method, arrangement_kind, condition_acknowledged_at, delivery_terms_agreed_at)",
     )
     .eq("id", transactionId.data)
     .maybeSingle();
@@ -272,8 +284,11 @@ export async function submitBuyRequest(formData: FormData) {
 
   const details = (Array.isArray(tx.purchase_details) ? tx.purchase_details[0] : tx.purchase_details) ?? null;
   const queued = isQueuedRequest(details);
-  // §6: a financing buyer books the GCE visit only after the financing is approved.
+  // §6: a financing buyer books the GCE visit or the meet-up only after the financing is approved. A
+  // delivery is dated at request, financed or not.
   const financing = isFinancingRequest(details);
+  const delivery = details?.arrangement_kind === "delivery";
+  const bookedAtRequest = !financing || delivery;
   if (!queued && !isOnsiteCashRequest(details)) {
     return {
       error:
@@ -281,6 +296,7 @@ export async function submitBuyRequest(formData: FormData) {
     };
   }
   if (queued && !details?.condition_acknowledged_at) return { error: "Acknowledge the car's condition first." };
+  if (delivery && !details?.delivery_terms_agreed_at) return { error: "Agree to the delivery terms first." };
 
   const [{ data: documents }, { data: slot }, { data: standing }] = await Promise.all([
     supabase.from("transaction_documents").select("document_kind, verification_state").eq("transaction_id", tx.id),
@@ -295,7 +311,7 @@ export async function submitBuyRequest(formData: FormData) {
   if (activeBuyerIdCount(documents ?? []) !== BUYER_ID_COUNT) return { error: "Upload two valid IDs first." };
   if (queued && standing?.gce_visit_only) return { error: "Your account is limited to GCE visits." };
   const scheduledAt = slot ? new Date(slot.schedule) : null;
-  if (!financing) {
+  if (bookedAtRequest) {
     if (!slot || !scheduledAt || slot.arrangement_kind !== details?.arrangement_kind) {
       return { error: "Book the meeting time first." };
     }
@@ -343,6 +359,17 @@ export async function submitBuyRequest(formData: FormData) {
       ? `Buyer submitted ${financing ? "an In-House Financing" : `a Cash ${details?.arrangement_kind === "delivery" ? "Delivery" : "Meet Halfway"}`} request (${onHold ? "On Hold" : "Active"})`
       : "Buyer submitted a Cash request with a GCE visit slot",
   });
+  // Financing is agreed in chat, so the request gets its own thread with GCE (as a sell offer does).
+  // 23505: the thread already exists.
+  if (financing) {
+    const { error: threadError } = await admin.from("inquiries").insert({
+      customer_id: user.user.id,
+      vehicle_id: tx.vehicle_id,
+      intention_kind: "buy_financing",
+      transaction_id: tx.id,
+    });
+    if (threadError && threadError.code !== "23505") return { error: threadError.message };
+  }
   const when = scheduledAt ? scheduledAt.toLocaleString("en-PH") : "";
   await notify(
     admin,

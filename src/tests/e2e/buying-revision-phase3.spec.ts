@@ -33,11 +33,6 @@ async function recordPayment(page: Page, amount: string, method: string, kind: s
   await page.getByRole("button", { name: "Record Payment" }).click();
 }
 
-async function userId(email: string): Promise<string> {
-  const { data } = await db().auth.admin.listUsers({ perPage: 1000 });
-  return data.users.find((u) => u.email === email)?.id ?? "";
-}
-
 test.describe
   .serial("Buying revision phase 3", () => {
     test.skip(
@@ -139,31 +134,21 @@ test.describe
       page,
     }) => {
       test.slow();
-      const when = futureSlot();
       await signInAs(page, "customer@gce.local");
       const id = await buyerRequest(page, await createTestVehicle("P3-MEETUP"), {
         method: "Cash",
         arrangement: "CALABARZON Meet-up",
-        when,
+        when: futureSlot(),
       });
       await approveAsSalesManager(page, id);
 
-      // Set-up only: Phase 4 makes the Sales Manager assign the meet-up team at approval. Until then
-      // the case is created here with the same columns createFieldCase writes.
-      const { data: fieldCase } = await db()
-        .from("field_cases")
-        .insert({
-          transaction_id: id,
-          case_kind: "buyer_meetup",
-          assigned_confidential_informant: await userId("confidential_informant@gce.local"),
-          mechanic_id: await userId("mechanic@gce.local"),
-          schedule: new Date(when).toISOString(),
-          location: "SM Calamba parking, Laguna",
-          state: "assigned",
-        })
-        .select("id")
-        .single();
-      const casePath = `/field-cases/${fieldCase?.id}`;
+      // The approval named the meet-up team and opened their field case.
+      const caseLink = page.getByRole("link", { name: "Open field case" });
+      await expect(caseLink).toBeVisible();
+      const casePath = new URL((await caseLink.getAttribute("href")) ?? "", page.url()).pathname.replace(
+        /^\/[^/]+/,
+        "",
+      );
       const keepCopy = page.getByRole("button", { name: "Record my signed copy" });
 
       await signInAs(page, "confidential_informant@gce.local");
