@@ -18,6 +18,9 @@ import {
   isOnsiteCashRequest,
   isQueuedRequest,
   isVisitSlot,
+  needsContract,
+  onlinePaymentsDue,
+  paymentAllowedBeforeSigning,
   SLOT_RULE_MESSAGE,
 } from "@/lib/transactions/buy-flow";
 import { releaseVisitSlots } from "@/lib/transactions/buy-flow-server";
@@ -808,6 +811,82 @@ export async function submitRequestCar(formData: FormData) {
   revalidatePath("/my-transactions");
   revalidatePath("/dashboard/transactions");
   return { success: true, id: transaction.id };
+}
+
+// The buyer pays what is due online (a delivery's fee and downpayment, or a financing downpayment) on
+// GCE's PayMongo payment link. The rows are recorded unverified so the Head Accountant can match them to
+// the PayMongo receipt; Pay again records nothing twice.
+// ponytail: a fixed payment link plus manual verification. Upgrade to PayMongo Checkout with a webhook
+// that marks the row paid when per-payment amounts and automatic confirmation are needed.
+export async function startOnlinePayment(
+  formData: FormData,
+): Promise<{ error: string } | { success: true; url: string }> {
+  const supabase = await createServerSupabaseClient();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+
+  const link = process.env.NEXT_PUBLIC_PAYMONGO_LINK;
+  if (!link) return { error: "Online payment is not set up yet." };
+
+  const id = z.string().uuid().safeParse(formData.get("transaction_id"));
+  if (!id.success) return { error: "Transaction not found." };
+
+  const admin = createAdminClient();
+  const { data: tx } = await admin
+    .from("transactions")
+    .select(
+      "id, customer_id, current_state, flow_status, purchase_details(payment_method, arrangement_kind, delivery_fee, downpayment_amount, downpayment_due_at), payment_records(payment_kind), payment_terms(down_payment, state), sale_handovers(contract_state)",
+    )
+    .eq("id", id.data)
+    .maybeSingle();
+  if (!tx || tx.customer_id !== user.user.id || tx.current_state !== "approved") {
+    return { error: "Transaction not found." };
+  }
+  const one = <T>(value: T | T[] | null | undefined) => (Array.isArray(value) ? value[0] : value) ?? null;
+  const details = one(tx.purchase_details);
+  const due = onlinePaymentsDue(details, one(tx.payment_terms), tx.flow_status);
+  if (due.length === 0) return { error: "Nothing is due online right now." };
+
+  const sent = new Set(((tx.payment_records ?? []) as { payment_kind: unknown }[]).map((p) => p.payment_kind));
+  const todo = due.filter((payment) => !sent.has(payment.kind));
+  if (todo.length === 0) return { success: true, url: link };
+  if (
+    needsContract(details) &&
+    one(tx.sale_handovers)?.contract_state !== "signed" &&
+    todo.some((payment) => !paymentAllowedBeforeSigning(details, payment.kind))
+  ) {
+    return { error: "Sign the contract before paying." };
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const { error } = await admin.from("payment_records").insert(
+    todo.map((payment) => ({
+      transaction_id: tx.id,
+      amount: payment.amount,
+      method: "paymongo",
+      payment_kind: payment.kind,
+      recorded_by: user.user.id,
+      settlement_date: today,
+    })),
+  );
+  if (error) return { error: error.message };
+  // §6 step 17: a claimed car's Initial Downpayment now waits for the Head Accountant.
+  if (todo.some((payment) => payment.kind === "downpayment") && tx.flow_status === "purchase_claim") {
+    await admin.from("transactions").update({ flow_status: "initial_dp_awaiting_verification" }).eq("id", tx.id);
+  }
+  await notify(
+    admin,
+    { role: "head_accountant" },
+    {
+      kind: "online_payment_sent",
+      title: "Online payment to verify",
+      body: `A buyer paid through PayMongo: ${todo.map((payment) => `${payment.label} ₱${payment.amount.toLocaleString()}`).join(", ")}. Check the PayMongo receipt, then verify.`,
+      transactionId: tx.id,
+    },
+  );
+  revalidatePath(`/my-transactions/${tx.id}`);
+  revalidatePath(`/dashboard/transactions/${tx.id}`);
+  return { success: true, url: link };
 }
 
 // The buyer signs the contract the Head Accountant approved: a typed full name and the time. The typed

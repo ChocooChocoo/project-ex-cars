@@ -51,6 +51,7 @@ import {
   isFinancingRequest,
   isOnsiteCashRequest,
   isQueuedRequest,
+  onlinePaymentsDue,
   PAPERS_STATUS_LABELS,
   type PapersStatus,
   paidTowardPrice,
@@ -68,6 +69,7 @@ import type { FlowStatus, QueueState, TransactionFlag, TransactionState } from "
 import { cn, formatCurrency } from "@/lib/utils";
 
 import { ContractSign } from "./contract-sign";
+import { OnlinePayment } from "./online-payment";
 import type { TransactionPaperProps } from "./transaction-paper";
 import { TransactionPreview } from "./transaction-preview";
 
@@ -163,6 +165,12 @@ export function TransactionDetail({
   const handover = (Array.isArray(handoverRaw) ? handoverRaw[0] : handoverRaw) ?? {};
   const papersStatus = (handover.papers_status as PapersStatus | null | undefined) ?? null;
   const contractState = (handover.contract_state as string | null | undefined) ?? null;
+  // What is paid on the PayMongo link: a delivery's fee and downpayment, or a claimed financing downpayment.
+  const onlineDue = onlinePaymentsDue(
+    purchaseDetails ?? null,
+    paymentTerms,
+    (transaction.flow_status as string | null) ?? null,
+  );
 
   const [localState, setLocalState] = useState<TransactionState | null>(null);
   const state = localState ?? ((transaction.current_state ?? "pending") as TransactionState);
@@ -774,6 +782,17 @@ export function TransactionDetail({
             </>
           ) : null}
 
+          {kind === "buy" && state === "approved" && onlineDue.length > 0 ? (
+            <>
+              <OnlinePayment
+                transactionId={id}
+                due={onlineDue}
+                payments={payments as { payment_kind?: unknown; verified_by?: unknown }[]}
+              />
+              <Separator />
+            </>
+          ) : null}
+
           {kind === "buy" && purchaseDetails?.downpayment_due_at ? (
             <>
               {/* §4 steps 5a–7a: what to pay, by when, and where the delivery is. */}
@@ -781,7 +800,7 @@ export function TransactionDetail({
                 <h2 className="font-medium tracking-tight">Delivery</h2>
                 <p className="text-sm">
                   Delivery fee {formatCurrency(Number(purchaseDetails.delivery_fee ?? 0))} and downpayment{" "}
-                  {formatCurrency(Number(purchaseDetails.downpayment_amount ?? 0))} by bank transfer before{" "}
+                  {formatCurrency(Number(purchaseDetails.downpayment_amount ?? 0))} through PayMongo before{" "}
                   {format(new Date(purchaseDetails.downpayment_due_at as string), "MMM d, yyyy")}.{" "}
                   {deliveryBalanceNote(purchaseDetails.payment_method, "buyer")}
                 </p>

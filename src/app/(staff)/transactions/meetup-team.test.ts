@@ -10,7 +10,7 @@ const { getUser, getCurrentRole, notify, db } = vi.hoisted(() => {
   const from = (table: string) => {
     const answer = () => Promise.resolve({ data: rows[table] ?? null, count: counts[table] ?? 0, error: null });
     const builder: Record<string, unknown> = {};
-    for (const step of ["select", "eq", "neq", "in", "not", "order", "limit"]) builder[step] = () => builder;
+    for (const step of ["select", "eq", "neq", "in", "not", "or", "order", "limit"]) builder[step] = () => builder;
     for (const op of ["insert", "upsert", "update"]) {
       builder[op] = (payload: Record<string, unknown>) => {
         writes.push({ table, op, payload });

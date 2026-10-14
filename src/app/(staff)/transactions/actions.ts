@@ -158,7 +158,10 @@ export async function transitionTransaction(formData: FormData) {
       .from("payment_records")
       .select("id", { count: "exact", head: true })
       .eq("transaction_id", id);
-    if (bankTransfer) paymentQuery = paymentQuery.not("verified_by", "is", null);
+    // A bank transfer, and anything paid on the PayMongo link, counts only once the Head Accountant verifies it.
+    paymentQuery = bankTransfer
+      ? paymentQuery.not("verified_by", "is", null)
+      : paymentQuery.or("verified_by.not.is.null,method.neq.paymongo");
     const { count: payments } = await paymentQuery;
     // A financed meet-up takes no downpayment: nothing is paid before the financing account opens.
     const nothingDueYet = financing && purchase?.arrangement_kind === "meetup";

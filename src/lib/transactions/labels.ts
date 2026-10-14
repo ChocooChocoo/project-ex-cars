@@ -29,8 +29,21 @@ export function paymentMethodLabel(method: string): string {
     cheque: "Cheque",
     down_payment: "Down Payment",
     bank_transfer: "Bank Transfer",
+    paymongo: "PayMongo",
   };
   return map[method] ?? method;
+}
+
+// What a payment was for, as the Head Accountant reads it on the request.
+export function paymentKindLabel(kind: string | null | undefined): string {
+  const map: Record<string, string> = {
+    full: "Full Payment",
+    delivery_fee: "Delivery Fee",
+    downpayment: "Downpayment",
+    balance: "Balance",
+    reschedule_fee: "Reschedule Fee",
+  };
+  return kind ? (map[kind] ?? kind) : "—";
 }
 
 export function arrangementKindLabel(kind: string): string {

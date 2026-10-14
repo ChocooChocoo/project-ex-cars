@@ -17,7 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { paymentMethodLabel } from "@/lib/transactions/labels";
+import { paymentKindLabel, paymentMethodLabel } from "@/lib/transactions/labels";
 import { formatCurrency } from "@/lib/utils";
 
 type PaymentRow = Record<string, unknown>;
@@ -43,6 +43,14 @@ export function TransactionPaymentsTableV1({
       ),
       cell: ({ row }: { row: { original: PaymentRow } }) => (
         <span className="font-medium text-xs tabular-nums">{formatCurrency(Number(row.original.amount))}</span>
+      ),
+    },
+    {
+      accessorKey: "payment_kind",
+      header: () => <span className="text-xs">For</span>,
+      enableSorting: false,
+      cell: ({ row }: { row: { original: PaymentRow } }) => (
+        <span className="text-xs">{paymentKindLabel(row.original.payment_kind as string | null)}</span>
       ),
     },
     {
