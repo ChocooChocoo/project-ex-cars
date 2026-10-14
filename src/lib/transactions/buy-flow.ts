@@ -13,7 +13,7 @@ export function activeBuyerIdCount(documents: DocumentLike[]): number {
 // Cash counterpart in §2–4. The "Cash" predicates below cover both methods.
 export const DIRECT_PAYMENT_METHODS = ["cash", "bank_transfer"] as const;
 
-function paysDirect(details: { payment_method?: unknown } | null): boolean {
+export function isDirectPayment(details: { payment_method?: unknown } | null): boolean {
   return (DIRECT_PAYMENT_METHODS as readonly unknown[]).includes(details?.payment_method);
 }
 
@@ -33,7 +33,7 @@ export function deliveryBalanceNote(method: unknown, audience: "buyer" | "team")
 
 // §2 Onsite Visit (§7 by bank transfer): paid in full at GCE.
 export function isOnsiteCashRequest(details: { payment_method?: unknown; arrangement_kind?: unknown } | null): boolean {
-  return paysDirect(details) && details?.arrangement_kind === "gce_visit";
+  return isDirectPayment(details) && details?.arrangement_kind === "gce_visit";
 }
 
 // The time a buyer picked in a datetime-local field, as an instant. The minutes are kept: a time off
@@ -77,7 +77,7 @@ export function isDeliveryDate(schedule: Date, requestedAt: Date = new Date()): 
 export function isHalfwayCashRequest(
   details: { payment_method?: unknown; arrangement_kind?: unknown } | null,
 ): boolean {
-  return paysDirect(details) && details?.arrangement_kind === "meetup";
+  return isDirectPayment(details) && details?.arrangement_kind === "meetup";
 }
 
 export const NO_SHOW_WAIT_MINUTES = 150;
@@ -107,7 +107,7 @@ export function nextStanding(current: Standing | null, event: "no_show" | "strik
 export function isDeliveryCashRequest(
   details: { payment_method?: unknown; arrangement_kind?: unknown } | null,
 ): boolean {
-  return paysDirect(details) && details?.arrangement_kind === "delivery";
+  return isDirectPayment(details) && details?.arrangement_kind === "delivery";
 }
 
 // Meet Halfway and Delivery share the Active / On Hold queue and the condition acknowledgment.
@@ -218,4 +218,91 @@ export function papersReadyForSale(
   handover: { papers_status?: unknown } | null,
 ): boolean {
   return handover?.papers_status === (isFieldArrangement(details) ? "handed_over" : "received");
+}
+
+// Contract (buying-flow revision). A sale at a meet-up, on delivery, or on financing has a contract. It
+// is signed before money is recorded, before the papers reach the buyer and before the car is marked sold.
+type SaleDetails = { payment_method?: unknown; arrangement_kind?: unknown } | null;
+
+export const CONTRACT_STATES = ["draft", "pending_approval", "returned", "approved", "signed"] as const;
+export type ContractState = (typeof CONTRACT_STATES)[number];
+
+export const CONTRACT_STATE_LABELS: Record<ContractState, string> = {
+  draft: "Draft",
+  pending_approval: "Waiting for Head Accountant",
+  returned: "Returned for Revision",
+  approved: "Approved, Waiting for Signature",
+  signed: "Contract Signed",
+};
+
+export function needsContract(details: SaleDetails): boolean {
+  return isFieldArrangement(details) || details?.payment_method === "financing";
+}
+
+// Financing at a GCE visit or a meet-up: the Sales Manager writes the contract, the Head Accountant
+// approves it and the buyer signs it in the app. Everywhere else the buyer signs the printed contract on
+// site and the Confidential Informant reports it.
+export function signsInApp(details: SaleDetails): boolean {
+  return details?.payment_method === "financing" && details.arrangement_kind !== "delivery";
+}
+
+type CopiesLike = { ci_copy_at?: unknown; mechanic_copy_at?: unknown } | null;
+
+// Who has not yet recorded keeping a signed copy. The Confidential Informant keeps one in the field; at
+// a cash Meet Halfway the Mechanic keeps one too.
+export function missingContractCopies(details: SaleDetails, handover: CopiesLike): string[] {
+  const missing: string[] = [];
+  if (isFieldArrangement(details) && !handover?.ci_copy_at) missing.push("Confidential Informant");
+  if (isHalfwayCashRequest(details) && !handover?.mechanic_copy_at) missing.push("Mechanic");
+  return missing;
+}
+
+export function contractReadyForSale(
+  details: SaleDetails,
+  handover: ({ contract_state?: unknown } & NonNullable<CopiesLike>) | null,
+): boolean {
+  if (!needsContract(details)) return true;
+  return handover?.contract_state === "signed" && missingContractCopies(details, handover).length === 0;
+}
+
+const PRE_DELIVERY_PAYMENT_KINDS: readonly unknown[] = ["delivery_fee", "reschedule_fee", "downpayment"];
+
+// A delivery takes its fee and downpayment before the day, so before the contract is signed on arrival.
+export function paymentAllowedBeforeSigning(details: SaleDetails, paymentKind: unknown): boolean {
+  return details?.arrangement_kind === "delivery" && PRE_DELIVERY_PAYMENT_KINDS.includes(paymentKind);
+}
+
+const peso = (amount: unknown) => `PHP ${Number(amount ?? 0).toLocaleString("en-PH")}`;
+
+// The pre-made contract the Sales Manager can start from, filled in from the agreed financing terms.
+export function contractTemplate(sale: {
+  buyer: string;
+  vehicle: string;
+  price: unknown;
+  terms: {
+    down_payment?: unknown;
+    number_of_payments?: unknown;
+    payment_frequency?: unknown;
+    first_due_date?: unknown;
+  } | null;
+}): string {
+  const { terms } = sale;
+  return [
+    "VEHICLE SALE AND IN-HOUSE FINANCING CONTRACT",
+    "",
+    `Seller: GCE Auto Sales. Buyer: ${sale.buyer}.`,
+    `Vehicle: ${sale.vehicle}.`,
+    `Vehicle price: ${peso(sale.price)}.`,
+    ...(terms
+      ? [
+          `Downpayment: ${peso(terms.down_payment)}.`,
+          `Amount financed: ${peso(Number(sale.price ?? 0) - Number(terms.down_payment ?? 0))}, paid in ${terms.number_of_payments} ${terms.payment_frequency} payments. First payment due ${terms.first_due_date}.`,
+        ]
+      : []),
+    "",
+    "The buyer has inspected the vehicle and accepts it in its present condition.",
+    "The vehicle stays under this contract until every payment is made. If the payments are not made, GCE will take back the vehicle.",
+    "",
+    "Signed by the buyer and by GCE Auto Sales.",
+  ].join("\n");
 }

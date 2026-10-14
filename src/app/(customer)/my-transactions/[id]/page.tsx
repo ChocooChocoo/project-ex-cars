@@ -16,13 +16,21 @@ export default async function MyTransactionDetailPage({ params }: { readonly par
   const { data: transaction } = await supabase
     .from("transactions")
     .select(
-      "*, vehicles(make, model, year, stock_code, current_price), purchase_details(*), sell_details(*), vehicle_requests(*), sale_handovers(papers_status)",
+      "*, vehicles(make, model, year, stock_code, current_price), purchase_details(*), sell_details(*), vehicle_requests(*), sale_handovers(papers_status, contract_state, contract_body, contract_signed_at)",
     )
     .eq("id", id)
     .eq("customer_id", user.user.id)
     .single();
 
   if (!transaction) notFound();
+
+  // The buyer reads the contract only once the Head Accountant has approved it: drafts stay with GCE.
+  const handovers = (
+    Array.isArray(transaction.sale_handovers) ? transaction.sale_handovers : [transaction.sale_handovers]
+  ) as ({ contract_state: string | null; contract_body: string | null } | null)[];
+  for (const handover of handovers) {
+    if (handover && !["approved", "signed"].includes(handover.contract_state ?? "")) handover.contract_body = null;
+  }
 
   const { data: history } = await supabase
     .from("transaction_status_history")

@@ -55,6 +55,7 @@ import {
   type PapersStatus,
   paidTowardPrice,
   pickedTime,
+  signsInApp,
 } from "@/lib/transactions/buy-flow";
 import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_SIZE, transactionDocumentLabel } from "@/lib/transactions/document-media";
 import {
@@ -66,6 +67,7 @@ import {
 import type { FlowStatus, QueueState, TransactionFlag, TransactionState } from "@/lib/transactions/state-machine";
 import { cn, formatCurrency } from "@/lib/utils";
 
+import { ContractSign } from "./contract-sign";
 import type { TransactionPaperProps } from "./transaction-paper";
 import { TransactionPreview } from "./transaction-preview";
 
@@ -158,9 +160,9 @@ export function TransactionDetail({
   const openedAt = transaction.opened_at as string;
   const completedAt = transaction.completed_at as string | null;
   const handoverRaw = transaction.sale_handovers as Record<string, unknown> | Record<string, unknown>[] | null;
-  const papersStatus =
-    ((Array.isArray(handoverRaw) ? handoverRaw[0] : handoverRaw)?.papers_status as PapersStatus | null | undefined) ??
-    null;
+  const handover = (Array.isArray(handoverRaw) ? handoverRaw[0] : handoverRaw) ?? {};
+  const papersStatus = (handover.papers_status as PapersStatus | null | undefined) ?? null;
+  const contractState = (handover.contract_state as string | null | undefined) ?? null;
 
   const [localState, setLocalState] = useState<TransactionState | null>(null);
   const state = localState ?? ((transaction.current_state ?? "pending") as TransactionState);
@@ -633,6 +635,20 @@ export function TransactionDetail({
               <Separator />
             </>
           )}
+
+          {kind === "buy" &&
+          signsInApp(purchaseDetails ?? null) &&
+          (state === "approved" || contractState === "signed") ? (
+            <>
+              <ContractSign
+                transactionId={id}
+                contractState={contractState}
+                contractBody={(handover.contract_body as string | null | undefined) ?? null}
+                signedAt={(handover.contract_signed_at as string | null | undefined) ?? null}
+              />
+              <Separator />
+            </>
+          ) : null}
 
           {kind === "buy" && flowStatus === "approved_awaiting_buyer_decision" && paymentTerms ? (
             <>

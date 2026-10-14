@@ -783,6 +783,63 @@ export async function submitRequestCar(formData: FormData) {
   return { success: true, id: transaction.id };
 }
 
+// The buyer signs the contract the Head Accountant approved: a typed full name and the time. The typed
+// name is kept in the request's history. Customers cannot write sale_handovers, so this uses the service
+// role after the ownership check.
+export async function signContract(formData: FormData) {
+  const supabase = await createServerSupabaseClient();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+
+  const id = z.string().uuid().safeParse(formData.get("transaction_id"));
+  if (!id.success) return { error: "Transaction not found." };
+
+  const admin = createAdminClient();
+  const { data: tx } = await admin
+    .from("transactions")
+    .select("id, customer_id, current_state, sale_handovers(contract_state)")
+    .eq("id", id.data)
+    .maybeSingle();
+  if (!tx || tx.customer_id !== user.user.id || tx.current_state !== "approved") {
+    return { error: "Transaction not found." };
+  }
+  const handover = Array.isArray(tx.sale_handovers) ? tx.sale_handovers[0] : tx.sale_handovers;
+  if (handover?.contract_state === "signed") return { error: "The contract is already signed." };
+  if (handover?.contract_state !== "approved") return { error: "The contract is not approved yet." };
+
+  const name = String(formData.get("signed_name") ?? "").trim();
+  if (!name) return { error: "Type your full name to sign." };
+
+  const { error } = await admin
+    .from("sale_handovers")
+    .update({ contract_state: "signed", contract_signed_at: new Date().toISOString() })
+    .eq("transaction_id", tx.id)
+    .eq("contract_state", "approved");
+  if (error) return { error: error.message };
+
+  await admin.from("transaction_status_history").insert({
+    transaction_id: tx.id,
+    from_state: tx.current_state,
+    to_state: tx.current_state,
+    actor_id: user.user.id,
+    reason: `Contract signed by ${name}`,
+  });
+  await notify(
+    admin,
+    { role: "sales_manager" },
+    {
+      kind: "contract_signed",
+      title: "Contract signed by the buyer",
+      body: `${name} signed the contract.`,
+      transactionId: tx.id,
+    },
+  );
+
+  revalidatePath(`/my-transactions/${tx.id}`);
+  revalidatePath(`/dashboard/transactions/${tx.id}`);
+  return { success: true };
+}
+
 export async function cancelTransaction(formData: FormData) {
   const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();

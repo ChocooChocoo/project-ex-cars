@@ -41,7 +41,7 @@ vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn(() => ({ from:
 
 import { advanceDeliveryStatus } from "@/app/(staff)/field-cases/delivery-actions";
 
-import { recordBuyerDecline, transitionTransaction } from "./actions";
+import { recordBuyerDecline, recordPayment, transitionTransaction } from "./actions";
 
 const userId = "11111111-1111-4111-8111-111111111111";
 const transactionId = "22222222-2222-4222-8222-222222222222";
@@ -94,6 +94,119 @@ describe("Mark as Sold waits for the vehicle papers", () => {
     papers("received");
 
     await expect(markSold()).resolves.toEqual({ success: true });
+  });
+});
+
+describe("Mark as Sold waits for the signed contract and its copies", () => {
+  const at = "2026-10-14T02:00:00.000Z";
+
+  function markSold() {
+    const fd = new FormData();
+    fd.set("id", transactionId);
+    fd.set("to_state", "completed");
+    return transitionTransaction(fd);
+  }
+
+  beforeEach(() => {
+    db.rows.transactions = {
+      current_state: "approved",
+      transaction_kind: "buy",
+      vehicle_id: "car-1",
+      customer_id: "buyer-1",
+      flow_status: null,
+      purchase_details: { payment_method: "cash", arrangement_kind: "meetup" },
+    };
+    db.counts.transaction_documents = 2;
+    db.counts.payment_records = 1;
+  });
+
+  it("refuses an unsigned contract", async () => {
+    db.rows.sale_handovers = { papers_status: "handed_over", contract_state: "approved" };
+
+    await expect(markSold()).resolves.toEqual({
+      error: "The buyer must sign the contract before the car is marked sold.",
+    });
+    expect(db.writes.some((write) => write.table === "transactions")).toBe(false);
+  });
+
+  it("refuses while the Mechanic has not recorded keeping the signed contract", async () => {
+    db.rows.sale_handovers = { papers_status: "handed_over", contract_state: "signed", ci_copy_at: at };
+
+    await expect(markSold()).resolves.toEqual({
+      error: "The Mechanic has not recorded keeping the signed contract.",
+    });
+  });
+
+  it("marks the car sold once the contract is signed and both copies are kept", async () => {
+    db.rows.sale_handovers = {
+      papers_status: "handed_over",
+      contract_state: "signed",
+      ci_copy_at: at,
+      mechanic_copy_at: at,
+    };
+
+    await expect(markSold()).resolves.toEqual({ success: true });
+  });
+});
+
+describe("a payment waits for the signed contract", () => {
+  function pay(kind: string, extra: Record<string, string> = {}) {
+    const fd = new FormData();
+    fd.set("transaction_id", transactionId);
+    fd.set("amount", "100000");
+    fd.set("method", "cash");
+    fd.set("settlement_date", "2026-10-14");
+    fd.set("payment_kind", kind);
+    for (const [key, value] of Object.entries(extra)) fd.set(key, value);
+    return recordPayment(fd);
+  }
+
+  const request = (method: string, arrangement: string, contractState: string | null) => {
+    db.rows.transactions = {
+      purchase_details: { payment_method: method, arrangement_kind: arrangement },
+      sale_handovers: contractState ? { contract_state: contractState } : null,
+    };
+  };
+
+  const paid = () => db.writes.some((write) => write.table === "payment_records");
+  const REFUSED = { error: "The buyer must sign the contract before a payment is recorded." };
+
+  it("refuses a financing downpayment before the buyer signs", async () => {
+    request("financing", "gce_visit", "approved");
+
+    await expect(pay("downpayment")).resolves.toEqual(REFUSED);
+    expect(paid()).toBe(false);
+  });
+
+  it("refuses the cash at a meet-up before the buyer signs", async () => {
+    request("cash", "meetup", null);
+
+    await expect(pay("full")).resolves.toEqual(REFUSED);
+  });
+
+  it("records the payment once the contract is signed", async () => {
+    request("financing", "gce_visit", "signed");
+
+    await expect(pay("downpayment")).resolves.toEqual({ success: true });
+    expect(paid()).toBe(true);
+  });
+
+  it("takes a delivery's fee and downpayment before signing, but not its balance", async () => {
+    request("cash", "delivery", null);
+
+    await expect(pay("delivery_fee")).resolves.toEqual({ success: true });
+    await expect(pay("downpayment")).resolves.toEqual({ success: true });
+    await expect(pay("balance")).resolves.toEqual(REFUSED);
+  });
+
+  it("asks for no contract on cash at a GCE visit, or on a monthly installment", async () => {
+    request("cash", "gce_visit", null);
+    await expect(pay("full")).resolves.toEqual({ success: true });
+
+    request("financing", "gce_visit", null);
+    await expect(pay("", { installment_id: "44444444-4444-4444-8444-444444444444" })).resolves.toEqual({
+      success: true,
+    });
   });
 });
 

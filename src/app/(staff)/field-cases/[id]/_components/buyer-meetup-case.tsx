@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { PapersStatus } from "@/lib/transactions/buy-flow";
 
+import { ContractCard } from "./contract-card";
 import { PapersCard } from "./papers-card";
 
 type Row = Record<string, unknown>;
@@ -14,15 +15,21 @@ export function BuyerMeetupCase({
   fieldCase,
   transaction,
   papersStatus,
+  handover,
+  member,
   canRecordPapers,
 }: {
   readonly fieldCase: Row;
   readonly transaction: Row;
   readonly papersStatus: PapersStatus | null;
+  readonly handover: Row;
+  readonly member: "informant" | "mechanic" | null;
   readonly canRecordPapers: boolean;
 }) {
   const buyer = transaction.profiles as Row | null;
   const vehicle = transaction.vehicles as Row | null;
+  const detailsRaw = transaction.purchase_details as Row | Row[] | null;
+  const details = (Array.isArray(detailsRaw) ? detailsRaw[0] : detailsRaw) ?? null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -55,6 +62,7 @@ export function BuyerMeetupCase({
           </CardContent>
         </Card>
         <PapersCard transactionId={transaction.id as string} papersStatus={papersStatus} canRecord={canRecordPapers} />
+        <ContractCard transactionId={transaction.id as string} details={details} handover={handover} member={member} />
       </div>
     </div>
   );

@@ -4,6 +4,8 @@ import {
   activeBuyerIdCount,
   addWorkingDays,
   canRecordNoShow,
+  contractReadyForSale,
+  contractTemplate,
   deliveryBalanceNote,
   financingFullyPaid,
   isBusinessSlot,
@@ -18,11 +20,15 @@ import {
   isVisitSlot,
   MISSED_INSTALLMENTS_BEFORE_REPOSSESSION,
   missedInstallments,
+  missingContractCopies,
+  needsContract,
   nextDeliveryStatus,
   nextStanding,
   paidTowardPrice,
   papersReadyForSale,
+  paymentAllowedBeforeSigning,
   pickedTime,
+  signsInApp,
   verifiedPaid,
 } from "./buy-flow";
 import { canTransition } from "./state-machine";
@@ -272,5 +278,88 @@ describe("vehicle papers custody", () => {
       expect(papersReadyForSale({ arrangement_kind }, { papers_status: "returned" })).toBe(false);
       expect(papersReadyForSale({ arrangement_kind }, { papers_status: "handed_over" })).toBe(true);
     }
+  });
+});
+
+describe("contract", () => {
+  const cashVisit = { payment_method: "cash", arrangement_kind: "gce_visit" };
+  const cashMeetup = { payment_method: "cash", arrangement_kind: "meetup" };
+  const cashDelivery = { payment_method: "cash", arrangement_kind: "delivery" };
+  const financedVisit = { payment_method: "financing", arrangement_kind: "gce_visit" };
+  const financedMeetup = { payment_method: "financing", arrangement_kind: "meetup" };
+  const financedDelivery = { payment_method: "financing", arrangement_kind: "delivery" };
+  const at = "2026-10-14T02:00:00.000Z";
+
+  it("is needed for a meet-up, a delivery and every financed sale, not for cash at a GCE visit", () => {
+    for (const details of [cashMeetup, cashDelivery, financedVisit, financedMeetup, financedDelivery]) {
+      expect(needsContract(details)).toBe(true);
+    }
+    expect(needsContract(cashVisit)).toBe(false);
+    expect(needsContract({ payment_method: "bank_transfer", arrangement_kind: "gce_visit" })).toBe(false);
+    expect(needsContract(null)).toBe(false);
+  });
+
+  it("is signed in the app for financing at a visit or a meet-up, on paper everywhere else", () => {
+    expect(signsInApp(financedVisit)).toBe(true);
+    expect(signsInApp(financedMeetup)).toBe(true);
+    expect(signsInApp(financedDelivery)).toBe(false);
+    expect(signsInApp(cashMeetup)).toBe(false);
+    expect(signsInApp(cashDelivery)).toBe(false);
+  });
+
+  it("names who has not recorded keeping the signed copy", () => {
+    expect(missingContractCopies(cashMeetup, null)).toEqual(["Confidential Informant", "Mechanic"]);
+    expect(missingContractCopies(cashMeetup, { ci_copy_at: at })).toEqual(["Mechanic"]);
+    expect(missingContractCopies(cashMeetup, { mechanic_copy_at: at })).toEqual(["Confidential Informant"]);
+    expect(missingContractCopies(cashMeetup, { ci_copy_at: at, mechanic_copy_at: at })).toEqual([]);
+    expect(missingContractCopies(cashDelivery, { ci_copy_at: at })).toEqual([]);
+    expect(missingContractCopies(financedMeetup, { ci_copy_at: at })).toEqual([]);
+    expect(missingContractCopies(financedVisit, null)).toEqual([]);
+  });
+
+  it("lets a sale close only once the contract is signed and every copy is kept", () => {
+    expect(contractReadyForSale(cashVisit, null)).toBe(true);
+    expect(contractReadyForSale(financedVisit, null)).toBe(false);
+    expect(contractReadyForSale(financedVisit, { contract_state: "approved" })).toBe(false);
+    expect(contractReadyForSale(financedVisit, { contract_state: "signed" })).toBe(true);
+    expect(contractReadyForSale(cashDelivery, { contract_state: "signed" })).toBe(false);
+    expect(contractReadyForSale(cashDelivery, { contract_state: "signed", ci_copy_at: at })).toBe(true);
+    expect(contractReadyForSale(cashMeetup, { contract_state: "signed", ci_copy_at: at })).toBe(false);
+    expect(contractReadyForSale(cashMeetup, { contract_state: "signed", ci_copy_at: at, mechanic_copy_at: at })).toBe(
+      true,
+    );
+    expect(contractReadyForSale(cashMeetup, { ci_copy_at: at, mechanic_copy_at: at })).toBe(false);
+  });
+
+  it("allows only the delivery fee, the reschedule fee and the downpayment of a delivery before signing", () => {
+    for (const kind of ["delivery_fee", "reschedule_fee", "downpayment"]) {
+      expect(paymentAllowedBeforeSigning(cashDelivery, kind)).toBe(true);
+      expect(paymentAllowedBeforeSigning(financedDelivery, kind)).toBe(true);
+    }
+    expect(paymentAllowedBeforeSigning(cashDelivery, "balance")).toBe(false);
+    expect(paymentAllowedBeforeSigning(cashDelivery, null)).toBe(false);
+    expect(paymentAllowedBeforeSigning(financedVisit, "downpayment")).toBe(false);
+    expect(paymentAllowedBeforeSigning(cashMeetup, "downpayment")).toBe(false);
+  });
+
+  it("prefills the template from the financing terms", () => {
+    const text = contractTemplate({
+      buyer: "Maria Santos",
+      vehicle: "2020 Toyota Vios (GCE-001)",
+      price: 500000,
+      terms: {
+        down_payment: 100000,
+        number_of_payments: 24,
+        payment_frequency: "monthly",
+        first_due_date: "2026-11-15",
+      },
+    });
+    expect(text).toContain("Maria Santos");
+    expect(text).toContain("2020 Toyota Vios (GCE-001)");
+    expect(text).toContain("500,000");
+    expect(text).toContain("100,000");
+    expect(text).toContain("24 monthly payments");
+    expect(text).toContain("2026-11-15");
+    expect(text).toMatch(/take back the vehicle/i);
   });
 });

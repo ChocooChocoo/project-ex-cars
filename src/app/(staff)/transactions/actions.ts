@@ -11,10 +11,14 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
   canRecordNoShow,
+  contractReadyForSale,
   DOWNPAYMENT_WORKING_DAYS,
   MISSED_INSTALLMENTS_BEFORE_REPOSSESSION,
   missedInstallments,
+  missingContractCopies,
+  needsContract,
   papersReadyForSale,
+  paymentAllowedBeforeSigning,
   verifiedPaid,
 } from "@/lib/transactions/buy-flow";
 import { finalizeBuySale, recordStandingEvent, releaseVisitSlots } from "@/lib/transactions/buy-flow-server";
@@ -160,13 +164,21 @@ export async function transitionTransaction(formData: FormData) {
     // Papers release: received by the Sales Manager at a GCE visit, or handed to the buyer in the field.
     const { data: handover } = await admin
       .from("sale_handovers")
-      .select("papers_status")
+      .select("papers_status, contract_state, ci_copy_at, mechanic_copy_at")
       .eq("transaction_id", id)
       .maybeSingle();
     if (!papersReadyForSale(purchase ?? null, handover)) {
       return {
         error: "The Confidential Informant must release the vehicle papers before the car is marked sold.",
       };
+    }
+    // Contract: signed, and a signed copy kept by everyone who must keep one.
+    if (!contractReadyForSale(purchase ?? null, handover)) {
+      if (handover?.contract_state !== "signed") {
+        return { error: "The buyer must sign the contract before the car is marked sold." };
+      }
+      const missing = missingContractCopies(purchase ?? null, handover).join(" and the ");
+      return { error: `The ${missing} has not recorded keeping the signed contract.` };
     }
   }
 
@@ -521,6 +533,25 @@ export async function recordPayment(formData: FormData) {
 
   const transactionId = parsed.data.transaction_id;
   const installmentId = parsed.data.installment_id || null;
+
+  // Contract first: no money is recorded on a sale that needs a contract until the buyer has signed.
+  // A delivery's fee and downpayment come before the day, and an installment only exists after signing.
+  if (!installmentId) {
+    const { data: sale } = await createAdminClient()
+      .from("transactions")
+      .select("purchase_details(payment_method, arrangement_kind), sale_handovers(contract_state)")
+      .eq("id", transactionId)
+      .maybeSingle();
+    const details = (Array.isArray(sale?.purchase_details) ? sale.purchase_details[0] : sale?.purchase_details) ?? null;
+    const handover = Array.isArray(sale?.sale_handovers) ? sale.sale_handovers[0] : sale?.sale_handovers;
+    if (
+      needsContract(details) &&
+      handover?.contract_state !== "signed" &&
+      !paymentAllowedBeforeSigning(details, parsed.data.payment_kind)
+    ) {
+      return { error: "The buyer must sign the contract before a payment is recorded." };
+    }
+  }
 
   const { error } = await supabase.from("payment_records").insert({
     transaction_id: transactionId,
