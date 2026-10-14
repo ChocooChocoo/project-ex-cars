@@ -18,13 +18,13 @@ import {
   verifyPayment,
   verifyTransactionDocument,
 } from "@/app/(staff)/transactions/actions";
-import { isFieldArrangement, type PapersStatus } from "@/lib/transactions/buy-flow";
+import { contractTemplate, isFieldArrangement, needsContract, type PapersStatus } from "@/lib/transactions/buy-flow";
 import type { TransactionState } from "@/lib/transactions/state-machine";
 
 import { BuyersForCarPanel, type CarBuyerRow } from "./buyers-for-car-panel";
 import { DeliveryPanel, type DeliveryTeam } from "./delivery-panel";
 import { FinancingPanel } from "./financing-panel";
-import { HandoverPanel } from "./handover-panel";
+import { ContractCard, HandoverPanel } from "./handover-panel";
 import { type SellFlowData, SellFlowPanel } from "./sell-flow-panel";
 import { TransactionDetailSidebarV1 } from "./transaction-detail-sidebar-v1";
 import { TransactionOverviewV1 } from "./transaction-overview-v1";
@@ -76,9 +76,8 @@ export function StaffTransactionDetail({
     | undefined;
   const purchaseDetails = Array.isArray(purchaseDetailsRaw) ? purchaseDetailsRaw[0] : purchaseDetailsRaw;
   const handoverRaw = transaction.sale_handovers as Record<string, unknown> | Record<string, unknown>[] | null;
-  const papersStatus =
-    ((Array.isArray(handoverRaw) ? handoverRaw[0] : handoverRaw)?.papers_status as PapersStatus | null | undefined) ??
-    null;
+  const handover = (Array.isArray(handoverRaw) ? handoverRaw[0] : handoverRaw) ?? {};
+  const papersStatus = (handover.papers_status as PapersStatus | null | undefined) ?? null;
   const sellDetailsRaw = transaction.sell_details as Record<string, unknown> | Record<string, unknown>[] | undefined;
   const sellDetails = Array.isArray(sellDetailsRaw) ? sellDetailsRaw[0] : sellDetailsRaw;
   const vehicleRequestsRaw = transaction.vehicle_requests as
@@ -361,6 +360,24 @@ export function StaffTransactionDetail({
           transactionId={id}
           papersStatus={papersStatus}
           fieldArrangement={isFieldArrangement(purchaseDetails ?? null)}
+          open={state === "approved"}
+          userRole={userRole}
+        />
+      ) : null}
+
+      {kind === "buy" && needsContract(purchaseDetails ?? null) && (state === "approved" || handover.contract_state) ? (
+        <ContractCard
+          transactionId={id}
+          details={purchaseDetails ?? null}
+          handover={handover}
+          template={contractTemplate({
+            buyer: customerName ?? "the buyer",
+            vehicle: vehicles
+              ? `${vehicles.year} ${vehicles.make} ${vehicles.model} (${vehicles.stock_code})`
+              : "the vehicle",
+            price: paymentTerms?.total_amount ?? purchaseDetails?.final_price,
+            terms: paymentTerms,
+          })}
           open={state === "approved"}
           userRole={userRole}
         />

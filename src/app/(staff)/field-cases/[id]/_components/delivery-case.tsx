@@ -25,6 +25,7 @@ import {
 } from "@/lib/transactions/buy-flow";
 import { formatCurrency } from "@/lib/utils";
 
+import { ContractCard } from "./contract-card";
 import { PapersCard } from "./papers-card";
 
 type Row = Record<string, unknown>;
@@ -34,12 +35,16 @@ export function DeliveryCase({
   fieldCase,
   transaction,
   papersStatus,
+  handover,
+  member,
   userRole,
   userId,
 }: {
   readonly fieldCase: Row;
   readonly transaction: Row;
   readonly papersStatus: PapersStatus | null;
+  readonly handover: Row;
+  readonly member: "informant" | "mechanic" | null;
   readonly userRole: string;
   readonly userId: string;
 }) {
@@ -197,6 +202,12 @@ export function DeliveryCase({
           transactionId={transaction.id as string}
           papersStatus={papersStatus}
           canRecord={isInformant && transaction.current_state === "approved"}
+        />
+        <ContractCard
+          transactionId={transaction.id as string}
+          details={details ?? null}
+          handover={handover}
+          member={member}
         />
       </div>
     </div>

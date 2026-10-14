@@ -52,17 +52,22 @@ export default async function FieldCasePage({ params }: { readonly params: Promi
   const { data: handover } =
     fieldCase.case_kind === "acquisition"
       ? { data: null }
-      : await admin
-          .from("sale_handovers")
-          .select("papers_status")
-          .eq("transaction_id", fieldCase.transaction_id)
-          .maybeSingle();
+      : await admin.from("sale_handovers").select("*").eq("transaction_id", fieldCase.transaction_id).maybeSingle();
   const papersStatus = (handover?.papers_status as PapersStatus | null | undefined) ?? null;
+  // Who the user is on this case, for the contract steps only the assigned team may record.
+  const member =
+    role === "confidential_informant" && fieldCase.assigned_confidential_informant === user.id
+      ? "informant"
+      : role === "mechanic" && fieldCase.mechanic_id === user.id
+        ? "mechanic"
+        : null;
 
   if (fieldCase.case_kind === "buyer_meetup") {
     const { data: transaction } = await admin
       .from("transactions")
-      .select("id, current_state, profiles(full_name, phone), vehicles(make, model, year, stock_code)")
+      .select(
+        "id, current_state, profiles(full_name, phone), vehicles(make, model, year, stock_code), purchase_details(payment_method, arrangement_kind)",
+      )
       .eq("id", fieldCase.transaction_id)
       .maybeSingle();
     if (!transaction) notFound();
@@ -71,6 +76,8 @@ export default async function FieldCasePage({ params }: { readonly params: Promi
         fieldCase={fieldCase}
         transaction={transaction as Record<string, unknown>}
         papersStatus={papersStatus}
+        handover={handover ?? {}}
+        member={transaction.current_state === "approved" ? member : null}
         canRecordPapers={
           role === "confidential_informant" &&
           fieldCase.assigned_confidential_informant === user.id &&
@@ -84,7 +91,7 @@ export default async function FieldCasePage({ params }: { readonly params: Promi
     const { data: transaction } = await admin
       .from("transactions")
       .select(
-        "id, current_state, profiles(full_name, phone), vehicles(make, model, year, stock_code), purchase_details(final_price, delivery_fee, downpayment_amount, payment_method)",
+        "id, current_state, profiles(full_name, phone), vehicles(make, model, year, stock_code), purchase_details(final_price, delivery_fee, downpayment_amount, payment_method, arrangement_kind)",
       )
       .eq("id", fieldCase.transaction_id)
       .maybeSingle();
@@ -94,6 +101,8 @@ export default async function FieldCasePage({ params }: { readonly params: Promi
         fieldCase={fieldCase}
         transaction={transaction as Record<string, unknown>}
         papersStatus={papersStatus}
+        handover={handover ?? {}}
+        member={transaction.current_state === "approved" ? member : null}
         userRole={role}
         userId={user.id}
       />
