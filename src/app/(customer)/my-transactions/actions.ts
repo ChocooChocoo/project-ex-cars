@@ -1,11 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 
 import { z } from "zod";
 
 import { ACCEPTED_ID_TYPES } from "@/lib/auth/roles";
 import { notify } from "@/lib/notifications/notify";
+import { markCheckoutPaid } from "@/lib/payments/checkout-paid";
+import { createCheckoutSession, retrieveCheckoutSession } from "@/lib/payments/paymongo";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
@@ -813,11 +816,10 @@ export async function submitRequestCar(formData: FormData) {
   return { success: true, id: transaction.id };
 }
 
-// The buyer pays what is due online (a delivery's fee and downpayment, or a financing downpayment) on
-// GCE's PayMongo payment link. The rows are recorded unverified so the Head Accountant can match them to
-// the PayMongo receipt; Pay again records nothing twice.
-// ponytail: a fixed payment link plus manual verification. Upgrade to PayMongo Checkout with a webhook
-// that marks the row paid when per-payment amounts and automatic confirmation are needed.
+// The buyer pays what is due online (a delivery's fee and downpayment, or a financing downpayment) on a
+// PayMongo Checkout Session for the exact amounts. The rows are recorded unpaid with the session id; the
+// PayMongo webhook (src/app/api/paymongo/webhook/route.ts) marks them paid. Pay again reuses an open
+// session, and an expired one is replaced.
 export async function startOnlinePayment(
   formData: FormData,
 ): Promise<{ error: string } | { success: true; url: string }> {
@@ -825,8 +827,8 @@ export async function startOnlinePayment(
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
-  const link = process.env.NEXT_PUBLIC_PAYMONGO_LINK;
-  if (!link) return { error: "Online payment is not set up yet." };
+  const secretKey = process.env.PAYMONGO_SECRET_KEY;
+  if (!secretKey) return { error: "Online payment is not set up yet." };
 
   const id = z.string().uuid().safeParse(formData.get("transaction_id"));
   if (!id.success) return { error: "Transaction not found." };
@@ -835,7 +837,7 @@ export async function startOnlinePayment(
   const { data: tx } = await admin
     .from("transactions")
     .select(
-      "id, customer_id, current_state, flow_status, purchase_details(payment_method, arrangement_kind, delivery_fee, downpayment_amount, downpayment_due_at), payment_records(payment_kind), payment_terms(down_payment, state), sale_handovers(contract_state)",
+      "id, customer_id, current_state, flow_status, purchase_details(payment_method, arrangement_kind, delivery_fee, downpayment_amount, downpayment_due_at), payment_records(id, payment_kind, method, paymongo_checkout_id, paid_at, verified_by), payment_terms(down_payment, state), sale_handovers(contract_state)",
     )
     .eq("id", id.data)
     .maybeSingle();
@@ -847,15 +849,61 @@ export async function startOnlinePayment(
   const due = onlinePaymentsDue(details, one(tx.payment_terms), tx.flow_status);
   if (due.length === 0) return { error: "Nothing is due online right now." };
 
-  const sent = new Set(((tx.payment_records ?? []) as { payment_kind: unknown }[]).map((p) => p.payment_kind));
+  type Row = {
+    payment_kind: unknown;
+    method: unknown;
+    paymongo_checkout_id: unknown;
+    paid_at: unknown;
+    verified_by: unknown;
+  };
+  let rows = (tx.payment_records ?? []) as Row[];
+  const waiting = rows.find(
+    (row) => row.method === "paymongo" && row.paymongo_checkout_id && !row.paid_at && !row.verified_by,
+  );
+  if (waiting) {
+    const checkoutId = String(waiting.paymongo_checkout_id);
+    try {
+      const session = await retrieveCheckoutSession(secretKey, checkoutId);
+      // Already paid (the webhook may not have arrived yet): record it now instead of reopening it.
+      if (session.paidPaymentId) {
+        await markCheckoutPaid(admin, checkoutId, session.paidPaymentId);
+        return { error: "Your payment is already received. Refresh the page to see it." };
+      }
+      if (session.status === "active") return { success: true, url: session.checkoutUrl };
+    } catch {
+      // An unreadable session is treated as expired and replaced below.
+    }
+    await admin
+      .from("payment_records")
+      .delete()
+      .eq("paymongo_checkout_id", checkoutId)
+      .is("paid_at", null)
+      .is("verified_by", null);
+    rows = rows.filter((row) => row.paymongo_checkout_id !== checkoutId);
+  }
+
+  const sent = new Set(rows.map((row) => row.payment_kind));
   const todo = due.filter((payment) => !sent.has(payment.kind));
-  if (todo.length === 0) return { success: true, url: link };
+  if (todo.length === 0) return { error: "Nothing is left to pay online." };
   if (
     needsContract(details) &&
     one(tx.sale_handovers)?.contract_state !== "signed" &&
     todo.some((payment) => !paymentAllowedBeforeSigning(details, payment.kind))
   ) {
     return { error: "Sign the contract before paying." };
+  }
+
+  const origin = (await headers()).get("origin") ?? process.env.NEXT_PUBLIC_SITE_URL ?? "";
+  let session: { id: string; checkoutUrl: string };
+  try {
+    session = await createCheckoutSession(secretKey, {
+      lineItems: todo.map((payment) => ({ name: payment.label, amount: payment.amount })),
+      referenceNumber: tx.id,
+      successUrl: `${origin}/my-transactions/${tx.id}?paid=1`,
+      cancelUrl: `${origin}/my-transactions/${tx.id}?cancelled=1`,
+    });
+  } catch (error) {
+    return { error: `PayMongo could not start the payment: ${(error as Error).message}` };
   }
 
   const today = new Date().toISOString().slice(0, 10);
@@ -867,26 +915,17 @@ export async function startOnlinePayment(
       payment_kind: payment.kind,
       recorded_by: user.user.id,
       settlement_date: today,
+      paymongo_checkout_id: session.id,
     })),
   );
   if (error) return { error: error.message };
-  // §6 step 17: a claimed car's Initial Downpayment now waits for the Head Accountant.
+  // §6 step 17: a claimed car's Initial Downpayment now waits for PayMongo's confirmation.
   if (todo.some((payment) => payment.kind === "downpayment") && tx.flow_status === "purchase_claim") {
     await admin.from("transactions").update({ flow_status: "initial_dp_awaiting_verification" }).eq("id", tx.id);
   }
-  await notify(
-    admin,
-    { role: "head_accountant" },
-    {
-      kind: "online_payment_sent",
-      title: "Online payment to verify",
-      body: `A buyer paid through PayMongo: ${todo.map((payment) => `${payment.label} ₱${payment.amount.toLocaleString()}`).join(", ")}. Check the PayMongo receipt, then verify.`,
-      transactionId: tx.id,
-    },
-  );
   revalidatePath(`/my-transactions/${tx.id}`);
   revalidatePath(`/dashboard/transactions/${tx.id}`);
-  return { success: true, url: link };
+  return { success: true, url: session.checkoutUrl };
 }
 
 // The buyer signs the contract the Head Accountant approved: a typed full name and the time. The typed

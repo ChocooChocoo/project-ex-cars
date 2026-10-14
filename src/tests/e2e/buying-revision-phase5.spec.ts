@@ -16,17 +16,42 @@ import {
   signInAs,
 } from "./support/t01";
 import { archiveListedTestVehicles, canCreateTestVehicle, createTestVehicle } from "./support/test-vehicle";
+import { createHmac } from "node:crypto";
 
-// Buying-flow revision, Phase 5 (docs/implementation-plan/buying-flow-revision/phase-5.md): the buyer
-// clicks Pay, is sent to GCE's PayMongo payment link, and the Head Accountant verifies the payment.
-// Run against a dev server started with NEXT_PUBLIC_PAYMONGO_LINK set; the spec skips otherwise.
+// Buying-flow revision, Phases 5 and 7 (docs/implementation-plan/buying-flow-revision/phase-7.md): the buyer
+// clicks Pay and lands on a PayMongo Checkout (test mode) for the exact amounts; PayMongo's webhook marks the
+// payment paid. PayMongo cannot reach localhost, so the spec sends the webhook itself, signed with the
+// webhook secret exactly as PayMongo signs it. Needs PAYMONGO_SECRET_KEY and PAYMONGO_WEBHOOK_SECRET.
 
-const LINK = process.env.NEXT_PUBLIC_PAYMONGO_LINK ?? "";
+const SECRET = process.env.PAYMONGO_SECRET_KEY ?? "";
+const WEBHOOK_SECRET = process.env.PAYMONGO_WEBHOOK_SECRET ?? "";
+
+// What PayMongo sends when the Checkout is paid.
+async function paymongoPaid(page: Page, id: string) {
+  const { data } = await db().from("payment_records").select("paymongo_checkout_id").eq("transaction_id", id);
+  const checkoutId = data?.find((row) => row.paymongo_checkout_id)?.paymongo_checkout_id as string;
+  const body = JSON.stringify({
+    data: {
+      id: `evt_${Date.now()}`,
+      attributes: {
+        type: "checkout_session.payment.paid",
+        data: { id: checkoutId, attributes: { payments: [{ id: `pay_e2e_${Date.now()}` }] } },
+      },
+    },
+  });
+  const t = Math.floor(Date.now() / 1000);
+  const signature = createHmac("sha256", WEBHOOK_SECRET).update(`${t}.${body}`).digest("hex");
+  const response = await page.request.post("/api/paymongo/webhook", {
+    data: body,
+    headers: { "Content-Type": "application/json", "Paymongo-Signature": `t=${t},te=${signature},li=` },
+  });
+  expect(response.status()).toBe(200);
+}
 
 async function paymentRows(id: string) {
   const { data } = await db()
     .from("payment_records")
-    .select("payment_kind, amount, method, verified_by")
+    .select("payment_kind, amount, method, paid_at")
     .eq("transaction_id", id)
     .order("payment_kind");
   return data ?? [];
@@ -34,14 +59,14 @@ async function paymentRows(id: string) {
 
 async function payOnline(page: Page) {
   await page.getByRole("button", { name: /^Pay ₱.* with PayMongo$/ }).click();
-  await page.waitForURL((url) => url.href.startsWith(LINK), { timeout: 30_000 });
+  await page.waitForURL((url) => url.hostname.endsWith("paymongo.com"), { timeout: 30_000 });
 }
 
 test.describe
   .serial("Buying revision phase 5", () => {
     test.skip(
-      !seedPassword || !canCreateTestVehicle() || !LINK,
-      "SEED_USER_PASSWORD, the Supabase service role and NEXT_PUBLIC_PAYMONGO_LINK are required",
+      !seedPassword || !canCreateTestVehicle() || !SECRET || !WEBHOOK_SECRET,
+      "SEED_USER_PASSWORD, the Supabase service role and the PayMongo test keys are required",
     );
     test.use({ actionTimeout: 60_000 });
     test.beforeAll(resetCustomerStanding);
@@ -50,7 +75,7 @@ test.describe
       await archiveListedTestVehicles();
     });
 
-    test("Scenario 3: Pay opens the link once and the Head Accountant verifies the labelled rows", async ({ page }) => {
+    test("Scenario 3: Pay opens one Checkout and PayMongo's webhook marks both payments paid", async ({ page }) => {
       test.slow();
       await signInAs(page, "customer@gce.local");
       const id = await buyerRequest(page, await createTestVehicle("P5-DELIVERY"), {
@@ -73,33 +98,30 @@ test.describe
       await page.setViewportSize({ width: 1280, height: 720 });
       await payOnline(page);
 
-      // Back on the request: both sent, nothing left to pay, and no second set of rows.
+      // Back on the request: both waiting for PayMongo, one Checkout for both rows.
       await open(page, `/my-transactions/${id}`);
-      await expect(page.getByText("Sent, waiting for the Head Accountant")).toHaveCount(2);
-      await expect(page.getByRole("button", { name: /with PayMongo$/ })).toHaveCount(0);
+      await expect(page.getByText("Waiting for PayMongo")).toHaveCount(2);
       expect(await paymentRows(id)).toEqual([
-        { payment_kind: "delivery_fee", amount: 2500, method: "paymongo", verified_by: null },
-        { payment_kind: "downpayment", amount: 50000, method: "paymongo", verified_by: null },
+        { payment_kind: "delivery_fee", amount: 2500, method: "paymongo", paid_at: null },
+        { payment_kind: "downpayment", amount: 50000, method: "paymongo", paid_at: null },
       ]);
+      // Pay again reopens the same Checkout and records nothing new.
+      await payOnline(page);
+      expect(await paymentRows(id)).toHaveLength(2);
 
+      // PayMongo confirms: both rows paid, no Head Accountant click.
+      await paymongoPaid(page, id);
+      await open(page, `/my-transactions/${id}`);
+      await expect(page.getByText("Paid", { exact: true })).toHaveCount(2);
       await signInAs(page, "head_accountant@gce.local");
       await open(page, `/head_accountant/transactions/${id}`);
       await expect(page.getByRole("cell", { name: "Delivery Fee" })).toBeVisible();
-      await expect(page.getByRole("cell", { name: "Downpayment" })).toBeVisible();
-      await page.screenshot({ path: "test-results/phase5-head-accountant-desktop.png", fullPage: true });
-      const verify = page.getByRole("button", { name: "Verify", exact: true });
-      await expect(verify).toHaveCount(2);
-      for (let left = 2; left > 0; left--) {
-        await verify.first().click();
-        await expect(verify).toHaveCount(left - 1);
-      }
-
-      await signInAs(page, "customer@gce.local");
-      await open(page, `/my-transactions/${id}`);
-      await expect(page.getByText("Verified", { exact: true })).toHaveCount(2);
+      await expect(page.getByText("Paid on PayMongo")).toHaveCount(2);
+      await expect(page.getByRole("button", { name: "Verify", exact: true })).toHaveCount(0);
+      await page.screenshot({ path: "test-results/phase7-head-accountant-desktop.png", fullPage: true });
     });
 
-    test("Scenario 5: Pay is refused before signing, and the car is not sold before the payment is verified", async ({
+    test("Scenario 5: Pay is refused before signing, and the car is not sold before PayMongo confirms", async ({
       page,
     }) => {
       test.setTimeout(900_000);
@@ -147,10 +169,10 @@ test.describe
       await page.waitForLoadState("networkidle");
       await payOnline(page);
       expect(await paymentRows(id)).toEqual([
-        { payment_kind: "downpayment", amount: 100000, method: "paymongo", verified_by: null },
+        { payment_kind: "downpayment", amount: 100000, method: "paymongo", paid_at: null },
       ]);
 
-      // Sent but not verified: the car is not sold.
+      // Not paid on PayMongo yet: the car is not sold.
       await signInAs(page, "sales_manager@gce.local");
       await open(page, `/sales_manager/transactions/${id}`);
       await page.getByRole("button", { name: /Mark Sold to This Buyer/ }).click();
@@ -159,11 +181,10 @@ test.describe
       const { data: still } = await db().from("transactions").select("current_state").eq("id", id).single();
       expect(still?.current_state).toBe("approved");
 
+      // PayMongo confirms the downpayment; the Head Accountant opens the account without verifying by hand.
+      await paymongoPaid(page, id);
       await signInAs(page, "head_accountant@gce.local");
       await open(page, `/head_accountant/transactions/${id}`);
-      await page.getByRole("button", { name: "Verify", exact: true }).click();
-      await expect(page.getByText("Payment verified.")).toBeVisible();
-      await page.reload();
       await page.getByRole("button", { name: "Complete financing agreement" }).click();
       await expect(page.getByText("Financing account opened.")).toBeVisible();
     });

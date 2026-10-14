@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { toast } from "sonner";
 
@@ -14,8 +14,8 @@ import { formatCurrency } from "@/lib/utils";
 
 type PaymentRow = { payment_kind?: unknown; verified_by?: unknown };
 
-// What the buyer pays through GCE's PayMongo link, and where each payment stands: not sent, sent and
-// waiting for the Head Accountant, or verified.
+// What the buyer pays on PayMongo Checkout, and where each payment stands: not paid, waiting for PayMongo
+// to confirm, or paid. PayMongo's webhook marks a payment paid.
 export function OnlinePayment({
   transactionId,
   due,
@@ -26,10 +26,12 @@ export function OnlinePayment({
   readonly payments: PaymentRow[];
 }) {
   const router = useRouter();
+  const returned = useSearchParams();
   const [busy, setBusy] = useState(false);
   const rowFor = (kind: string) => payments.find((p) => p.payment_kind === kind);
-  const unsent = due.filter((payment) => !rowFor(payment.kind));
-  const total = unsent.reduce((sum, payment) => sum + payment.amount, 0);
+  // Not paid yet: never started, or started on a Checkout the buyer left. Pay reopens or replaces it.
+  const unpaid = due.filter((payment) => !rowFor(payment.kind)?.verified_by);
+  const total = unpaid.reduce((sum, payment) => sum + payment.amount, 0);
 
   async function pay() {
     const fd = new FormData();
@@ -50,6 +52,15 @@ export function OnlinePayment({
       <h2 id="online-payment-heading" className="font-medium tracking-tight">
         Pay online
       </h2>
+      {returned.get("paid") ? (
+        <p role="status" className="text-sm">
+          Payment received. It shows as Paid once PayMongo confirms it.
+        </p>
+      ) : returned.get("cancelled") ? (
+        <p role="status" className="text-sm">
+          Payment cancelled. Nothing was charged.
+        </p>
+      ) : null}
       <ul className="flex flex-col divide-y rounded-md border text-sm">
         {due.map((payment) => {
           const row = rowFor(payment.kind);
@@ -59,26 +70,23 @@ export function OnlinePayment({
                 {payment.label} <span className="tabular-nums">{formatCurrency(payment.amount)}</span>
               </span>
               <Badge variant={row?.verified_by ? "secondary" : "outline"}>
-                {row?.verified_by ? "Verified" : row ? "Sent, waiting for the Head Accountant" : "Not paid"}
+                {row?.verified_by ? "Paid" : row ? "Waiting for PayMongo" : "Not paid"}
               </Badge>
             </li>
           );
         })}
       </ul>
-      {unsent.length > 0 ? (
+      {unpaid.length > 0 ? (
         <>
           <Button className="self-start" disabled={busy} onClick={pay}>
             {busy ? "Opening PayMongo..." : `Pay ${formatCurrency(total)} with PayMongo`}
           </Button>
           <p className="text-muted-foreground text-xs">
-            You pay on PayMongo. Enter exactly {formatCurrency(total)}. The Head Accountant checks the receipt and
-            verifies your payment.
+            You pay on PayMongo by card, GCash, Maya or online banking. Your payment is confirmed automatically.
           </p>
         </>
       ) : (
-        <p className="text-muted-foreground text-xs">
-          The Head Accountant checks the PayMongo receipt and verifies each payment.
-        </p>
+        <p className="text-muted-foreground text-xs">PayMongo confirms each payment; this page updates when it does.</p>
       )}
     </section>
   );
