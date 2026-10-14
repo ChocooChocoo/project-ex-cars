@@ -186,7 +186,7 @@ export async function setDeliveryTerms(formData: FormData): Promise<DeliveryActi
     {
       kind: "delivery_terms_set",
       title: "Your delivery is confirmed",
-      body: `Pay the delivery fee of ${peso(parsed.data.delivery_fee)} and the downpayment of ${peso(parsed.data.downpayment_amount)} by bank transfer before ${due.toLocaleDateString("en-PH")}. ${deliveryBalanceNote(tx.details.payment_method, "buyer")}`,
+      body: `Pay the delivery fee of ${peso(parsed.data.delivery_fee)} and the downpayment of ${peso(parsed.data.downpayment_amount)} through PayMongo before ${due.toLocaleDateString("en-PH")}. ${deliveryBalanceNote(tx.details.payment_method, "buyer")}`,
       transactionId: tx.id,
     },
   );
@@ -196,7 +196,7 @@ export async function setDeliveryTerms(formData: FormData): Promise<DeliveryActi
     {
       kind: "delivery_payment_expected",
       title: "Delivery payments expected",
-      body: `A buyer will pay a delivery fee of ${peso(parsed.data.delivery_fee)} and a downpayment of ${peso(parsed.data.downpayment_amount)} by bank transfer. Record and verify them on the transaction.`,
+      body: `A buyer will pay a delivery fee of ${peso(parsed.data.delivery_fee)} and a downpayment of ${peso(parsed.data.downpayment_amount)} through PayMongo. Check the receipts and verify them on the transaction.`,
       transactionId: tx.id,
     },
   );
@@ -248,7 +248,7 @@ export async function createDeliveryFieldCase(formData: FormData): Promise<Deliv
     schedule: tx.arrangement.schedule,
     location: tx.arrangement.location,
     state: "assigned",
-    notes: `Delivery. ${deliveryBalanceNote(tx.details.payment_method, "team")} Delivery fee ${peso(tx.details.delivery_fee)}, downpayment ${peso(tx.details.downpayment_amount)} by bank transfer.`,
+    notes: `Delivery. ${deliveryBalanceNote(tx.details.payment_method, "team")} Delivery fee ${peso(tx.details.delivery_fee)}, downpayment ${peso(tx.details.downpayment_amount)} paid through PayMongo.`,
   });
   if (error) return { error: error.message };
 

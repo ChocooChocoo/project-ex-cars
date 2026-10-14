@@ -306,3 +306,30 @@ export function contractTemplate(sale: {
     "Signed by the buyer and by GCE Auto Sales.",
   ].join("\n");
 }
+
+export type OnlinePayment = { kind: "delivery_fee" | "downpayment"; label: string; amount: number };
+
+// What the buyer pays online: a delivery's fee and downpayment once its terms are set, or the Initial
+// Downpayment of a financing claimed at a GCE visit. Everything else is paid in person or in instalments.
+export function onlinePaymentsDue(
+  details: {
+    arrangement_kind?: unknown;
+    delivery_fee?: unknown;
+    downpayment_amount?: unknown;
+    downpayment_due_at?: unknown;
+  } | null,
+  terms: { down_payment?: unknown; state?: unknown } | null,
+  flowStatus: unknown,
+): OnlinePayment[] {
+  if (details?.arrangement_kind === "delivery" && details.downpayment_due_at) {
+    return [
+      { kind: "delivery_fee" as const, label: "Delivery Fee", amount: Number(details.delivery_fee ?? 0) },
+      { kind: "downpayment" as const, label: "Downpayment", amount: Number(details.downpayment_amount ?? 0) },
+    ].filter((payment) => payment.amount > 0);
+  }
+  if (details?.arrangement_kind === "gce_visit" && terms?.state === "approved" && flowStatus === "purchase_claim") {
+    const amount = Number(terms.down_payment ?? 0);
+    return amount > 0 ? [{ kind: "downpayment", label: "Downpayment", amount }] : [];
+  }
+  return [];
+}

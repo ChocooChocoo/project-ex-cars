@@ -62,6 +62,8 @@ financing delivery.
 | `playwright test buying-revision-phase4` (dev server on :3000, hosted Supabase) | Scenarios 2 and 8 passed in one run; Scenario 9 passed on its own run (see notes) |
 | Impeccable detector on the changed UI files | no findings |
 | `playwright test buying-revision-phase3` rerun with the changed helpers | 3 of 3 passed |
+| Rerun after Phase 5 (2026-10-14, Phase 5 in the working tree) | Scenario 2 passed. Scenario 8 failed 4 times on timeouts at different steps (no app error shown); the hosted Supabase project answered its health check in 0.2 to 7.5 s and sign-in took 11.5 s. Scenario 9 and the Phase 5 spec not run. To rerun when Supabase is fast. |
+| Rerun when Supabase answered in 0.3 s (2026-10-14) | Scenario 8 passed (6.3 min), Scenario 9 passed (4.9 min). With Scenario 2 above, all three pass with Phase 5 in place. |
 
 Unit tests were written first and seen to fail: financing actions (10 of 11), the buyer request and chat thread (6), the team, sold and receive rules (14).
 
