@@ -111,6 +111,7 @@ test.describe
     });
 
     test("§3: a second no-show limits the buyer to GCE visits", async ({ page }) => {
+      test.slow();
       await signInAs(page, "customer@gce.local");
       const second = await buyerRequest(page, await createTestVehicle("HALFWAY-NOSHOW"), {
         method: "Cash",

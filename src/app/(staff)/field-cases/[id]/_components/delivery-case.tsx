@@ -119,7 +119,9 @@ export function DeliveryCase({
             </p>
             {details?.final_price ? (
               <p>
-                <span className="text-muted-foreground">Balance to collect: </span>
+                <span className="text-muted-foreground">
+                  {details.payment_method === "financing" ? "Amount financed: " : "Balance to collect: "}
+                </span>
                 {formatCurrency(balance)}
               </p>
             ) : null}
