@@ -7,6 +7,7 @@ import type { PapersStatus } from "@/lib/transactions/buy-flow";
 
 import { ContractCard } from "./contract-card";
 import { PapersCard } from "./papers-card";
+import { ReceiveCaseButton } from "./receive-case-button";
 
 type Row = Record<string, unknown>;
 
@@ -28,6 +29,7 @@ export function BuyerMeetupCase({
 }) {
   const buyer = transaction.profiles as Row | null;
   const vehicle = transaction.vehicles as Row | null;
+  const received = (at: unknown) => (at ? format(new Date(at as string), "MMM d, yyyy h:mm a") : "Not yet");
   const detailsRaw = transaction.purchase_details as Row | Row[] | null;
   const details = (Array.isArray(detailsRaw) ? detailsRaw[0] : detailsRaw) ?? null;
 
@@ -59,6 +61,17 @@ export function BuyerMeetupCase({
               <span className="text-muted-foreground">Vehicle: </span>
               {vehicle ? `${vehicle.year} ${vehicle.make} ${vehicle.model} (${vehicle.stock_code})` : "—"}
             </p>
+            <p>
+              <span className="text-muted-foreground">Received by the Confidential Informant: </span>
+              {received(fieldCase.ci_received_at)}
+            </p>
+            <p>
+              <span className="text-muted-foreground">Received by the Mechanic: </span>
+              {received(fieldCase.mechanic_received_at)}
+            </p>
+            {member && !fieldCase[member === "informant" ? "ci_received_at" : "mechanic_received_at"] ? (
+              <ReceiveCaseButton fieldCaseId={fieldCase.id as string} />
+            ) : null}
           </CardContent>
         </Card>
         <PapersCard transactionId={transaction.id as string} papersStatus={papersStatus} canRecord={canRecordPapers} />

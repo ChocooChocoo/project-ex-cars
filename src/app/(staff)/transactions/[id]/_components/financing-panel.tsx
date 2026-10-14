@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { toast } from "sonner";
@@ -19,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { missedInstallments } from "@/lib/transactions/buy-flow";
 import { formatCurrency } from "@/lib/utils";
 
@@ -45,6 +47,9 @@ export function FinancingPanel({
   account,
   hasRecoveryCase,
   userRole,
+  arrangementKind = "gce_visit",
+  signingReported = false,
+  threadId = null,
 }: {
   readonly transactionId: string;
   readonly state: string;
@@ -53,13 +58,31 @@ export function FinancingPanel({
   readonly account: Row | null;
   readonly hasRecoveryCase: boolean;
   readonly userRole: string;
+  readonly arrangementKind?: string;
+  readonly signingReported?: boolean;
+  readonly threadId?: string | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({});
-  const set = (key: string) => (value: string) => setForm((prev) => ({ ...prev, [key]: value }));
   const isSales = ["sales_manager", "ceo"].includes(userRole);
   const termsState = (terms?.state as string | undefined) ?? null;
+  // A meet-up takes no downpayment; a delivery's fee and downpayment are approved with the terms.
+  const meetup = arrangementKind === "meetup";
+  const delivery = arrangementKind === "delivery";
+  const termsReady =
+    form.duration_months &&
+    form.total_amount &&
+    form.monthly_payment &&
+    form.first_due_date &&
+    form.missed_payment_policy?.trim() &&
+    (meetup || form.down_payment) &&
+    (!delivery || form.delivery_fee);
+  // In the field the account opens once the Confidential Informant reports the signing.
+  const canComplete =
+    termsState === "approved" &&
+    (meetup ? signingReported : flowStatus === "initial_dp_confirmed" && (!delivery || signingReported));
+  const set = (key: string) => (value: string) => setForm((prev) => ({ ...prev, [key]: value }));
 
   async function submit(action: (fd: FormData) => Promise<Result>, fields: Row, message: string) {
     const fd = new FormData();
@@ -92,10 +115,25 @@ export function FinancingPanel({
         <CardTitle>In-House Financing</CardTitle>
         <CardDescription>
           The Sales Manager proposes the terms, the Head Accountant reviews them, the CEO confirms, and the buyer
-          decides. The Initial Downpayment is taken only after the buyer inspects the car.
+          decides.{" "}
+          {meetup
+            ? "A meet-up takes no downpayment."
+            : delivery
+              ? "The delivery fee and the downpayment are paid before the car is dispatched."
+              : "The Initial Downpayment is taken only after the buyer inspects the car."}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4 text-sm">
+        {threadId ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild size="sm" variant="outline">
+              <Link href={`/dashboard/inquiries/${threadId}`}>Open chat with the buyer</Link>
+            </Button>
+            <span className="text-muted-foreground text-xs">
+              Agree the instalment period and explain the financing offers before setting the terms.
+            </span>
+          </div>
+        ) : null}
         {terms ? (
           <section className="flex flex-col gap-2 rounded-md border p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -110,9 +148,18 @@ export function FinancingPanel({
               <Fact label="Balance" value={formatCurrency(remaining)} />
               <Fact
                 label="Duration"
-                value={`${String(terms.duration_months ?? terms.number_of_payments)} months · ${formatCurrency(remaining / Number(terms.number_of_payments || 1))}/mo`}
+                value={`${String(terms.duration_months ?? terms.number_of_payments)} months · ${formatCurrency(Number(terms.monthly_payment ?? remaining / Number(terms.number_of_payments || 1)))}/mo`}
               />
+              {terms.delivery_fee != null ? (
+                <Fact label="Delivery fee" value={formatCurrency(Number(terms.delivery_fee))} />
+              ) : null}
             </dl>
+            {terms.missed_payment_policy ? (
+              <p>
+                <span className="text-muted-foreground">Missed payment policy: </span>
+                {String(terms.missed_payment_policy)}
+              </p>
+            ) : null}
             {termsState === "returned" && terms.returned_reason ? (
               <p className="text-destructive text-xs">Returned: {String(terms.returned_reason)}</p>
             ) : null}
@@ -137,11 +184,29 @@ export function FinancingPanel({
                 onChange={set("total_amount")}
                 type="number"
               />
+              {meetup ? null : (
+                <Field
+                  id="fin-dp"
+                  label={delivery ? "Downpayment (₱)" : "Initial Downpayment (₱)"}
+                  value={form.down_payment}
+                  onChange={set("down_payment")}
+                  type="number"
+                />
+              )}
+              {delivery ? (
+                <Field
+                  id="fin-delivery-fee"
+                  label="Delivery fee (₱)"
+                  value={form.delivery_fee}
+                  onChange={set("delivery_fee")}
+                  type="number"
+                />
+              ) : null}
               <Field
-                id="fin-dp"
-                label="Initial Downpayment (₱)"
-                value={form.down_payment}
-                onChange={set("down_payment")}
+                id="fin-monthly"
+                label="Monthly payment (₱)"
+                value={form.monthly_payment}
+                onChange={set("monthly_payment")}
                 type="number"
               />
               <Field
@@ -152,10 +217,21 @@ export function FinancingPanel({
                 type="date"
               />
             </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="fin-missed-policy" className="text-xs">
+                Missed payment policy
+              </Label>
+              <Textarea
+                id="fin-missed-policy"
+                rows={2}
+                value={form.missed_payment_policy ?? ""}
+                onChange={(e) => set("missed_payment_policy")(e.target.value)}
+              />
+            </div>
             <Button
               size="sm"
               className="self-start"
-              disabled={busy}
+              disabled={busy || !termsReady}
               onClick={() =>
                 submit(
                   proposeFinancingTerms,
@@ -163,7 +239,10 @@ export function FinancingPanel({
                     duration_months: form.duration_months,
                     total_amount: form.total_amount,
                     down_payment: form.down_payment,
+                    delivery_fee: form.delivery_fee,
+                    monthly_payment: form.monthly_payment,
                     first_due_date: form.first_due_date,
+                    missed_payment_policy: form.missed_payment_policy,
                   },
                   "Terms sent to the Head Accountant.",
                 )
@@ -171,6 +250,9 @@ export function FinancingPanel({
             >
               Send to Head Accountant
             </Button>
+            {termsReady ? null : (
+              <p className="text-muted-foreground text-xs">Fill in every field to send the terms.</p>
+            )}
           </section>
         ) : null}
 
@@ -213,7 +295,7 @@ export function FinancingPanel({
           </section>
         ) : null}
 
-        {isSales && ["gce_visit_scheduled_dp_pending", "potential_buyer"].includes(flowStatus ?? "") ? (
+        {isSales && !meetup && ["gce_visit_scheduled_dp_pending", "potential_buyer"].includes(flowStatus ?? "") ? (
           <section className="flex flex-col gap-2 rounded-md border p-3">
             <p className="font-medium">After the inspection</p>
             <p className="text-muted-foreground text-xs">
@@ -249,7 +331,7 @@ export function FinancingPanel({
           </p>
         ) : null}
 
-        {["head_accountant", "ceo"].includes(userRole) && flowStatus === "initial_dp_confirmed" ? (
+        {["head_accountant", "ceo"].includes(userRole) && canComplete ? (
           <Button
             size="sm"
             className="self-start"

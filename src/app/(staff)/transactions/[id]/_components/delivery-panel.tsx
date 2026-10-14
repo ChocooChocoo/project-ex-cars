@@ -84,7 +84,7 @@ export function DeliveryPanel({
   const downpaymentPaid = verifiedPaid(paymentRows, "downpayment");
   const dueAt = purchaseDetails?.downpayment_due_at as string | null;
   const termsSet = Boolean(dueAt);
-  // §11: a financed delivery waits for the buyer to accept the financing offer and book the delivery.
+  // A financed delivery gets its fee and downpayment with the financing terms, when the CEO confirms them.
   const awaitingOffer = purchaseDetails?.payment_method === "financing" && flowStatus !== "purchase_claim" && !termsSet;
   const deadlinePassed = Boolean(dueAt && new Date(dueAt).getTime() < Date.now() && downpaymentPaid < downpayment);
   const status = (fieldCase?.delivery_status as DeliveryStatus | null) ?? null;
@@ -129,10 +129,23 @@ export function DeliveryPanel({
         ) : null}
 
         {awaitingOffer ? (
-          <p className="text-muted-foreground text-xs">
-            Set the delivery terms after the buyer accepts the financing offer and books the delivery. The downpayment
-            is the Initial Downpayment.
-          </p>
+          <>
+            <p className="text-muted-foreground text-xs">
+              The delivery fee and the downpayment are set with the financing terms. They apply, with the 3-working-day
+              payment deadline, once the CEO confirms the terms.
+            </p>
+            {canManage ? (
+              <Button
+                size="sm"
+                variant="destructive"
+                className="self-start"
+                disabled={busy}
+                onClick={() => submit(setDeliveryTerms, { serviceable: "no" }, "Request closed: not serviceable.")}
+              >
+                Reject: not serviceable
+              </Button>
+            ) : null}
+          </>
         ) : null}
 
         {canManage && !termsSet && !awaitingOffer ? (
@@ -357,7 +370,7 @@ function MoneyInput({
   );
 }
 
-function PersonSelect({
+export function PersonSelect({
   label,
   people,
   value,

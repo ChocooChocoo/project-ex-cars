@@ -19,6 +19,7 @@ import {
   verifiedPaid,
 } from "@/lib/transactions/buy-flow";
 import { releaseVisitSlots } from "@/lib/transactions/buy-flow-server";
+import { bookedMeetup, meetupTeamError, openMeetupCase } from "@/lib/transactions/meetup-server";
 import { canCancelScheduled } from "@/lib/transactions/state-machine";
 
 type DeliveryActionResult = { error: string } | { success: true };
@@ -114,8 +115,10 @@ export async function setDeliveryTerms(formData: FormData): Promise<DeliveryActi
   if (!tx) return { error: "Delivery request not found." };
   if (tx.current_state !== "approved") return { error: "Set delivery terms after approving the request." };
   if (tx.details?.downpayment_due_at) return { error: "Delivery terms are already set." };
-  if (tx.details?.payment_method === "financing" && tx.flow_status !== "purchase_claim") {
-    return { error: "Wait for the buyer to accept the financing offer and book the delivery." };
+  // A financed delivery's fee and downpayment are approved with the financing terms (confirmFinancingTerms).
+  // Only "not serviceable" is decided here.
+  if (tx.details?.payment_method === "financing" && parsed.data.serviceable === "yes") {
+    return { error: "Set the delivery fee and the downpayment in the financing terms." };
   }
 
   if (parsed.data.serviceable === "no") {
@@ -265,6 +268,69 @@ export async function createDeliveryFieldCase(formData: FormData): Promise<Deliv
   return done(tx.id);
 }
 
+// Meet Halfway: the Sales Manager assigns a Confidential Informant and a Mechanic and sends the command.
+// A cash request gets its team with the approval; this covers a financed one, whose team is assigned only
+// after the Head Accountant approves the contract and the buyer books the meet-up.
+export async function createMeetupFieldCase(formData: FormData): Promise<DeliveryActionResult> {
+  const actor = await salesManager();
+  if ("error" in actor) return actor;
+  const parsed = z
+    .object({
+      transaction_id: z.string().uuid(),
+      informant_id: z.string().uuid("Choose a Confidential Informant."),
+      mechanic_id: z.string().uuid("Choose a Mechanic."),
+    })
+    .safeParse({
+      transaction_id: formData.get("transaction_id"),
+      informant_id: formData.get("informant_id") ?? "",
+      mechanic_id: formData.get("mechanic_id") ?? "",
+    });
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Choose the meet-up team." };
+
+  const admin = createAdminClient();
+  const { data: tx } = await admin
+    .from("transactions")
+    .select(
+      "id, customer_id, vehicle_id, current_state, transaction_kind, purchase_details(payment_method, arrangement_kind), sale_handovers(contract_state)",
+    )
+    .eq("id", parsed.data.transaction_id)
+    .maybeSingle();
+  const details = Array.isArray(tx?.purchase_details) ? tx.purchase_details[0] : tx?.purchase_details;
+  if (tx?.transaction_kind !== "buy" || tx.current_state !== "approved" || details?.arrangement_kind !== "meetup") {
+    return { error: "Approved meet-up request not found." };
+  }
+  if (details.payment_method === "financing") {
+    const handover = Array.isArray(tx.sale_handovers) ? tx.sale_handovers[0] : tx.sale_handovers;
+    if (!["approved", "signed"].includes(handover?.contract_state ?? "")) {
+      return { error: "The Head Accountant must approve the contract first." };
+    }
+  }
+  const meetup = await bookedMeetup(admin, tx.id);
+  if (!meetup) return { error: "The buyer has not booked the meet-up yet." };
+  const { data: existing } = await admin
+    .from("field_cases")
+    .select("id")
+    .eq("transaction_id", tx.id)
+    .eq("case_kind", "buyer_meetup")
+    .neq("state", "cancelled")
+    .maybeSingle();
+  if (existing) return { error: "The meet-up team is already assigned." };
+
+  const supabase = await createServerSupabaseClient();
+  const teamError = await meetupTeamError(supabase, parsed.data.informant_id, parsed.data.mechanic_id);
+  if (teamError) return { error: teamError };
+
+  const error = await openMeetupCase(
+    admin,
+    tx,
+    { informantId: parsed.data.informant_id, mechanicId: parsed.data.mechanic_id },
+    meetup,
+    actor.userId,
+  );
+  if (error) return { error };
+  return done(tx.id);
+}
+
 // §4 step 7c: the buyer asked in advance (5 hours or more) for a new date or address; a fee applies,
 // recorded by the Head Accountant as a reschedule_fee payment.
 export async function rescheduleDelivery(formData: FormData): Promise<DeliveryActionResult> {
@@ -318,7 +384,7 @@ export async function rescheduleDelivery(formData: FormData): Promise<DeliveryAc
     {
       kind: "delivery_rescheduled",
       title: "Your delivery was rescheduled",
-      body: `New delivery: ${schedule.toLocaleString("en-PH")} at ${parsed.data.location}.${parsed.data.fee > 0 ? ` Pay the ${peso(parsed.data.fee)} rescheduling fee by bank transfer.` : ""}`,
+      body: `New delivery: ${schedule.toLocaleString("en-PH")} at ${parsed.data.location}.${parsed.data.fee > 0 ? ` Pay the ${peso(parsed.data.fee)} rescheduling fee.` : ""}`,
       transactionId: tx.id,
     },
   );

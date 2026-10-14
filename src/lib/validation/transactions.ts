@@ -21,6 +21,14 @@ export const buyDetailsSchema = z.object({
   notes: z.string().max(500).optional().or(z.literal("")),
   // §3 step 3: "I have reviewed this car's condition and intend to purchase it as shown."
   acknowledge_condition: z.literal("yes").optional().or(z.literal("")),
+  // The delivery terms notice: a fee and a downpayment are paid first.
+  agree_delivery_terms: z.literal("yes").optional().or(z.literal("")),
+  // A financed meet-up: the term the buyer asks for (1, 2, 3 or 5 years).
+  requested_term_months: z.coerce
+    .number()
+    .refine((months) => [12, 24, 36, 60].includes(months), "Choose a payment term.")
+    .optional()
+    .or(z.literal("")),
 });
 
 export type BuyDetailsFormData = z.infer<typeof buyDetailsSchema>;

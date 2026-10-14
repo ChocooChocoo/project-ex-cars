@@ -13,6 +13,7 @@ import {
   canRecordNoShow,
   contractReadyForSale,
   DOWNPAYMENT_WORKING_DAYS,
+  isHalfwayCashRequest,
   MISSED_INSTALLMENTS_BEFORE_REPOSSESSION,
   missedInstallments,
   missingContractCopies,
@@ -23,6 +24,7 @@ import {
 } from "@/lib/transactions/buy-flow";
 import { finalizeBuySale, recordStandingEvent, releaseVisitSlots } from "@/lib/transactions/buy-flow-server";
 import { closeFinancingIfPaid, confirmInitialDownpaymentIfPaid } from "@/lib/transactions/financing-server";
+import { bookedMeetup, meetupTeamError, openMeetupCase } from "@/lib/transactions/meetup-server";
 import { SELL_PAPER_KINDS } from "@/lib/transactions/sell-flow";
 import type { TransactionState } from "@/lib/transactions/state-machine";
 import { canTransition, reviewDueAt } from "@/lib/transactions/state-machine";
@@ -109,6 +111,25 @@ export async function transitionTransaction(formData: FormData) {
     }
   }
 
+  // Meet Halfway paid in cash or by bank transfer: the Sales Manager names the Confidential Informant
+  // and the Mechanic with the approval, and their field case opens with it.
+  let meetupTeam: {
+    informantId: string;
+    mechanicId: string;
+    meetup: { schedule: string; location: string | null };
+  } | null = null;
+  if (toState === "approved" && tx.transaction_kind === "buy" && isHalfwayCashRequest(purchase ?? null)) {
+    const picked = z
+      .object({ informant_id: z.string().uuid(), mechanic_id: z.string().uuid() })
+      .safeParse({ informant_id: formData.get("informant_id"), mechanic_id: formData.get("mechanic_id") });
+    if (!picked.success) return { error: "Choose a Confidential Informant and a Mechanic before approving." };
+    const teamError = await meetupTeamError(supabase, picked.data.informant_id, picked.data.mechanic_id);
+    if (teamError) return { error: teamError };
+    const meetup = await bookedMeetup(admin, id);
+    if (!meetup) return { error: "The buyer has not booked the meet-up yet." };
+    meetupTeam = { informantId: picked.data.informant_id, mechanicId: picked.data.mechanic_id, meetup };
+  }
+
   // Two valid IDs + proof of billing must be verified before a purchase completes (G16).
   if (toState === "completed" && tx.transaction_kind === "buy") {
     const [{ count: verifiedIds }, { count: verifiedBilling }] = await Promise.all([
@@ -139,7 +160,9 @@ export async function transitionTransaction(formData: FormData) {
       .eq("transaction_id", id);
     if (bankTransfer) paymentQuery = paymentQuery.not("verified_by", "is", null);
     const { count: payments } = await paymentQuery;
-    if (!payments) {
+    // A financed meet-up takes no downpayment: nothing is paid before the financing account opens.
+    const nothingDueYet = financing && purchase?.arrangement_kind === "meetup";
+    if (!payments && !nothingDueYet) {
       return {
         error: bankTransfer
           ? "The Head Accountant must verify the bank transfer before the car is marked sold."
@@ -207,6 +230,17 @@ export async function transitionTransaction(formData: FormData) {
     actor_id: user.user.id,
     reason,
   });
+
+  if (meetupTeam) {
+    const caseError = await openMeetupCase(
+      admin,
+      { id, vehicle_id: tx.vehicle_id, current_state: toState },
+      meetupTeam,
+      meetupTeam.meetup,
+      user.user.id,
+    );
+    if (caseError) return { error: caseError };
+  }
 
   if (tx.transaction_kind === "buy") {
     if (toState === "completed") {

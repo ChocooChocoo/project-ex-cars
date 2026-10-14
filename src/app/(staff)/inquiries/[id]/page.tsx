@@ -16,7 +16,7 @@ export default async function StaffChatPage({ params }: { params: Promise<{ id: 
     .select("*, vehicles(make, model, year, stock_code), profiles(full_name)")
     .eq("id", id);
 
-  if (role === "sales_manager") inquiryQuery = inquiryQuery.eq("intention_kind", "buy_now");
+  if (role === "sales_manager") inquiryQuery = inquiryQuery.in("intention_kind", ["buy_now", "buy_financing"]);
   // T01 Selling step 5: the Marketing Specialist negotiates in the offer's own thread only.
   if (role === "marketing_specialist") inquiryQuery = inquiryQuery.eq("intention_kind", "sell_negotiation");
 
