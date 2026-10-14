@@ -1,5 +1,6 @@
 import { expect as baseExpect, type Page, test } from "@playwright/test";
 
+import { papersThenSold, verifyPayments } from "./support/t01";
 import { archiveListedTestVehicles, canCreateTestVehicle, createTestVehicle } from "./support/test-vehicle";
 
 // The dev server compiles each route on first use, so a refresh after a server action can take
@@ -107,8 +108,14 @@ test.describe
     });
 
     test("Sales Manager verifies, approves and marks the car sold to this buyer", async ({ page }) => {
+      test.slow();
       await signInAs(page, "sales_manager@gce.local");
       await page.goto(`/sales_manager/transactions/${buyId}`);
+
+      // Scenario 1, also try: approving before the three documents are confirmed is refused.
+      await page.waitForLoadState("networkidle");
+      await page.getByRole("button", { name: /^Transition Approve/ }).click();
+      await expect(page.getByText(/Two verified valid IDs and a verified proof of billing are required/)).toBeVisible();
 
       for (let left = 3; left > 0; left--) {
         await page.getByRole("button", { name: "Verify", exact: true }).first().click();
@@ -118,14 +125,16 @@ test.describe
       }
       await page.getByRole("button", { name: /Approve/ }).click();
       await expect(page.getByText("Approved").first()).toBeVisible();
+      await page.waitForLoadState("networkidle");
 
       await page.locator("#pay_amount").fill("500000");
       // Wait for each action's own toast: a "Sold" label is on the page from the start, and signing
       // out before the actions finish drops them.
       await page.getByRole("button", { name: "Record Payment" }).click();
       await expect(page.getByText("Payment recorded.")).toBeVisible({ timeout: 30_000 });
-      await page.getByRole("button", { name: /Mark Sold to This Buyer/ }).click();
-      await expect(page.getByText("Transaction moved to completed.")).toBeVisible({ timeout: 30_000 });
+      // Buying-flow revision Phase 2: the payment is checked and the papers go through the CI first.
+      await verifyPayments(page, buyId);
+      await papersThenSold(page, buyId, "E2E Test ONSITE");
 
       // The rival never submitted, so only the buyer can see it closed (00055).
       await signInAs(page, "customer@gce.local");

@@ -6,15 +6,18 @@ import {
   ceoConfirms,
   db,
   expect,
+  fieldCasePath,
   futureSlot,
   headAccountantApproves,
+  markSold,
   open,
-  pick,
   pickByLabel,
+  recordPayment,
   resetCustomerStanding,
   seedPassword,
   signInAs,
   verifyAll,
+  writeAndApproveContract,
 } from "./support/t01";
 import { archiveListedTestVehicles, canCreateTestVehicle, createTestVehicle } from "./support/test-vehicle";
 
@@ -24,34 +27,7 @@ import { archiveListedTestVehicles, canCreateTestVehicle, createTestVehicle } fr
 // delivery fee and downpayment with the financing terms, and financing is agreed in a chat thread.
 
 const POLICY = "From the 4th missed month GCE takes back the vehicle.";
-const markSold = (page: Page) => page.getByRole("button", { name: /Mark Sold to This Buyer/ });
 const complete = (page: Page) => page.getByRole("button", { name: "Complete financing agreement" });
-
-async function recordPayment(page: Page, amount: string, method: string, kind: string) {
-  await page.locator("#pay_amount").fill(amount);
-  await pick(page, "pay_method", method);
-  await pick(page, "pay_kind", kind);
-  await page.getByRole("button", { name: "Record Payment" }).click();
-}
-
-// The field case a request's "Open field case" link points at, without the role prefix.
-async function fieldCasePath(page: Page) {
-  const link = page.getByRole("link", { name: "Open field case" });
-  await expect(link).toBeVisible();
-  return new URL((await link.getAttribute("href")) ?? "", page.url()).pathname.replace(/^\/[^/]+/, "");
-}
-
-async function writeAndApproveContract(page: Page, id: string) {
-  await signInAs(page, "sales_manager@gce.local");
-  await open(page, `/sales_manager/transactions/${id}`);
-  await page.getByRole("button", { name: "Start from the pre-made contract" }).click();
-  await page.getByRole("button", { name: "Send for approval" }).click();
-  await expect(page.getByText("Contract sent to the Head Accountant.")).toBeVisible();
-  await signInAs(page, "head_accountant@gce.local");
-  await open(page, `/head_accountant/transactions/${id}`);
-  await page.getByRole("button", { name: "Approve contract" }).click();
-  await expect(page.getByText("Contract approved. The buyer can sign it.")).toBeVisible();
-}
 
 test.describe
   .serial("Buying revision phase 4", () => {

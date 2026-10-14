@@ -7,6 +7,7 @@ import {
   expect,
   futureSlot,
   open,
+  papersThenSold,
   pick,
   pickByLabel,
   seedPassword,
@@ -26,7 +27,7 @@ test.describe
     );
     // A click that cannot land fails in a minute instead of holding the run until the test timeout.
     test.use({ actionTimeout: 60_000 });
-    test.setTimeout(300_000);
+    test.setTimeout(600_000);
     const vehicleIds: string[] = [];
     test.afterAll(async () => {
       if (vehicleIds.length) {
@@ -66,7 +67,7 @@ test.describe
       visitId = await buyerRequest(page, vehicleId, {
         method: "Bank Transfer",
         arrangement: "GCE Visit",
-        when: futureSlot().replace(":00", ":25"),
+        when: futureSlot(),
       });
       await approveAsSalesManager(page, visitId);
 
@@ -87,10 +88,8 @@ test.describe
       await verify.click();
       await expect(verify).toHaveCount(0);
 
-      await signInAs(page, "sales_manager@gce.local");
-      await open(page, `/sales_manager/transactions/${visitId}`);
-      await page.getByRole("button", { name: /Mark Sold to This Buyer/ }).click();
-      await expect(page.getByText("Transaction moved to completed.")).toBeVisible();
+      // Buying-flow revision Phase 2: the papers go through the CI before the sale.
+      await papersThenSold(page, visitId, "E2E Test BANK-VISIT");
       const { data } = await db().from("transactions").select("current_state").eq("id", visitId).single();
       expect(data?.current_state).toBe("completed");
       const { data: vehicle } = await db().from("vehicles").select("listing_state").eq("id", vehicleId).single();

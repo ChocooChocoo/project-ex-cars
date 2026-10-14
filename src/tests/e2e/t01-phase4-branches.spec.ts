@@ -137,6 +137,9 @@ test.describe
       await page.getByLabel("Report a delay to the Sales Manager").fill("Heavy traffic on SLEX");
       await page.getByRole("button", { name: "Report delay" }).click();
       await expect(page.getByText("Delay reported.")).toBeVisible();
+      // Buying-flow revision Phase 2: the papers are recorded as released before dispatch.
+      await page.getByRole("button", { name: "Record papers released to me" }).click();
+      await expect(page.getByText("Papers recorded as released to you.")).toBeVisible();
 
       await signInAs(page, "sales_manager@gce.local");
       await open(page, `/sales_manager/transactions/${id}`);

@@ -1,5 +1,6 @@
 import { expect as baseExpect, type Page, test } from "@playwright/test";
 
+import { buyerSignsContract, futureSlot, papersThenSold, writeAndApproveContract } from "./support/t01";
 import { archiveListedTestVehicles, canCreateTestVehicle, createTestVehicle } from "./support/test-vehicle";
 
 // The dev server compiles each route on first use, so a refresh after a server action can take
@@ -24,8 +25,8 @@ const png = (name: string) => ({
   ),
 });
 
-// A whole-hour slot far enough ahead that reruns rarely collide.
-const visit = `2032-${String(1 + Math.floor(Math.random() * 12)).padStart(2, "0")}-${String(1 + Math.floor(Math.random() * 27)).padStart(2, "0")}T${String(9 + Math.floor(Math.random() * 8)).padStart(2, "0")}:00`;
+// A whole-hour slot, Monday to Saturday (futureSlot skips Sundays).
+const visit = futureSlot();
 
 async function signInAs(page: Page, email: string) {
   await page.context().clearCookies();
@@ -104,21 +105,23 @@ test.describe
       await page.getByLabel("Payment duration (months)").fill("12");
       await page.getByLabel("Vehicle price (₱)").fill("500000");
       await page.getByLabel("Initial Downpayment (₱)").fill("100000");
+      await page.getByLabel("Monthly payment (₱)").fill("33334");
       await page.getByLabel("First installment due").fill("2032-12-01");
+      await page.getByLabel("Missed payment policy").fill("From the 4th missed month GCE takes back the vehicle.");
       await page.getByRole("button", { name: "Send to Head Accountant" }).click();
-      await expect(page.getByText("Waiting for the Head Accountant")).toBeVisible();
+      await expect(page.getByText("Terms sent to the Head Accountant.")).toBeVisible();
     });
 
     test("Head Accountant approves and the CEO confirms", async ({ page }) => {
       await signInAs(page, "head_accountant@gce.local");
       await page.goto(`/head_accountant/transactions/${txId}`);
       await page.getByRole("button", { name: "Approve", exact: true }).click();
-      await expect(page.getByText("Waiting for the CEO")).toBeVisible();
+      await expect(page.getByText("Terms sent to the CEO.")).toBeVisible();
 
       await signInAs(page, "ceo@gce.local");
       await page.goto(`/ceo/transactions/${txId}`);
       await page.getByRole("button", { name: "Confirm", exact: true }).click();
-      await expect(page.getByText("Confirmed", { exact: true })).toBeVisible();
+      await expect(page.getByText("Financing confirmed; the buyer is notified.")).toBeVisible();
     });
 
     test("buyer accepts the offer and books the inspection visit", async ({ page }) => {
@@ -127,17 +130,29 @@ test.describe
       await expect(page.getByText("Your approved financing")).toBeVisible();
       // Fill only after hydration, or React never sees the value.
       await page.waitForLoadState("networkidle");
-      await page.getByLabel("GCE visit (on the hour)").fill(visit);
+      // Scenario 4, also try: 10:25 is not on the hour.
+      await page.getByLabel("GCE visit date and time").fill(visit.replace(":00", ":25"));
+      await page.getByRole("button", { name: "Accept and book visit" }).click();
+      await expect(page.getByText("Pick a future GCE visit slot on the hour.")).toBeVisible();
+      await page.getByLabel("GCE visit date and time").fill(visit);
       await expect(page.getByRole("button", { name: "Accept and book visit" })).toBeEnabled();
       await page.getByRole("button", { name: "Accept and book visit" }).click();
       await expect(page.getByText(/Visit booked/)).toBeVisible();
     });
 
     test("Sales Manager records the Purchase Claim and the Initial Downpayment", async ({ page }) => {
+      test.slow();
       await signInAs(page, "sales_manager@gce.local");
       await page.goto(`/sales_manager/transactions/${txId}`);
       await page.getByRole("button", { name: "Record Purchase Claim" }).click();
       await expect(page.getByText(/Record the Initial Downpayment under Record payment/)).toBeVisible();
+
+      // Buying-flow revision Phase 3: the contract is approved and signed before money is recorded.
+      await writeAndApproveContract(page, txId);
+      await buyerSignsContract(page, txId);
+      await signInAs(page, "sales_manager@gce.local");
+      await page.goto(`/sales_manager/transactions/${txId}`);
+      await page.waitForLoadState("networkidle");
 
       await page.locator("#pay_amount").fill("100000");
       await pick(page, "pay_method", "Bank Transfer");
@@ -155,10 +170,9 @@ test.describe
     });
 
     test("Sales Manager marks the financed car sold", async ({ page }) => {
-      await signInAs(page, "sales_manager@gce.local");
-      await page.goto(`/sales_manager/transactions/${txId}`);
-      await page.getByRole("button", { name: /Mark Sold to This Buyer/ }).click();
-      await expect(page.getByText("Completed", { exact: true }).first()).toBeVisible();
+      test.slow();
+      // Buying-flow revision Phase 2: the papers go through the CI before the sale.
+      await papersThenSold(page, txId, "E2E Test FINANCING");
 
       // The buyer sees the financing as active, not simply "Sold".
       await signInAs(page, "customer@gce.local");

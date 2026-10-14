@@ -97,6 +97,8 @@ test.describe
       await page.locator("#schedule").fill("2031-08-20T10:00");
       await page.locator("#location").fill("123 Rizal St, Calamba, Laguna");
       await page.getByLabel(/I have reviewed this car's condition/).check();
+      // Buying-flow revision Phase 4: the buyer agrees to the delivery terms notice.
+      await page.locator("#agree-delivery-terms").check();
       await page.getByRole("button", { name: "Save Details" }).click();
       await expect(page.getByText("Details saved.")).toBeVisible();
       await page.waitForLoadState("networkidle");
@@ -144,14 +146,26 @@ test.describe
       const open = page.getByRole("link", { name: "Open field case" });
       await expect(open).toBeVisible();
       fieldCasePath = new URL((await open.getAttribute("href")) ?? "", page.url()).pathname.replace(/^\/[^/]+/, "");
+
+      // Scenario 3, also try: the car cannot be marked sold before it is delivered.
+      await page.waitForLoadState("networkidle");
+      await page.getByRole("button", { name: /Mark Sold to This Buyer/ }).click();
+      await expect(page.getByText("Mark the car sold after the delivery team reports it delivered.")).toBeVisible();
     });
 
     test("the team moves the delivery to Delivered", async ({ page }) => {
+      // Buying-flow revision Phase 2: the assigned CI records the papers before dispatch.
+      await signInAs(page, "confidential_informant@gce.local");
+      await page.goto(`/confidential_informant${fieldCasePath}`);
+      await page.getByRole("button", { name: "Record papers released to me" }).click();
+      await expect(page.getByText("Papers recorded as released to you.")).toBeVisible();
+
       await signInAs(page, "head_security@gce.local");
       await page.goto(`/head_security${fieldCasePath}`);
       for (const step of ["Dispatched", "In Transit", "Arriving", "Delivered"]) {
         await page.getByRole("button", { name: `Mark ${step}` }).click();
         await expect(page.getByText(`Marked ${step}.`)).toBeVisible();
+        await page.waitForLoadState("networkidle");
       }
     });
 

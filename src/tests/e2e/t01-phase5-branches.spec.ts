@@ -3,17 +3,20 @@ import { type Page, test } from "@playwright/test";
 import {
   approveAsSalesManager,
   buyerRequest,
+  buyerSignsContract,
   ceoConfirms,
   db,
   expect,
   futureSlot,
   headAccountantApproves,
   open,
+  papersThenSold,
   pick,
   proposeTerms,
   seedPassword,
   signInAs,
   verifyAll,
+  writeAndApproveContract,
 } from "./support/t01";
 import { archiveListedTestVehicles, canCreateTestVehicle, createTestVehicle } from "./support/test-vehicle";
 
@@ -36,18 +39,21 @@ async function requestFinancing(page: Page, label: string) {
 async function buyerBooksVisit(page: Page, id: string) {
   await signInAs(page, "customer@gce.local");
   await open(page, `/customer/my-transactions/${id}`);
-  await page.getByLabel("GCE visit (on the hour)").fill(futureSlot());
+  await page.getByLabel("GCE visit date and time").fill(futureSlot());
   await page.getByRole("button", { name: "Accept and book visit" }).click();
   await expect(page.getByText(/Visit booked/)).toBeVisible();
 }
 
-// Purchase Claim → Initial Downpayment → agreement → sold.
-async function claimPayAndSell(page: Page, id: string, downpayment: number) {
+// Purchase Claim → contract approved and signed → Initial Downpayment → agreement → papers → sold.
+async function claimPayAndSell(page: Page, id: string, downpayment: number, label: string) {
   await signInAs(page, "sales_manager@gce.local");
   await open(page, `/sales_manager/transactions/${id}`);
   await page.getByRole("button", { name: "Record Purchase Claim" }).click();
   await expect(page.getByText("Purchase Claim recorded.")).toBeVisible();
-  await page.waitForLoadState("networkidle");
+  await writeAndApproveContract(page, id);
+  await buyerSignsContract(page, id);
+  await signInAs(page, "sales_manager@gce.local");
+  await open(page, `/sales_manager/transactions/${id}`);
   await page.locator("#pay_amount").fill(String(downpayment));
   await pick(page, "pay_method", "Bank Transfer");
   await pick(page, "pay_kind", "Downpayment");
@@ -60,10 +66,7 @@ async function claimPayAndSell(page: Page, id: string, downpayment: number) {
   await page.getByRole("button", { name: "Complete financing agreement" }).click();
   await expect(page.getByText("Financing account opened.")).toBeVisible();
 
-  await signInAs(page, "sales_manager@gce.local");
-  await open(page, `/sales_manager/transactions/${id}`);
-  await page.getByRole("button", { name: /Mark Sold to This Buyer/ }).click();
-  await expect(page.getByText("Transaction moved to completed.")).toBeVisible();
+  await papersThenSold(page, id, `E2E Test ${label}`);
 }
 
 async function flow(id: string) {
@@ -86,6 +89,8 @@ test.describe
     test.afterAll(archiveListedTestVehicles);
 
     test("terms returned by the Head Accountant and the CEO, then declined by the buyer", async ({ page }) => {
+      // Many sign-ins in one test: the default 120 s budget runs out on a dev server.
+      test.slow();
       const { id } = await requestFinancing(page, "FIN-RETURNED");
       await proposeTerms(page, 12, 500_000, 100_000);
 
@@ -121,6 +126,8 @@ test.describe
     });
 
     test("a Potential Buyer claims later and pays every installment", async ({ page }) => {
+      // Many sign-ins in one test: the default 120 s budget runs out on a dev server.
+      test.slow();
       const { id, vehicleId } = await requestFinancing(page, "FIN-POTENTIAL");
       await proposeTerms(page, 1, 300_000, 100_000);
       await headAccountantApproves(page, id);
@@ -135,7 +142,7 @@ test.describe
       const { data: listed } = await db().from("vehicles").select("listing_state").eq("id", vehicleId).single();
       expect(listed?.listing_state).toBe("available");
 
-      await claimPayAndSell(page, id, 100_000);
+      await claimPayAndSell(page, id, 100_000, "FIN-POTENTIAL");
 
       // The single installment is paid; the financing completes.
       await signInAs(page, "head_accountant@gce.local");
@@ -146,12 +153,14 @@ test.describe
     });
 
     test("missed installments lead to repossession, reconditioning, repricing and relisting", async ({ page }) => {
+      // Many sign-ins in one test: the default 120 s budget runs out on a dev server.
+      test.slow();
       const { id, vehicleId } = await requestFinancing(page, "FIN-REPO");
       await proposeTerms(page, 6, 600_000, 120_000);
       await headAccountantApproves(page, id);
       await ceoConfirms(page, id);
       await buyerBooksVisit(page, id);
-      await claimPayAndSell(page, id, 120_000);
+      await claimPayAndSell(page, id, 120_000, "FIN-REPO");
 
       // Four installments fall due and go unpaid.
       const { data: account } = await db()

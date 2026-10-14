@@ -161,6 +161,105 @@ export async function ceoConfirms(page: Page, id: string) {
   await expect(page.getByText("Financing confirmed; the buyer is notified.")).toBeVisible();
 }
 
+export const markSold = (page: Page) => page.getByRole("button", { name: /Mark Sold to This Buyer/ });
+
+export async function recordPayment(page: Page, amount: string, method: string, kind: string) {
+  await page.locator("#pay_amount").fill(amount);
+  await pick(page, "pay_method", method);
+  await pick(page, "pay_kind", kind);
+  await page.getByRole("button", { name: "Record Payment" }).click();
+}
+
+// The field case a request's "Open field case" link points at, without the role prefix.
+export async function fieldCasePath(page: Page) {
+  const link = page.getByRole("link", { name: "Open field case" });
+  await expect(link).toBeVisible();
+  return new URL((await link.getAttribute("href")) ?? "", page.url()).pathname.replace(/^\/[^/]+/, "");
+}
+
+// Phase 3: the Sales Manager writes the pre-made contract and the Head Accountant approves it.
+export async function writeAndApproveContract(page: Page, id: string) {
+  await signInAs(page, "sales_manager@gce.local");
+  await open(page, `/sales_manager/transactions/${id}`);
+  await page.getByRole("button", { name: "Start from the pre-made contract" }).click();
+  await page.getByRole("button", { name: "Send for approval" }).click();
+  await expect(page.getByText("Contract sent to the Head Accountant.")).toBeVisible();
+  await signInAs(page, "head_accountant@gce.local");
+  await open(page, `/head_accountant/transactions/${id}`);
+  await page.getByRole("button", { name: "Approve contract" }).click();
+  await expect(page.getByText("Contract approved. The buyer can sign it.")).toBeVisible();
+}
+
+export async function buyerSignsContract(page: Page, id: string) {
+  await signInAs(page, "customer@gce.local");
+  await open(page, `/my-transactions/${id}`);
+  await page.getByLabel("Type your full name to sign").fill("Maria Santos");
+  await page.getByRole("button", { name: "Sign contract" }).click();
+  await expect(page.getByText("Contract signed.")).toBeVisible();
+}
+
+// Head Accountant verifies every payment still waiting on the request.
+export async function verifyPayments(page: Page, id: string) {
+  await signInAs(page, "head_accountant@gce.local");
+  await open(page, `/head_accountant/transactions/${id}`);
+  await verifyAll(page, await page.getByRole("button", { name: "Verify", exact: true }).count());
+}
+
+// Phase 2 papers chain at GCE: the Sales Manager requests the papers, the CI hands them over from Field
+// Cases, the Sales Manager receives them and marks the car sold. The payment must already be checked.
+export async function papersThenSold(page: Page, id: string, vehicleLabel: string) {
+  await signInAs(page, "sales_manager@gce.local");
+  await open(page, `/sales_manager/transactions/${id}`);
+  await page.getByRole("button", { name: "Request papers release" }).click();
+  await expect(page.getByText("Papers requested from the Confidential Informant.")).toBeVisible();
+  await signInAs(page, "confidential_informant@gce.local");
+  await open(page, "/confidential_informant/field-cases");
+  const request = page.getByRole("listitem").filter({ hasText: vehicleLabel });
+  await request.getByRole("button", { name: "Approve and hand over" }).click();
+  await expect(page.getByText("Papers handed over to the Sales Manager.")).toBeVisible();
+  await signInAs(page, "sales_manager@gce.local");
+  await open(page, `/sales_manager/transactions/${id}`);
+  await page.getByRole("button", { name: "Receive papers" }).click();
+  await expect(page.getByText("Papers received.")).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  await markSold(page).click();
+  await expect(page.getByText("Transaction moved to completed.")).toBeVisible();
+}
+
+// Field flows (meet-up, delivery): the assigned CI records the papers, Buyer Met, the signing (paper
+// contract, or the buyer's in-app signature already given), a signed copy, the cash when paid on site,
+// and hands the papers to the buyer. The Mechanic's copy is recorded when the flow needs it.
+export async function ciClosesFieldCase(
+  page: Page,
+  casePath: string,
+  options: { papersReleased?: boolean; cash?: boolean; mechanicCopy?: boolean } = {},
+) {
+  await signInAs(page, "confidential_informant@gce.local");
+  await open(page, `/confidential_informant${casePath}`);
+  if (!options.papersReleased) {
+    await page.getByRole("button", { name: "Record papers released to me" }).click();
+    await expect(page.getByText("Papers recorded as released to you.")).toBeVisible();
+  }
+  await page.getByRole("button", { name: "Record Buyer Met" }).click();
+  await expect(page.getByText("Buyer Met recorded.")).toBeVisible();
+  await page.getByRole("button", { name: "Report contract signed" }).click();
+  await expect(page.getByText("Signing reported to GCE.")).toBeVisible();
+  await page.getByRole("button", { name: "Record my signed copy" }).click();
+  await expect(page.getByText("Your signed copy is recorded.")).toBeVisible();
+  if (options.cash) {
+    await page.getByRole("button", { name: "Report payment received" }).click();
+    await expect(page.getByText("Payment reported to the Sales Manager.")).toBeVisible();
+  }
+  await page.getByRole("button", { name: "Hand papers to buyer" }).click();
+  await expect(page.getByText("Papers handed to the buyer.")).toBeVisible();
+  if (options.mechanicCopy) {
+    await signInAs(page, "mechanic@gce.local");
+    await open(page, `/mechanic${casePath}`);
+    await page.getByRole("button", { name: "Record my signed copy" }).click();
+    await expect(page.getByText("Your signed copy is recorded.")).toBeVisible();
+  }
+}
+
 // ---------------------------------------------------------------------------------------------
 // Service-role helpers. Used only to move the clock forward for time-based rules (backdating a
 // meet-up, a deadline or installments) and to reset test state; never to perform a flow step.
