@@ -74,8 +74,19 @@ export function TransactionPaymentsTableV1({
       enableSorting: false,
       cell: ({ row }: { row: { original: PaymentRow } }) => (
         <span className="text-xs">
-          {row.original.verified_by ? (
+          {row.original.paymongo_payment_id ? (
+            <Badge
+              className="h-5 border-green-600/35 bg-green-600/10 px-2 text-[11px] text-green-600"
+              title={String(row.original.paymongo_payment_id)}
+            >
+              Paid on PayMongo
+            </Badge>
+          ) : row.original.verified_by ? (
             <Badge className="h-5 border-green-600/35 bg-green-600/10 px-2 text-[11px] text-green-600">Verified</Badge>
+          ) : row.original.paymongo_checkout_id ? (
+            <Badge variant="outline" className="h-5 px-2 text-[11px]">
+              Waiting for PayMongo
+            </Badge>
           ) : (
             <Badge variant="outline" className="h-5 px-2 text-[11px]">
               Pending
@@ -89,7 +100,8 @@ export function TransactionPaymentsTableV1({
       header: () => <span className="sr-only">Actions</span>,
       enableSorting: false,
       cell: ({ row }: { row: { original: PaymentRow } }) =>
-        !row.original.verified_by ? (
+        // PayMongo confirms its own payments through the webhook; only payments recorded by staff are verified here.
+        !row.original.verified_by && !row.original.paymongo_checkout_id ? (
           <Button
             variant="ghost"
             size="sm"
