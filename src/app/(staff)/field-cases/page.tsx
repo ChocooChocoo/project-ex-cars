@@ -12,7 +12,6 @@ const FIELD_CASE_ROLES = [
   "confidential_informant",
   "sales_manager",
   "mechanic",
-  "account_manager",
   "head_accountant",
   // §4 step 7: Head Security rides with the delivery team and sees the cases assigned to them.
   "head_security",

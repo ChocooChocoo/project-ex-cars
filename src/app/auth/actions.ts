@@ -155,7 +155,8 @@ export async function assignRole(params: AssignRoleParams) {
   if (!user) return { error: "Not authenticated" };
 
   const { data: roles } = await supabase.rpc("get_user_roles");
-  const hasRole = (roles as { role: string }[] | undefined)?.some((r) => ["ceo", "account_manager"].includes(r.role));
+  // T03 R2: only the CEO grants roles; the Account Manager manages employees without RBAC access.
+  const hasRole = (roles as { role: string }[] | undefined)?.some((r) => r.role === "ceo");
   if (!hasRole) return { error: "Not authorized" };
 
   const admin = createAdminClient();
@@ -197,7 +198,7 @@ export async function createWalkInAccount(params: CreateWalkInAccountParams) {
   const parsed = createWalkInAccountSchema.safeParse(params);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid walk-in account details." };
 
-  const authorization = await authorizeAction(["account_manager"]);
+  const authorization = await authorizeAction(["account_manager", "ceo"]);
   if (!authorization.ok) return { error: authorization.message };
   const actorId = authorization.data.userId;
 
