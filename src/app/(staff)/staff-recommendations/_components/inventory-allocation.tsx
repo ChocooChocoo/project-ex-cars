@@ -4,33 +4,14 @@ import * as React from "react";
 
 import { Label, Pie, PieChart } from "recharts";
 
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { type ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { formatCurrency } from "@/lib/utils";
 
 import { type AllocationItem, getInventoryAllocation } from "../actions";
 
-const currencies = {
-  PHP: {
-    label: "PHP Balance",
-  },
-  EUR: {
-    label: "Euro Balance",
-  },
-  GBP: {
-    label: "GBP Balance",
-  },
-  USD: {
-    label: "USD Balance",
-  },
-} as const;
-
-type Currency = keyof typeof currencies;
-
 export function InventoryAllocation() {
-  const [currency, setCurrency] = React.useState<Currency>("PHP");
   const [items, setItems] = React.useState<AllocationItem[] | null>(null);
 
   React.useEffect(() => {
@@ -65,22 +46,6 @@ export function InventoryAllocation() {
     <Card className="h-full">
       <CardHeader>
         <CardTitle className="font-normal">Inventory Allocation</CardTitle>
-        <CardAction>
-          <Select onValueChange={(value) => setCurrency(value as Currency)} value={currency}>
-            <SelectTrigger className="w-36" size="sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                {Object.entries(currencies).map(([value, item]) => (
-                  <SelectItem key={value} value={value}>
-                    {item.label}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        </CardAction>
       </CardHeader>
 
       <CardContent className="grid items-center gap-4 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1fr)]">
@@ -116,7 +81,7 @@ export function InventoryAllocation() {
                         x={viewBox.cx}
                         y={(viewBox.cy ?? 0) + 14}
                       >
-                        {formatCurrency(totalAmount, { currency, noDecimals: true })}
+                        {formatCurrency(totalAmount, { noDecimals: true })}
                       </tspan>
                     </text>
                   );
@@ -134,9 +99,7 @@ export function InventoryAllocation() {
                   <span aria-hidden="true" className="h-2 w-1 rounded-full" style={{ backgroundColor: item.fill }} />
                   <p className="truncate text-muted-foreground text-xs">{item.account}</p>
                 </div>
-                <p className="font-medium tabular-nums">
-                  {formatCurrency(item.amount, { currency, noDecimals: true })}
-                </p>
+                <p className="font-medium tabular-nums">{formatCurrency(item.amount, { noDecimals: true })}</p>
               </div>
               <div className="font-medium tabular-nums">{item.percentage}%</div>
             </div>

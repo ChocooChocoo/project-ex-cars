@@ -43,7 +43,7 @@ export default async function StaffRecordsPage({
 
   const staffProfiles = (profiles ?? []).filter((p) => staffRoleIds?.includes(p.id as string));
   const employeeOptions = staffProfiles.map((p) => ({ id: p.id as string, full_name: p.full_name as string | null }));
-  const accounts: StaffTableRow[] = (profiles ?? []).map((profile) => {
+  const accounts: StaffTableRow[] = staffProfiles.map((profile) => {
     const schedule = (schedules as Record<string, unknown>[] | null)?.find((item) => item.employee_id === profile.id);
     const workdays = schedule?.workdays;
     return {
@@ -76,7 +76,7 @@ export default async function StaffRecordsPage({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-semibold text-3xl tracking-tight">Staff Records</h1>
-          <p className="text-muted-foreground text-sm">Manage employee and customer accounts.</p>
+          <p className="text-muted-foreground text-sm">Manage employee accounts.</p>
         </div>
         {role === "account_manager" ? <WalkInForm initialOpen={createWalkIn === "1"} /> : null}
       </div>
@@ -90,7 +90,7 @@ export default async function StaffRecordsPage({
         <Card>
           <CardHeader>
             <CardTitle className="leading-none">{accounts.length} Accounts</CardTitle>
-            <CardDescription>Staff and customer accounts with role, schedule, and status.</CardDescription>
+            <CardDescription>Staff accounts with role, schedule, and status.</CardDescription>
           </CardHeader>
           <CardContent className="pt-0">
             {recordsError ? (

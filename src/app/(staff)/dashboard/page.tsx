@@ -1,14 +1,9 @@
 import { getCurrentRole } from "@/app/auth/actions";
 import { requireRole } from "@/lib/auth/guards";
 import { STAFF_ROLES } from "@/lib/auth/roles";
-import {
-  checkAndNotifyDueInstallments,
-  checkAndNotifyOverdueReviews,
-  getNotifications,
-} from "@/lib/notifications/actions";
+import { checkAndNotifyDueInstallments, checkAndNotifyOverdueReviews } from "@/lib/notifications/actions";
 
 import { MetricCards } from "./_components/metric-cards";
-import { NotificationsPanel } from "./_components/notifications-panel";
 import { PerformanceOverview } from "./_components/performance-overview";
 import { Phase6Overview } from "./_components/phase6-overview";
 import { ReconditioningOverview } from "./_components/reconditioning-overview";
@@ -20,7 +15,6 @@ export default async function Page() {
   const isCeo = role === "ceo";
 
   await Promise.all([checkAndNotifyDueInstallments(), checkAndNotifyOverdueReviews()]);
-  const notifications = role ? await getNotifications(role) : [];
 
   return (
     <div className="@container/main flex flex-col gap-4 md:gap-6">
@@ -39,7 +33,6 @@ export default async function Page() {
       <PerformanceOverview />
       <ReconditioningOverview />
       <SubscriberOverview />
-      <NotificationsPanel notifications={notifications} />
     </div>
   );
 }

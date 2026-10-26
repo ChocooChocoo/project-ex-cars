@@ -4,7 +4,7 @@
 import { useState } from "react";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Car, DollarSign, Fuel, Search, SlidersHorizontal, Sparkles } from "lucide-react";
+import { Car, Fuel, PhilippinePeso, Search, SlidersHorizontal, Sparkles } from "lucide-react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -82,7 +82,7 @@ export function RecommendationForm({ onResults }: RecommendationFormProps) {
         <form noValidate onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-6">
           <div className="space-y-2">
             <FieldLabel className="flex items-center gap-1.5">
-              <DollarSign className="size-4" />
+              <PhilippinePeso className="size-4" />
               Your Budget
             </FieldLabel>
             <Controller
