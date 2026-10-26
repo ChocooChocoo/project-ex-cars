@@ -277,6 +277,8 @@ export async function createInspectionIssueReport(formData: FormData): Promise<S
       profitability_reason: z.string().trim().min(1, "Explain the profitability decision.").max(2000),
       recalculated_price: z.coerce.number().positive().optional().or(z.literal("")),
       new_ceiling: z.coerce.number().positive().optional().or(z.literal("")),
+      // T03 C13: what the seller reads next to the new price.
+      seller_remarks: z.string().trim().max(1000).optional().or(z.literal("")),
     })
     .safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid report." };
@@ -286,6 +288,9 @@ export async function createInspectionIssueReport(formData: FormData): Promise<S
   const newCeiling = parsed.data.new_ceiling || null;
   if (profitable && (!recalculated || !newCeiling)) {
     return { error: "A profitable vehicle needs a recalculated price and a new ceiling." };
+  }
+  if (profitable && !parsed.data.seller_remarks) {
+    return { error: "Write remarks for the seller explaining the new price." };
   }
   if (profitable && recalculated && newCeiling && recalculated > newCeiling) {
     return { error: "The recalculated price cannot exceed the new ceiling." };
@@ -337,6 +342,7 @@ export async function createInspectionIssueReport(formData: FormData): Promise<S
     repair_estimate: fieldCase.repair_estimate,
     is_profitable: profitable,
     profitability_reason: parsed.data.profitability_reason,
+    seller_remarks: profitable ? parsed.data.seller_remarks : null,
     recalculated_price: recalculated,
     new_ceiling: newCeiling,
     proposal_id: proposalId,

@@ -4,9 +4,11 @@
 import { type ReactElement, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import { format } from "date-fns";
-import { ArrowLeft, Paperclip } from "lucide-react";
+import { ArrowLeft, FileText, Paperclip, X } from "lucide-react";
 import { toast } from "sonner";
 
+import { getMessageAttachment, prepareMessageAttachment } from "@/app/(customer)/my-inquiries/actions";
+import { TransactionImagePreview } from "@/components/transaction-image-preview";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +16,12 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import {
+  attachmentError,
+  MESSAGE_ATTACHMENT_ACCEPT,
+  MESSAGE_ATTACHMENTS_BUCKET,
+  type SignedAttachment,
+} from "@/lib/inquiries/attachments";
 import { createClient } from "@/lib/supabase/client";
 import { cn, getInitials } from "@/lib/utils";
 import { censorMessage } from "@/lib/word-filter";
@@ -34,6 +42,61 @@ export interface InquiryConversationProps {
   readonly beforeMessages?: ReactNode;
   readonly fillHeight?: boolean;
   readonly onBack?: () => void;
+}
+
+function formatSize(bytes: number | null): string {
+  if (!bytes) return "";
+  return bytes >= 1024 * 1024
+    ? `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+    : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+function AttachmentView({
+  attachment,
+  outbound,
+}: {
+  readonly attachment: SignedAttachment;
+  readonly outbound: boolean;
+}) {
+  const url = attachment.signed_url;
+  if (!url) {
+    return <p className="text-xs opacity-75">{attachment.original_name} (unavailable)</p>;
+  }
+  if (attachment.file_kind === "image") {
+    return (
+      <TransactionImagePreview
+        src={url}
+        alt={attachment.original_name}
+        triggerClassName="h-40 w-56 max-w-full bg-background/40"
+        className="object-cover"
+      />
+    );
+  }
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      download={attachment.original_name}
+      className={cn(
+        "flex max-w-full items-center gap-2 rounded-md border px-2.5 py-2 text-xs underline-offset-2 hover:underline",
+        outbound ? "border-primary-foreground/30" : "border-border bg-background",
+      )}
+    >
+      <FileText className="size-4 shrink-0" aria-hidden />
+      <span className="min-w-0 truncate">{attachment.original_name}</span>
+      <span className="shrink-0 opacity-75">{formatSize(attachment.file_size)}</span>
+    </a>
+  );
+}
+
+function withAttachment(
+  prev: Record<string, SignedAttachment[]>,
+  attachment: SignedAttachment,
+): Record<string, SignedAttachment[]> {
+  const current = prev[attachment.message_id] ?? [];
+  if (current.some((item) => item.id === attachment.id)) return prev;
+  return { ...prev, [attachment.message_id]: [...current, attachment] };
 }
 
 function getActionError(result: unknown): string | null {
@@ -60,6 +123,9 @@ export function InquiryConversation({
   const [msgs, setMsgs] = useState(initialMessages);
   const [text, setText] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
+  // Files that arrive after their message (realtime) or come back from our own send, keyed by message id.
+  const [extraAttachments, setExtraAttachments] = useState<Record<string, SignedAttachment[]>>({});
   const [sending, setSending] = useState(false);
   const [myInitials, setMyInitials] = useState("ME");
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -93,6 +159,13 @@ export function InquiryConversation({
           });
         },
       )
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "message_attachments" }, (payload) => {
+        const row = payload.new as { id?: string };
+        if (!row.id) return;
+        void getMessageAttachment(row.id).then((attachment) => {
+          if (attachment) setExtraAttachments((prev) => withAttachment(prev, attachment));
+        });
+      })
       .subscribe();
 
     return () => {
@@ -114,25 +187,67 @@ export function InquiryConversation({
     });
   }, [supabase]);
 
+  function pickFile(picked: File | null) {
+    const error = picked ? attachmentError({ name: picked.name, type: picked.type, size: picked.size }) : null;
+    setFileError(error);
+    setFile(error ? null : picked);
+    if (error && fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function clearFile() {
+    setFile(null);
+    setFileError(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
   async function handleSend() {
     if (!text.trim() && !file) return;
     setSending(true);
     const fd = new FormData();
     fd.set("inquiry_id", inquiryId);
     fd.set("message_text", text);
-    if (file) fd.set("file", file);
 
     try {
+      if (file) {
+        // The file goes straight to storage on a signed URL; only its path goes through the server action.
+        const prepared = await prepareMessageAttachment(inquiryId, {
+          name: file.name,
+          type: file.type,
+          size: file.size,
+        });
+        if ("error" in prepared) {
+          setFileError(prepared.error);
+          toast.error(prepared.error);
+          return;
+        }
+        const { error: uploadError } = await supabase.storage
+          .from(MESSAGE_ATTACHMENTS_BUCKET)
+          .uploadToSignedUrl(prepared.path, prepared.token, file, { contentType: file.type });
+        if (uploadError) {
+          const message = `The file did not upload: ${uploadError.message}`;
+          setFileError(message);
+          toast.error(message);
+          return;
+        }
+        fd.set("attachment_path", prepared.path);
+        fd.set("attachment_name", file.name);
+        fd.set("attachment_type", file.type);
+        fd.set("attachment_size", String(file.size));
+      }
+
       const result = await sendMessage(fd);
       const error = getActionError(result);
       if (error) {
+        if (file) setFileError(error);
         toast.error(error);
         return;
       }
+      const sent = result as { attachment?: SignedAttachment | null };
+      const sentAttachment = sent.attachment;
+      if (sentAttachment) setExtraAttachments((prev) => withAttachment(prev, sentAttachment));
 
       setText("");
-      setFile(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      clearFile();
     } catch {
       toast.error("Could not send this message.");
     } finally {
@@ -244,10 +359,16 @@ export function InquiryConversation({
                   <p className="leading-relaxed">
                     {message.message_text ? censorMessage(message.message_text as string) : null}
                   </p>
-                  {(message.message_attachments as InquiryRecord[] | undefined)?.map((attachment) => (
-                    <div key={attachment.id as string} className="text-xs opacity-70">
-                      {attachment.original_name as string}
-                    </div>
+                  {[
+                    ...((message.message_attachments as SignedAttachment[] | undefined) ?? []),
+                    ...(extraAttachments[message.id as string] ?? []).filter(
+                      (extra) =>
+                        !(message.message_attachments as SignedAttachment[] | undefined)?.some(
+                          (attachment) => attachment.id === extra.id,
+                        ),
+                    ),
+                  ].map((attachment) => (
+                    <AttachmentView key={attachment.id} attachment={attachment} outbound={isOutbound} />
                   ))}
                   <div
                     className={cn(
@@ -275,8 +396,10 @@ export function InquiryConversation({
             <input
               ref={fileInputRef}
               type="file"
+              accept={MESSAGE_ATTACHMENT_ACCEPT}
               className="hidden"
-              onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+              aria-label="Attach an image or PDF"
+              onChange={(event) => pickFile(event.target.files?.[0] ?? null)}
             />
             <Button
               size="icon"
@@ -303,12 +426,33 @@ export function InquiryConversation({
         </div>
       </div>
 
-      {file && (
-        <div className="px-2">
-          <Badge variant="secondary" className="max-w-full truncate text-xs">
-            {file.name}
-          </Badge>
+      {file || fileError ? (
+        <div className="flex flex-col gap-1 px-2">
+          {file ? (
+            <div className="flex items-center gap-1">
+              <Badge variant="secondary" className="max-w-full truncate text-xs">
+                {file.name} · {formatSize(file.size)}
+              </Badge>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-6"
+                onClick={clearFile}
+                aria-label={`Remove ${file.name}`}
+              >
+                <X className="size-3" />
+              </Button>
+            </div>
+          ) : null}
+          {fileError ? (
+            <p role="alert" className="text-destructive text-xs">
+              {fileError}
+            </p>
+          ) : null}
         </div>
+      ) : (
+        <p className="px-2 text-muted-foreground text-xs">Images (JPG, PNG, WebP) or PDF, up to 10 MB.</p>
       )}
     </div>
   );

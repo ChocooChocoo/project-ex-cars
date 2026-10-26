@@ -126,6 +126,7 @@ test.describe
       await page.locator("#profit-reason").fill("Resale margin holds after a ₱30,000 aircon overhaul.");
       await page.locator("#recalculated").fill(String(recalculated));
       await page.locator("#new-ceiling").fill("460000");
+      await page.locator("#seller-remarks").fill("The aircon compressor needs replacing before resale.");
       await page.getByRole("button", { name: "Send to CEO" }).click();
       await expect(page.getByText("Revised ceiling sent to the CEO.")).toBeVisible();
 
@@ -134,6 +135,13 @@ test.describe
       await expect(page.getByText(/Revised ceiling/).first()).toBeVisible();
       await page.getByRole("button", { name: "Approve", exact: true }).click();
       await expect(page.getByText("Ceiling approved.")).toBeVisible();
+
+      // T03 C13: once approved, the seller sees the new price with GCE's remarks.
+      await signInAs(page, "customer@gce.local");
+      await open(page, `/customer/my-transactions/${transactionId}`);
+      const counter = page.getByRole("region", { name: "GCE counter-offer" });
+      await expect(counter).toContainText(`₱${recalculated.toLocaleString()}`);
+      await expect(counter).toContainText("The aircon compressor needs replacing before resale.");
 
       await signInAs(page, "marketing_specialist@gce.local");
       await open(page, `/marketing_specialist/transactions/${transactionId}`);

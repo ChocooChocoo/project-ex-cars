@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { getCurrentRole } from "@/app/auth/actions";
+import { withSignedMessageAttachments } from "@/lib/inquiries/attachments-server";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 import { StaffChatView } from "../_components/staff-chat-view";
@@ -41,7 +42,7 @@ export default async function StaffChatPage({ params }: { params: Promise<{ id: 
   return (
     <StaffChatView
       inquiry={inquiry as Record<string, unknown>}
-      messages={(messages as Record<string, unknown>[]) ?? []}
+      messages={await withSignedMessageAttachments((messages as Record<string, unknown>[]) ?? [])}
       arrangement={arrangement as Record<string, unknown> | null}
       userRole={role}
     />

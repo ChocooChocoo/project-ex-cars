@@ -116,6 +116,12 @@ export async function proxy(request: NextRequest) {
     return withSession(NextResponse.rewrite(url, { request: { headers: request.headers } }), refreshed);
   }
 
+  // The user menus link to /profile for every role; send it to this role's profile page.
+  if (pathname === "/profile") {
+    url.pathname = `/${role}/profile`;
+    return withSession(NextResponse.redirect(url), refreshed);
+  }
+
   // Legacy paths → redirect to role-prefixed
   if (pathname.startsWith("/dashboard")) {
     const segment = pathname.replace("/dashboard/", "").replace("/dashboard", "dashboard");
