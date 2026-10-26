@@ -19,7 +19,7 @@ export interface SaleRecordRow {
     | { final_price: number | null; payment_method: string }
     | { final_price: number | null; payment_method: string }[]
     | null;
-  payment_records: { amount: number; payment_kind: string | null }[] | null;
+  payment_records: { amount: number; payment_kind: string | null; rejected_at?: string | null }[] | null;
 }
 
 const KIND_LABELS: Record<string, string> = {
@@ -69,7 +69,9 @@ export function SaleRecordsCard({ sales }: { readonly sales: SaleRecordRow[] }) 
                   const details = Array.isArray(sale.purchase_details)
                     ? sale.purchase_details[0]
                     : sale.purchase_details;
-                  const received = (sale.payment_records ?? []).reduce((sum, p) => sum + Number(p.amount), 0);
+                  // T03 HA3: rejected payments are not money received.
+                  const counted = (sale.payment_records ?? []).filter((p) => !p.rejected_at);
+                  const received = counted.reduce((sum, p) => sum + Number(p.amount), 0);
                   return (
                     <TableRow key={sale.id}>
                       <TableCell className="tabular-nums">
@@ -90,7 +92,7 @@ export function SaleRecordsCard({ sales }: { readonly sales: SaleRecordRow[] }) 
                       <TableCell className="text-right tabular-nums">
                         {formatCurrency(received)}
                         {/* §4 step 10: a delivery sale shows its fee and downpayment separately. */}
-                        {breakdown(sale.payment_records ?? [])}
+                        {breakdown(counted)}
                       </TableCell>
                     </TableRow>
                   );

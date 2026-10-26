@@ -1048,12 +1048,28 @@ export function TransactionDetail({
             <h2 className="font-medium tracking-tight">Financial Summary</h2>
             {payments.length > 0 && (
               <div className="flex flex-col gap-2">
-                {payments.map((p) => (
-                  <div key={p.id as string} className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">{paymentMethodLabel(p.method as string)}</span>
-                    <span className="font-medium">{formatCurrency(Number(p.amount))}</span>
-                  </div>
-                ))}
+                {payments.map((p) =>
+                  // T03 HA3: a payment GCE did not accept stays visible, with the reason, and is not counted.
+                  p.rejected_at ? (
+                    <div key={p.id as string} className="flex flex-col gap-1 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">
+                          {paymentMethodLabel(p.method as string)} ·{" "}
+                          <span className="text-destructive">Not accepted</span>
+                        </span>
+                        <span className="font-medium text-muted-foreground line-through">
+                          {formatCurrency(Number(p.amount))}
+                        </span>
+                      </div>
+                      <p className="text-muted-foreground text-xs">Reason: {String(p.rejection_reason ?? "")}</p>
+                    </div>
+                  ) : (
+                    <div key={p.id as string} className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">{paymentMethodLabel(p.method as string)}</span>
+                      <span className="font-medium">{formatCurrency(Number(p.amount))}</span>
+                    </div>
+                  ),
+                )}
               </div>
             )}
 

@@ -42,6 +42,15 @@ describe("pickedTime", () => {
 });
 
 describe("paidTowardPrice", () => {
+  it("leaves a payment the Head Accountant rejected out of what was paid (T03 HA3)", () => {
+    expect(
+      paidTowardPrice([
+        { payment_kind: "downpayment", amount: 50000, rejected_at: "2026-10-26T03:00:00Z" },
+        { payment_kind: "balance", amount: 20000, rejected_at: null },
+      ]),
+    ).toBe(20000);
+  });
+
   it("leaves the delivery and reschedule fees out of what was paid for the car", () => {
     expect(
       paidTowardPrice([
