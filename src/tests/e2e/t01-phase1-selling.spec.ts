@@ -49,11 +49,13 @@ test.describe
     test("seller submits the car with the declaration, meet-up method and papers", async ({ page }) => {
       await signInAs(page, "customer@gce.local");
       await page.goto("/customer/sell-vehicle");
-      await page.getByLabel("Make *").fill("Toyota");
+      await page.getByLabel("Brand *").fill("Toyota");
       await page.getByLabel("Model *").fill("Vios");
-      await page.getByLabel("Year *").fill("2019");
+      await page.keyboard.press("Escape");
+      await pick(page, /^Year/, "2019");
       await page.getByLabel("Mileage (km) *").fill("40000");
-      await pick(page, /^Condition/, "Good");
+      await pick(page, /^Condition/, "Second Hand");
+      await pick(page, /^Owner number/, "1st owner");
       await page.getByLabel("Offered Amount (₱) *").fill("520000");
       await page.getByLabel("There is no known issue").check();
       await pick(page, /^Meet-up method/, "GCE Visit");

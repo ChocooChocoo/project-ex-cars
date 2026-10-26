@@ -527,7 +527,9 @@ const SELL_PHOTO_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const idTypeSchema = z.enum(ACCEPTED_ID_TYPES);
 
-type SellDocumentKind = "sell_photo" | "valid_id" | "orcr" | "deed_of_sale";
+type SellDocumentKind = "sell_photo" | "valid_id" | "orcr" | "deed_of_sale" | "issue_photo";
+// Photos attached to the offer: recorded verified, outside the papers check.
+const SELL_ATTACHMENT_KINDS: SellDocumentKind[] = ["sell_photo", "issue_photo"];
 // Selling step 1: two valid IDs, the ORCR and the deed of sale are required with every offer.
 const SELL_PAPER_KINDS: SellDocumentKind[] = ["valid_id", "valid_id", "orcr", "deed_of_sale"];
 
@@ -537,17 +539,19 @@ export type SellFileMeta = { kind: SellDocumentKind; type: string; size: number 
 const sellPathPrefix = (transactionId: string, kind: SellDocumentKind) =>
   `${transactionId}/${kind.replace(/_/g, "-")}-`;
 
-// Files are listed as photos first, then the papers in SELL_PAPER_KINDS order.
+// Files are listed as photos first, then the papers in SELL_PAPER_KINDS order, then any issue photos.
 function sellFilesError(files: SellFileMeta[]): string | null {
   const photos = files.filter((f) => f.kind === "sell_photo");
-  const papers = files.filter((f) => f.kind !== "sell_photo");
+  const issuePhotos = files.filter((f) => f.kind === "issue_photo");
+  const papers = files.filter((f) => !SELL_ATTACHMENT_KINDS.includes(f.kind));
   if (photos.length === 0) return "At least one vehicle photo is required.";
   if (photos.length > SELL_PHOTO_MAX_COUNT) return `You can upload at most ${SELL_PHOTO_MAX_COUNT} photos.`;
+  if (issuePhotos.length > SELL_PHOTO_MAX_COUNT) return `You can upload at most ${SELL_PHOTO_MAX_COUNT} issue photos.`;
   if (papers.length !== SELL_PAPER_KINDS.length || papers.some((f, i) => f.kind !== SELL_PAPER_KINDS[i])) {
     return "Attach two valid IDs with their ID types, the ORCR and the deed of sale.";
   }
   for (const file of files) {
-    if (file.kind === "sell_photo" && !SELL_PHOTO_MIME_TYPES.includes(file.type)) {
+    if (SELL_ATTACHMENT_KINDS.includes(file.kind) && !SELL_PHOTO_MIME_TYPES.includes(file.type)) {
       return "Photos must be JPEG, PNG, or WebP images.";
     }
     if (!DOCUMENT_EXTENSIONS[file.type]) return "Papers must be JPEG, PNG, WebP or PDF files.";
@@ -606,6 +610,14 @@ function readSellUploads(formData: FormData, transactionId: string): { uploads: 
   const deed = pathOf(formData.get("deed_of_sale_path"), "deed_of_sale");
   if (!deed) return { error: "The deed of sale is required." };
   uploads.push({ path: deed, document_kind: "deed_of_sale", id_type: null });
+  const issuePaths = formData.getAll("issue_photo_paths").map((value) => pathOf(value, "issue_photo"));
+  if (issuePaths.length > SELL_PHOTO_MAX_COUNT) {
+    return { error: `You can upload at most ${SELL_PHOTO_MAX_COUNT} issue photos.` };
+  }
+  for (const path of issuePaths) {
+    if (!path) return { error: "Invalid issue photo." };
+    uploads.push({ path, document_kind: "issue_photo", id_type: null });
+  }
   return { uploads };
 }
 
@@ -692,6 +704,7 @@ export async function submitSellVehicle(formData: FormData) {
     has_known_issues: data.has_known_issues === "yes",
     declared_issues: data.has_known_issues === "yes" ? data.declared_issues : null,
     meetup_method: data.meetup_method,
+    owner_number: data.owner_number,
   });
 
   if (detailError) {
@@ -701,14 +714,14 @@ export async function submitSellVehicle(formData: FormData) {
   }
 
   for (const upload of uploads) {
-    // Photos are attachments and land verified; the papers wait for the Marketing Specialist.
+    // Photos (vehicle and issue) are attachments and land verified; the papers wait for the Marketing Specialist.
     const { error: docError } = await supabase.from("transaction_documents").insert({
       transaction_id: transaction.id,
       document_kind: upload.document_kind,
       id_type: upload.id_type,
       storage_path: upload.path,
       uploader_id: user.user.id,
-      verification_state: upload.document_kind === "sell_photo" ? "verified" : "pending",
+      verification_state: SELL_ATTACHMENT_KINDS.includes(upload.document_kind) ? "verified" : "pending",
     });
     if (docError) {
       await removeUploads();
@@ -798,6 +811,7 @@ export async function submitRequestCar(formData: FormData) {
     year_min: parsed.data.year_min ?? null,
     year_max: parsed.data.year_max ?? null,
     budget: parsed.data.budget,
+    purpose: parsed.data.purpose || null,
     other_preferences: parsed.data.other_preferences || null,
   });
 

@@ -33,6 +33,7 @@ import {
 } from "@/lib/transactions/sell-flow";
 import type { FlowStatus, TransactionFlag, TransactionState } from "@/lib/transactions/state-machine";
 import { formatCurrency } from "@/lib/utils";
+import { OWNER_NUMBERS } from "@/lib/vehicles/catalog";
 
 type Row = Record<string, unknown>;
 type Person = { id: string; full_name: string | null };
@@ -89,6 +90,7 @@ export function SellFlowPanel({
   const router = useRouter();
   const id = transaction.id as string;
   const state = (transaction.current_state ?? "pending") as TransactionState;
+  const vehicle = transaction.vehicles as { condition?: string | null; mileage?: number | null } | null;
   const isMs = userRole === "marketing_specialist";
   const isCeo = userRole === "ceo";
   const [busy, setBusy] = useState(false);
@@ -138,6 +140,18 @@ export function SellFlowPanel({
         <dl className="grid gap-2 sm:grid-cols-2">
           <Fact label="Seller's asking price" value={formatCurrency(Number(sellDetails?.offered_amount ?? 0))} />
           <Fact label="Meet-up method" value={method ? SELL_MEETUP_METHOD_LABELS[method] : "Not given"} />
+          <Fact label="Condition" value={String(vehicle?.condition ?? "Not given")} />
+          <Fact
+            label="Mileage"
+            value={typeof vehicle?.mileage === "number" ? `${vehicle.mileage.toLocaleString("en-PH")} km` : "Not given"}
+          />
+          <Fact
+            label="Owner number"
+            value={
+              OWNER_NUMBERS.find((owner) => owner.value === String(sellDetails?.owner_number ?? ""))?.label ??
+              "Not given"
+            }
+          />
           <Fact label="Approved ceiling" value={ceiling === null ? "—" : formatCurrency(ceiling)} />
           <Fact
             label="Agreed price"

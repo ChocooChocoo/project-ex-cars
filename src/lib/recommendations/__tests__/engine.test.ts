@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { explainScores, getWeightLabels, rankVehicles, type VehicleInput } from "../engine";
+import { explainScores, getWeightLabels, rankVehicles, rankWithinBudget, type VehicleInput } from "../engine";
 
 function makeVehicle(overrides: Partial<VehicleInput> = {}): VehicleInput {
   return {
@@ -95,5 +95,18 @@ describe("getWeightLabels", () => {
       weight: 0.35,
       pct: "35%",
     });
+  });
+});
+
+describe("rankWithinBudget", () => {
+  it("keeps only priced cars at or below the budget", () => {
+    const vehicles = [
+      makeVehicle({ id: "under", current_price: 400_000 }),
+      makeVehicle({ id: "exact", current_price: 500_000 }),
+      makeVehicle({ id: "over", current_price: 500_001 }),
+      makeVehicle({ id: "unpriced", current_price: null }),
+    ];
+    const ids = rankWithinBudget(vehicles, 500_000).map((v) => v.vehicleId);
+    expect(ids.sort()).toEqual(["exact", "under"]);
   });
 });
