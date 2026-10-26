@@ -132,6 +132,14 @@ export function rankVehicles(vehicles: VehicleInput[], budget: number): ScoredVe
   return scored;
 }
 
+/** T03 C4: only cars with a price at or below the budget, ranked the same way as recommendations. */
+export function rankWithinBudget(vehicles: VehicleInput[], budget: number): ScoredVehicle[] {
+  const affordable = vehicles.filter(
+    (v) => v.current_price !== null && v.current_price > 0 && v.current_price <= budget,
+  );
+  return rankVehicles(affordable, budget);
+}
+
 export function explainScores(vehicle: VehicleInput, scored: ScoredVehicle): ScoreExplanation {
   const price = vehicle.current_price ?? 0;
 

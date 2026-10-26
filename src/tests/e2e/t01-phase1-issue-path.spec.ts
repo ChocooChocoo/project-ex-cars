@@ -41,14 +41,17 @@ test.describe
     test("seller submits; papers verified; ceiling approved; price agreed", async ({ page }) => {
       await signInAs(page, "customer@gce.local");
       await open(page, "/customer/sell-vehicle");
-      await page.getByLabel("Make *").fill("Mitsubishi");
+      await page.getByLabel("Brand *").fill("Mitsubishi");
       await page.getByLabel("Model *").fill("Mirage");
-      await page.getByLabel("Year *").fill("2018");
+      await page.keyboard.press("Escape");
+      await pickNamed(page, /^Year/, "2018");
       await page.getByLabel("Mileage (km) *").fill("62000");
-      await pickNamed(page, /^Condition/, "Fair");
+      await pickNamed(page, /^Condition/, "Second Hand");
+      await pickNamed(page, /^Owner number/, "2nd owner");
       await page.getByLabel("Offered Amount (₱) *").fill("520000");
       await page.getByLabel("The vehicle has known issues").check();
-      await page.getByLabel("Describe the issues *").fill("Aircon weak");
+      await page.getByLabel("Others", { exact: true }).check();
+      await page.getByLabel("Describe the other issues *").fill("Aircon weak");
       await pickNamed(page, /^Meet-up method/, "Meet Halfway within Calabarzon");
       await page.getByLabel("Vehicle photos").setInputFiles(png("front.png"));
       await page.getByLabel("Valid ID #1 *").setInputFiles(png("id-1.png"));

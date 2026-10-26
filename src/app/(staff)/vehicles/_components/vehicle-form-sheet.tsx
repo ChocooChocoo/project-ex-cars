@@ -27,6 +27,7 @@ function toFormDefaults(vehicle: Record<string, unknown>): VehicleFormData & { i
     exterior_color: (vehicle.exterior_color as string) ?? "",
     interior_color: (vehicle.interior_color as string) ?? "",
     body_type: (vehicle.body_type as string) ?? "",
+    purpose: (vehicle.purpose as VehicleFormData["purpose"]) ?? "",
     engine: (vehicle.engine as string) ?? "",
     description: (vehicle.description as string) ?? "",
     current_price: (vehicle.current_price as number | undefined) ?? undefined,

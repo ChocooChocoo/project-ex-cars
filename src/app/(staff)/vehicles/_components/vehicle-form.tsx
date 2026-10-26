@@ -18,6 +18,7 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/in
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { type VehicleFormData, vehicleSchema } from "@/lib/validation/vehicles";
+import { VEHICLE_PURPOSES } from "@/lib/vehicles/catalog";
 
 interface VehicleFormProps {
   defaultValues?: VehicleFormData & { id?: string };
@@ -51,6 +52,7 @@ export function VehicleForm({ defaultValues, onSuccess, onCancel }: VehicleFormP
       exterior_color: "",
       interior_color: "",
       body_type: "",
+      purpose: "",
       engine: "",
       description: "",
       current_price: undefined,
@@ -283,6 +285,30 @@ export function VehicleForm({ defaultValues, onSuccess, onCancel }: VehicleFormP
                   )}
                 />
               </div>
+              <Controller
+                control={form.control}
+                name="purpose"
+                render={({ field, fieldState }) => (
+                  <Field data-invalid={fieldState.invalid}>
+                    <FieldLabel htmlFor="vehicle-purpose">Purpose</FieldLabel>
+                    <Select value={field.value || ""} onValueChange={field.onChange}>
+                      <SelectTrigger id="vehicle-purpose">
+                        <SelectValue placeholder="Best suited for" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {VEHICLE_PURPOSES.map((purpose) => (
+                            <SelectItem key={purpose} value={purpose}>
+                              {purpose}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                    {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                  </Field>
+                )}
+              />
               <Controller
                 control={form.control}
                 name="engine"

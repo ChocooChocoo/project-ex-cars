@@ -15,6 +15,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Kbd } from "@/components/ui/kbd";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { VEHICLE_PURPOSES } from "@/lib/vehicles/catalog";
 
 export function ShowroomGrid({
   vehicles,
@@ -25,6 +26,7 @@ export function ShowroomGrid({
 }) {
   const [search, setSearch] = useState("");
   const [makeFilter, setMakeFilter] = useState("all");
+  const [purposeFilter, setPurposeFilter] = useState("all");
   const [priceSort, setPriceSort] = useState("newest");
   const [favourites, setFavourites] = useState<Set<string>>(new Set(favouriteIds));
 
@@ -48,6 +50,7 @@ export function ShowroomGrid({
 
   const filtered = vehicles.filter((v) => {
     if (makeFilter !== "all" && v.make !== makeFilter) return false;
+    if (purposeFilter !== "all" && v.purpose !== purposeFilter) return false;
     if (search) {
       const q = search.toLowerCase();
       const make = ((v.make as string) ?? "").toLowerCase();
@@ -84,16 +87,32 @@ export function ShowroomGrid({
           </InputGroupAddon>
         </InputGroup>
         <Select value={makeFilter} onValueChange={setMakeFilter}>
-          <SelectTrigger size="sm" className="w-40">
-            <span className="text-muted-foreground">Make:</span>
+          <SelectTrigger size="sm" className="w-40" aria-label="Brand">
+            <span className="text-muted-foreground">Brand:</span>
             <SelectValue />
           </SelectTrigger>
           <SelectContent position="popper" align="start">
             <SelectGroup>
-              <SelectItem value="all">All Makes</SelectItem>
+              <SelectItem value="all">All Brands</SelectItem>
               {makes.map((m) => (
                 <SelectItem key={m} value={m}>
                   {m}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+        <Select value={purposeFilter} onValueChange={setPurposeFilter}>
+          <SelectTrigger size="sm" className="w-48" aria-label="Purpose">
+            <span className="text-muted-foreground">Purpose:</span>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent position="popper" align="start">
+            <SelectGroup>
+              <SelectItem value="all">Any purpose</SelectItem>
+              {VEHICLE_PURPOSES.map((purpose) => (
+                <SelectItem key={purpose} value={purpose}>
+                  {purpose}
                 </SelectItem>
               ))}
             </SelectGroup>
@@ -112,7 +131,9 @@ export function ShowroomGrid({
             </SelectGroup>
           </SelectContent>
         </Select>
-        <span className="ml-auto text-muted-foreground text-sm">{filtered.length} vehicles</span>
+        <span className="ml-auto text-muted-foreground text-sm">
+          {filtered.length} {filtered.length === 1 ? "vehicle" : "vehicles"}
+        </span>
       </div>
 
       {filtered.length === 0 ? (
