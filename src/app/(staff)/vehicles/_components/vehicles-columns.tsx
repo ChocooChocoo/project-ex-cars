@@ -1,7 +1,7 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
-import { Archive, DollarSign, MoreHorizontal, Pencil, Send, Trash2 } from "lucide-react";
+import { Archive, MoreHorizontal, Pencil, PhilippinePeso, Send, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,7 @@ export function createColumns(
   canManage: boolean,
   canDelete: boolean,
 ): ColumnDef<Record<string, unknown>>[] {
-  return [
+  const columns: ColumnDef<Record<string, unknown>>[] = [
     {
       id: "select",
       header: ({ table }) => (
@@ -134,68 +134,71 @@ export function createColumns(
         return <span className="text-sm">{miles.toLocaleString()} km</span>;
       },
     },
-    {
-      id: "actions",
-      header: () => <div className="text-right">Actions</div>,
-      cell: ({ row }) => {
-        const vehicle = row.original;
-        const id = vehicle.id as string;
-        const state = vehicle.listing_state as string;
-
-        return (
-          <div className="text-right">
-            {canManage || canDelete ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    aria-label={`Open actions for ${(vehicle.stock_code as string) ?? ""}`}
-                    className="size-8 rounded-md text-muted-foreground hover:bg-muted/50"
-                    size="icon-sm"
-                    variant="ghost"
-                  >
-                    <MoreHorizontal className="size-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {canManage ? (
-                    <DropdownMenuItem onClick={() => onEdit(vehicle)}>
-                      <Pencil className="mr-2 size-4" />
-                      Edit
-                    </DropdownMenuItem>
-                  ) : null}
-                  {/* §6 step 38: a reconditioned repossessed car ("repairing") is repriced from here too. */}
-                  {canManage && (state === "draft" || state === "repairing") && (
-                    <DropdownMenuItem onClick={() => onProposePrice(vehicle)}>
-                      <DollarSign className="mr-2 size-4" />
-                      Propose Price
-                    </DropdownMenuItem>
-                  )}
-                  {canManage && state === "draft" ? (
-                    <DropdownMenuItem onClick={() => onPublish(id)}>
-                      <Send className="mr-2 size-4" />
-                      Publish
-                    </DropdownMenuItem>
-                  ) : null}
-                  {canManage && state !== "archived" ? (
-                    <DropdownMenuItem onClick={() => onArchive(vehicle)}>
-                      <Archive className="mr-2 size-4" />
-                      Archive
-                    </DropdownMenuItem>
-                  ) : null}
-                  {canDelete ? (
-                    <DropdownMenuItem variant="destructive" onClick={() => onDelete(vehicle)}>
-                      <Trash2 className="mr-2 size-4" />
-                      Delete
-                    </DropdownMenuItem>
-                  ) : null}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : null}
-          </div>
-        );
-      },
-      enableHiding: false,
-      enableSorting: false,
-    },
   ];
+
+  // A role with no row action (the Sales Manager) gets no Actions column, not an empty one.
+  if (!(canManage || canDelete)) return columns;
+
+  columns.push({
+    id: "actions",
+    header: () => <div className="text-right">Actions</div>,
+    cell: ({ row }) => {
+      const vehicle = row.original;
+      const id = vehicle.id as string;
+      const state = vehicle.listing_state as string;
+
+      return (
+        <div className="text-right">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                aria-label={`Open actions for ${(vehicle.stock_code as string) ?? ""}`}
+                className="size-8 rounded-md text-muted-foreground hover:bg-muted/50"
+                size="icon-sm"
+                variant="ghost"
+              >
+                <MoreHorizontal className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {canManage ? (
+                <DropdownMenuItem onClick={() => onEdit(vehicle)}>
+                  <Pencil className="mr-2 size-4" />
+                  Edit
+                </DropdownMenuItem>
+              ) : null}
+              {/* §6 step 38: a reconditioned repossessed car ("repairing") is repriced from here too. */}
+              {canManage && (state === "draft" || state === "repairing") && (
+                <DropdownMenuItem onClick={() => onProposePrice(vehicle)}>
+                  <PhilippinePeso className="mr-2 size-4" />
+                  Propose Price
+                </DropdownMenuItem>
+              )}
+              {canManage && state === "draft" ? (
+                <DropdownMenuItem onClick={() => onPublish(id)}>
+                  <Send className="mr-2 size-4" />
+                  Publish
+                </DropdownMenuItem>
+              ) : null}
+              {canManage && state !== "archived" ? (
+                <DropdownMenuItem onClick={() => onArchive(vehicle)}>
+                  <Archive className="mr-2 size-4" />
+                  Archive
+                </DropdownMenuItem>
+              ) : null}
+              {canDelete ? (
+                <DropdownMenuItem variant="destructive" onClick={() => onDelete(vehicle)}>
+                  <Trash2 className="mr-2 size-4" />
+                  Delete
+                </DropdownMenuItem>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      );
+    },
+    enableHiding: false,
+    enableSorting: false,
+  });
+  return columns;
 }

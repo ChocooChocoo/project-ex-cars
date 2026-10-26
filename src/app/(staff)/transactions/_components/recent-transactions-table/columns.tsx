@@ -5,7 +5,7 @@ import Link from "next/link";
 
 import type { ColumnDef } from "@tanstack/react-table";
 import { differenceInCalendarDays, endOfToday, format, parseISO } from "date-fns";
-import { CircleCheck, CircleDollarSign, Clock3, Eye, MoreHorizontal, UserRound } from "lucide-react";
+import { CircleCheck, Clock3, Eye, MoreHorizontal, PhilippinePeso, UserRound } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -36,7 +36,7 @@ function kindIcon(kind: string) {
     case "buy":
       return <CircleCheck className="fill-green-500 stroke-primary-foreground dark:fill-green-600" />;
     case "sell":
-      return <CircleDollarSign className="text-amber-600 dark:text-amber-500" />;
+      return <PhilippinePeso className="text-amber-600 dark:text-amber-500" />;
     case "request_a_car":
       return <Clock3 className="text-muted-foreground" />;
     default:
