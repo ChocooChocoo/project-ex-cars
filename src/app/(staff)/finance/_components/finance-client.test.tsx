@@ -1,9 +1,13 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { toast } from "sonner";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { FinanceClient, type FinancialEntryRow, getFinanceSummary } from "./finance-client";
+import { advanceDisbursement } from "@/app/(staff)/finance/actions";
+
+import { type DisbursementRow, FinanceClient, type FinancialEntryRow, getFinanceSummary } from "./finance-client";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/app/(staff)/finance/actions", () => ({
   advanceDisbursement: vi.fn(),
   createDisbursementRequest: vi.fn(),
@@ -185,9 +189,10 @@ describe("FinanceClient", () => {
         isInformant={false}
       />,
     );
-    const tab = screen.getByRole("tab", { name: /Disbursements/ });
-    fireEvent.mouseDown(tab);
-    fireEvent.click(tab);
+    openDisbursements();
+    // T03 HA4: actions live in the request's detail view.
+    expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Open Car purchase fund/ }));
     expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
   });
 
@@ -207,5 +212,89 @@ describe("FinanceClient", () => {
     );
     expect(screen.queryByRole("button", { name: "Record Entry" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Record/ })).not.toBeInTheDocument();
+  });
+});
+
+function openDisbursements() {
+  const tab = screen.getByRole("tab", { name: /Disbursements/ });
+  fireEvent.mouseDown(tab);
+  fireEvent.click(tab);
+}
+
+function disbursement(overrides: Partial<DisbursementRow> = {}): DisbursementRow {
+  return {
+    id: "d1",
+    title: "Reconditioning fund",
+    amount_cents: 1_500_000,
+    purpose: "short",
+    status: "draft",
+    notes: null,
+    requested_by: "u1",
+    purchase_transaction_id: null,
+    created_at: new Date().toISOString(),
+    ...overrides,
+  };
+}
+
+const financeProps = {
+  purchaseTransactions: [],
+  canRecord: true,
+  canVerify: true,
+  canRequest: true,
+  canAdvance: true,
+  canRequestPurchaseFunds: true,
+  isInformant: false,
+};
+
+describe("Finance tables (T03 HA4, HA5)", () => {
+  beforeEach(() => vi.mocked(advanceDisbursement).mockReset());
+
+  it("shows 10 ledger entries per page", () => {
+    const entries = Array.from({ length: 12 }, (_, i) => entry({ id: `e${i}`, description: `Entry ${i + 1}` }));
+    render(<FinanceClient entries={entries} disbursements={[]} {...financeProps} />);
+
+    expect(screen.getByText("Entry 10")).toBeInTheDocument();
+    expect(screen.queryByText("Entry 11")).not.toBeInTheDocument();
+    expect(screen.getByText("Page 1 of 2")).toBeInTheDocument();
+  });
+
+  it("opens a disbursement with its full purpose", () => {
+    const purpose = `${"Replace the timing belt, water pump and both front tyres before listing. ".repeat(6)}End.`;
+    render(<FinanceClient entries={[]} disbursements={[disbursement({ purpose })]} {...financeProps} />);
+    openDisbursements();
+
+    fireEvent.click(screen.getByRole("button", { name: /Open Reconditioning fund/ }));
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveTextContent(purpose);
+  });
+
+  it("needs a reason to reject, and sends it with the rejection", async () => {
+    vi.mocked(advanceDisbursement).mockResolvedValue({ success: true } as never);
+    render(<FinanceClient entries={[]} disbursements={[disbursement()]} {...financeProps} />);
+    openDisbursements();
+    fireEvent.click(screen.getByRole("button", { name: /Open Reconditioning fund/ }));
+
+    const reject = screen.getByRole("button", { name: "Reject" });
+    expect(reject).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText("Reason for rejecting"), { target: { value: "No quotation attached" } });
+    expect(reject).toBeEnabled();
+    fireEvent.click(reject);
+
+    await waitFor(() => expect(advanceDisbursement).toHaveBeenCalled());
+    const form = vi.mocked(advanceDisbursement).mock.calls[0][0] as FormData;
+    expect(form.get("event_kind")).toBe("rejected");
+    expect(form.get("notes")).toBe("No quotation attached");
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Disbursement rejected."));
+  });
+
+  it("shows 10 disbursement requests per page", () => {
+    const rows = Array.from({ length: 11 }, (_, i) => disbursement({ id: `d${i}`, title: `Request ${i + 1}` }));
+    render(<FinanceClient entries={[]} disbursements={rows} {...financeProps} />);
+    openDisbursements();
+
+    expect(screen.getByText("Request 10")).toBeInTheDocument();
+    expect(screen.queryByText("Request 11")).not.toBeInTheDocument();
   });
 });

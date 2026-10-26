@@ -1,7 +1,10 @@
+"use client";
+
 import Link from "next/link";
 
 import { format } from "date-fns";
 
+import { TablePager, usePagedRows } from "@/components/table-pager";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { paymentMethodLabel } from "@/lib/transactions/labels";
@@ -38,6 +41,7 @@ function breakdown(payments: { amount: number; payment_kind: string | null }[]) 
 
 // §2 step 7: once a car is marked sold, its sale figures are listed for the Head Accountant's records.
 export function SaleRecordsCard({ sales }: { readonly sales: SaleRecordRow[] }) {
+  const paged = usePagedRows(sales);
   return (
     <Card>
       <CardHeader>
@@ -61,7 +65,7 @@ export function SaleRecordsCard({ sales }: { readonly sales: SaleRecordRow[] }) 
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sales.map((sale) => {
+                {paged.rows.map((sale) => {
                   const details = Array.isArray(sale.purchase_details)
                     ? sale.purchase_details[0]
                     : sale.purchase_details;
@@ -93,6 +97,7 @@ export function SaleRecordsCard({ sales }: { readonly sales: SaleRecordRow[] }) 
                 })}
               </TableBody>
             </Table>
+            <TablePager {...paged} label="Sale records" />
           </div>
         )}
       </CardContent>
