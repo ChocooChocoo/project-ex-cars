@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { notificationHref } from "@/lib/notifications/notification-href";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase, createServerSupabaseClient } from "@/lib/supabase/server";
 import { MISSED_INSTALLMENTS_BEFORE_REPOSSESSION, missedInstallments, verifiedPaid } from "@/lib/transactions/buy-flow";
@@ -17,6 +18,8 @@ export interface NotificationRow {
   reference_table: string | null;
   reference_id: string | null;
   created_at: string;
+  /** Page the notification opens, computed server-side by getNotifications (null: not clickable). */
+  href?: string | null;
 }
 
 /**
@@ -221,7 +224,52 @@ export async function getNotifications(role: string): Promise<NotificationRow[]>
     .or(roleOrOwnFilter(role))
     .order("created_at", { ascending: false })
     .limit(20);
-  return (data ?? []) as NotificationRow[];
+  const rows = (data ?? []) as NotificationRow[];
+
+  // Installment reminders reference the installment; they open the purchase transaction it belongs to.
+  const installmentIds = rows
+    .filter((n) => n.reference_table === "installments" && n.reference_id)
+    .map((n) => n.reference_id as string);
+  const installmentTransactions = new Map<string, string>();
+  if (installmentIds.length > 0) {
+    const { data: installments } = await supabase
+      .from("installments")
+      .select("id, installment_accounts(purchase_transaction_id)")
+      .in("id", installmentIds);
+    for (const installment of installments ?? []) {
+      const account = installment.installment_accounts as unknown as { purchase_transaction_id: string | null } | null;
+      if (account?.purchase_transaction_id)
+        installmentTransactions.set(installment.id as string, account.purchase_transaction_id);
+    }
+  }
+
+  // Mechanic and Head Security cannot open transactions; their alerts open the field case assigned to them.
+  const assignedFieldCases = new Map<string, string>();
+  const transactionIds = rows
+    .filter((n) => n.reference_table === "transactions" && n.reference_id)
+    .map((n) => n.reference_id as string);
+  if ((role === "mechanic" || role === "head_security") && transactionIds.length > 0) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      const { data: cases } = await supabase
+        .from("field_cases")
+        .select("id, transaction_id")
+        .in("transaction_id", transactionIds)
+        .or(`mechanic_id.eq.${user.id},head_security_id.eq.${user.id}`)
+        .order("created_at", { ascending: false });
+      for (const fieldCase of cases ?? []) {
+        const transactionId = fieldCase.transaction_id as string;
+        if (!assignedFieldCases.has(transactionId)) assignedFieldCases.set(transactionId, fieldCase.id as string);
+      }
+    }
+  }
+
+  return rows.map((row) => ({
+    ...row,
+    href: notificationHref(row, role, installmentTransactions, assignedFieldCases),
+  }));
 }
 
 // Also awaited during Server Component renders, same constraint as getNotifications.

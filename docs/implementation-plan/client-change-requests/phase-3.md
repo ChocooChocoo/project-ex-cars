@@ -1,6 +1,8 @@
 [← Previous: Phase 2](./phase-2.md) | [Next: Phase 4 →](./phase-4.md)
 
-**Status:** 🔲 Not Started
+**Status:** ✅ Done
+
+Completed 2026-10-26, not committed.
 
 # Phase 3: Clickable notifications
 
@@ -20,25 +22,61 @@
 
 ## Tasks
 
-- [ ] Add `notificationHref(row: NotificationRow, role: GceRole): string | null` in
+- [x] Added `notificationHref(row, role, installmentTransactions?, assignedFieldCases?)` in
   `src/lib/notifications/notification-href.ts`:
-  - `transactions` → `rolePath(role, "/transactions/{id}")` for staff, `rolePath(role, "/my-transactions/{id}")` for the customer;
-  - `installments` → the installment's transaction page (look up how the installments page is routed today);
-  - `null` reference or unknown table → `null` (item stays a plain row).
-- [ ] Unit test `src/lib/notifications/notification-href.test.ts` for each branch and each role type.
-- [ ] In `notification-popover.tsx`, render items with a `href` as Next `Link`; on click mark read (existing action) and
-  close the popover (make it controlled with `open` / `onOpenChange`).
-- [ ] Keyboard: items are focusable links with a visible focus ring; items without a link stay non-interactive text.
-- [ ] Check the supplier layout (`src/app/(supplier)/layout.tsx`) gets sensible links or `null`.
+  - `transactions` → `/{role}/transactions/{id}` for roles with Transactions, `/customer/my-transactions/{id}` for the
+    customer;
+  - `installments` → the purchase transaction of the installment's account;
+  - mechanic and head security (no Transactions) → the field case assigned to them on that transaction
+    (`/{role}/field-cases/{id}`); added after the browser walk showed every Mechanic alert was a dead end;
+  - `null` reference, unknown table, or a role that cannot open the target → `null`.
+- [x] `getNotifications` (`src/lib/notifications/actions.ts`) adds `href` to each row on the server: one lookup of
+  installments → purchase transaction, and for mechanic/head security one lookup of their assigned field cases.
+- [x] Unit test `src/lib/notifications/notification-href.test.ts` (6 cases: customer, staff, roles without access,
+  installments, field roles, no reference).
+- [x] `notification-popover.tsx`: rows with an `href` get a stretched Next `Link` on the title (the whole row is
+  clickable; the "mark as read" button stays a separate control, since a button inside a link is invalid HTML).
+  Clicking marks the row read and closes the popover (now controlled with `open` / `onOpenChange`).
+- [x] Keyboard: the link is focusable; the row shows an inset focus ring (`focus-within:ring-2 ... ring-inset`).
+  Rows without a link stay plain text.
+- [x] Supplier: notifications get `null` (suppliers have no transaction pages); covered by the unit test.
+- [x] Component test `src/app/(staff)/_components/sidebar/notification-popover.test.tsx` (link opens, marks read,
+  closes; plain row without a link). It fails against the old component.
 
 ## Done when
 
-- [ ] `npm run test` passes with the new `notification-href` tests.
-- [ ] As a buyer, clicking a transaction notification opens `/customer/my-transactions/{id}` and the item shows as read.
-- [ ] As the Sales Manager, clicking a transaction notification opens `/sales_manager/transactions/{id}`.
-- [ ] A notification with no reference does nothing on click and is not shown as a link.
-- [ ] `npx tsc --noEmit` exits 0, biome on touched files is clean.
-- [ ] Walked with the Playwright MCP browser tools for customer and one staff role.
+- [x] `npm run test` passes with the new tests (75 files, 499 tests).
+- [x] As a buyer, clicking a transaction notification opens `/customer/my-transactions/{id}` and the unread count drops
+  (18 → 17).
+- [x] As the Sales Manager, a notification opened from the keyboard (Tab, Enter) goes to
+  `/sales_manager/transactions/{id}` and the popover closes.
+- [x] A notification with no reachable page is not shown as a link and does not navigate (Mechanic row without an
+  assigned case; clicking it only marks it read, as before).
+- [x] `npx tsc --noEmit` exits 0, biome on touched files is clean, `npm run build` compiles.
+- [x] Walked with the Playwright MCP browser tools as customer, Sales Manager, Account Manager and Mechanic.
+
+## Verification (2026-10-26)
+
+| Check | Result |
+| --- | --- |
+| New tests before the change | `notification-href.test.ts` failed (module missing); field-case case failed before it was added; popover test fails on the old component |
+| `npm run test` | 75 files, 499 tests passed |
+| `npx tsc --noEmit` / biome / `npm run build` | exit 0 / clean / compiled |
+| Customer (MCP) | 20 of 20 rows linked; first opens "Toyota Hilux (2020)" transaction; unread 18 → 17; popover closed |
+| Sales Manager (MCP) | 20 of 20 linked; Tab reaches the first row with a visible ring; Enter opens the transaction; popover closed |
+| Account Manager (MCP) | 20 of 20 "Installment due" rows linked to the purchase transaction; page opens (financing, 6 installments) |
+| Mechanic (MCP) | before the field-case rule: 0 of 20 linked; after: 19 of 20 open the assigned field case ("Seller meet-up" page) |
+
+Screenshots: `test-results/mcp-phase3-*.png`.
+
+## Notes
+
+- One `500` on `/mechanic/inspections` appeared in the dev server log ("Missing PreferencesStoreProvider" in
+  `AppSidebar`) right after a hot reload of the edited files. Three reloads of the same pages returned 200 and the
+  error is outside the notification code; treated as a dev-only Fast Refresh glitch. Watch for it in later phases.
+- Mechanic and head security alerts are sent to the whole role; only the person assigned to the case gets a link,
+  because the field case page refuses anyone else.
+- The Confidential Informant has Transactions, so their alerts open the transaction page, not the field case.
 
 ---
 
