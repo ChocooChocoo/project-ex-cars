@@ -9,6 +9,7 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 
 import { markExpenseReimbursed } from "@/app/(staff)/finance/actions";
+import { TablePager, usePagedRows } from "@/components/table-pager";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
@@ -35,6 +36,7 @@ export function FieldExpensesCard({
 }) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
+  const paged = usePagedRows(expenses);
 
   async function reimburse(id: string) {
     setBusyId(id);
@@ -57,7 +59,7 @@ export function FieldExpensesCard({
       </CardHeader>
       <CardContent className="flex flex-col gap-2 text-sm">
         {expenses.length === 0 ? <p className="text-muted-foreground">No open field expenses.</p> : null}
-        {expenses.map((expense) => {
+        {paged.rows.map((expense) => {
           const vehicle = expense.field_cases?.vehicles;
           const sold = vehicle?.listing_state === "sold";
           const transactionId = expense.field_cases?.transaction_id;
@@ -88,6 +90,7 @@ export function FieldExpensesCard({
             </div>
           );
         })}
+        <TablePager {...paged} label="Field expenses" />
       </CardContent>
     </Card>
   );
