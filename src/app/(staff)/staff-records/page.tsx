@@ -78,7 +78,7 @@ export default async function StaffRecordsPage({
           <h1 className="font-semibold text-3xl tracking-tight">Staff Records</h1>
           <p className="text-muted-foreground text-sm">Manage employee accounts.</p>
         </div>
-        {role === "account_manager" ? <WalkInForm initialOpen={createWalkIn === "1"} /> : null}
+        {role === "account_manager" || role === "ceo" ? <WalkInForm initialOpen={createWalkIn === "1"} /> : null}
       </div>
 
       <TabsList className="w-fit gap-1">

@@ -211,6 +211,7 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
     "users",
     "suppliers",
     "staff-records",
+    "create-walk-in",
     "attendance",
     "employee-requests",
     "payroll",
@@ -224,7 +225,6 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
   account_manager: new Set([
     "default",
     "finance",
-    "roles",
     "users",
     "vehicles",
     "inspections",
@@ -239,7 +239,6 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
     "employee-requests",
     "payroll",
     "payslips",
-    "field-cases",
     "reports",
     "announcements",
   ]),

@@ -52,7 +52,8 @@ describe("createWalkInAccount Task 33", () => {
 
   it("uses the authorized Account Manager actor and reports success only after all writes", async () => {
     await expect(createWalkInAccount(validParams())).resolves.toEqual({ success: true });
-    expect(authorizeAction).toHaveBeenCalledWith(["account_manager"]);
+    // T03 R1: the CEO holds full access, so the CEO may create walk-in accounts too.
+    expect(authorizeAction).toHaveBeenCalledWith(["account_manager", "ceo"]);
     expect(profileUpdate).toHaveBeenCalledWith(expect.objectContaining({ created_by: actor }));
     expect(profileEq).toHaveBeenCalledWith("id", createdUser);
     expect(auditInsert).toHaveBeenCalledWith(expect.objectContaining({ actor_id: actor, record_id: createdUser }));
