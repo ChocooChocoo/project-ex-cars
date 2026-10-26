@@ -2,7 +2,7 @@
 
 **Status:** ✅ Done
 
-Completed 2026-10-26, not committed.
+Completed 2026-10-26.
 
 # Phase 1: Quick fixes and removals
 

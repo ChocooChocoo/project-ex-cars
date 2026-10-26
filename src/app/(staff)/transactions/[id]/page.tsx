@@ -50,6 +50,17 @@ export default async function TransactionDetailPage({ params }: { readonly param
     .eq("transaction_id", id)
     .order("settlement_date", { ascending: false });
 
+  // T03 HA2: sign the cheque / deposit-slip photo the same way as document images; the path never reaches the page.
+  const paymentRows = (
+    await withSignedTransactionDocumentUrls(
+      supabase.storage,
+      ((payments as Record<string, unknown>[] | null) ?? []).map(({ proof_path, ...payment }) => ({
+        ...payment,
+        storage_path: proof_path ?? null,
+      })),
+    )
+  ).map(({ signed_url, is_image: _isImage, ...payment }) => ({ ...payment, proof_url: signed_url }));
+
   const { data: installmentAccount } = await supabase
     .from("installment_accounts")
     .select("*, installments(*)")
@@ -196,7 +207,7 @@ export default async function TransactionDetailPage({ params }: { readonly param
         transaction={transaction as Record<string, unknown>}
         history={(history as Record<string, unknown>[]) ?? []}
         documents={signedDocuments}
-        payments={(payments as Record<string, unknown>[]) ?? []}
+        payments={paymentRows}
         installmentAccount={installmentAccount as Record<string, unknown> | null}
         paymentTerms={paymentTerms as Record<string, unknown> | null}
         viewingArrangements={(viewingArrangements as Record<string, unknown>[]) ?? []}
