@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import { authorizeAction } from "@/lib/auth/action-guard";
@@ -12,6 +13,7 @@ import { landingPath } from "@/lib/routing/paths";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase, createServerSupabaseClient } from "@/lib/supabase/server";
 import { emailSchema, fullNameSchema, passwordSchema } from "@/lib/validation/forms";
+import { changePasswordSchema, ownProfileSchema } from "@/lib/validation/profile";
 
 export async function signIn(formData: FormData) {
   const supabase = await createServerSupabaseClient();
@@ -528,6 +530,59 @@ export async function uploadCustomerDocument(formData: FormData) {
     return { error: dbError.message };
   }
 
-  revalidatePath("/dashboard/profile");
+  revalidatePath("/profile");
+  return { success: true };
+}
+
+// T03 C15: the signed-in user's own name, phone and address. Only these columns are written, on their own
+// row (RLS "Users can update own profile"); the auth display name follows the full name.
+export async function updateOwnProfile(formData: FormData): Promise<{ error: string } | { success: true }> {
+  const parsed = ownProfileSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid profile details." };
+
+  const supabase = await createServerSupabaseClient();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      full_name: parsed.data.full_name,
+      phone: parsed.data.phone || null,
+      address: parsed.data.address || null,
+    })
+    .eq("id", user.user.id);
+  if (error) return { error: error.message };
+
+  await supabase.auth.updateUser({ data: { full_name: parsed.data.full_name } });
+
+  revalidatePath("/profile");
+  revalidatePath("/my-profile");
+  return { success: true };
+}
+
+// T03 C15: changing the password asks for the current one, checked on a separate client so the
+// user's session cookies are not touched by the check.
+export async function changeOwnPassword(formData: FormData): Promise<{ error: string } | { success: true }> {
+  const parsed = changePasswordSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid password." };
+
+  const supabase = await createServerSupabaseClient();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user?.email) return { error: "Not authenticated" };
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  if (!url || !key) return { error: "Password change is not available right now." };
+  const checker = createSupabaseClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  const { error: checkError } = await checker.auth.signInWithPassword({
+    email: user.user.email,
+    password: parsed.data.current_password,
+  });
+  if (checkError) return { error: "Your current password is not correct." };
+  await checker.auth.signOut({ scope: "local" });
+
+  const { error } = await supabase.auth.updateUser({ password: parsed.data.new_password });
+  if (error) return { error: error.message };
   return { success: true };
 }

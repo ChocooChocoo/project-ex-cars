@@ -17,6 +17,7 @@ import {
   submitBuyRequest,
   uploadPurchaseDocument,
 } from "@/app/(customer)/my-transactions/actions";
+import { RejectReasonDialog } from "@/components/reject-reason-dialog";
 import { TransactionImagePreview } from "@/components/transaction-image-preview";
 import { TransactionStatusBadge } from "@/components/transaction-status-badge";
 import {
@@ -85,7 +86,7 @@ function ProgressStepper({ state }: { readonly state: TransactionState }) {
     approved: "Approved by GCE — we are finalising your transaction.",
     completed: "Complete — your transaction is finished.",
     cancelled: "Cancelled — this transaction was stopped. Start a new request if needed.",
-    rejected: "Not approved — check the history for the reason or contact support.",
+    rejected: "Not approved — use See reason above for why, or contact support.",
   };
   return (
     <Card>
@@ -138,6 +139,7 @@ export function TransactionDetail({
   takenSlots = [],
   gceVisitOnly = false,
   delivery = null,
+  counterOffer = null,
 }: {
   readonly transaction: Record<string, unknown>;
   readonly history: Record<string, unknown>[];
@@ -151,6 +153,13 @@ export function TransactionDetail({
   readonly takenSlots?: string[];
   readonly gceVisitOnly?: boolean;
   readonly delivery?: { status: string | null; delay_note: string | null; expected_arrival: string | null } | null;
+  /** T03 C13: GCE's CEO-approved counter-offer on a sell offer, with the remarks written for the seller. */
+  readonly counterOffer?: {
+    price: number;
+    remarks: string | null;
+    issue: string | null;
+    response: string | null;
+  } | null;
 }) {
   const router = useRouter();
   const id = transaction.id as string;
@@ -174,6 +183,17 @@ export function TransactionDetail({
 
   const [localState, setLocalState] = useState<TransactionState | null>(null);
   const state = localState ?? ((transaction.current_state ?? "pending") as TransactionState);
+  // T03 C14: why GCE stopped the transaction: the latest history reason for that state, else the review notes.
+  // A rejection always offers the modal; a cancellation only when a reason was recorded.
+  const recordedReason =
+    ([...history].reverse().find((entry) => entry.to_state === state && entry.reason)?.reason as string | undefined) ??
+    ((sellDetails?.review_notes as string | null | undefined) || null);
+  const stoppedReason =
+    state === "rejected"
+      ? (recordedReason ?? "GCE did not record a reason. Contact support for details.")
+      : state === "cancelled"
+        ? recordedReason
+        : null;
   const [cancelling, setCancelling] = useState(false);
 
   // Purchase document upload state
@@ -455,6 +475,14 @@ export function TransactionDetail({
           <Badge variant="outline" className="text-sm">
             {transactionKindLabel(kind as never)}
           </Badge>
+          {stoppedReason ? (
+            <RejectReasonDialog
+              trigger={<Button variant="outline">See reason</Button>}
+              title={state === "rejected" ? "Why this was not approved" : "Why this was cancelled"}
+              description="The reason GCE recorded for this transaction."
+              reason={stoppedReason}
+            />
+          ) : null}
           {papersStatus ? (
             <Badge variant="outline" className="text-sm">
               {PAPERS_STATUS_LABELS[papersStatus]}
@@ -888,6 +916,33 @@ export function TransactionDetail({
                   }
                 />
                 <DetailRow label="Review Notes" value={(sellDetails.review_notes as string) ?? "—"} />
+                {counterOffer ? (
+                  <section
+                    className="flex flex-col gap-1.5 rounded-md border bg-muted/30 p-3"
+                    aria-label="GCE counter-offer"
+                  >
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <span className="font-medium text-sm">GCE counter-offer</span>
+                      <span className="font-semibold text-base tabular-nums">
+                        ₱{counterOffer.price.toLocaleString()}
+                      </span>
+                    </div>
+                    {counterOffer.issue ? (
+                      <p className="text-muted-foreground text-xs">Inspection found: {counterOffer.issue}</p>
+                    ) : null}
+                    <p className="text-sm">
+                      <span className="text-muted-foreground">Remarks: </span>
+                      {counterOffer.remarks ?? "No remarks given."}
+                    </p>
+                    <p className="text-muted-foreground text-xs">
+                      {counterOffer.response === "agreed"
+                        ? "You accepted this price."
+                        : counterOffer.response === "refused"
+                          ? "You declined this price."
+                          : "Reply in the chat with GCE to accept or decline."}
+                    </p>
+                  </section>
+                ) : null}
               </section>
               <Separator />
             </>

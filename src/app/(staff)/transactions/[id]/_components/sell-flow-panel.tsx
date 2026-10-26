@@ -382,7 +382,7 @@ export function SellFlowPanel({
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="Explanation" htmlFor="profit-reason">
+            <Field label="Internal explanation (staff only)" htmlFor="profit-reason">
               <Textarea
                 id="profit-reason"
                 rows={2}
@@ -410,6 +410,20 @@ export function SellFlowPanel({
                     onChange={(e) => set("new_ceiling")(e.target.value)}
                   />
                 </Field>
+                <div className="sm:col-span-2">
+                  <Field label="Remarks for the seller" htmlFor="seller-remarks">
+                    <Textarea
+                      id="seller-remarks"
+                      rows={2}
+                      placeholder="Why the price changed, e.g. the timing belt needs replacing"
+                      value={form.seller_remarks ?? ""}
+                      onChange={(e) => set("seller_remarks")(e.target.value)}
+                    />
+                  </Field>
+                  <p className="mt-1 text-muted-foreground text-xs">
+                    The seller sees the recalculated price and these remarks once the CEO approves.
+                  </p>
+                </div>
               </div>
             ) : null}
             <Button
@@ -424,6 +438,7 @@ export function SellFlowPanel({
                     profitability_reason: form.profitability_reason,
                     recalculated_price: form.recalculated_price,
                     new_ceiling: form.new_ceiling,
+                    seller_remarks: form.seller_remarks,
                   },
                   form.is_profitable === "yes" ? "Revised ceiling sent to the CEO." : "Offer cancelled.",
                 )
@@ -448,6 +463,9 @@ export function SellFlowPanel({
                 {formatCurrency(Number(report.new_ceiling))}
                 {report.seller_response ? ` · Seller ${String(report.seller_response)}` : ""}
               </p>
+            ) : null}
+            {report.seller_remarks ? (
+              <p className="text-xs">Remarks for the seller: {String(report.seller_remarks)}</p>
             ) : null}
             {isMs && state === "approved" && reportProposal?.decision === "approved" && !report.seller_response ? (
               <div className="flex gap-2 pt-1">

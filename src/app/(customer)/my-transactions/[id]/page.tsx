@@ -102,6 +102,30 @@ export default async function MyTransactionDetailPage({ params }: { readonly par
     .eq("account_id", user.user.id)
     .maybeSingle();
 
+  // T03 C13: GCE's counter-offer after an inspection issue, once the CEO approved it. Customers cannot read
+  // issue reports (they hold the internal ceiling), so only the seller-facing columns are read here,
+  // with the service role, for a transaction already limited to this customer above.
+  const { data: counterReport } =
+    (transaction as Record<string, unknown>).transaction_kind === "sell"
+      ? await createAdminClient()
+          .from("inspection_issue_reports")
+          .select("recalculated_price, seller_remarks, issue_found, seller_response, vehicle_price_proposals(decision)")
+          .eq("transaction_id", id)
+          .eq("is_profitable", true)
+          .maybeSingle()
+      : { data: null };
+  const counterApproved =
+    (counterReport?.vehicle_price_proposals as { decision?: string } | null)?.decision === "approved";
+  const counterOffer =
+    counterReport && counterApproved && counterReport.recalculated_price !== null
+      ? {
+          price: Number(counterReport.recalculated_price),
+          remarks: (counterReport.seller_remarks as string | null) ?? null,
+          issue: (counterReport.issue_found as string | null) ?? null,
+          response: (counterReport.seller_response as string | null) ?? null,
+        }
+      : null;
+
   // Selling step 5: the offer's negotiation thread with the Marketing Specialist.
   const { data: negotiationThread } = await supabase
     .from("inquiries")
@@ -121,6 +145,7 @@ export default async function MyTransactionDetailPage({ params }: { readonly par
         viewingArrangements={(viewingArrangements as Record<string, unknown>[]) ?? []}
         autofill={autofill}
         negotiationThreadId={(negotiationThread as { id: string } | null)?.id ?? null}
+        counterOffer={counterOffer}
         gceVisitOnly={standing?.gce_visit_only === true}
         delivery={
           deliveryCase

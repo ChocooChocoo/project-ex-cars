@@ -5,6 +5,7 @@ import { z } from "zod";
 import type { InquiryThreadData } from "@/components/inquiries/types";
 import { authorizeAction } from "@/lib/auth/action-guard";
 import { type ActionResult, failure, notFound, success } from "@/lib/auth/action-result";
+import { withSignedMessageAttachments } from "@/lib/inquiries/attachments-server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const inquiryIdSchema = z.string().uuid();
@@ -51,7 +52,7 @@ export async function getStaffInquiryThread(inquiryId: string): Promise<ActionRe
 
   return success({
     inquiry: inquiry as Record<string, unknown>,
-    messages: (messages as Record<string, unknown>[]) ?? [],
+    messages: await withSignedMessageAttachments((messages as Record<string, unknown>[]) ?? []),
     arrangement: arrangement as Record<string, unknown> | null,
   });
 }

@@ -2,11 +2,24 @@
 
 import { revalidatePath } from "next/cache";
 
+import { z } from "zod";
+
 import type { InquiryThreadData } from "@/components/inquiries/types";
 import { type ActionResult, failure, notAuthenticated, notFound } from "@/lib/auth/action-result";
 import { getProfileAutoFill } from "@/lib/autofill";
+import {
+  type AttachmentMeta,
+  attachmentError,
+  MESSAGE_ATTACHMENT_TYPES,
+  MESSAGE_ATTACHMENTS_BUCKET,
+  type SignedAttachment,
+} from "@/lib/inquiries/attachments";
+import { signAttachments, withSignedMessageAttachments } from "@/lib/inquiries/attachments-server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase, createServerSupabaseClient } from "@/lib/supabase/server";
 import { createInquirySchema, scheduleArrangementSchema, sendMessageSchema } from "@/lib/validation/inquiries";
+
+import { randomUUID } from "node:crypto";
 
 export async function createInquiry(formData: FormData) {
   const supabase = await createServerSupabaseClient();
@@ -70,13 +83,48 @@ export async function getInquiryThread(inquiryId: string): Promise<ActionResult<
     ok: true,
     data: {
       inquiry: inquiry as Record<string, unknown>,
-      messages: (messages as Record<string, unknown>[]) ?? [],
+      messages: await withSignedMessageAttachments((messages as Record<string, unknown>[]) ?? []),
       arrangement: arrangement as Record<string, unknown> | null,
     },
   };
 }
 
-export async function sendMessageWithAttachment(formData: FormData) {
+// T03 C16: step 1 of sending a file. Checks the sender can read the thread, then returns a signed
+// upload URL in the thread's folder; the browser uploads straight to storage.
+export async function prepareMessageAttachment(
+  inquiryId: string,
+  file: AttachmentMeta,
+): Promise<{ error: string } | { path: string; token: string }> {
+  const supabase = await createServerSupabaseClient();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+  if (!z.string().uuid().safeParse(inquiryId).success) return { error: "Invalid conversation." };
+
+  const fileError = attachmentError(file);
+  if (fileError) return { error: fileError };
+
+  const { data: inquiry } = await supabase.from("inquiries").select("id").eq("id", inquiryId).maybeSingle();
+  if (!inquiry) return { error: "You cannot send files in this conversation." };
+
+  const path = `${inquiryId}/${randomUUID()}.${MESSAGE_ATTACHMENT_TYPES[file.type]}`;
+  const { data, error } = await createAdminClient()
+    .storage.from(MESSAGE_ATTACHMENTS_BUCKET)
+    .createSignedUploadUrl(path);
+  if (error || !data) return { error: error?.message ?? "Could not prepare the upload." };
+  return { path: data.path, token: data.token };
+}
+
+const attachmentFieldsSchema = z.object({
+  attachment_path: z.string().min(1),
+  attachment_name: z.string().trim().min(1).max(200),
+  attachment_type: z.string(),
+  attachment_size: z.coerce.number().int(),
+});
+
+// Step 2: the message, with the already uploaded file when there is one. Errors come back to the UI.
+export async function sendMessageWithAttachment(
+  formData: FormData,
+): Promise<{ error: string } | { success: true; attachment: SignedAttachment | null }> {
   const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
@@ -88,9 +136,26 @@ export async function sendMessageWithAttachment(formData: FormData) {
 
   const inquiryId = parsed.data.inquiry_id;
   const text = parsed.data.message_text || "";
-  const file = formData.get("file") as File | null;
+  const hasFile = !!formData.get("attachment_path");
+  if (!text.trim() && !hasFile) return { error: "Message cannot be empty" };
 
-  if (!text?.trim() && !file) return { error: "Message cannot be empty" };
+  let file: z.infer<typeof attachmentFieldsSchema> | null = null;
+  if (hasFile) {
+    const fields = attachmentFieldsSchema.safeParse(Object.fromEntries(formData));
+    if (!fields.success || !fields.data.attachment_path.startsWith(`${inquiryId}/`)) {
+      return { error: "Invalid attachment. Please attach the file again." };
+    }
+    const fileError = attachmentError({
+      name: fields.data.attachment_name,
+      type: fields.data.attachment_type,
+      size: fields.data.attachment_size,
+    });
+    if (fileError) return { error: fileError };
+    file = fields.data;
+  }
+  const removeUpload = async () => {
+    if (file) await createAdminClient().storage.from(MESSAGE_ATTACHMENTS_BUCKET).remove([file.attachment_path]);
+  };
 
   const { data: message, error } = await supabase
     .from("inquiry_messages")
@@ -102,27 +167,47 @@ export async function sendMessageWithAttachment(formData: FormData) {
     .select("id")
     .single();
 
-  if (error) return { error: error.message };
+  if (error) {
+    await removeUpload();
+    return { error: error.message };
+  }
 
-  if (file && file.size > 0) {
-    const fileExt = file.name.split(".").pop() ?? "bin";
-    const storagePath = `${inquiryId}/${message.id}-${Date.now()}.${fileExt}`;
-
-    const { error: uploadError } = await supabase.storage.from("message-attachments").upload(storagePath, file);
-
-    if (!uploadError) {
-      await supabase.from("message_attachments").insert({
+  let attachment: SignedAttachment | null = null;
+  if (file) {
+    const { data: row, error: attachmentInsertError } = await supabase
+      .from("message_attachments")
+      .insert({
         message_id: message.id,
-        storage_path: storagePath,
-        original_name: file.name,
-        mime_type: file.type || null,
-      });
+        file_kind: file.attachment_type.startsWith("image/") ? "image" : "file",
+        storage_path: file.attachment_path,
+        original_name: file.attachment_name,
+        file_size: file.attachment_size,
+        uploader_id: user.user.id,
+      })
+      .select("*")
+      .single();
+    if (attachmentInsertError || !row) {
+      await removeUpload();
+      return {
+        error: `Your message was sent, but the file was not: ${attachmentInsertError?.message ?? "unknown error"}`,
+      };
     }
+    [attachment] = await signAttachments([row as Record<string, unknown>]);
   }
 
   revalidatePath(`/inquiries/${inquiryId}`);
   revalidatePath(`/dashboard/inquiries/${inquiryId}`);
-  return { success: true };
+  return { success: true, attachment };
+}
+
+// A file another participant just sent (realtime): read under RLS, then signed.
+export async function getMessageAttachment(attachmentId: string): Promise<SignedAttachment | null> {
+  if (!z.string().uuid().safeParse(attachmentId).success) return null;
+  const supabase = await createServerSupabaseClient();
+  const { data: row } = await supabase.from("message_attachments").select("*").eq("id", attachmentId).maybeSingle();
+  if (!row) return null;
+  const [attachment] = await signAttachments([row as Record<string, unknown>]);
+  return attachment ?? null;
 }
 
 export async function sendMessage(formData: FormData) {
