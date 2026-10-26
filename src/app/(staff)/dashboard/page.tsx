@@ -7,7 +7,7 @@ import { MetricCards } from "./_components/metric-cards";
 import { PerformanceOverview } from "./_components/performance-overview";
 import { Phase6Overview } from "./_components/phase6-overview";
 import { ReconditioningOverview } from "./_components/reconditioning-overview";
-import { SubscriberOverview } from "./_components/subscriber-overview";
+import { getDashboardData } from "./dashboard-data";
 
 export default async function Page() {
   await requireRole(STAFF_ROLES);
@@ -15,6 +15,7 @@ export default async function Page() {
   const isCeo = role === "ceo";
 
   await Promise.all([checkAndNotifyDueInstallments(), checkAndNotifyOverdueReviews()]);
+  const summary = await getDashboardData(role);
 
   return (
     <div className="@container/main flex flex-col gap-4 md:gap-6">
@@ -29,10 +30,9 @@ export default async function Page() {
           <Phase6Overview />
         </section>
       ) : null}
-      <MetricCards />
-      <PerformanceOverview />
+      <MetricCards summary={summary} />
+      <PerformanceOverview monthly={summary.monthly} />
       <ReconditioningOverview />
-      <SubscriberOverview />
     </div>
   );
 }
