@@ -93,4 +93,22 @@ describe("TransactionDocumentsCard (T03 SM1, HA1, HA3)", () => {
 
     expect(screen.queryByRole("button", { name: /Verify/ })).not.toBeInTheDocument();
   });
+
+  it("shows a failed auto-check next to the manual Verify control, which stays available", () => {
+    renderCard([{ ...pendingId, auto_check_status: "failed", auto_check_detail: "Name mismatch" }]);
+
+    expect(screen.getByText("Auto-check: failed")).toBeInTheDocument();
+    expect(screen.getByText("Name mismatch")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Verify" })).toBeInTheDocument();
+  });
+
+  it("shows the manual review fallback, and nothing for documents never auto-checked", () => {
+    renderCard([
+      { ...pendingId, auto_check_status: "manual_review" },
+      { ...pendingId, id: "id-2" },
+    ]);
+
+    expect(screen.getAllByText(/Auto-check:/)).toHaveLength(1);
+    expect(screen.getByText("Auto-check: needs manual review")).toBeInTheDocument();
+  });
 });

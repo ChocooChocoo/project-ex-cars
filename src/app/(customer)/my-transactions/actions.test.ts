@@ -12,6 +12,12 @@ const { eq, insert, maybeSingle, select, upsert, getUser, from } = vi.hoisted(()
 });
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+const { after, autoCheckDocument } = vi.hoisted(() => ({
+  after: vi.fn(),
+  autoCheckDocument: vi.fn(),
+}));
+vi.mock("next/server", () => ({ after }));
+vi.mock("@/lib/verification/verify-document", () => ({ autoCheckDocument }));
 vi.mock("@/lib/supabase/server", () => ({
   createServerSupabaseClient: vi.fn(async () => ({
     auth: { getUser },
@@ -113,6 +119,34 @@ describe("saveBuyDetails ownership guard", () => {
 
     await expect(uploadPurchaseDocument(form)).resolves.toEqual({ success: true });
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({ document_kind: "proof_of_billing", id_type: null }));
+  });
+
+  it("saves a valid ID even when the auto-check fails, and runs the check after the response", async () => {
+    maybeSingle.mockResolvedValue({
+      data: { id: transactionId, customer_id: customerId, transaction_kind: "buy" },
+      error: null,
+    });
+    from.mockImplementation((table: string) => {
+      if (table === "transactions") return { select };
+      if (table === "transaction_documents") {
+        return { select: () => ({ eq: async () => ({ data: [] }) }), insert };
+      }
+      throw new Error(`Unexpected table: ${table}`);
+    });
+    autoCheckDocument.mockRejectedValue(new Error("provider down"));
+    const path = `${transactionId}/valid_id-1.png`;
+    const form = new FormData();
+    form.set("transaction_id", transactionId);
+    form.set("document_kind", "valid_id");
+    form.set("id_type", "drivers_license");
+    form.set("storage_path", path);
+
+    await expect(uploadPurchaseDocument(form)).resolves.toEqual({ success: true });
+    expect(autoCheckDocument).not.toHaveBeenCalled();
+    expect(after).toHaveBeenCalledTimes(1);
+
+    await expect(after.mock.calls[0][0]()).rejects.toThrow("provider down");
+    expect(autoCheckDocument).toHaveBeenCalledWith(transactionId, path, "valid_id", "drivers_license");
   });
 });
 
