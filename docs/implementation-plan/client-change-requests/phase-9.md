@@ -108,6 +108,22 @@ have a working Profile page (C15); images and files send in My Inquiries (C16).
 | Console | 0 errors; one dev-only LCP hint for the chat photo |
 | MCP, See reason | rejected `31b0bd96…` → "Delivery address is not serviceable"; rejected without a reason → fallback text; cancelled `efd8f546…` → "Vehicle sold to another buyer"; Close works |
 
+### Live site walk (2026-10-27)
+
+Playwright MCP on https://global-exchange-car.vercel.app (`main` at `e8426b6`, same hosted Supabase project).
+Test records are tagged `LIVE-QA`.
+
+| Role | Checked | Result |
+| --- | --- | --- |
+| Customer profile | "Phone must be at least 10 characters." for 12345; saved 09179990000, kept after reload, then restored to 09171234567 | pass |
+| Password | Wrong current password → "Your current password is not correct." | pass |
+| Attachments (customer, Camry inquiry) | 11 MB file → "Files must be 10 MB or smaller."; photo + PDF sent, still there after reload; photo opens large | pass |
+| Attachments (Marketing, sell chat of `c9096cad`) | Sent PDF + photo; after reload the photo loads and the PDF returns 200 `application/pdf` | pass |
+| Counter-offer (seller, `db84a236`) | "GCE counter-offer ₱450,133 · Inspection found: … · Remarks: … · You accepted this price." | pass |
+| See reason | Rejected `31b0bd96` → "Delivery address is not serviceable"; Close works | pass |
+
+Not re-checked: staff profile page, cancelled-transaction reason.
+
 ## Files changed
 
 - `supabase/migrations/20261026130000_t03_customer_counter_offers_attachments.sql` (new), `.test.ts` (new)

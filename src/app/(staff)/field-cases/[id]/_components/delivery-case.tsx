@@ -66,7 +66,9 @@ export function DeliveryCase({
     fieldCase.mechanic_id,
     fieldCase.head_security_id,
   ].includes(userId);
-  const open = !["completed", "cancelled"].includes(fieldCase.state as string);
+  // Same rule as the server: a delivery whose sale is no longer approved takes no more team actions.
+  const open =
+    !["completed", "cancelled"].includes(fieldCase.state as string) && transaction.current_state === "approved";
   const isInformant = userRole === "confidential_informant" && fieldCase.assigned_confidential_informant === userId;
 
   async function send(

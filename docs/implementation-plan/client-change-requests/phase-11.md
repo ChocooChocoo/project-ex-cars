@@ -96,6 +96,24 @@ Completed 2026-10-27.
 | D1, delivered | after Mark Delivered the toggle is gone (checked after reload) and the buyer no longer sees the map link |
 | Guard trigger | a signed-in CI updating `price_status`, `updated_price`, `last_lat` directly: row updated, those columns unchanged |
 
+### Live site walk (2026-10-27)
+
+Playwright MCP on https://global-exchange-car.vercel.app (`main` at `e8426b6`, same hosted Supabase project).
+Test records are tagged `LIVE-QA`.
+
+| Role | Checked | Result |
+| --- | --- | --- |
+| CI, Displayed Price | Case `214fc4ca`: ₱830,000, discount ₱20,000 → "Price updated. The office was notified."; agreed price ₱850,000 → ₱830,000; flag shown | pass |
+| Notifications | SM and CEO get "Price changed at inspection", linking to the transaction (`00b64b32`) that shows the flag | pass |
+| Flags | Field Cases list (CI, CEO): flag only on the two changed cases; Marketing transaction page shows flag + updated price | pass |
+| CI, Negotiated | Case `7d751431`: price fields hidden, "Confirmed price kept.", agreed price stays ₱800,000 | pass |
+| D1, sharing | Head Security on delivery `9f769e8b` (Arriving), location 14.2117, 121.1653: "Sharing. Last sent 12:48 PM"; not-dispatched case `3dde6083` has no switch | pass |
+| D1, viewers | SM and buyer (390px, no overflow): "Last seen Oct 27, 12:48 PM · Open in Google Maps" → `https://www.google.com/maps?q=14.2117,121.1653` | pass |
+| D1, denied | Mechanic: "Location access is blocked. …", switch stays off, Mark Delivered still shown | pass |
+| D1, delivered | Not reached: Mark Delivered → "This delivery is no longer active.", because the case's transaction (`17c97d27`) is Cancelled. The page still shows the switch and Mark Delivered, and the buyer still sees the map link on a cancelled transaction | finding |
+
+Screenshot: `test-results/live-phase11-buyer-390.png`.
+
 ## Files changed
 
 - `supabase/migrations/20261027110000_t03_field_case_price_and_location.sql` (new), `.test.ts` (new)

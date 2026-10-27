@@ -75,6 +75,23 @@ verification service when one is configured; without one, they are flagged for m
 | Provider throws | unit test: `manual_review`; action test: the upload returns success before the check runs |
 | Live, failed + throw | Two test-only adapters were added for one run and then removed: one returns `failed`, one throws. Set with `ORCR_VERIFY_PROVIDER=__e2e_fail` and `ID_VERIFY_PROVIDER=__e2e_throw`. Sell submit passed; the ORCR was saved as `failed`. Buyer ID uploads passed, including the resubmission; the server log shows the error 6 times; each ID was saved as `manual_review` ("The verification service did not answer."). Marketing Specialist saw the red "Auto-check: failed" badge with the detail, clicked Verify, and the ORCR became `verified` |
 
+### Live site walk (2026-10-27)
+
+Playwright MCP on https://global-exchange-car.vercel.app (`main` at `e8426b6`, same hosted Supabase project).
+Test records are tagged `LIVE-QA`.
+
+| Role | Checked | Result |
+| --- | --- | --- |
+| Sell flow | New ORCR (`c9096cad`) shows "Auto-check: needs manual review · No verification service is set up." for SM and Marketing | pass |
+| Marketing | Verify on that ORCR → "Document verified."; badge stays | pass |
+| Buy flow | Customer uploaded 2 IDs on `d03bf62c` and submitted; SM sees "Auto-check: needs manual review" on both, with Verify and Ask to resubmit | pass |
+| Staff upload | ID uploaded by the SM gets no badge (as planned) | pass |
+| Failed / throw adapters | Skipped: needs Vercel env changes | n/a |
+
+Note: staff (SM and CEO) get a 404 for a buy transaction until the customer submits it.
+
+Screenshots: `test-results/live-phase10-*.png`.
+
 ## Files changed
 
 - `supabase/migrations/20261027100000_t03_document_auto_verification.sql` (new), `.test.ts` (new)

@@ -855,7 +855,7 @@ export function TransactionDetail({
                     );
                   })}
                 </ol>
-                {delivery?.status === "in_transit" || delivery?.status === "arriving" ? (
+                {state === "approved" && (delivery?.status === "in_transit" || delivery?.status === "arriving") ? (
                   <DeliveryLastSeen lat={delivery.last_lat} lng={delivery.last_lng} at={delivery.last_located_at} />
                 ) : null}
                 {delivery?.delay_note ? (

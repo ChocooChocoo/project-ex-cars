@@ -85,6 +85,17 @@ the app or directly against the database (R2, R3), and loses Field Cases (AM6).
 The client checks used an unknown role key and an invalid role name, so a passed guard ends in an error and no
 data changed.
 
+### Live site walk (2026-10-27)
+
+Playwright MCP on https://global-exchange-car.vercel.app (`main` at `e8426b6`, same hosted Supabase project).
+Test records are tagged `LIVE-QA`.
+
+| Role | Checked | Result |
+| --- | --- | --- |
+| Account Manager | No Roles / Field Cases in the sidebar; `/account_manager/roles` and `/account_manager/field-cases` → `/unauthorized`; walk-in dialog opens; Staff Records row menu has Edit | pass |
+| CEO | Create Walk-In, Field Cases, Roles in the sidebar; Roles page has Create Role and Edit; walk-in dialog opens | pass |
+| DB guard calls | Skipped: same database as the local run, already checked | n/a |
+
 ## Files changed
 
 - `src/lib/auth/roles.ts`, `roles.ceo.test.ts` (new)

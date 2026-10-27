@@ -94,6 +94,24 @@ open a payment's proof photo before verifying (HA2) and rejects with a reason in
 
 Screenshots: `test-results/mcp-phase6-*.png`.
 
+### Live site walk (2026-10-27)
+
+Playwright MCP on https://global-exchange-car.vercel.app (`main` at `e8426b6`, same hosted Supabase project).
+Test records are tagged `LIVE-QA`.
+
+| Role | Checked | Result |
+| --- | --- | --- |
+| Sales Manager | Documents 3 per row (x=326/684/1043); recorded ₱1,111 and ₱2,222 with photos on E2E transaction `642417bd`; no Verify/Reject for SM | pass |
+| Head Accountant | Photo opens large; Verify ₱2,222 → "Verified"; Reject ₱1,111 (confirm disabled until a reason) → "Payment rejected. The buyer is notified." | pass |
+| Totals | Total paid ₱2,222 (rejected left out); Rejected 1 · not counted | pass |
+| Buyer | Notification opens the transaction; Financial Summary "Cash · Not accepted ₱1,111.00, Reason: LIVE-QA: …" | pass |
+| Ask to resubmit (SM) | Modal "Ask for a new Valid ID?", confirm disabled when empty → "Resubmission requested. The uploader is notified." → "To fix: …" | pass |
+
+Note: a reject dialog opened within 3 s of a Verify closed on its own once (the page refresh after Verify). Opened
+again after the refresh, it worked.
+
+Screenshot: `test-results/live-phase6-ha-payments.png`.
+
 ## Notes
 
 - Found and fixed during the walk: the "Total paid" caption said "all records" (now "verified and pending"); the

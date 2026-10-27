@@ -99,6 +99,8 @@ export function RequestCarForm() {
       other_preferences: "",
     },
   });
+  // Stays true after a successful submit so a slow redirect cannot be beaten by a second click (duplicate request).
+  const [sent, setSent] = useState(false);
   const budget = watch("budget");
   const { field: brand } = useController({ control, name: "requested_make" });
   const { field: model } = useController({ control, name: "requested_model" });
@@ -117,6 +119,7 @@ export function RequestCarForm() {
     if (result.error) {
       toast.error(result.error);
     } else if (result.id) {
+      setSent(true);
       toast.success("Request submitted!");
       router.push(`/my-transactions/${result.id}`);
     }
@@ -227,8 +230,8 @@ export function RequestCarForm() {
             <Button type="button" variant="outline" onClick={() => router.back()}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Submitting..." : "Submit Request"}
+            <Button type="submit" disabled={isSubmitting || sent}>
+              {sent ? "Opening your request..." : isSubmitting ? "Submitting..." : "Submit Request"}
             </Button>
           </div>
         </form>

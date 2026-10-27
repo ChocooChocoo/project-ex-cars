@@ -48,6 +48,13 @@ async function assignedDelivery(fieldCaseId: unknown) {
     return { error: "Only the assigned delivery team can update this delivery." } as const;
   }
   if (["completed", "cancelled"].includes(fieldCase.state)) return { error: "This delivery is closed." } as const;
+  // A cancelled or rejected sale can leave its delivery case open; the team may not act on it.
+  const { data: tx } = await admin
+    .from("transactions")
+    .select("current_state")
+    .eq("id", fieldCase.transaction_id)
+    .maybeSingle();
+  if (tx?.current_state !== "approved") return { error: "This delivery is no longer active." } as const;
   return { admin, role, userId: data.user.id, fieldCase };
 }
 

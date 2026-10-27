@@ -90,6 +90,23 @@ Screenshots: `test-results/client-phase1-*.png`.
 Screenshots: `test-results/mcp-phase1-*.png`. The dashboard still shows template metric cards and the mock
 "18,426 Customers" table; that is Phase 4 (G3) scope, not a Phase 1 regression.
 
+### Live site walk (2026-10-27)
+
+Playwright MCP on https://global-exchange-car.vercel.app (`main` at `e8426b6`, same hosted Supabase project).
+Test records are tagged `LIVE-QA`.
+
+| Role | Checked | Result |
+| --- | --- | --- |
+| Sales Manager | "Dashboard" label, no "Default"; Vehicles headers end at Mileage (no Actions); "GCE Admin" → `/sales_manager/dashboard`; no notification list | pass |
+| Marketing Specialist | Actions column; menu Edit, Propose Price, Publish, Archive | pass |
+| CEO | Brand → `/ceo/dashboard`; Vehicles view has Actions with Delete; no notification list | pass |
+| Account Manager | "8 Accounts", no customer rows; Inventory Allocation without a select, amounts in ₱ | pass |
+| Head Accountant | "Dashboard" label, brand → `/head_accountant/dashboard` | pass |
+| Customer | "Global Car Exchange" → `/customer/showroom`; 390px: label fits (159/159 px), no page overflow | pass |
+| Console | React error #418 (hydration text mismatch) on most pages: the server renders dates in UTC, the browser in local time (e.g. "4:48 AM" vs "12:48 PM"). Live only, because Vercel runs in UTC. Not caused by this phase | finding |
+
+Screenshots: `test-results/live-phase1-*.png`.
+
 ## Files changed
 
 - `src/navigation/sidebar/sidebar-items.ts`
