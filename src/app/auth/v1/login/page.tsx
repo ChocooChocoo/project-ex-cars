@@ -4,7 +4,6 @@ import { GceLogo } from "@/components/gce-logo";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 import { LoginForm } from "../../_components/login-form";
-import { GoogleButton } from "../../_components/social-auth/google-button";
 
 export default async function LoginV1({ searchParams }: { readonly searchParams: Promise<{ error?: string }> }) {
   const { error } = await searchParams;
@@ -38,7 +37,6 @@ export default async function LoginV1({ searchParams }: { readonly searchParams:
               </Alert>
             )}
             <LoginForm />
-            <GoogleButton className="w-full" variant="outline" />
             <p className="text-center text-muted-foreground text-xs">
               Don&apos;t have an account?{" "}
               <Link prefetch={false} href="register" className="text-primary">
