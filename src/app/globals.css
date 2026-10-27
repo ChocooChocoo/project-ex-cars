@@ -142,6 +142,11 @@ These serve as the fallback; there is no separate default.css file. */
   html {
     @apply font-sans;
   }
+
+  /* T04 A1: PasswordInput owns the reveal button; hide Edge's native one so only one shows. */
+  input::-ms-reveal {
+    display: none;
+  }
 }
 
 @layer utilities {
