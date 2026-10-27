@@ -43,8 +43,10 @@ optional and untested items remain.
 | 11 | Delivery on cancelled transaction still showed sharing, Mark Delivered and map link | Fixed, works on live |
 | 2 | Database permission checks | Not tested (same DB as local) |
 | 10 | OCR.space auto-check on live (sample OR/CR, sample passport, blank image as license) | Works on live after the Vercel env fix + redeploy (07:03 UTC): OR/CR "verified", passport "verified", blank license "failed" with Verify / Ask to resubmit still shown (`9a083af1`, `8bbfca3d`) |
-| 11 | Switch gone after Delivered | Not tested (no active delivery) |
-| 7, 9 | Walk-in sign-in, staff profile, cancelled reason | Not tested |
+| 11 | Switch gone after Delivered | Skipped on live: the only open delivery (`3dde6083`) is a seeded sale (2021 Honda HR-V GCE-011); a new one needs a real PayMongo downpayment. Checked locally in phase 11 |
+| 7 | Walk-in sign-in (`e2e.walkin.live@gce.local`) | Works: lands on `/customer/showroom` as "LIVE-QA Walkin" |
+| 9 | Staff profile (CEO) | Works: user menu → `/ceo/profile` in staff layout; no overflow at desktop or 390px |
+| 9 | Cancelled reason (`efd8f546`) | Works: "Why this was cancelled · Vehicle sold to another buyer"; Close works |
 
 ## Fixes applied
 
