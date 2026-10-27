@@ -65,6 +65,24 @@ describe("FieldCasesClient template table", () => {
     expect(within(menu).getByRole("menuitem", { name: "Update" })).toBeInTheDocument();
   });
 
+  it("shows the created date formatted, not the raw timestamp", () => {
+    render(
+      <FieldCasesClient
+        cases={[fieldCase]}
+        canUpdate={false}
+        canCreate={false}
+        canAssignMechanic={false}
+        informants={[]}
+        mechanics={[]}
+        userRole="sales_manager"
+      />,
+    );
+
+    expect(screen.getByRole("columnheader", { name: "Created" })).toBeInTheDocument();
+    expect(screen.getByText("Aug 1, 2026")).toBeInTheDocument();
+    expect(screen.queryByText(fieldCase.created_at)).not.toBeInTheDocument();
+  });
+
   it("hides Assign Mechanic when canAssignMechanic is false", async () => {
     render(
       <FieldCasesClient
