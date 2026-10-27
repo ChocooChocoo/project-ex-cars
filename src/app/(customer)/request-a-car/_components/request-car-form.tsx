@@ -121,7 +121,9 @@ export function RequestCarForm() {
     } else if (result.id) {
       setSent(true);
       toast.success("Request submitted!");
-      router.push(`/my-transactions/${result.id}`);
+      // Full page load, not router.push: the budget lookup (a server action) can finish after the push and its
+      // refresh of this page cancels the client navigation, leaving the buyer on the filled form.
+      window.location.assign(`/my-transactions/${result.id}`);
     }
   }
 
