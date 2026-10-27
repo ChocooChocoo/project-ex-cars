@@ -590,7 +590,7 @@ export async function recordPayment(formData: FormData) {
     }
   }
 
-  // T03 HA2: an optional photo of the cheque or deposit slip, viewed by the Head Accountant before verifying.
+  // T03 HA2: an optional photo of the deposit slip or receipt, viewed by the Head Accountant before verifying.
   const proof = formData.get("proof");
   let proofPath: string | null = null;
   if (proof instanceof File && proof.size > 0) {

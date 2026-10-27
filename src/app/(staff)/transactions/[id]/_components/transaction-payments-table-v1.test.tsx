@@ -12,14 +12,14 @@ const base = {
   id: "p1",
   amount: 20000,
   payment_kind: "balance",
-  method: "cheque",
+  method: "bank_transfer",
   settlement_date: "2026-10-20",
   verified_by: null,
   rejected_at: null,
   rejection_reason: null,
   paymongo_checkout_id: null,
   paymongo_payment_id: null,
-  proof_url: "https://example.test/cheque.jpg",
+  proof_url: "https://example.test/deposit-slip.jpg",
 };
 
 function renderTable(payments: Record<string, unknown>[], canReview = true) {
@@ -37,7 +37,7 @@ function renderTable(payments: Record<string, unknown>[], canReview = true) {
 }
 
 describe("TransactionPaymentsTableV1 (T03 HA2, HA3)", () => {
-  it("opens the cheque photo in a larger view before verifying", () => {
+  it("opens the deposit slip photo in a larger view before verifying", () => {
     renderTable([base]);
 
     fireEvent.click(screen.getByRole("button", { name: /Open payment proof/ }));
@@ -53,21 +53,29 @@ describe("TransactionPaymentsTableV1 (T03 HA2, HA3)", () => {
     const confirm = within(dialog).getByRole("button", { name: "Reject payment" });
     expect(confirm).toBeDisabled();
 
-    fireEvent.change(within(dialog).getByLabelText("Reason"), { target: { value: "Amount on the cheque is wrong" } });
+    fireEvent.change(within(dialog).getByLabelText("Reason"), {
+      target: { value: "Amount on the deposit slip is wrong" },
+    });
     fireEvent.click(confirm);
 
-    await waitFor(() => expect(onRejectPayment).toHaveBeenCalledWith("p1", "Amount on the cheque is wrong"));
+    await waitFor(() => expect(onRejectPayment).toHaveBeenCalledWith("p1", "Amount on the deposit slip is wrong"));
   });
 
   it("shows a rejected payment with its reason, without actions, and leaves it out of the total", () => {
     renderTable([
-      { ...base, id: "p1", amount: 20000, rejected_at: "2026-10-26T03:00:00Z", rejection_reason: "Bounced cheque" },
+      {
+        ...base,
+        id: "p1",
+        amount: 20000,
+        rejected_at: "2026-10-26T03:00:00Z",
+        rejection_reason: "Transfer was reversed",
+      },
       { ...base, id: "p2", amount: 5000, proof_url: null },
     ]);
 
     // The badge on the row, plus the "Rejected" count in the summary strip.
     expect(screen.getAllByText("Rejected")).toHaveLength(2);
-    expect(screen.getByText("Bounced cheque")).toBeInTheDocument();
+    expect(screen.getByText("Transfer was reversed")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Reject" })).toHaveLength(1);
     // ₱5,000.00 twice: the counted row and the total; the rejected ₱20,000 is not added.
     expect(screen.getAllByText("₱5,000.00")).toHaveLength(2);

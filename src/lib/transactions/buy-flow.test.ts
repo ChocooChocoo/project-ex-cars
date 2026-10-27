@@ -7,6 +7,8 @@ import {
   contractReadyForSale,
   contractTemplate,
   deliveryBalanceNote,
+  FINANCING_TERM_MONTHS,
+  financedTotal,
   financingFullyPaid,
   isBusinessSlot,
   isDeliveryCashRequest,
@@ -92,7 +94,13 @@ describe("§7–9 bank transfer", () => {
     expect(isHalfwayCashRequest({ payment_method: "bank_transfer", arrangement_kind: "meetup" })).toBe(true);
     expect(isDeliveryCashRequest({ payment_method: "bank_transfer", arrangement_kind: "delivery" })).toBe(true);
     expect(isQueuedRequest({ payment_method: "bank_transfer", arrangement_kind: "gce_visit" })).toBe(false);
-    expect(isOnsiteCashRequest({ payment_method: "cheque", arrangement_kind: "gce_visit" })).toBe(false);
+    expect(isOnsiteCashRequest({ payment_method: "down_payment", arrangement_kind: "gce_visit" })).toBe(false);
+  });
+
+  it("treats a PayMongo full payment like Cash", () => {
+    expect(isOnsiteCashRequest({ payment_method: "paymongo", arrangement_kind: "gce_visit" })).toBe(true);
+    expect(isHalfwayCashRequest({ payment_method: "paymongo", arrangement_kind: "meetup" })).toBe(true);
+    expect(deliveryBalanceNote("paymongo", "buyer")).toBe("The balance is paid through PayMongo on delivery.");
   });
 
   it("words the delivery balance by method", () => {
@@ -103,6 +111,18 @@ describe("§7–9 bank transfer", () => {
     expect(deliveryBalanceNote("financing", "team")).toBe(
       "Collect nothing on delivery: the balance is financed by GCE.",
     );
+  });
+});
+
+describe("T04 financing", () => {
+  it("adds a flat 10% to the price", () => {
+    expect(financedTotal(1_000_000)).toBe(1_100_000);
+    expect(financedTotal(499_999)).toBe(549_999);
+    expect(financedTotal(0)).toBe(0);
+  });
+
+  it("offers 6, 12, 24, 36 and 60 months", () => {
+    expect(FINANCING_TERM_MONTHS).toEqual([6, 12, 24, 36, 60]);
   });
 });
 

@@ -50,7 +50,7 @@ export default async function TransactionDetailPage({ params }: { readonly param
     .eq("transaction_id", id)
     .order("settlement_date", { ascending: false });
 
-  // T03 HA2: sign the cheque / deposit-slip photo the same way as document images; the path never reaches the page.
+  // T03 HA2: sign the deposit slip / receipt photo the same way as document images; the path never reaches the page.
   const paymentRows = (
     await withSignedTransactionDocumentUrls(
       supabase.storage,

@@ -164,8 +164,8 @@ export async function saveBuyDetails(formData: FormData) {
 
   const {
     transaction_id: transactionId,
-    payment_method,
-    final_price,
+    payment_option: pickedOption,
+    payment_method: pickedMethod,
     arrangement_kind,
     schedule,
     location,
@@ -174,6 +174,11 @@ export async function saveBuyDetails(formData: FormData) {
     agree_delivery_terms,
     requested_term_months,
   } = parsed.data;
+
+  // T04 P5: Financing keeps the method 'financing', which the financing flow reads. Full Payment needs a real method.
+  const payment_option = pickedOption || (pickedMethod === "financing" ? "financing" : "full");
+  if (payment_option === "full" && pickedMethod === "financing") return { error: "Select a payment method." };
+  const payment_method = payment_option === "financing" ? "financing" : pickedMethod;
 
   const { data: transaction } = await supabase
     .from("transactions")
@@ -225,20 +230,21 @@ export async function saveBuyDetails(formData: FormData) {
       return { error: "Read the delivery terms and tick I agree." };
     }
   }
-  // A financed meet-up: the buyer says how long they want to pay.
-  const financedMeetup = payment_method === "financing" && arrangement_kind === "meetup";
-  if (financedMeetup && !requested_term_months) return { error: "Choose a payment term." };
+  // T04 P7: every financing request says how long the buyer wants to pay.
+  const financing = payment_method === "financing";
+  if (financing && !requested_term_months) return { error: "Choose a payment term." };
 
   const { error } = await supabase.from("purchase_details").upsert(
     {
       transaction_id: transactionId,
+      payment_option,
       payment_method,
-      // A blank Final Price arrives as 0 (coerced ""); the sale is then at the Showroom price.
-      final_price: final_price || vehicle?.current_price || null,
+      // T04 P3: the buyer no longer types a price; the sale is at the Showroom price.
+      final_price: vehicle?.current_price || null,
       arrangement_kind: arrangement_kind || null,
       ...(acknowledge_condition === "yes" ? { condition_acknowledged_at: new Date().toISOString() } : {}),
       ...(needsDeliveryTerms && agree_delivery_terms ? { delivery_terms_agreed_at: new Date().toISOString() } : {}),
-      ...(financedMeetup ? { requested_term_months } : {}),
+      ...(financing ? { requested_term_months } : {}),
     },
     { onConflict: "transaction_id" },
   );
@@ -256,7 +262,8 @@ export async function saveBuyDetails(formData: FormData) {
       purchase_transaction_id: transactionId,
       arrangement_kind: arrangement_kind || "gce_visit",
       schedule: slot.toISOString(),
-      location: location || null,
+      // T04 P2: a GCE Visit happens at GCE, so it has no location.
+      location: arrangement_kind === "gce_visit" ? null : location || null,
       notes,
     });
 

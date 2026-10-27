@@ -50,6 +50,7 @@ export function FinancingPanel({
   arrangementKind = "gce_visit",
   signingReported = false,
   threadId = null,
+  defaultTotal,
 }: {
   readonly transactionId: string;
   readonly state: string;
@@ -61,10 +62,12 @@ export function FinancingPanel({
   readonly arrangementKind?: string;
   readonly signingReported?: boolean;
   readonly threadId?: string | null;
+  // T04 P6: the Showroom price plus 10%, prefilled for the Sales Manager.
+  readonly defaultTotal?: number;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-  const [form, setForm] = useState<Record<string, string>>({});
+  const [form, setForm] = useState<Record<string, string>>(defaultTotal ? { total_amount: String(defaultTotal) } : {});
   const isSales = ["sales_manager", "ceo"].includes(userRole);
   const termsState = (terms?.state as string | undefined) ?? null;
   // A meet-up takes no downpayment; a delivery's fee and downpayment are approved with the terms.
@@ -179,7 +182,7 @@ export function FinancingPanel({
               />
               <Field
                 id="fin-price"
-                label="Vehicle price (₱)"
+                label="Total with financing (₱)"
                 value={form.total_amount}
                 onChange={set("total_amount")}
                 type="number"

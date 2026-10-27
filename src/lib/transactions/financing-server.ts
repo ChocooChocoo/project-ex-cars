@@ -65,7 +65,7 @@ export async function loadFinancing(admin: Admin, transactionId: unknown) {
   const { data: tx } = await admin
     .from("transactions")
     .select(
-      "id, customer_id, vehicle_id, current_state, flow_status, transaction_kind, purchase_details(payment_method, arrangement_kind), payment_records(payment_kind, amount, verified_by)",
+      "id, customer_id, vehicle_id, current_state, flow_status, transaction_kind, purchase_details(payment_method, arrangement_kind, final_price), payment_records(payment_kind, amount, verified_by)",
     )
     .eq("id", id.data)
     .maybeSingle();

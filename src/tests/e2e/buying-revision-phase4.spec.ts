@@ -104,7 +104,7 @@ test.describe
       await expect(page.getByLabel("Initial Downpayment (₱)")).toHaveCount(0);
       const send = page.getByRole("button", { name: "Send to Head Accountant" });
       await page.getByLabel("Payment duration (months)").fill("36");
-      await page.getByLabel("Vehicle price (₱)").fill("500000");
+      await page.getByLabel("Total with financing (₱)").fill("500000");
       await page.getByLabel("Monthly payment (₱)").fill("13889");
       await page.getByLabel("First installment due").fill("2033-12-01");
       await expect(send).toBeDisabled();
@@ -230,7 +230,7 @@ test.describe
       // Not sent without the delivery fee.
       const send = page.getByRole("button", { name: "Send to Head Accountant" });
       await page.getByLabel("Payment duration (months)").fill("12");
-      await page.getByLabel("Vehicle price (₱)").fill("500000");
+      await page.getByLabel("Total with financing (₱)").fill("500000");
       await page.getByLabel("Downpayment (₱)").fill("100000");
       await page.getByLabel("Monthly payment (₱)").fill("33334");
       await page.getByLabel("First installment due").fill("2033-12-01");

@@ -10,8 +10,15 @@ export function activeBuyerIdCount(documents: DocumentLike[]): number {
 }
 
 // §7–9 (Phase 6 default, not yet in the source): a bank-transfer purchase follows the same steps as its
-// Cash counterpart in §2–4. The "Cash" predicates below cover both methods.
-export const DIRECT_PAYMENT_METHODS = ["cash", "bank_transfer"] as const;
+// Cash counterpart in §2–4. T04: so does a Full Payment through PayMongo. The "Cash" predicates below cover all three.
+export const DIRECT_PAYMENT_METHODS = ["cash", "bank_transfer", "paymongo"] as const;
+
+// T04 P6/P7: financing adds a flat 10% to the car's price, for every term.
+export const FINANCING_TERM_MONTHS = [6, 12, 24, 36, 60] as const;
+
+export function financedTotal(price: number): number {
+  return Math.round(price * 1.1);
+}
 
 export function isDirectPayment(details: { payment_method?: unknown } | null): boolean {
   return (DIRECT_PAYMENT_METHODS as readonly unknown[]).includes(details?.payment_method);
@@ -25,7 +32,7 @@ export function deliveryBalanceNote(method: unknown, audience: "buyer" | "team")
       ? "The balance is paid in monthly installments under your financing agreement."
       : "Collect nothing on delivery: the balance is financed by GCE.";
   }
-  const how = method === "bank_transfer" ? "by bank transfer" : "in cash";
+  const how = method === "bank_transfer" ? "by bank transfer" : method === "paymongo" ? "through PayMongo" : "in cash";
   return audience === "buyer"
     ? `The balance is paid ${how} on delivery.`
     : `Collect the remaining balance ${how} when the buyer accepts the car.`;

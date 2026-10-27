@@ -953,13 +953,14 @@ async function seedTransactions(users, vehicles) {
   const buyTxs = created.filter((t) => t.kind === "buy");
   const purchaseRows = buyTxs.map((t) => ({
     transaction_id: t.id,
-    payment_method: pick(["cash", "financing", "cheque", "down_payment"]),
+    payment_method: pick(["cash", "financing", "bank_transfer", "paymongo"]),
     final_price: randInt(500000, 1800000),
     arrangement_kind: pick(["delivery", "meetup", "gce_visit"]),
     document_check_state: t.state === "completed" ? "verified" : pick(["pending", "verified"]),
     checked_by: t.state === "completed" ? users.sales_manager : null,
     checked_at: t.state === "completed" ? iso(daysAgo(randInt(1, 9))) : null,
   }));
+  for (const row of purchaseRows) row.payment_option = row.payment_method === "financing" ? "financing" : "full";
   const purchases = await insert("purchase_details", purchaseRows);
   log("P5", "purchase_details", purchases.length);
 
@@ -1050,7 +1051,7 @@ async function seedTransactions(users, vehicles) {
           transaction_id: acc.tx.id,
           installment_id: inst.id,
           amount: inst.amount_due,
-          method: pick(["cash", "bank_transfer", "cheque"]),
+          method: pick(["cash", "bank_transfer", "paymongo"]),
           external_reference: `REF-${String(Math.floor(rand() * 100000)).padStart(5, "0")}`,
           recorded_by: users.head_accountant,
           verified_by: rand() < 0.8 ? users.head_accountant : null,
@@ -1065,7 +1066,7 @@ async function seedTransactions(users, vehicles) {
       transaction_id: t.id,
       installment_id: null,
       amount: randInt(500000, 1600000),
-      method: pick(["cash", "cheque", "bank_transfer"]),
+      method: pick(["cash", "paymongo", "bank_transfer"]),
       external_reference: `REF-${String(Math.floor(rand() * 100000)).padStart(5, "0")}`,
       recorded_by: users.head_accountant,
       verified_by: rand() < 0.8 ? users.head_accountant : null,

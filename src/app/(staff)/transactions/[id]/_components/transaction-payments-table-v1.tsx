@@ -152,7 +152,7 @@ export function TransactionPaymentsTableV1({
               }
               title="Reject this payment?"
               description={`${formatCurrency(Number(row.original.amount))} stays on record as rejected and stops counting toward what was paid. The buyer sees your reason.`}
-              placeholder="e.g. The amount on the cheque does not match"
+              placeholder="e.g. The amount on the deposit slip does not match"
               confirmLabel="Reject payment"
               onConfirm={(reason) => onRejectPayment(row.original.id as string, reason)}
             />
