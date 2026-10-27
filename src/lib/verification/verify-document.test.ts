@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { type VerificationProvider, verifyDocument } from "./verify-document";
+import { judgeIdText, judgeOrcrText, type VerificationProvider, verifyDocument } from "./verify-document";
 
 const file = { path: "tx/orcr-1.jpg" };
 
@@ -39,5 +39,29 @@ describe("verifyDocument", () => {
       detail: "Name mismatch",
     });
     expect(stub).toHaveBeenCalledWith({ kind: "valid_id", path: file.path, idType: "passport", apiKey: "secret" });
+  });
+});
+
+describe("judgeOrcrText", () => {
+  it("accepts text with OR/CR markers", () => {
+    const text =
+      "Republic of the Philippines Land Transportation Office Certificate of Registration Plate No. ABC 1234";
+    expect(judgeOrcrText(text).status).toBe("verified");
+  });
+
+  it("rejects text that is not an OR/CR", () => {
+    expect(judgeOrcrText("Grocery receipt Rice 50.00").status).toBe("failed");
+  });
+});
+
+describe("judgeIdText", () => {
+  it("accepts a driver's license read as that type", () => {
+    expect(
+      judgeIdText("Republic of the Philippines Land Transportation Office Driver's License", "drivers_license").status,
+    ).toBe("verified");
+  });
+
+  it("rejects an ID that does not match the chosen type", () => {
+    expect(judgeIdText("Republic of the Philippines PhilHealth", "passport").status).toBe("failed");
   });
 });
