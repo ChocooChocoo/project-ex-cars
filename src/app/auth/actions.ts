@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
@@ -74,6 +74,11 @@ export async function signIn(formData: FormData) {
 export async function signUp(formData: FormData) {
   const supabase = await createServerSupabaseClient();
 
+  // T04 X1: both policy boxes are required server side too, not only in the form.
+  if (formData.get("accept_terms") !== "true" || formData.get("accept_policy") !== "true") {
+    return { error: "You must agree to the Terms and Conditions and the Company Policy." };
+  }
+
   const parsed = z.object({ email: emailSchema, password: passwordSchema, full_name: fullNameSchema }).safeParse({
     email: formData.get("email"),
     password: formData.get("password"),
@@ -84,12 +89,15 @@ export async function signUp(formData: FormData) {
   }
 
   const { email, password, full_name: fullName } = parsed.data;
+  const origin = (await headers()).get("origin") ?? process.env.NEXT_PUBLIC_SITE_URL ?? "";
 
+  // The handle_new_user trigger creates the profile from the full_name metadata.
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
-      data: { full_name: fullName },
+      emailRedirectTo: `${origin}/auth/callback`,
+      data: { full_name: fullName, terms_accepted_at: new Date().toISOString() },
     },
   });
 
@@ -97,13 +105,18 @@ export async function signUp(formData: FormData) {
     return { error: error.message };
   }
 
-  if (data.user) {
-    const admin = createAdminClient();
-    await admin.from("profiles").update({ full_name: fullName }).eq("id", data.user.id);
-
-    const cookieStore = await cookies();
-    cookieStore.set("gce-role", "customer", { httpOnly: true, sameSite: "lax", maxAge: 604800, path: "/" });
+  // With confirmations on, Supabase hides an existing email by returning a user with no identities.
+  if (data.user?.identities?.length === 0) {
+    return { error: "This email is already registered. Please log in instead." };
   }
+
+  // T04 A3: no session means the email still needs verifying; the callback signs the user in later.
+  if (!data.session) {
+    return { notice: "Check your email to verify your account." };
+  }
+
+  const cookieStore = await cookies();
+  cookieStore.set("gce-role", "customer", { httpOnly: true, sameSite: "lax", maxAge: 604800, path: "/" });
 
   revalidatePath("/", "layout");
   redirect("/customer/showroom");
