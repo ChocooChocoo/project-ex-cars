@@ -64,26 +64,25 @@ mismatch; the full fix is to pass `timeZone: "Asia/Manila"` to each date formatt
 Still slow (not part of these fixes): opening a new request took about 36 s on live. The transaction page alone takes
 about 6.5 s to render on the server; the rest is the submit itself on a cold serverless function.
 
-## Test data to clean up
+## Test data cleanup
 
-| What | Where |
+All LIVE-QA test data was removed on 2026-10-27 in one database transaction (dry run first, then commit), plus storage
+files and the walk-in login:
+
+| Removed or restored | Count |
 | --- | --- |
-| Payments ₱2,222 (verified), ₱1,111 (rejected) | Transaction `642417bd` |
-| Valid ID uploaded by Sales Manager, asked to resubmit | Transaction `642417bd` |
-| "LIVE-QA disbursement full flow" (paid), "LIVE-QA disbursement reject" | Finance → Disbursements |
-| Walk-in `e2e.walkin.live@gce.local` | Staff Records |
-| Payroll run 2026-09-01 to 2026-09-30 | Payroll |
-| Request a Car ×2 (live run) | `a91d7805`, `4dd76335` |
-| Request a Car "T600 LIVE-QA-FIX" (local fix check) | `7aef465a` |
-| Request a Car "T600 LIVE-QA-LIVEFIX" and "T600 LIVE-QA-LIVEFIX2" (live fix checks) | `1eca7076`, `d6492743` |
-| Sell offers "Xpander LIVE-QA-OCR" / "LIVE-QA-OCR2" (OCR checks) | `c968433f`, `d397df18` |
-| Buys on "GCE Test Artifact S5b" / "S4e", submitted for review (OCR checks) | `7f314467`, `8f888c49` |
-| Sell offer "Xpander LIVE-QA-OCR3" + buy on "S4c" (live OCR re-check) | `67015350`, `5b6a25d7` |
-| Sell offer "Xpander LIVE-QA-OCR-LOCAL" + buy on "S4b" (local OCR check) | `095a2ff5`, `5b47bfa9` |
-| Sell offer "Xpander LIVE-QA-OCR4" + buy on "S4d" (live OCR check, passed) | `9a083af1`, `8bbfca3d` |
-| Sell offer "Xpander LIVE-QA" (ORCR verified) | `c9096cad` |
-| Buy on "GCE Test Artifact S6b", submitted for review | `d03bf62c` |
-| Chat photo + PDF (customer and Marketing) | Customer's Camry inquiry; sell chat of `c9096cad` |
-| Displayed Price ₱830,000 (was ₱850,000) | Field case `214fc4ca` |
-| Price status Negotiated | Field case `7d751431` |
-| Location sharing on (14.2117, 121.1653) | Delivery `9f769e8b` |
+| Test transactions (5 Request a Car, 6 sell offers, 6 buys on test-artifact cars) with their documents, history, chats and notifications | 17 |
+| Draft vehicles created by the test sell offers | 6 |
+| Viewing arrangements of the test buys | 6 |
+| Payments ₱1,111 / ₱2,222 and the staff-uploaded ID on `642417bd`, plus their 2 notifications | 2 + 1 |
+| LIVE-QA disbursements | 2 |
+| Payroll run 2026-09-01 to 2026-09-30 | 1 |
+| LIVE-QA chat messages with attachments | 4 |
+| Storage files (`transaction-documents` 53, `message-attachments` 4) | 57 |
+| Walk-in login `e2e.walkin.live@gce.local` | 1 |
+| Field case `214fc4ca`: price status cleared, agreed price back to ₱850,000; its 3 price-change notifications removed | restored |
+| Field case `7d751431`: price status cleared | restored |
+| Delivery `9f769e8b`: shared location cleared | restored |
+
+Check after cleanup: 0 rows left tagged LIVE-QA in vehicles, requests, disbursements, payroll, chat, documents,
+payments, profiles or users. The test-artifact cars used for the buys are still `available`.
