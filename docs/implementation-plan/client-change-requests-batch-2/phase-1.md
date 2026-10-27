@@ -1,8 +1,14 @@
 [Next: Phase 2 →](./phase-2.md)
 
-**Status:** 🚧 Blocked: code done, waiting on hosted Supabase settings (see Blockers)
+**Status:** 🚧 Blocked: code done, waiting on the hosted Supabase URL settings (see Blockers)
 
 > 2026-10-27: Work started (A1, A2, A3, X1 code and tests).
+>
+> 2026-10-28: **A2 dropped by the client.** "Continue with Google" is removed completely: the button file, its use
+> on the v1/v2 login and register pages (with the "Or continue with" divider), the `[auth.external.google]` block in
+> `supabase/config.toml`, and the Google vars in `.env.example`. The `?error=auth_callback_failed` alert stays, because
+> the email verification link also goes through `/auth/callback`. `src/app/template/**` keeps its own copy (upstream
+> design preview, not product). The A2 tasks below are kept for history and marked ~~struck~~.
 >
 > 2026-10-27: All code tasks are done and verified locally. Two Done-when checks wait on owner changes in the hosted
 > Supabase dashboard: Google provider credentials and Site URL / Redirect URLs. Nothing committed.
@@ -18,8 +24,7 @@ Source: `docs/tasks/T04.md`.
 ## Dependencies
 
 - None
-- Google OAuth client ID and secret from the owner's Google Cloud project, entered in the hosted Supabase project
-  (Authentication → Providers → Google)
+- ~~Google OAuth client ID and secret~~ (no longer needed: A2 dropped 2026-10-28)
 
 ## Tasks
 
@@ -31,12 +36,12 @@ Source: `docs/tasks/T04.md`.
 - [x] **A1:** Use `PasswordInput` in `src/app/auth/_components/login-form.tsx:80` and `register-form.tsx:105,123`.
   Hide the native reveal in `src/app/globals.css` (`input::-ms-reveal { display: none; }`).
   - Done: all three password fields swapped; rule added in `@layer base` of `globals.css`.
-- [x] **A2:** In `src/app/auth/_components/social-auth/google-button.tsx`, add an `onClick` that calls
+- [x] ~~**A2:**~~ (removed 2026-10-28) In `src/app/auth/_components/social-auth/google-button.tsx`, add an `onClick` that calls
   `supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: origin + "/auth/callback" } })`.
   - Done: client component, uses `createClient()` from `src/lib/supabase/client.ts`, `type="button"`, disables
     while redirecting, shows `toast.error` on failure. Verified in the browser: click goes to
     `<supabase>/auth/v1/authorize?provider=google&redirect_to=http://localhost:3000/auth/callback`.
-- [x] **A2:** Add `[auth.external.google]` (with `env(...)` secrets) to `supabase/config.toml`. Fill in
+- [x] ~~**A2:**~~ (removed 2026-10-28) Add `[auth.external.google]` (with `env(...)` secrets) to `supabase/config.toml`. Fill in
   `NEXT_PUBLIC_SITE_URL` and the Google variables in `.env.example`.
   - Done: provider block with `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID` / `_SECRET`, `skip_nonce_check = true`
     (local only); `http://127.0.0.1:3000/auth/callback` added to `additional_redirect_urls`. `.env.example`
@@ -93,10 +98,10 @@ Source: `docs/tasks/T04.md`.
   off). With either box unchecked, registration is refused.
   - Only Terms checked: the form shows "You must agree to the Company Policy." Both checked: the
     "Check your email to verify your account." alert shows. The server-side refusal is covered by unit tests.
-- [ ] Clicking "Continue with Google" reaches Google's consent page. After consent, the user lands on
-  `/customer/showroom` with `gce-role=customer` set.
-  - **Blocked:** Supabase answers `{"code":400,"error_code":"validation_failed","msg":"Unsupported provider: provider is
-    not enabled"}`. The owner must enable Google in the hosted project.
+- [x] ~~Clicking "Continue with Google" reaches Google's consent page. After consent, the user lands on
+  `/customer/showroom` with `gce-role=customer` set.~~ Dropped 2026-10-28: the client removed Google sign-in.
+  Verified after removal: no "Continue with Google" or "Or continue with" left under `src/app/auth`; tsc exit 0;
+  biome clean on `src/app/auth`; auth tests 21/21.
 - [x] `npx tsc --noEmit` exits 0 and `npm run check` has no findings on the touched files.
   - tsc exit 0. `npx biome check` on touched files: no findings. Full `npm run check` only reports existing
     findings in `.opencode/skills/**` (not part of this phase).
@@ -106,22 +111,22 @@ Source: `docs/tasks/T04.md`.
 1. **Authentication → URL Configuration:** set Site URL to `https://global-exchange-car.vercel.app` and add
    `https://global-exchange-car.vercel.app/**` and `http://localhost:3000/**` to Redirect URLs. Until then,
    verification emails link to localhost (A3).
-2. **Authentication → Providers → Google:** enable it with the Google Cloud OAuth client ID and secret. Add
-   `https://nsdwyxwrsmtarrxgzeuj.supabase.co/auth/v1/callback` as an authorised redirect URI in Google Cloud (A2).
+2. ~~Google provider~~: no longer needed (A2 dropped).
 3. **Cleanup:** delete the three QA users created on the hosted project during this phase (the automated delete was
    not permitted): `3732e353-d5a0-49bb-9faf-527c46bae106` (gce.qa.a3.20261027@gmail.com),
    `cf1e0c75-0036-4d4e-9b46-69f4f33f3cc4` (gce.qa.a3b.20261027@gmail.com),
    `03d0ce08-a64e-4d98-815c-1c98f4c91cd6` (gce.qa.x1.20261027@gmail.com).
 
-After 1 and 2, re-test: register on the Vercel site, then open the email link and land signed in. Then Google consent
-should lead to `/customer/showroom` with `gce-role=customer` set.
+After 1, re-test: register on the Vercel site, then open the email link and land signed in on `/customer/showroom`
+with `gce-role=customer` set.
 
 ## Files changed
 
 `src/components/password-input.tsx` (new), `src/components/password-input.test.tsx` (new),
 `src/app/auth/actions.signup.test.ts` (new), `src/app/auth/actions.ts`, `src/app/auth/_components/login-form.tsx`,
-`src/app/auth/_components/register-form.tsx`, `src/app/auth/_components/social-auth/google-button.tsx`,
-`src/app/auth/v1/login/page.tsx`, `src/app/globals.css`, `supabase/config.toml`, `.env.example`.
+`src/app/auth/_components/register-form.tsx`, `src/app/auth/_components/social-auth/google-button.tsx` (deleted),
+`src/app/auth/v1/login/page.tsx`, `src/app/auth/v1/register/page.tsx`, `src/app/auth/v2/login/page.tsx`,
+`src/app/auth/v2/register/page.tsx`, `src/app/globals.css`, `supabase/config.toml`, `.env.example`.
 
 ---
 
