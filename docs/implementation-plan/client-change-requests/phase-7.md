@@ -86,6 +86,22 @@ payslips and correct totals (AM5).
 | Console errors (MCP) | 0 |
 | Rerun after the label fix | `tsc` exit 0; full suite 536/539 with 3 timeouts in `employee-requests` / `staff-records` table tests under load; those files plus payroll rerun alone: 51/51 |
 
+### Live site walk (2026-10-27)
+
+Playwright MCP on https://global-exchange-car.vercel.app (`main` at `e8426b6`, same hosted Supabase project).
+Test records are tagged `LIVE-QA`.
+
+| Role | Checked | Result |
+| --- | --- | --- |
+| Account Manager | Created walk-in "LIVE-QA Walkin" (`e2e.walkin.live@gce.local`): "Walk-in account created.", dialog closes | pass |
+| Compensation list | 8 records shown | pass |
+| Create Run | 2026-09-01 to 2026-09-30 created, appears without reload; totals ₱0 (no checked attendance for September) | pass |
+| Duplicate | Same period again: "A payroll run for this period already exists." | pass |
+
+Not re-checked: sign-in as the new walk-in account.
+
+Screenshot: `test-results/live-phase7-payroll.png`.
+
 ## Files changed
 
 - `src/app/(staff)/payroll/actions.ts`, `page.tsx`, `_components/payroll-tables.tsx`, `_components/payroll-client.tsx`,

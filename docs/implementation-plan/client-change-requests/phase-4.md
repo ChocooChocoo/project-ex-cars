@@ -77,6 +77,20 @@ Completed 2026-10-26.
 
 Screenshots: `test-results/mcp-phase4-*.png`.
 
+### Live site walk (2026-10-27)
+
+Playwright MCP on https://global-exchange-car.vercel.app (`main` at `e8426b6`, same hosted Supabase project).
+Test records are tagged `LIVE-QA`.
+
+| Role | Checked | Result |
+| --- | --- | --- |
+| CEO, SM, HA, AM | Payments Received This Month (₱11,660,199, then ₱11,662,421 after a ₱2,222 test payment was verified), Completed Sales 55, New Customers 1, Active 3 | pass |
+| Marketing Specialist | Available Vehicles 17 in place of payments; other three cards the same | pass |
+| Mock content | "18,426", "Subscribed", "$1,250" absent on every role checked | pass |
+| Chart | Light and dark screenshots readable, axis labels not clipped | pass |
+
+Screenshots: `test-results/live-phase4-chart-*.png`.
+
 ## Notes
 
 - First walk showed "Revenue This Month ₱0" while the CEO overview showed ₱18.4M. Cause: `financial_entries`

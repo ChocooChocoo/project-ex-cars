@@ -47,6 +47,7 @@ beforeEach(() => {
     mechanic_id: null,
     head_security_id: securityId,
   };
+  db.rows.transactions = { current_state: "approved" };
 });
 
 describe("updateDeliveryLocation", () => {
@@ -79,6 +80,14 @@ describe("updateDeliveryLocation", () => {
     (db.rows.field_cases as Record<string, unknown>).delivery_status = "delivered";
     await expect(updateDeliveryLocation(caseId, 14.5, 121)).resolves.toEqual({
       error: "Location is shared only while the car is in transit or arriving.",
+    });
+    expect(db.writes).toHaveLength(0);
+  });
+
+  it("refuses a delivery whose transaction is no longer approved", async () => {
+    db.rows.transactions = { current_state: "cancelled" };
+    await expect(updateDeliveryLocation(caseId, 14.5, 121)).resolves.toEqual({
+      error: "This delivery is no longer active.",
     });
     expect(db.writes).toHaveLength(0);
   });

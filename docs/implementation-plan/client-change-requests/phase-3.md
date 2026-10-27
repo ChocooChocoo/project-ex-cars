@@ -69,6 +69,21 @@ Completed 2026-10-26.
 
 Screenshots: `test-results/mcp-phase3-*.png`.
 
+### Live site walk (2026-10-27)
+
+Playwright MCP on https://global-exchange-car.vercel.app (`main` at `e8426b6`, same hosted Supabase project).
+Test records are tagged `LIVE-QA`.
+
+| Role | Checked | Result |
+| --- | --- | --- |
+| Sales Manager | 20 of 20 rows are links; Tab reaches the first row, Enter opens the transaction, popover closes | pass |
+| Account Manager | First row opens the transaction; unread 19 → 18 | pass |
+| Head Accountant | 20 of 20 rows linked | pass |
+| Customer | "A payment was not accepted" opens the transaction; unread 20 → 19; popover closes | pass |
+| Mechanic | Rows link to `/mechanic/field-cases/…` | pass |
+
+Screenshot: `test-results/live-phase3-sm-keyboard.png`.
+
 ## Notes
 
 - One `500` on `/mechanic/inspections` appeared in the dev server log ("Missing PreferencesStoreProvider" in

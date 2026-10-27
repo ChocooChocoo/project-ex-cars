@@ -91,6 +91,23 @@ One crash during this run ("Failed to execute 'removeChild' on 'Node'") was caus
 Sonner's toast elements from the DOM by hand; rerun without that, no error.
 
 
+### Live site walk (2026-10-27)
+
+Playwright MCP on https://global-exchange-car.vercel.app (`main` at `e8426b6`, same hosted Supabase project).
+Test records are tagged `LIVE-QA`.
+
+| Role | Checked | Result |
+| --- | --- | --- |
+| Head Accountant | Ledger "1–10 of 40", Next → "11–20 of 40" (Page 2 of 4), Previous back; Disbursements, Sale records (58), Field expenses (8) paged | pass |
+| Head Accountant | Detail opens with Enter on the title; paid → Close only; approved → Release | pass |
+| Head Accountant | "LIVE-QA disbursement reject": Reject disabled until a reason, then "Disbursement rejected." | pass |
+| Head Accountant | "LIVE-QA disbursement full flow": Approve → Release → Receive → Mark Paid, all toasts; ends "Paid" with Close only. The list refreshes slower than local (about 5 s) | pass |
+| Account Manager | Record Entry / Request Disbursement / Request Purchase Funds; no Verify; no Sale records; own request detail read-only | pass |
+| Confidential Informant | Banner shown; own 7 requests "1–7 of 7"; detail read-only | pass |
+| 390px | No page-level horizontal scroll (375/375) | pass |
+
+Screenshot: `test-results/live-phase5-390.png`.
+
 ## Notes
 
 - The walks added five test disbursements to the hosted database, all titled "E2E T03 P5 …": "reject test"

@@ -111,6 +111,21 @@ dropdowns that still allow typing (C2, C3, C6), budget recommendations (C4), yea
 | Console errors (MCP) | 0 |
 | Final `npm run test` / `tsc` / biome / build | 85 files, 550 tests / exit 0 / clean / compiled |
 
+### Live site walk (2026-10-27)
+
+Playwright MCP on https://global-exchange-car.vercel.app (`main` at `e8426b6`, same hosted Supabase project).
+Test records are tagged `LIVE-QA`.
+
+| Role | Checked | Result |
+| --- | --- | --- |
+| Request a Car | "Toy" suggests Toyota; Honda models listed; "Zotye" / "T600 LIVE-QA" kept; budget ₱700,000 → 6 cars, top ₱698,000, each links to its showroom page | pass |
+| Request a Car submit | Saved (Zotye / T600 LIVE-QA / ₱650,000). The first click gave no feedback and no redirect for 30 s, so a second click made a duplicate (`a91d7805`, `4dd76335`) | finding |
+| Sell a Car | Years 2026 → 1980; Brand New / Second Hand; 4 owner options; 51 parts + Others; 2 issue photos; "Vehicle submitted for evaluation!" (`c9096cad`) | pass |
+| Sales Manager | Condition Second Hand, 45,000 km, "2nd owner", declared issues incl. the Others text; 2 "Issue photo" cards, one opens large | pass |
+| Marketing | Edit vehicle (Honda Brio) shows Purpose "Family Car"; save → "Vehicle updated." | pass |
+| Showroom | 22 vehicles; Family Car → 1; Ride-hailing → 0 with the empty state | pass |
+| 390px | Request a Car and Sell a Car: no page overflow | pass |
+
 ## Files changed
 
 - `supabase/migrations/20261026120000_t03_vehicle_purpose_owner_number.sql` (new), `.test.ts` (new)
