@@ -16,6 +16,13 @@ import { ACCEPTED_ID_TYPES, ID_LABELS } from "@/lib/auth/roles";
 import { transactionDocumentLabel } from "@/lib/transactions/document-media";
 import { SELL_PAPER_KINDS } from "@/lib/transactions/sell-flow";
 
+// T03 C11/SM2: result of the automatic OR/CR and ID check. Advisory only; staff Verify stays the decision.
+const AUTO_CHECK_LABELS: Record<string, string> = {
+  verified: "Auto-check: verified",
+  failed: "Auto-check: failed",
+  manual_review: "Auto-check: needs manual review",
+};
+
 // T03 SM1/HA1: customer documents get the full page width (was the narrow sidebar), in a 1/2/3-column grid,
 // so staff can check several IDs and papers side by side.
 export function TransactionDocumentsCard({
@@ -169,6 +176,19 @@ export function TransactionDocumentsCard({
                   )}
                   {doc.verification_state === "rejected" && doc.rejection_reason ? (
                     <p className="text-muted-foreground text-xs">To fix: {doc.rejection_reason as string}</p>
+                  ) : null}
+                  {typeof doc.auto_check_status === "string" && AUTO_CHECK_LABELS[doc.auto_check_status] ? (
+                    <div className="flex flex-col gap-1">
+                      <Badge
+                        variant={doc.auto_check_status === "failed" ? "destructive" : "outline"}
+                        className="h-5 px-2 text-[11px]"
+                      >
+                        {AUTO_CHECK_LABELS[doc.auto_check_status]}
+                      </Badge>
+                      {doc.auto_check_detail ? (
+                        <p className="text-muted-foreground text-xs">{doc.auto_check_detail as string}</p>
+                      ) : null}
+                    </div>
                   ) : null}
                   {doc.verification_state === "pending" && canVerify(doc.document_kind) ? (
                     <div className="mt-auto flex gap-1.5">

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
+import { after } from "next/server";
 
 import { z } from "zod";
 
@@ -35,6 +36,7 @@ import {
   requestCarSchema,
   sellVehicleSchema,
 } from "@/lib/validation/transactions";
+import { autoCheckDocument } from "@/lib/verification/verify-document";
 
 import { randomUUID } from "node:crypto";
 
@@ -91,6 +93,9 @@ export async function uploadPurchaseDocument(formData: FormData) {
     verification_state: "pending",
   });
   if (dbError) return { error: dbError.message };
+
+  // T03 SM2: advisory auto-check after the response is sent, so the upload never waits or fails on it.
+  if (documentKind === "valid_id") after(() => autoCheckDocument(transactionId, storagePath, "valid_id", idType));
 
   revalidatePath(`/my-transactions/${transactionId}`);
   revalidatePath(`/dashboard/transactions/${transactionId}`);
@@ -775,6 +780,10 @@ export async function submitSellVehicle(formData: FormData) {
     actor_id: user.user.id,
     reason: "Sell transaction created",
   });
+
+  // T03 C11: advisory OR/CR auto-check after the response is sent; the Marketing Specialist still verifies.
+  const orcr = uploads.find((upload) => upload.document_kind === "orcr");
+  if (orcr) after(() => autoCheckDocument(transaction.id, orcr.path, "orcr"));
 
   revalidatePath("/my-transactions");
   revalidatePath("/dashboard/transactions");
