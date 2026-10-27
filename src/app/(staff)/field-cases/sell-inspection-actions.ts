@@ -8,6 +8,7 @@ import { getCurrentRole } from "@/app/auth/actions";
 import { notify } from "@/lib/notifications/notify";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { formatCurrency } from "@/lib/utils";
 
 type FieldActionResult = { error: string } | { success: true };
 
@@ -245,5 +246,80 @@ export async function fileFieldExpense(formData: FormData): Promise<FieldActionR
     submitted_by: userId,
   });
   if (error) return { error: error.message };
+  return done(fieldCase.id, fieldCase.transaction_id);
+}
+
+const fieldPriceSchema = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("negotiated") }),
+  z.object({
+    status: z.literal("displayed_price"),
+    updatedPrice: z.coerce.number().positive("Enter an updated price above zero."),
+    discountAmount: z.coerce.number().min(0, "The discount cannot be negative."),
+  }),
+]);
+
+// T03 CI1–CI3: the Confidential Informant records the price status at the seller meet-up. "Negotiated" keeps
+// the confirmed price; "Displayed Price" sets a new agreed price and alerts the Marketing Specialist, the
+// Sales Manager and the CEO.
+export async function recordFieldPrice(
+  fieldCaseId: string,
+  input: { status: string; updatedPrice?: unknown; discountAmount?: unknown },
+): Promise<FieldActionResult> {
+  const context = await assignedCase(fieldCaseId);
+  if ("error" in context) return context;
+  const { fieldCase, role } = context;
+  if (role !== "confidential_informant") return { error: "The Confidential Informant records the price status." };
+  if (fieldCase.case_kind !== "acquisition" || !fieldCase.transaction_id) {
+    return { error: "Only seller meet-up cases have a price status." };
+  }
+  const parsed = fieldPriceSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid price status." };
+
+  const admin = createAdminClient();
+  const [{ data: details }, { data: current }] = await Promise.all([
+    admin.from("sell_details").select("agreed_price").eq("transaction_id", fieldCase.transaction_id).maybeSingle(),
+    admin.from("field_cases").select("price_status").eq("id", fieldCase.id).maybeSingle(),
+  ]);
+  const confirmed =
+    details?.agreed_price === null || details?.agreed_price === undefined ? null : Number(details.agreed_price);
+  if (confirmed === null) return { error: "There is no confirmed price yet." };
+
+  if (parsed.data.status === "negotiated") {
+    // Once the price was changed on site, "Negotiated" would hide that change.
+    if (current?.price_status === "displayed_price") return { error: "The price was already changed at inspection." };
+    const { error } = await admin
+      .from("field_cases")
+      .update({ price_status: "negotiated", updated_price: null, discount_amount: null })
+      .eq("id", fieldCase.id);
+    if (error) return { error: error.message };
+    return done(fieldCase.id, fieldCase.transaction_id);
+  }
+
+  const { updatedPrice, discountAmount } = parsed.data;
+  if (updatedPrice === confirmed) return { error: "That is the confirmed price. Choose Negotiated instead." };
+
+  const { error } = await admin
+    .from("field_cases")
+    .update({ price_status: "displayed_price", updated_price: updatedPrice, discount_amount: discountAmount })
+    .eq("id", fieldCase.id);
+  if (error) return { error: error.message };
+  const { error: priceError } = await admin
+    .from("sell_details")
+    .update({ agreed_price: updatedPrice })
+    .eq("transaction_id", fieldCase.transaction_id);
+  if (priceError) return { error: priceError.message };
+
+  for (const recipient of ["marketing_specialist", "sales_manager", "ceo"]) {
+    await notify(
+      admin,
+      { role: recipient },
+      {
+        kind: "field_price_changed",
+        title: "Price changed at inspection",
+        body: `The Confidential Informant changed the agreed price from ${formatCurrency(confirmed)} to ${formatCurrency(updatedPrice)} (discount ${formatCurrency(discountAmount)}).`,
+        transactionId: fieldCase.transaction_id,
+      },
+    );
+  }
   return done(fieldCase.id, fieldCase.transaction_id);
 }

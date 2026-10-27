@@ -354,6 +354,17 @@ export function SellFlowPanel({
               Identity {fieldCase.identity_confirmed_at ? "confirmed" : "not confirmed"} · Plate/chassis{" "}
               {fieldCase.plate_confirmed_at ? "confirmed" : "not confirmed"}
             </p>
+            {fieldCase.price_status === "displayed_price" ? (
+              <div className="flex flex-col gap-1">
+                <Badge className="self-start">Price changed at inspection</Badge>
+                <p>
+                  Updated price {formatCurrency(Number(fieldCase.updated_price))} · discount{" "}
+                  {formatCurrency(Number(fieldCase.discount_amount ?? 0))}
+                </p>
+              </div>
+            ) : fieldCase.price_status === "negotiated" ? (
+              <p className="text-muted-foreground text-xs">Price at inspection: negotiated, confirmed price kept.</p>
+            ) : null}
             <p>
               {fieldCase.inspection_outcome === "no_issues"
                 ? "No issues found."

@@ -121,7 +121,7 @@ export default async function TransactionDetailPage({ params }: { readonly param
   const { data: deliveryCase } = isDelivery
     ? await supabase
         .from("field_cases")
-        .select("id, state, delivery_status, delay_note, expected_arrival")
+        .select("id, state, delivery_status, delay_note, expected_arrival, last_lat, last_lng, last_located_at")
         .eq("transaction_id", id)
         .eq("case_kind", "delivery")
         .neq("state", "cancelled")

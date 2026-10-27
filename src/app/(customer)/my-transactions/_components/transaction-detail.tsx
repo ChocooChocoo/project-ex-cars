@@ -17,6 +17,7 @@ import {
   submitBuyRequest,
   uploadPurchaseDocument,
 } from "@/app/(customer)/my-transactions/actions";
+import { DeliveryLastSeen } from "@/components/delivery-last-seen";
 import { RejectReasonDialog } from "@/components/reject-reason-dialog";
 import { TransactionImagePreview } from "@/components/transaction-image-preview";
 import { TransactionStatusBadge } from "@/components/transaction-status-badge";
@@ -152,7 +153,14 @@ export function TransactionDetail({
   readonly negotiationThreadId?: string | null;
   readonly takenSlots?: string[];
   readonly gceVisitOnly?: boolean;
-  readonly delivery?: { status: string | null; delay_note: string | null; expected_arrival: string | null } | null;
+  readonly delivery?: {
+    status: string | null;
+    delay_note: string | null;
+    expected_arrival: string | null;
+    last_lat?: number | null;
+    last_lng?: number | null;
+    last_located_at?: string | null;
+  } | null;
   /** T03 C13: GCE's CEO-approved counter-offer on a sell offer, with the remarks written for the seller. */
   readonly counterOffer?: {
     price: number;
@@ -847,6 +855,9 @@ export function TransactionDetail({
                     );
                   })}
                 </ol>
+                {delivery?.status === "in_transit" || delivery?.status === "arriving" ? (
+                  <DeliveryLastSeen lat={delivery.last_lat} lng={delivery.last_lng} at={delivery.last_located_at} />
+                ) : null}
                 {delivery?.delay_note ? (
                   <p className="text-muted-foreground text-xs">
                     Running late: {delivery.delay_note}

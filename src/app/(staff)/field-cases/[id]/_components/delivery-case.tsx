@@ -9,6 +9,7 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 
 import { advanceDeliveryStatus, reportDeliveryDelay } from "@/app/(staff)/field-cases/delivery-actions";
+import { DeliveryLastSeen } from "@/components/delivery-last-seen";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,6 +28,7 @@ import { formatCurrency } from "@/lib/utils";
 
 import { ContractCard } from "./contract-card";
 import { PapersCard } from "./papers-card";
+import { ShareLocation } from "./share-location";
 
 type Row = Record<string, unknown>;
 
@@ -160,6 +162,10 @@ export function DeliveryCase({
               >
                 Mark {DELIVERY_STATUS_LABELS[next]}
               </Button>
+            ) : null}
+            <DeliveryLastSeen lat={fieldCase.last_lat} lng={fieldCase.last_lng} at={fieldCase.last_located_at} />
+            {onTeam && open && (status === "in_transit" || status === "arriving") ? (
+              <ShareLocation fieldCaseId={fieldCase.id as string} />
             ) : null}
             {fieldCase.delay_note ? (
               <p className="text-xs">

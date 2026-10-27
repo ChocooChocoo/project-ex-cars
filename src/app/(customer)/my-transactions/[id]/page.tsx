@@ -88,7 +88,7 @@ export default async function MyTransactionDetailPage({ params }: { readonly par
     (transaction as Record<string, unknown>).transaction_kind === "buy"
       ? await createAdminClient()
           .from("field_cases")
-          .select("delivery_status, delay_note, expected_arrival")
+          .select("delivery_status, delay_note, expected_arrival, last_lat, last_lng, last_located_at")
           .eq("transaction_id", id)
           .eq("case_kind", "delivery")
           .neq("state", "cancelled")
@@ -153,6 +153,9 @@ export default async function MyTransactionDetailPage({ params }: { readonly par
                 status: deliveryCase.delivery_status,
                 delay_note: deliveryCase.delay_note,
                 expected_arrival: deliveryCase.expected_arrival,
+                last_lat: deliveryCase.last_lat,
+                last_lng: deliveryCase.last_lng,
+                last_located_at: deliveryCase.last_located_at,
               }
             : null
         }
