@@ -84,7 +84,7 @@ describe("saveBuyDetails ownership guard", () => {
     expect(insert).not.toHaveBeenCalled();
   });
 
-  it("saves the Showroom price when the Final Price is left blank", async () => {
+  it("saves the Showroom price, whatever price the form sends", async () => {
     maybeSingle.mockResolvedValue({
       data: {
         id: transactionId,
@@ -99,7 +99,7 @@ describe("saveBuyDetails ownership guard", () => {
     const form = new FormData();
     form.set("transaction_id", transactionId);
     form.set("payment_method", "cash");
-    form.set("final_price", "");
+    form.set("final_price", "1");
     form.set("arrangement_kind", "gce_visit");
 
     await expect(saveBuyDetails(form)).resolves.toEqual({ success: true });

@@ -26,7 +26,6 @@ export function paymentMethodLabel(method: string): string {
   const map: Record<string, string> = {
     cash: "Cash",
     financing: "Financing",
-    cheque: "Cheque",
     down_payment: "Down Payment",
     bank_transfer: "Bank Transfer",
     paymongo: "PayMongo",
