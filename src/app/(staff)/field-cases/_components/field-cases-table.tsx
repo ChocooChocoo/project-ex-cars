@@ -129,7 +129,14 @@ export function FieldCasesTable({
         accessorKey: "case_kind",
         header: "Kind",
         filterFn: "equalsString",
-        cell: ({ row }) => <span className="font-medium capitalize">{row.original.case_kind}</span>,
+        cell: ({ row }) => (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="font-medium capitalize">{row.original.case_kind}</span>
+            {row.original.price_status === "displayed_price" ? (
+              <Badge variant="outline">Price changed at inspection</Badge>
+            ) : null}
+          </div>
+        ),
       },
       {
         accessorKey: "state",
