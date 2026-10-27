@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { getCurrentRole } from "@/app/auth/actions";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { rolePath } from "@/lib/routing/paths";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
   compensationSchema,
@@ -17,6 +17,15 @@ type Phase6ActionResult = { error: string } | { success: true };
 const PAYROLL_PREPARERS = ["ceo", "account_manager"];
 const PAYROLL_REVIEWERS = ["ceo", "head_accountant"];
 const WORKING_DAYS_PER_MONTH = 30;
+// Days a checked attendance status pays for. Absent and on leave pay nothing.
+const PAID_DAYS: Record<string, number> = { present: 1, late: 1, half_day: 0.5 };
+
+// Pages are served at /{role}/payroll (rewritten to /payroll), so refresh both.
+function revalidatePayroll(role: string, page: "payroll" | "payslips", id?: string) {
+  const path = id ? `/${page}/${id}` : `/${page}`;
+  revalidatePath(path);
+  revalidatePath(rolePath(role, path));
+}
 
 export async function saveCompensation(formData: FormData): Promise<Phase6ActionResult> {
   const supabase = await createServerSupabaseClient();
@@ -34,22 +43,19 @@ export async function saveCompensation(formData: FormData): Promise<Phase6Action
     return { error: parsed.error.issues[0]?.message ?? "Invalid compensation." };
   }
 
-  const admin = createAdminClient();
-
-  const { error } = await admin.from("staff_compensation").insert({
-    employee_id: parsed.data.employee_id,
-    base_salary_cents: parsed.data.base_salary_cents,
-    effective_from: parsed.data.effective_from,
-    effective_until: parsed.data.effective_until || null,
-    sss_contribution_cents: parsed.data.sss_contribution_cents,
-    pagibig_contribution_cents: parsed.data.pagibig_contribution_cents,
-    philhealth_contribution_cents: parsed.data.philhealth_contribution_cents,
-    tin_number: parsed.data.tin_number || null,
-    created_by: user.user.id,
+  const { error } = await supabase.rpc("add_staff_compensation", {
+    p_employee_id: parsed.data.employee_id,
+    p_base_salary_cents: parsed.data.base_salary_cents,
+    p_effective_from: parsed.data.effective_from,
+    p_effective_until: parsed.data.effective_until || null,
+    p_sss_contribution_cents: parsed.data.sss_contribution_cents,
+    p_pagibig_contribution_cents: parsed.data.pagibig_contribution_cents,
+    p_philhealth_contribution_cents: parsed.data.philhealth_contribution_cents,
+    p_tin_number: parsed.data.tin_number || null,
   });
   if (error) return { error: error.message };
 
-  revalidatePath("/dashboard/payroll");
+  revalidatePayroll(role, "payroll");
   return { success: true };
 }
 
@@ -80,8 +86,8 @@ export async function markPayslipPaid(formData: FormData): Promise<Phase6ActionR
     .eq("id", payslipId);
   if (updateError) return { error: updateError.message };
 
-  revalidatePath("/dashboard/payslips");
-  revalidatePath(`/dashboard/payslips/${payslipId}`);
+  revalidatePayroll(role, "payslips");
+  revalidatePayroll(role, "payslips", payslipId);
   return { success: true };
 }
 
@@ -101,8 +107,6 @@ export async function createPayrollRun(formData: FormData): Promise<Phase6Action
     return { error: parsed.error.issues[0]?.message ?? "Invalid payroll run." };
   }
 
-  const admin = createAdminClient();
-
   const { data: run, error: runError } = await supabase
     .from("payroll_runs")
     .insert({
@@ -114,7 +118,10 @@ export async function createPayrollRun(formData: FormData): Promise<Phase6Action
     })
     .select()
     .single();
-  if (runError) return { error: runError.message };
+  if (runError) {
+    if (runError.code === "23505") return { error: "A payroll run for this period already exists." };
+    return { error: runError.message };
+  }
 
   // Only checked attendance feeds payroll input.
   const { data: attendance } = await supabase
@@ -124,18 +131,17 @@ export async function createPayrollRun(formData: FormData): Promise<Phase6Action
     .lte("attendance_date", parsed.data.period_end)
     .not("checked_by", "is", null);
 
-  const { data: compensation } = await admin
-    .from("staff_compensation")
-    .select(
-      "employee_id, base_salary_cents, effective_from, effective_until, sss_contribution_cents, pagibig_contribution_cents, philhealth_contribution_cents",
-    )
-    .lte("effective_from", parsed.data.period_end)
-    .or(`effective_until.is.null,effective_until.gte.${parsed.data.period_start}`);
+  // Ordered by effective_from, so the latest record for an employee wins in the maps below.
+  const { data: compensation, error: compensationError } = await supabase.rpc("list_staff_compensation", {
+    p_period_start: parsed.data.period_start,
+    p_period_end: parsed.data.period_end,
+  });
+  if (compensationError) return { error: compensationError.message };
 
   const workedDaysByEmployee = new Map<string, number>();
   for (const entry of attendance ?? []) {
     const employeeId = entry.employee_id as string;
-    const worked = entry.status === "half_day" ? 0.5 : 1;
+    const worked = PAID_DAYS[entry.status as string] ?? 0;
     workedDaysByEmployee.set(employeeId, (workedDaysByEmployee.get(employeeId) ?? 0) + worked);
   }
 
@@ -157,7 +163,7 @@ export async function createPayrollRun(formData: FormData): Promise<Phase6Action
 
   for (const [employeeId, workedDays] of workedDaysByEmployee) {
     const dailyRate = dailyRateByEmployee.get(employeeId);
-    if (!dailyRate) continue;
+    if (!dailyRate || workedDays === 0) continue;
 
     const gross = Math.round(dailyRate * workedDays);
     const compRecord = compensationByEmployee.get(employeeId);
@@ -219,8 +225,8 @@ export async function createPayrollRun(formData: FormData): Promise<Phase6Action
     .eq("id", run.id);
   if (totalError) return { error: totalError.message };
 
-  revalidatePath("/dashboard/payroll");
-  revalidatePath("/dashboard/payslips");
+  revalidatePayroll(role, "payroll");
+  revalidatePayroll(role, "payslips");
   return { success: true };
 }
 
@@ -265,7 +271,7 @@ export async function reviewPayrollRun(formData: FormData): Promise<Phase6Action
       notes: parsed.data.notes || null,
     });
 
-    revalidatePath("/dashboard/payroll");
+    revalidatePayroll(role, "payroll");
     return { success: true };
   }
 
@@ -306,7 +312,7 @@ export async function reviewPayrollRun(formData: FormData): Promise<Phase6Action
     notes: parsed.data.notes || null,
   });
 
-  revalidatePath("/dashboard/payroll");
+  revalidatePayroll(role, "payroll");
   return { success: true };
 }
 
@@ -339,8 +345,8 @@ export async function finalizePayrollRun(formData: FormData): Promise<Phase6Acti
     .eq("status", "draft");
   if (payslipError) return { error: payslipError.message };
 
-  revalidatePath("/dashboard/payroll");
-  revalidatePath("/dashboard/payslips");
+  revalidatePayroll(role, "payroll");
+  revalidatePayroll(role, "payslips");
   return { success: true };
 }
 
@@ -393,6 +399,6 @@ export async function addPayslipItem(formData: FormData): Promise<Phase6ActionRe
     .eq("id", parsed.data.payslip_id);
   if (payslipError) return { error: payslipError.message };
 
-  revalidatePath("/dashboard/payslips");
+  revalidatePayroll(role, "payslips");
   return { success: true };
 }

@@ -15,6 +15,7 @@ import {
   rescheduleDelivery,
   setDeliveryTerms,
 } from "@/app/(staff)/transactions/delivery-actions";
+import { DeliveryLastSeen } from "@/components/delivery-last-seen";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -270,6 +271,7 @@ export function DeliveryPanel({
               <p className="font-medium">Tracking</p>
               <Badge variant="secondary">{status ? DELIVERY_STATUS_LABELS[status] : "Not dispatched"}</Badge>
             </div>
+            <DeliveryLastSeen lat={fieldCase.last_lat} lng={fieldCase.last_lng} at={fieldCase.last_located_at} />
             {fieldCase.delay_note ? (
               <p className="text-xs">
                 Delay reported: {String(fieldCase.delay_note)}

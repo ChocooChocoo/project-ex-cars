@@ -199,3 +199,33 @@ export async function receiveFieldCase(formData: FormData): Promise<DeliveryFiel
   if (error) return { error: error.message };
   return done(fieldCase.id, fieldCase.transaction_id);
 }
+
+const locationSchema = z.object({
+  lat: z.number().finite().min(-90).max(90),
+  lng: z.number().finite().min(-180).max(180),
+});
+
+// T03 D1: the delivery team shares its position while the car is on the road. The browser sends at most once
+// a minute; staff and the buyer see the last one with a Google Maps link.
+export async function updateDeliveryLocation(
+  fieldCaseId: string,
+  lat: number,
+  lng: number,
+): Promise<DeliveryFieldResult> {
+  const context = await assignedDelivery(fieldCaseId);
+  if (context.error !== undefined) return { error: context.error };
+  const { admin, fieldCase } = context;
+  if (!["in_transit", "arriving"].includes(fieldCase.delivery_status ?? "")) {
+    return { error: "Location is shared only while the car is in transit or arriving." };
+  }
+  const parsed = locationSchema.safeParse({ lat, lng });
+  if (!parsed.success) return { error: "Invalid location." };
+
+  const { error } = await admin
+    .from("field_cases")
+    .update({ last_lat: parsed.data.lat, last_lng: parsed.data.lng, last_located_at: new Date().toISOString() })
+    .eq("id", fieldCase.id);
+  if (error) return { error: error.message };
+  // No revalidatePath: this runs every minute and the viewers reload on their own.
+  return { success: true };
+}

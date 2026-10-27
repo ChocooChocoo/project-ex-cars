@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 
-import { CircleHelp, ClipboardList, Command, Database, File, Search, Settings } from "lucide-react";
+import { CircleHelp, ClipboardList, Database, File, Search, Settings } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 
+import { GceLogo } from "@/components/gce-logo";
 import {
   Sidebar,
   SidebarContent,
@@ -14,13 +15,13 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { APP_CONFIG } from "@/config/app-config";
 import { type GceRole, ROLE_NAV_ACCESS } from "@/lib/auth/roles";
 import { rolePath } from "@/lib/routing/paths";
 import { type NavMainItem, sidebarItems } from "@/navigation/sidebar/sidebar-items";
 import { usePreferencesStore } from "@/stores/preferences/preferences-provider";
 
 import { NavMain } from "./nav-main";
+import { brandFor } from "./sidebar-brand";
 import { UserMenu } from "./user-menu";
 
 const _data = {
@@ -105,7 +106,7 @@ export function AppSidebar({
       items: group.items.map((item) => (userRole ? resolveItemUrl(item, userRole) : item)),
     }));
 
-  const brandHref = userRole ? rolePath(userRole, "/dashboard/default") : "/dashboard/default";
+  const brand = brandFor(userRole);
 
   return (
     <Sidebar {...props} variant={variant} collapsible={collapsible}>
@@ -113,9 +114,9 @@ export function AppSidebar({
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton asChild>
-              <Link prefetch={false} href={brandHref}>
-                <Command />
-                <span className="font-semibold text-base">{APP_CONFIG.name}</span>
+              <Link prefetch={false} href={brand.href}>
+                <GceLogo className="text-primary" compact aria-hidden="true" />
+                <span className="truncate font-semibold text-base">{brand.label}</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>

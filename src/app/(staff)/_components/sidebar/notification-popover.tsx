@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 
+import Link from "next/link";
+
 import { Bell, BellOff, CheckCheck } from "lucide-react";
 import { toast } from "sonner";
 
@@ -29,26 +31,47 @@ function formatTimeAgo(date: Date): string {
 interface NotificationItemProps {
   notification: NotificationRow;
   onMarkRead: (id: string) => void;
+  onOpen: () => void;
 }
 
-function NotificationItem({ notification, onMarkRead }: NotificationItemProps) {
+function NotificationItem({ notification, onMarkRead, onOpen }: NotificationItemProps) {
   const isUnread = !notification.is_read;
+  const href = notification.href ?? null;
 
   return (
     <Item
       size="xs"
       variant={isUnread ? "muted" : "default"}
       onClick={() => {
-        if (isUnread) onMarkRead(notification.id);
+        if (!href && isUnread) onMarkRead(notification.id);
       }}
-      className={cn(isUnread && "cursor-pointer hover:bg-muted")}
+      className={cn(
+        "relative",
+        (href || isUnread) && "cursor-pointer hover:bg-muted",
+        href && "focus-within:ring-2 focus-within:ring-ring focus-within:ring-inset",
+      )}
     >
       <ItemMedia>
         <span className={cn("size-2 shrink-0 rounded-full", isUnread ? "bg-primary" : "bg-transparent")} />
       </ItemMedia>
       <ItemContent>
         <ItemTitle>
-          {notification.title}
+          {href ? (
+            // Stretched link: the whole row opens the record, while the mark-read button stays its own control.
+            <Link
+              href={href}
+              prefetch={false}
+              className="outline-none after:absolute after:inset-0 after:content-['']"
+              onClick={() => {
+                if (isUnread) onMarkRead(notification.id);
+                onOpen();
+              }}
+            >
+              {notification.title}
+            </Link>
+          ) : (
+            notification.title
+          )}
           <span className="font-normal text-muted-foreground text-xs">
             {formatTimeAgo(new Date(notification.created_at))}
           </span>
@@ -62,6 +85,7 @@ function NotificationItem({ notification, onMarkRead }: NotificationItemProps) {
           <Button
             size="icon-xs"
             variant="ghost"
+            className="relative z-10"
             aria-label="Mark notification as read"
             onClick={(event) => {
               event.stopPropagation();
@@ -82,6 +106,7 @@ export function NotificationPopover({
   readonly notifications: NotificationRow[];
 }) {
   const [notifications, setNotifications] = useState(initialNotifications);
+  const [open, setOpen] = useState(false);
 
   const { active, unreadCount } = useMemo(() => {
     const sorted = [...notifications].sort((a, b) => b.created_at.localeCompare(a.created_at));
@@ -106,7 +131,7 @@ export function NotificationPopover({
   };
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button size="icon" variant="ghost" className="relative" aria-label={`Notifications (${unreadCount} unread)`}>
           <Bell />
@@ -145,7 +170,12 @@ export function NotificationPopover({
           <ScrollArea className="h-80">
             <ItemGroup className="gap-1 px-4 pr-5 pb-4">
               {active.map((notification) => (
-                <NotificationItem key={notification.id} notification={notification} onMarkRead={handleMarkRead} />
+                <NotificationItem
+                  key={notification.id}
+                  notification={notification}
+                  onMarkRead={handleMarkRead}
+                  onOpen={() => setOpen(false)}
+                />
               ))}
             </ItemGroup>
           </ScrollArea>

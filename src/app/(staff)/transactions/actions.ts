@@ -590,6 +590,17 @@ export async function recordPayment(formData: FormData) {
     }
   }
 
+  // T03 HA2: an optional photo of the cheque or deposit slip, viewed by the Head Accountant before verifying.
+  const proof = formData.get("proof");
+  let proofPath: string | null = null;
+  if (proof instanceof File && proof.size > 0) {
+    if (!/^image\/(jpeg|png|webp)$/.test(proof.type)) return { error: "The payment photo must be a JPG, PNG or WebP." };
+    const ext = proof.type.split("/")[1].replace("jpeg", "jpg");
+    proofPath = `${transactionId}/payment-proof-${Date.now()}.${ext}`;
+    const { error: uploadError } = await supabase.storage.from("transaction-documents").upload(proofPath, proof);
+    if (uploadError) return { error: uploadError.message };
+  }
+
   const { error } = await supabase.from("payment_records").insert({
     transaction_id: transactionId,
     installment_id: installmentId ?? null,
@@ -599,9 +610,13 @@ export async function recordPayment(formData: FormData) {
     recorded_by: user.user.id,
     settlement_date: parsed.data.settlement_date,
     payment_kind: parsed.data.payment_kind || null,
+    proof_path: proofPath,
   });
 
-  if (error) return { error: error.message };
+  if (error) {
+    if (proofPath) await supabase.storage.from("transaction-documents").remove([proofPath]);
+    return { error: error.message };
+  }
 
   // Update installment state if linked.
   if (installmentId) {
@@ -648,6 +663,8 @@ export async function verifyPayment(paymentId: string) {
     .from("payment_records")
     .update({ verified_by: user.user.id })
     .eq("id", paymentId)
+    // T03 HA3: a rejected payment cannot be verified afterwards.
+    .is("rejected_at", null)
     .select("transaction_id")
     .maybeSingle();
 

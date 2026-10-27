@@ -33,6 +33,7 @@ import {
 } from "@/lib/transactions/sell-flow";
 import type { FlowStatus, TransactionFlag, TransactionState } from "@/lib/transactions/state-machine";
 import { formatCurrency } from "@/lib/utils";
+import { OWNER_NUMBERS } from "@/lib/vehicles/catalog";
 
 type Row = Record<string, unknown>;
 type Person = { id: string; full_name: string | null };
@@ -89,6 +90,7 @@ export function SellFlowPanel({
   const router = useRouter();
   const id = transaction.id as string;
   const state = (transaction.current_state ?? "pending") as TransactionState;
+  const vehicle = transaction.vehicles as { condition?: string | null; mileage?: number | null } | null;
   const isMs = userRole === "marketing_specialist";
   const isCeo = userRole === "ceo";
   const [busy, setBusy] = useState(false);
@@ -138,6 +140,18 @@ export function SellFlowPanel({
         <dl className="grid gap-2 sm:grid-cols-2">
           <Fact label="Seller's asking price" value={formatCurrency(Number(sellDetails?.offered_amount ?? 0))} />
           <Fact label="Meet-up method" value={method ? SELL_MEETUP_METHOD_LABELS[method] : "Not given"} />
+          <Fact label="Condition" value={String(vehicle?.condition ?? "Not given")} />
+          <Fact
+            label="Mileage"
+            value={typeof vehicle?.mileage === "number" ? `${vehicle.mileage.toLocaleString("en-PH")} km` : "Not given"}
+          />
+          <Fact
+            label="Owner number"
+            value={
+              OWNER_NUMBERS.find((owner) => owner.value === String(sellDetails?.owner_number ?? ""))?.label ??
+              "Not given"
+            }
+          />
           <Fact label="Approved ceiling" value={ceiling === null ? "—" : formatCurrency(ceiling)} />
           <Fact
             label="Agreed price"
@@ -340,6 +354,17 @@ export function SellFlowPanel({
               Identity {fieldCase.identity_confirmed_at ? "confirmed" : "not confirmed"} · Plate/chassis{" "}
               {fieldCase.plate_confirmed_at ? "confirmed" : "not confirmed"}
             </p>
+            {fieldCase.price_status === "displayed_price" ? (
+              <div className="flex flex-col gap-1">
+                <Badge className="self-start">Price changed at inspection</Badge>
+                <p>
+                  Updated price {formatCurrency(Number(fieldCase.updated_price))} · discount{" "}
+                  {formatCurrency(Number(fieldCase.discount_amount ?? 0))}
+                </p>
+              </div>
+            ) : fieldCase.price_status === "negotiated" ? (
+              <p className="text-muted-foreground text-xs">Price at inspection: negotiated, confirmed price kept.</p>
+            ) : null}
             <p>
               {fieldCase.inspection_outcome === "no_issues"
                 ? "No issues found."
@@ -368,7 +393,7 @@ export function SellFlowPanel({
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="Explanation" htmlFor="profit-reason">
+            <Field label="Internal explanation (staff only)" htmlFor="profit-reason">
               <Textarea
                 id="profit-reason"
                 rows={2}
@@ -396,6 +421,20 @@ export function SellFlowPanel({
                     onChange={(e) => set("new_ceiling")(e.target.value)}
                   />
                 </Field>
+                <div className="sm:col-span-2">
+                  <Field label="Remarks for the seller" htmlFor="seller-remarks">
+                    <Textarea
+                      id="seller-remarks"
+                      rows={2}
+                      placeholder="Why the price changed, e.g. the timing belt needs replacing"
+                      value={form.seller_remarks ?? ""}
+                      onChange={(e) => set("seller_remarks")(e.target.value)}
+                    />
+                  </Field>
+                  <p className="mt-1 text-muted-foreground text-xs">
+                    The seller sees the recalculated price and these remarks once the CEO approves.
+                  </p>
+                </div>
               </div>
             ) : null}
             <Button
@@ -410,6 +449,7 @@ export function SellFlowPanel({
                     profitability_reason: form.profitability_reason,
                     recalculated_price: form.recalculated_price,
                     new_ceiling: form.new_ceiling,
+                    seller_remarks: form.seller_remarks,
                   },
                   form.is_profitable === "yes" ? "Revised ceiling sent to the CEO." : "Offer cancelled.",
                 )
@@ -434,6 +474,9 @@ export function SellFlowPanel({
                 {formatCurrency(Number(report.new_ceiling))}
                 {report.seller_response ? ` · Seller ${String(report.seller_response)}` : ""}
               </p>
+            ) : null}
+            {report.seller_remarks ? (
+              <p className="text-xs">Remarks for the seller: {String(report.seller_remarks)}</p>
             ) : null}
             {isMs && state === "approved" && reportProposal?.decision === "approved" && !report.seller_response ? (
               <div className="flex gap-2 pt-1">

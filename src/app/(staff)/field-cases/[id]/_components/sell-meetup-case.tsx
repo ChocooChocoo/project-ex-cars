@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import {
   confirmFieldCheck,
   fileFieldExpense,
+  recordFieldPrice,
   reportInspection,
 } from "@/app/(staff)/field-cases/sell-inspection-actions";
 import { TransactionImagePreview } from "@/components/transaction-image-preview";
@@ -52,6 +53,9 @@ export function SellMeetupCase({
   const [estimate, setEstimate] = useState("");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
+  const [priceStatus, setPriceStatus] = useState("");
+  const [updatedPrice, setUpdatedPrice] = useState("");
+  const [discount, setDiscount] = useState("");
   const photosRef = useRef<HTMLInputElement>(null);
   const proofRef = useRef<HTMLInputElement>(null);
 
@@ -92,6 +96,18 @@ export function SellMeetupCase({
     fd.set("repair_estimate", estimate);
     for (const file of Array.from(photosRef.current?.files ?? [])) fd.append("photos", file);
     await send(reportInspection, fd, "Inspection reported.");
+  }
+
+  async function submitPrice() {
+    setBusy(true);
+    const result = await recordFieldPrice(caseId, { status: priceStatus, updatedPrice, discountAmount: discount });
+    setBusy(false);
+    if ("error" in result) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success(priceStatus === "negotiated" ? "Confirmed price kept." : "Price updated. The office was notified.");
+    router.refresh();
   }
 
   async function submitExpense() {
@@ -205,6 +221,82 @@ export function SellMeetupCase({
                   <Badge variant="outline">Pending</Badge>
                 )}
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Price at inspection</CardTitle>
+              <CardDescription>
+                Keep the confirmed price, or record the price agreed with the seller on site. A new price alerts the
+                Marketing Specialist, Sales Manager and CEO.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3 text-sm">
+              {fieldCase.price_status === "displayed_price" ? (
+                <div className="flex flex-col gap-1">
+                  <Badge className="self-start">Price changed at inspection</Badge>
+                  <p>
+                    Updated price {formatCurrency(Number(fieldCase.updated_price))} · discount{" "}
+                    {formatCurrency(Number(fieldCase.discount_amount ?? 0))}
+                  </p>
+                </div>
+              ) : fieldCase.price_status === "negotiated" ? (
+                <p>Negotiated. The confirmed price stays.</p>
+              ) : null}
+              {isInformant && open && fieldCase.price_status !== "negotiated" ? (
+                <>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="price-status">Price status</Label>
+                    <Select value={priceStatus} onValueChange={setPriceStatus}>
+                      <SelectTrigger id="price-status">
+                        <SelectValue placeholder="Choose a price status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {fieldCase.price_status !== "displayed_price" ? (
+                          <SelectItem value="negotiated">Negotiated</SelectItem>
+                        ) : null}
+                        <SelectItem value="displayed_price">Displayed Price</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {priceStatus === "displayed_price" ? (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="updated-price">Updated price (₱)</Label>
+                        <Input
+                          id="updated-price"
+                          type="number"
+                          inputMode="decimal"
+                          min="1"
+                          value={updatedPrice}
+                          onChange={(e) => setUpdatedPrice(e.target.value)}
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="discount-amount">Discounted amount (₱)</Label>
+                        <Input
+                          id="discount-amount"
+                          type="number"
+                          inputMode="decimal"
+                          min="0"
+                          value={discount}
+                          onChange={(e) => setDiscount(e.target.value)}
+                        />
+                      </div>
+                      <p className="text-muted-foreground text-xs sm:col-span-2">
+                        Confirmed price:{" "}
+                        {sellDetails?.agreed_price ? formatCurrency(Number(sellDetails.agreed_price)) : "—"}
+                      </p>
+                    </div>
+                  ) : null}
+                  <Button size="sm" className="self-start" disabled={busy || !priceStatus} onClick={submitPrice}>
+                    Save price status
+                  </Button>
+                </>
+              ) : !fieldCase.price_status ? (
+                <p className="text-muted-foreground">Not recorded yet.</p>
+              ) : null}
             </CardContent>
           </Card>
 

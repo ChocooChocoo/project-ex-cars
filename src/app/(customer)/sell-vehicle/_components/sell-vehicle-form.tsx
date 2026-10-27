@@ -5,16 +5,16 @@ import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ChevronDown, X } from "lucide-react";
-import { Controller, type Resolver, useForm } from "react-hook-form";
+import { X } from "lucide-react";
+import { Controller, type Resolver, useController, useForm } from "react-hook-form";
 import { toast } from "sonner";
 
 import { prepareSellUploads, submitSellVehicle } from "@/app/(customer)/my-transactions/actions";
+import { BrandModelCombobox } from "@/components/brand-model-combobox";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Field, FieldError, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -23,6 +23,7 @@ import { ACCEPTED_ID_TYPES, ID_LABELS } from "@/lib/auth/roles";
 import { createClient } from "@/lib/supabase/client";
 import { SELL_MEETUP_METHOD_LABELS, SELL_MEETUP_METHODS } from "@/lib/transactions/sell-flow";
 import { type SellVehicleFormData, sellVehicleSchema } from "@/lib/validation/transactions";
+import { listedYears, OWNER_NUMBERS, SELL_CONDITIONS } from "@/lib/vehicles/catalog";
 
 export interface ConditionChecklistNode {
   id: string;
@@ -47,6 +48,19 @@ export function validateSellPhotos(files: File[]): string | null {
   return null;
 }
 
+/** Issue photos are optional; when given they follow the vehicle photo rules. */
+export function validateIssuePhotos(files: File[]): string | null {
+  return files.length === 0 ? null : validateSellPhotos(files);
+}
+
+/** C12: the ticked checklist names, plus the "Others" text, as the declared issues sentence. */
+export function composeDeclaredIssues(tickedNames: string[], othersText: string | null): string {
+  const others = othersText?.trim();
+  return [...tickedNames, ...(others ? [`Others: ${others}`] : [])].join("; ");
+}
+
+const YEARS = listedYears();
+
 export const SELL_PAPER_ACCEPT = "image/jpeg,image/png,image/webp,application/pdf";
 
 const PAPER_FIELDS = [
@@ -63,18 +77,20 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
     handleSubmit,
     control,
     watch,
-    formState: { errors, isSubmitting },
+    setValue,
+    formState: { errors, isSubmitting, isSubmitted },
   } = useForm<SellVehicleFormData>({
     resolver: zodResolver(sellVehicleSchema) as unknown as Resolver<SellVehicleFormData>,
+    defaultValues: { make: "", model: "" },
   });
 
-  const conditionValue = watch("condition");
   const hasKnownIssues = watch("has_known_issues");
+  const { field: makeField } = useController({ control, name: "make" });
+  const { field: modelField } = useController({ control, name: "model" });
 
   const [papers, setPapers] = useState<Record<string, File | null>>({});
   const [idTypes, setIdTypes] = useState<Record<string, string>>({});
   const [paperError, setPaperError] = useState<string | null>(null);
-  const showDetail = typeof conditionValue === "string" && conditionValue.toLowerCase() === "other";
 
   const [photos, setPhotos] = useState<File[]>([]);
   const [photoError, setPhotoError] = useState<string | null>(null);
@@ -82,7 +98,12 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   const [selectedConditionItems, setSelectedConditionItems] = useState<string[]>([]);
-  const [checklistOpen, setChecklistOpen] = useState(false);
+  const [othersChecked, setOthersChecked] = useState(false);
+  const [othersText, setOthersText] = useState("");
+  const [othersError, setOthersError] = useState<string | null>(null);
+  const [issuePhotos, setIssuePhotos] = useState<File[]>([]);
+  const [issuePhotoError, setIssuePhotoError] = useState<string | null>(null);
+  const nameById = useMemo(() => new Map(checklistNodes.map((node) => [node.id, node.name])), [checklistNodes]);
 
   const checklistTree = useMemo(() => {
     const systems = checklistNodes.filter((n) => n.level === "system");
@@ -119,10 +140,31 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
     setPreviews(previews.filter((_, i) => i !== index));
   }
 
+  // The declared issues text follows the ticks, so the schema checks one field.
+  function syncDeclaredIssues(items: string[], others: boolean, text: string) {
+    const names = items.map((id) => nameById.get(id) ?? id);
+    setValue("declared_issues", composeDeclaredIssues(names, others ? text : null), {
+      shouldValidate: isSubmitted,
+    });
+  }
+
   function toggleConditionItem(nodeId: string, checked: boolean) {
-    setSelectedConditionItems((prev) =>
-      checked ? (prev.includes(nodeId) ? prev : [...prev, nodeId]) : prev.filter((id) => id !== nodeId),
+    const without = selectedConditionItems.filter((id) => id !== nodeId);
+    const next = checked ? [...without, nodeId] : without;
+    setSelectedConditionItems(next);
+    syncDeclaredIssues(next, othersChecked, othersText);
+  }
+
+  function handleIssuePhotoChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const picked = [...issuePhotos, ...Array.from(event.target.files ?? [])];
+    const next = picked.slice(0, SELL_PHOTO_MAX_COUNT);
+    setIssuePhotos(next);
+    setIssuePhotoError(
+      picked.length > SELL_PHOTO_MAX_COUNT
+        ? `You can add at most ${SELL_PHOTO_MAX_COUNT} issue photos.`
+        : validateIssuePhotos(next),
     );
+    event.target.value = "";
   }
 
   async function onSubmit(data: SellVehicleFormData) {
@@ -139,33 +181,44 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
       toast.error(message);
       return;
     }
-    let finalCondition = data.condition;
-    const detail = data.condition_detail;
-    if (typeof finalCondition === "string" && finalCondition.toLowerCase() === "other" && detail?.trim()) {
-      finalCondition = detail.trim();
+    const hasIssues = data.has_known_issues === "yes";
+    if (hasIssues && othersChecked && !othersText.trim()) {
+      setOthersError("Describe the other issues.");
+      return;
+    }
+    const issuePhotoValidationError = hasIssues ? validateIssuePhotos(issuePhotos) : null;
+    if (issuePhotoValidationError) {
+      setIssuePhotoError(issuePhotoValidationError);
+      toast.error(issuePhotoValidationError);
+      return;
     }
     const fd = new FormData();
     fd.set("make", data.make);
     fd.set("model", data.model);
     fd.set("year", String(data.year));
     fd.set("mileage", String(data.mileage));
-    fd.set("condition", finalCondition);
+    fd.set("condition", data.condition);
+    fd.set("owner_number", String(data.owner_number));
     fd.set("offered_amount", String(data.offered_amount));
     if (data.description) fd.set("description", data.description);
     fd.set("has_known_issues", data.has_known_issues);
-    if (data.declared_issues) fd.set("declared_issues", data.declared_issues);
+    if (hasIssues && data.declared_issues) fd.set("declared_issues", data.declared_issues);
     fd.set("meetup_method", data.meetup_method);
     fd.set("id_type_1", idTypes.id_type_1);
     fd.set("id_type_2", idTypes.id_type_2);
-    if (detail?.trim() && finalCondition !== detail.trim()) {
-      fd.set("condition_detail", detail.trim());
+    if (hasIssues && selectedConditionItems.length > 0) {
+      fd.set("condition_items", JSON.stringify(selectedConditionItems));
     }
-    if (selectedConditionItems.length > 0) fd.set("condition_items", JSON.stringify(selectedConditionItems));
 
     // The files go straight to storage: a Vercel function rejects request bodies over 4.5 MB.
     const files = [
       ...photos.map((file) => ({ file, kind: "sell_photo" as const, pathKey: "photo_paths" })),
       ...PAPER_FIELDS.map((field) => ({ file: papers[field.key] as File, kind: field.kind, pathKey: field.pathKey })),
+      ...(hasIssues ? issuePhotos : []).map((file) => ({
+        file,
+        kind: "issue_photo" as const,
+        pathKey: "issue_photo_paths",
+      })),
     ];
     try {
       const prepared = await prepareSellUploads(
@@ -206,64 +259,90 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field data-invalid={!!errors.make}>
-              <FieldLabel htmlFor="sell-make">Make *</FieldLabel>
-              <Input id="sell-make" {...register("make")} placeholder="e.g. Honda" />
-              {errors.make && <FieldError errors={[{ message: errors.make.message }]} />}
-            </Field>
-            <Field data-invalid={!!errors.model}>
-              <FieldLabel htmlFor="sell-model">Model *</FieldLabel>
-              <Input id="sell-model" {...register("model")} placeholder="e.g. Civic" />
-              {errors.model && <FieldError errors={[{ message: errors.model.message }]} />}
-            </Field>
-          </div>
+          <BrandModelCombobox
+            idPrefix="sell"
+            brand={makeField.value ?? ""}
+            model={modelField.value ?? ""}
+            onBrandChange={makeField.onChange}
+            onModelChange={modelField.onChange}
+            brandError={errors.make?.message}
+            modelError={errors.model?.message}
+          />
           <div className="grid gap-4 sm:grid-cols-2">
             <Field data-invalid={!!errors.year}>
               <FieldLabel htmlFor="sell-year">Year *</FieldLabel>
-              <Input id="sell-year" {...register("year")} type="number" placeholder="2020" />
+              <Controller
+                control={control}
+                name="year"
+                render={({ field }) => (
+                  <Select value={field.value ? String(field.value) : ""} onValueChange={field.onChange}>
+                    <SelectTrigger id="sell-year" className="w-full" aria-invalid={!!errors.year}>
+                      <SelectValue placeholder="Select year" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-72">
+                      {YEARS.map((year) => (
+                        <SelectItem key={year} value={String(year)}>
+                          {year}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
               {errors.year && <FieldError errors={[{ message: errors.year.message }]} />}
             </Field>
             <Field data-invalid={!!errors.mileage}>
               <FieldLabel htmlFor="sell-mileage">Mileage (km) *</FieldLabel>
-              <Input id="sell-mileage" {...register("mileage")} type="number" placeholder="50000" />
+              <Input id="sell-mileage" {...register("mileage")} type="number" inputMode="numeric" placeholder="50000" />
               {errors.mileage && <FieldError errors={[{ message: errors.mileage.message }]} />}
             </Field>
           </div>
-          <Field data-invalid={!!errors.condition}>
-            <FieldLabel htmlFor="sell-condition">Condition *</FieldLabel>
-            <Controller
-              control={control}
-              name="condition"
-              render={({ field }) => (
-                <Select value={field.value ?? ""} onValueChange={field.onChange}>
-                  <SelectTrigger id="sell-condition">
-                    <SelectValue placeholder="Select condition" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="excellent">Excellent</SelectItem>
-                    <SelectItem value="good">Good</SelectItem>
-                    <SelectItem value="fair">Fair</SelectItem>
-                    <SelectItem value="needs_repair">Needs Repair</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              )}
-            />
-            {errors.condition && <FieldError errors={[{ message: errors.condition.message }]} />}
-          </Field>
-          {showDetail ? (
-            <Field data-invalid={!!errors.condition_detail}>
-              <FieldLabel htmlFor="sell-condition-detail">Condition Detail</FieldLabel>
-              <Textarea
-                id="sell-condition-detail"
-                {...register("condition_detail")}
-                placeholder="Describe the condition..."
-                rows={3}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field data-invalid={!!errors.condition}>
+              <FieldLabel htmlFor="sell-condition">Condition *</FieldLabel>
+              <Controller
+                control={control}
+                name="condition"
+                render={({ field }) => (
+                  <Select value={field.value ?? ""} onValueChange={field.onChange}>
+                    <SelectTrigger id="sell-condition" className="w-full" aria-invalid={!!errors.condition}>
+                      <SelectValue placeholder="Select condition" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SELL_CONDITIONS.map((condition) => (
+                        <SelectItem key={condition} value={condition}>
+                          {condition}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               />
-              {errors.condition_detail && <FieldError errors={[{ message: errors.condition_detail.message }]} />}
+              {errors.condition && <FieldError errors={[{ message: errors.condition.message }]} />}
             </Field>
-          ) : null}
+            <Field data-invalid={!!errors.owner_number}>
+              <FieldLabel htmlFor="sell-owner-number">Owner number *</FieldLabel>
+              <Controller
+                control={control}
+                name="owner_number"
+                render={({ field }) => (
+                  <Select value={field.value ? String(field.value) : ""} onValueChange={field.onChange}>
+                    <SelectTrigger id="sell-owner-number" className="w-full" aria-invalid={!!errors.owner_number}>
+                      <SelectValue placeholder="Which owner are you?" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {OWNER_NUMBERS.map((owner) => (
+                        <SelectItem key={owner.value} value={owner.value}>
+                          {owner.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              {errors.owner_number && <FieldError errors={[{ message: errors.owner_number.message }]} />}
+            </Field>
+          </div>
           <Field data-invalid={!!errors.offered_amount}>
             <FieldLabel htmlFor="sell-offered-amount">Offered Amount (₱) *</FieldLabel>
             <Input
@@ -309,16 +388,116 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
             {errors.has_known_issues && <FieldError errors={[{ message: errors.has_known_issues.message }]} />}
           </Field>
           {hasKnownIssues === "yes" ? (
-            <Field data-invalid={!!errors.declared_issues}>
-              <FieldLabel htmlFor="sell-declared-issues">Describe the issues *</FieldLabel>
-              <Textarea
-                id="sell-declared-issues"
-                {...register("declared_issues")}
-                placeholder="e.g. Aircon not cooling, dent on rear bumper"
-                rows={3}
-              />
+            <fieldset className="flex flex-col gap-3 rounded-md border p-3" aria-describedby="sell-issues-help">
+              <legend className="px-1 font-medium text-sm">Which parts have issues? *</legend>
+              <p id="sell-issues-help" className="text-muted-foreground text-xs">
+                Tick every part with damage or a known problem. This helps our mechanic plan the inspection.
+                {selectedConditionItems.length > 0 ? ` ${selectedConditionItems.length} ticked.` : ""}
+              </p>
+              {checklistTree.length > 0 ? (
+                <div className="flex max-h-80 flex-col gap-2 overflow-y-auto overscroll-contain pr-1">
+                  {checklistTree.map(({ system, components }) => (
+                    <div key={system.id} className="flex flex-col gap-1.5 rounded-md border bg-muted/20 p-2.5">
+                      <span className="font-medium text-sm">{system.name}</span>
+                      {components.map(({ component, parts }) => (
+                        <div key={component.id} className="ml-1 flex flex-col gap-1.5 sm:ml-3">
+                          <div className="flex items-center gap-2 text-sm">
+                            <Checkbox
+                              id={`condition-${component.id}`}
+                              checked={selectedConditionItems.includes(component.id)}
+                              onCheckedChange={(checked) => toggleConditionItem(component.id, checked === true)}
+                            />
+                            <label htmlFor={`condition-${component.id}`}>{component.name}</label>
+                          </div>
+                          {parts.map((part) => (
+                            <div key={part.id} className="ml-6 flex items-center gap-2 text-sm">
+                              <Checkbox
+                                id={`condition-${part.id}`}
+                                checked={selectedConditionItems.includes(part.id)}
+                                onCheckedChange={(checked) => toggleConditionItem(part.id, checked === true)}
+                              />
+                              <label htmlFor={`condition-${part.id}`}>{part.name}</label>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <Checkbox
+                    id="sell-issues-others"
+                    checked={othersChecked}
+                    onCheckedChange={(checked) => {
+                      const on = checked === true;
+                      setOthersChecked(on);
+                      setOthersError(null);
+                      syncDeclaredIssues(selectedConditionItems, on, othersText);
+                    }}
+                  />
+                  <label htmlFor="sell-issues-others">Others</label>
+                </div>
+                {othersChecked ? (
+                  <Field data-invalid={!!othersError}>
+                    <FieldLabel htmlFor="sell-issues-others-text">Describe the other issues *</FieldLabel>
+                    <Textarea
+                      id="sell-issues-others-text"
+                      value={othersText}
+                      onChange={(event) => {
+                        setOthersText(event.target.value);
+                        setOthersError(null);
+                        syncDeclaredIssues(selectedConditionItems, true, event.target.value);
+                      }}
+                      placeholder="e.g. Aircon not cooling, dent on rear bumper"
+                      rows={3}
+                      aria-invalid={!!othersError}
+                    />
+                    {othersError && <FieldError errors={[{ message: othersError }]} />}
+                  </Field>
+                ) : null}
+              </div>
               {errors.declared_issues && <FieldError errors={[{ message: errors.declared_issues.message }]} />}
-            </Field>
+              <Field data-invalid={!!issuePhotoError}>
+                <FieldLabel htmlFor="sell-issue-photos">Photos of the issues (optional, up to 6)</FieldLabel>
+                <Input
+                  id="sell-issue-photos"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  multiple
+                  onChange={handleIssuePhotoChange}
+                />
+                <FieldDescription>JPEG, PNG or WebP, max 5MB each.</FieldDescription>
+                {issuePhotoError && <FieldError errors={[{ message: issuePhotoError }]} />}
+                {issuePhotos.length > 0 ? (
+                  <ul className="flex flex-wrap gap-2" aria-label="Issue photos to upload">
+                    {issuePhotos.map((file, index) => (
+                      <li
+                        key={`${file.name}-${file.size}-${file.lastModified}`}
+                        className="flex max-w-full items-center gap-1 rounded-md border bg-muted/30 py-1 pr-1 pl-2 text-xs"
+                      >
+                        <span className="max-w-48 truncate">{file.name}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="size-6"
+                          onClick={() => {
+                            const next = issuePhotos.filter((_, i) => i !== index);
+                            setIssuePhotos(next);
+                            setIssuePhotoError(validateIssuePhotos(next));
+                          }}
+                          aria-label={`Remove ${file.name}`}
+                        >
+                          <X className="size-3" />
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </Field>
+            </fieldset>
           ) : null}
           <Field data-invalid={!!errors.meetup_method}>
             <FieldLabel htmlFor="sell-meetup-method">Meet-up method *</FieldLabel>
@@ -414,52 +593,6 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
               </div>
             ) : null}
           </Field>
-          {checklistTree.length > 0 ? (
-            <Collapsible open={checklistOpen} onOpenChange={setChecklistOpen}>
-              <CollapsibleTrigger asChild>
-                <Button type="button" variant="outline" className="justify-between">
-                  Known issues checklist (optional)
-                  <ChevronDown className="size-4" />
-                </Button>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="pt-3">
-                <p className="text-muted-foreground text-xs">
-                  Tick any parts with known damage or issues. This is optional and helps our mechanics prioritize the
-                  inspection.
-                  {selectedConditionItems.length > 0 ? ` ${selectedConditionItems.length} selected.` : ""}
-                </p>
-                <div className="mt-2 flex max-h-72 flex-col gap-2 overflow-y-auto">
-                  {checklistTree.map(({ system, components }) => (
-                    <div key={system.id} className="flex flex-col gap-1.5 rounded-md border p-2.5">
-                      <span className="font-medium text-sm">{system.name}</span>
-                      {components.map(({ component, parts }) => (
-                        <div key={component.id} className="ml-3 flex flex-col gap-1.5">
-                          <div className="flex items-center gap-2 text-sm">
-                            <Checkbox
-                              id={`condition-${component.id}`}
-                              checked={selectedConditionItems.includes(component.id)}
-                              onCheckedChange={(checked) => toggleConditionItem(component.id, checked === true)}
-                            />
-                            <label htmlFor={`condition-${component.id}`}>{component.name}</label>
-                          </div>
-                          {parts.map((part) => (
-                            <div key={part.id} className="ml-6 flex items-center gap-2 text-sm">
-                              <Checkbox
-                                id={`condition-${part.id}`}
-                                checked={selectedConditionItems.includes(part.id)}
-                                onCheckedChange={(checked) => toggleConditionItem(part.id, checked === true)}
-                              />
-                              <label htmlFor={`condition-${part.id}`}>{part.name}</label>
-                            </div>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
-          ) : null}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => router.back()}>
               Cancel

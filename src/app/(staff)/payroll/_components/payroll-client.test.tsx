@@ -27,7 +27,7 @@ const compensation: CompensationRow[] = [
     base_salary_cents: 500000,
     effective_from: "2026-08-01",
     effective_until: null,
-    profiles: { full_name: "Ada Santos" },
+    full_name: "Ada Santos",
   },
 ];
 

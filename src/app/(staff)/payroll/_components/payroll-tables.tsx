@@ -63,7 +63,7 @@ export interface CompensationRow {
   base_salary_cents: number;
   effective_from: string;
   effective_until: string | null;
-  profiles: { full_name: string | null } | null;
+  full_name: string | null;
 }
 
 const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
@@ -263,14 +263,12 @@ export function CompensationTable({ data }: { readonly data: CompensationRow[] }
         accessorKey: "employee_id",
         header: "Employee",
         cell: ({ row }) => (
-          <span className="font-medium">
-            {row.original.profiles?.full_name ?? row.original.employee_id.slice(0, 8)}
-          </span>
+          <span className="font-medium">{row.original.full_name ?? row.original.employee_id.slice(0, 8)}</span>
         ),
       },
       {
         id: "search",
-        accessorFn: (row) => `${row.id} ${row.employee_id} ${row.profiles?.full_name ?? ""}`,
+        accessorFn: (row) => `${row.id} ${row.employee_id} ${row.full_name ?? ""}`,
         filterFn: "includesString",
         enableHiding: true,
       },

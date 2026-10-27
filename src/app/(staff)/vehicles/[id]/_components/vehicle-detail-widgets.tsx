@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { format, parseISO } from "date-fns";
-import { Car, DollarSign, Gauge, ShieldCheck, Stamp } from "lucide-react";
+import { Car, Gauge, PhilippinePeso, ShieldCheck, Stamp } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -56,7 +56,7 @@ export function VehicleMetricCards({ vehicle }: { readonly vehicle: VehicleDetai
     {
       label: "Listed Price",
       value: vehicle.current_price ? `₱${vehicle.current_price.toLocaleString()}` : "Price TBA",
-      icon: DollarSign,
+      icon: PhilippinePeso,
       badge: vehicle.pricing_type ? { label: vehicle.pricing_type, variant: "secondary" } : undefined,
       caption: "As shown to customers",
     },

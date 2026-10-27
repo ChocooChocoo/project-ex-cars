@@ -113,9 +113,11 @@ test.describe
       await page.keyboard.press("Escape");
       await expect(larger).toBeHidden();
 
-      // No reason, no request.
-      const reason = page.getByLabel("What to fix on Valid ID").first();
-      const ask = reason.locator("xpath=..").getByRole("button", { name: "Ask to resubmit" });
+      // No reason, no request. T03 HA3: the reason is asked for in a modal.
+      await page.getByRole("button", { name: "Ask to resubmit Valid ID" }).first().click();
+      const resubmit = page.getByRole("dialog");
+      const reason = resubmit.getByLabel("What to fix");
+      const ask = resubmit.getByRole("button", { name: "Ask to resubmit" });
       await expect(ask).toBeDisabled();
       await reason.fill("The photo is blurred");
       await page.screenshot({ path: "test-results/phase1-resubmit-desktop.png", fullPage: true });

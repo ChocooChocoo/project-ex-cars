@@ -155,10 +155,19 @@ export function verifiedPaid(payments: PaymentLike[], kind: string): number {
 
 // What the buyer has paid toward the car itself. The delivery and reschedule fees are charged on top
 // of the car price, so they do not reduce it.
-export function paidTowardPrice(payments: { payment_kind?: unknown; amount?: unknown }[]): number {
+// A payment the Head Accountant rejected (T03 HA3) never counts.
+export function paidTowardPrice(
+  payments: { payment_kind?: unknown; amount?: unknown; rejected_at?: unknown }[],
+): number {
   return payments
-    .filter((p) => p.payment_kind !== "delivery_fee" && p.payment_kind !== "reschedule_fee")
+    .filter((p) => !p.rejected_at && p.payment_kind !== "delivery_fee" && p.payment_kind !== "reschedule_fee")
     .reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
+}
+
+// State an unpaid installment returns to, from its due date (both "YYYY-MM-DD").
+export function installmentStateFor(dueDate: string, today: string): "overdue" | "due" | "upcoming" {
+  if (dueDate < today) return "overdue";
+  return dueDate === today ? "due" : "upcoming";
 }
 
 // §6 In-House Financing: the buyer inspects the car at a GCE visit before any downpayment. §10 and §11

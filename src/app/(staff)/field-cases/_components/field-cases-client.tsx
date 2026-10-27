@@ -46,6 +46,7 @@ export interface FieldCaseRow {
   created_at: string;
   assigned_confidential_informant?: string | null;
   mechanic_id?: string | null;
+  price_status?: string | null;
 }
 
 export interface VehicleLookup {

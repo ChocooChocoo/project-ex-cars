@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 
+import { withSignedMessageAttachments } from "@/lib/inquiries/attachments-server";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 import { ChatView } from "../_components/chat-view";
@@ -38,7 +39,7 @@ export default async function InquiryChatPage({ params }: { params: Promise<{ id
   return (
     <ChatView
       inquiry={inquiry as Record<string, unknown>}
-      messages={(messages as Record<string, unknown>[]) ?? []}
+      messages={await withSignedMessageAttachments((messages as Record<string, unknown>[]) ?? [])}
       arrangement={arrangement as Record<string, unknown> | null}
     />
   );
