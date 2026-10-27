@@ -63,7 +63,7 @@ export function AccountSwitcher() {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => router.push("/dashboard/profile")}>
+        <DropdownMenuItem onClick={() => router.push("/profile")}>
           <User />
           Profile
         </DropdownMenuItem>

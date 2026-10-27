@@ -18,6 +18,7 @@ import {
   verifyPayment,
   verifyTransactionDocument,
 } from "@/app/(staff)/transactions/actions";
+import { rejectPayment } from "@/app/(staff)/transactions/payment-review-actions";
 import {
   contractTemplate,
   isFieldArrangement,
@@ -34,6 +35,7 @@ import { ContractCard, HandoverPanel } from "./handover-panel";
 import { type MeetupPick, MeetupTeamPanel } from "./meetup-team-panel";
 import { type SellFlowData, SellFlowPanel } from "./sell-flow-panel";
 import { TransactionDetailSidebarV1 } from "./transaction-detail-sidebar-v1";
+import { TransactionDocumentsCard } from "./transaction-documents-card";
 import { TransactionOverviewV1 } from "./transaction-overview-v1";
 import { TransactionPaymentProgressV1 } from "./transaction-payment-progress-v1";
 import { TransactionPaymentsTableV1 } from "./transaction-payments-table-v1";
@@ -79,6 +81,8 @@ export function StaffTransactionDetail({
   readonly headSecurity?: { id: string; full_name: string | null }[];
 }) {
   const router = useRouter();
+  // T03 HA3: rejected payments stay in Payment Records but never count toward progress or gates.
+  const countedPayments = payments.filter((p) => !p.rejected_at);
   const id = transaction.id as string;
   const kind = transaction.transaction_kind as string;
   const state = (transaction.current_state ?? "pending") as TransactionState;
@@ -155,13 +159,14 @@ export function StaffTransactionDetail({
     }
   }
 
-  async function onRecordPayment(amount: string, method: string, date: string, paymentKind: string) {
+  async function onRecordPayment(amount: string, method: string, date: string, paymentKind: string, proof?: File) {
     const fd = new FormData();
     fd.set("transaction_id", id);
     fd.set("amount", amount);
     fd.set("method", method);
     fd.set("settlement_date", date);
     if (paymentKind) fd.set("payment_kind", paymentKind);
+    if (proof) fd.set("proof", proof);
     const result = await recordPayment(fd);
     if (result.error) toast.error(result.error);
     else {
@@ -218,6 +223,15 @@ export function StaffTransactionDetail({
     if (result.error) toast.error(result.error);
     else {
       toast.success("Payment verified.");
+      router.refresh();
+    }
+  }
+
+  async function onRejectPayment(paymentId: string, reason: string) {
+    const result = await rejectPayment(paymentId, reason);
+    if (result.error) toast.error(result.error);
+    else {
+      toast.success("Payment rejected. The buyer is notified.");
       router.refresh();
     }
   }
@@ -297,7 +311,7 @@ export function StaffTransactionDetail({
         <div className="flex flex-col gap-4 lg:col-span-2">
           <TransactionPaymentProgressV1
             kind={kind}
-            payments={payments}
+            payments={countedPayments}
             purchaseDetails={purchaseDetails}
             sellDetails={sellDetails}
             vehicleRequests={vehicleRequests}
@@ -339,7 +353,7 @@ export function StaffTransactionDetail({
           kind={kind}
           state={state}
           userRole={userRole}
-          payments={payments}
+          payments={countedPayments}
           documents={documents}
           history={history}
           installmentAccount={installmentAccount}
@@ -348,9 +362,6 @@ export function StaffTransactionDetail({
           sellDetails={sellDetails}
           checklistNameMap={checklistNameMap}
           onRecordPayment={onRecordPayment}
-          onUploadDocument={onUploadDocument}
-          onVerifyDocument={onVerifyDocument}
-          onRejectDocument={onRejectDocument}
           onRecordPaperwork={onRecordPaperwork}
           onWaiveInstallment={onWaiveInstallment}
           onRecordInstallmentPaid={onRecordInstallmentPaid}
@@ -358,6 +369,15 @@ export function StaffTransactionDetail({
           onInstructRepossession={onInstructRepossession}
         />
       </div>
+
+      <TransactionDocumentsCard
+        kind={kind}
+        userRole={userRole}
+        documents={documents}
+        onUploadDocument={onUploadDocument}
+        onVerifyDocument={onVerifyDocument}
+        onRejectDocument={onRejectDocument}
+      />
 
       {kind === "buy" && financing ? (
         <FinancingPanel
@@ -400,7 +420,7 @@ export function StaffTransactionDetail({
           transactionId={id}
           state={state}
           purchaseDetails={purchaseDetails}
-          payments={payments}
+          payments={countedPayments}
           arrangement={liveVisit ?? null}
           fieldCase={delivery.fieldCase}
           flowStatus={(transaction.flow_status as string | null) ?? null}
@@ -441,7 +461,12 @@ export function StaffTransactionDetail({
         <BuyersForCarPanel currentId={id} buyers={carBuyers} canPromote={["sales_manager", "ceo"].includes(userRole)} />
       ) : null}
 
-      <TransactionPaymentsTableV1 payments={payments} onVerifyPayment={onVerifyPayment} />
+      <TransactionPaymentsTableV1
+        payments={payments}
+        canReview={userRole === "ceo" || userRole === "head_accountant"}
+        onVerifyPayment={onVerifyPayment}
+        onRejectPayment={onRejectPayment}
+      />
     </div>
   );
 }

@@ -14,10 +14,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ACCEPTED_ID_TYPES, ID_LABELS } from "@/lib/auth/roles";
-import { transactionDocumentLabel } from "@/lib/transactions/document-media";
 import { arrangementKindLabel, TRANSACTION_STATE_LABELS } from "@/lib/transactions/labels";
-import { SELL_PAPER_KINDS } from "@/lib/transactions/sell-flow";
 import type { TransactionState } from "@/lib/transactions/state-machine";
 import { formatCurrency } from "@/lib/utils";
 
@@ -51,9 +48,6 @@ export function TransactionDetailSidebarV1({
   conditionItems,
   checklistNameMap,
   onRecordPayment,
-  onUploadDocument,
-  onVerifyDocument,
-  onRejectDocument,
   onRecordPaperwork,
   onWaiveInstallment,
   onRecordInstallmentPaid,
@@ -77,10 +71,13 @@ export function TransactionDetailSidebarV1({
   readonly conditionItems?: unknown;
   // Optional id → display-name map for inspection_checklist_nodes.
   readonly checklistNameMap?: Record<string, string>;
-  readonly onRecordPayment: (amount: string, method: string, date: string, paymentKind: string) => Promise<void>;
-  readonly onUploadDocument: (documentKind: string, idType: string, file: File) => Promise<void>;
-  readonly onVerifyDocument: (documentId: string) => Promise<void>;
-  readonly onRejectDocument: (documentId: string, reason: string) => Promise<void>;
+  readonly onRecordPayment: (
+    amount: string,
+    method: string,
+    date: string,
+    paymentKind: string,
+    proof?: File,
+  ) => Promise<void>;
   readonly onRecordPaperwork: (documentKind: string) => Promise<void>;
   readonly onWaiveInstallment: (installmentId: string) => Promise<void>;
   readonly onRecordInstallmentPaid?: (installmentId: string, amount: string) => Promise<void>;
@@ -91,10 +88,7 @@ export function TransactionDetailSidebarV1({
   // §4: a delivery's fee, downpayment, balance and reschedule fee are told apart for the records.
   const [payKind, setPayKind] = useState("full");
   const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10));
-  const [docKind, setDocKind] = useState("valid_id");
-  const [docIdType, setDocIdType] = useState("");
-  const [resubmitReasons, setResubmitReasons] = useState<Record<string, string>>({});
-  const docFileRef = useRef<HTMLInputElement>(null);
+  const proofFileRef = useRef<HTMLInputElement>(null);
   const [repoOpen, setRepoOpen] = useState(false);
   const [repoInformant, setRepoInformant] = useState("");
   const [repoHeadSecurity, setRepoHeadSecurity] = useState("");
@@ -114,16 +108,6 @@ export function TransactionDetailSidebarV1({
   // Only the Head Accountant may verify purchase documents, so the buttons match
   // the server-side guard in verifyTransactionDocument.
   const isHeadAccountant = userRole === "head_accountant";
-  // T01 Selling step 2: the Marketing Specialist verifies a seller's papers; the Head Accountant the rest.
-  // §2 step 4: the Sales Manager checks a buyer's IDs and proof of billing.
-  const canVerify = (documentKind: unknown) =>
-    kind === "sell" && (SELL_PAPER_KINDS as readonly unknown[]).includes(documentKind)
-      ? userRole === "marketing_specialist"
-      : isHeadAccountant ||
-        (userRole === "sales_manager" &&
-          kind === "buy" &&
-          ["valid_id", "proof_of_billing"].includes(String(documentKind)));
-
   const docSellPhotos = documents.filter((doc) => String(doc.document_kind) === "sell_photo");
   const photos =
     sellPhotos && sellPhotos.length > 0
@@ -138,20 +122,6 @@ export function TransactionDetailSidebarV1({
   const conditionList = normalizeConditionItems(rawConditionItems).map((item) => checklistNameMap?.[item] ?? item);
 
   const showSellExtras = kind === "sell" && (photos.length > 0 || conditionList.length > 0);
-
-  async function handleUpload() {
-    const file = docFileRef.current?.files?.[0];
-    if (!file) {
-      toast.error("Select a file to upload.");
-      return;
-    }
-    if (docKind === "valid_id" && !docIdType) {
-      toast.error("Select the ID type.");
-      return;
-    }
-    await onUploadDocument(docKind, docIdType, file);
-    if (docFileRef.current) docFileRef.current.value = "";
-  }
 
   async function handleInstruct() {
     if (!repoInformant) {
@@ -271,126 +241,6 @@ export function TransactionDetailSidebarV1({
             </div>
           )}
 
-          <div className="space-y-2 rounded-md border bg-muted/20 px-3 py-2">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-muted-foreground text-xs">Documents</p>
-              <Badge className="h-5 px-2 text-[11px] tabular-nums">{documents.length}</Badge>
-            </div>
-            {kind === "buy" && !isCeo && (
-              <div className="flex flex-col gap-2">
-                <Select
-                  value={docKind}
-                  onValueChange={(v) => {
-                    setDocKind(v);
-                    if (v !== "valid_id") setDocIdType("");
-                  }}
-                >
-                  <SelectTrigger className="h-7 w-full text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="valid_id">Valid ID</SelectItem>
-                    <SelectItem value="proof_of_billing">Proof of Billing</SelectItem>
-                  </SelectContent>
-                </Select>
-                {docKind === "valid_id" ? (
-                  <Select value={docIdType} onValueChange={setDocIdType}>
-                    <SelectTrigger className="h-7 w-full text-xs">
-                      <SelectValue placeholder="ID type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ACCEPTED_ID_TYPES.map((t) => (
-                        <SelectItem key={t} value={t}>
-                          {ID_LABELS[t]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : null}
-                <Input
-                  ref={docFileRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,application/pdf"
-                  className="h-7 w-full text-xs"
-                />
-                <Button size="sm" className="h-7 text-xs" onClick={handleUpload}>
-                  Upload
-                </Button>
-              </div>
-            )}
-            {documents.length === 0 ? (
-              <p className="text-muted-foreground text-xs">No documents.</p>
-            ) : (
-              documents.map((doc) => {
-                const label = transactionDocumentLabel(doc.document_kind);
-                const signedUrl = typeof doc.signed_url === "string" ? doc.signed_url : null;
-                return (
-                  <div key={doc.id as string} className="space-y-2 rounded-md border bg-background/70 px-2.5 py-1.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-sm">{label}</span>
-                      <Badge variant="secondary" className="h-5 px-2 text-[11px]">
-                        {doc.verification_state as string}
-                      </Badge>
-                    </div>
-                    {doc.id_type ? (
-                      <p className="text-muted-foreground text-xs capitalize">
-                        {(doc.id_type as string).replace(/_/g, " ")}
-                      </p>
-                    ) : null}
-                    {signedUrl ? (
-                      doc.is_image === true ? (
-                        <TransactionImagePreview src={signedUrl} alt={`${label} document preview`} />
-                      ) : (
-                        <a href={signedUrl} target="_blank" rel="noreferrer" className="text-primary text-xs underline">
-                          Open {label.toLowerCase()}
-                        </a>
-                      )
-                    ) : (
-                      <p className="text-muted-foreground text-xs">Preview unavailable</p>
-                    )}
-                    {doc.verification_state === "rejected" && doc.rejection_reason ? (
-                      <p className="text-muted-foreground text-xs">To fix: {doc.rejection_reason as string}</p>
-                    ) : null}
-                    {doc.verification_state === "pending" && canVerify(doc.document_kind) ? (
-                      <div className="space-y-1.5">
-                        <Label htmlFor={`resubmit-${doc.id as string}`} className="text-xs">
-                          What to fix<span className="sr-only"> on {label}</span>
-                        </Label>
-                        <Input
-                          id={`resubmit-${doc.id as string}`}
-                          placeholder="Only if the image is unclear"
-                          className="h-8 text-xs"
-                          value={resubmitReasons[doc.id as string] ?? ""}
-                          onChange={(e) =>
-                            setResubmitReasons((reasons) => ({ ...reasons, [doc.id as string]: e.target.value }))
-                          }
-                        />
-                        <div className="flex gap-1.5">
-                          <Button
-                            size="sm"
-                            className="h-8 px-2.5 text-xs"
-                            onClick={() => onVerifyDocument(doc.id as string)}
-                          >
-                            Verify
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-8 px-2.5 text-xs"
-                            disabled={!resubmitReasons[doc.id as string]?.trim()}
-                            onClick={() => onRejectDocument(doc.id as string, resubmitReasons[doc.id as string].trim())}
-                          >
-                            Ask to resubmit
-                          </Button>
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })
-            )}
-          </div>
-
           {showSellExtras ? (
             <div className="space-y-2 rounded-md border bg-muted/20 px-3 py-2">
               <div className="flex items-center justify-between gap-2">
@@ -506,10 +356,31 @@ export function TransactionDetailSidebarV1({
                   onChange={(e) => setPayDate(e.target.value)}
                 />
               </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="pay_proof" className="text-xs">
+                  Photo of cheque / deposit slip (optional)
+                </Label>
+                <Input
+                  id="pay_proof"
+                  ref={proofFileRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="h-7 w-full text-xs"
+                />
+              </div>
               <Button
                 size="sm"
                 className="h-7 w-full text-xs"
-                onClick={() => onRecordPayment(payAmount, payMethod, payDate, kind === "buy" ? payKind : "")}
+                onClick={async () => {
+                  await onRecordPayment(
+                    payAmount,
+                    payMethod,
+                    payDate,
+                    kind === "buy" ? payKind : "",
+                    proofFileRef.current?.files?.[0],
+                  );
+                  if (proofFileRef.current) proofFileRef.current.value = "";
+                }}
               >
                 Record Payment
               </Button>

@@ -213,22 +213,36 @@ export function PayrollClient({
           <FieldGroup className="gap-4">
             <div className="grid grid-cols-2 gap-4">
               <Field>
-                <FieldLabel>Period Start</FieldLabel>
-                <Input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} />
+                <FieldLabel htmlFor="payroll-period-start">Period Start</FieldLabel>
+                <Input
+                  id="payroll-period-start"
+                  type="date"
+                  value={periodStart}
+                  onChange={(e) => setPeriodStart(e.target.value)}
+                />
               </Field>
               <Field>
-                <FieldLabel>Period End</FieldLabel>
-                <Input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
+                <FieldLabel htmlFor="payroll-period-end">Period End</FieldLabel>
+                <Input
+                  id="payroll-period-end"
+                  type="date"
+                  value={periodEnd}
+                  onChange={(e) => setPeriodEnd(e.target.value)}
+                />
               </Field>
             </div>
             <Field>
-              <FieldLabel>Notes</FieldLabel>
-              <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} />
+              <FieldLabel htmlFor="payroll-run-notes">Notes</FieldLabel>
+              <Textarea id="payroll-run-notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} />
             </Field>
             <p className="text-muted-foreground text-xs">
               Draft payslips are generated only from checked attendance and active compensation records for the period.
             </p>
-            {formError ? <p className="text-destructive text-sm">{formError}</p> : null}
+            {formError ? (
+              <p role="alert" className="text-destructive text-sm">
+                {formError}
+              </p>
+            ) : null}
           </FieldGroup>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>

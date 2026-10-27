@@ -55,6 +55,8 @@ export function resolveInternalPath(role: string, segment: string): string {
   if (seg.startsWith("sell-vehicle")) return `/${seg}`;
   if (seg.startsWith("buying-requirements")) return `/${seg}`;
   if (seg.startsWith("supplier-messages")) return "/supplier-messages";
+  // T03 C15: /customer/profile. Staff keep /profile, a different route group.
+  if (seg === "profile") return "/my-profile";
 
   return "/dashboard";
 }

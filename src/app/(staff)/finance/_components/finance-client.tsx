@@ -5,7 +5,7 @@ import { useState } from "react";
 
 import { useRouter } from "next/navigation";
 
-import { Banknote, Check, Plus, Send, Undo2 } from "lucide-react";
+import { Banknote, Check, ChevronRight, Plus, Send, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -15,6 +15,7 @@ import {
   requestPurchaseFunds,
   verifyFinancialEntry,
 } from "@/app/(staff)/finance/actions";
+import { TablePager, usePagedRows } from "@/components/table-pager";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,13 +29,20 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { FINANCIAL_ENTRY_KINDS, type FinancialEntryKind } from "@/lib/validation/phase6";
 
 export interface FinancialEntryRow {
@@ -115,6 +123,249 @@ export function getFinanceSummary(entries: FinancialEntryRow[]) {
   return { revenueTotal, expenseTotal, netTotal: revenueTotal - expenseTotal, count: entries.length };
 }
 
+const isOutflow = (kind: FinancialEntryKind) => kind === "expense" || kind === "disbursement";
+
+function LedgerTable({
+  entries,
+  canVerify,
+  onVerify,
+}: {
+  readonly entries: FinancialEntryRow[];
+  readonly canVerify: boolean;
+  readonly onVerify: (entry: FinancialEntryRow) => void;
+}) {
+  const paged = usePagedRows(entries);
+  return (
+    <div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b text-left text-muted-foreground">
+              <th className="px-2 py-2 font-medium">Type</th>
+              <th className="px-2 py-2 font-medium">Description</th>
+              <th className="px-2 py-2 font-medium">Amount</th>
+              <th className="px-2 py-2 font-medium">Recorded</th>
+              <th className="px-2 py-2 font-medium">Verified</th>
+              {canVerify ? <th className="px-2 py-2" /> : null}
+            </tr>
+          </thead>
+          <tbody>
+            {entries.length === 0 ? (
+              <tr>
+                <td colSpan={canVerify ? 6 : 5} className="px-2 py-6 text-center text-muted-foreground">
+                  No financial entries recorded.
+                </td>
+              </tr>
+            ) : (
+              paged.rows.map((entry) => (
+                <tr key={entry.id} className="border-b last:border-0">
+                  <td className="px-2 py-2">
+                    <Badge variant="secondary" className="capitalize">
+                      {ENTRY_LABELS[entry.entry_kind]}
+                    </Badge>
+                  </td>
+                  <td className="px-2 py-2 text-muted-foreground">{entry.description}</td>
+                  <td
+                    className={cn(
+                      "px-2 py-2 font-medium",
+                      isOutflow(entry.entry_kind)
+                        ? "text-red-600 dark:text-red-400"
+                        : "text-green-600 dark:text-green-400",
+                    )}
+                  >
+                    {isOutflow(entry.entry_kind) ? "−" : "+"}₱{(entry.amount_cents / 100).toLocaleString()}
+                  </td>
+                  <td className="px-2 py-2 text-muted-foreground">
+                    {new Date(entry.recorded_at).toLocaleDateString()}
+                  </td>
+                  <td className="px-2 py-2">
+                    {entry.verified_by ? (
+                      <Badge variant="default">Verified</Badge>
+                    ) : (
+                      <Badge variant="outline">Pending</Badge>
+                    )}
+                  </td>
+                  {canVerify ? (
+                    <td className="px-2 py-2 text-right">
+                      {!entry.verified_by ? (
+                        <Button variant="ghost" size="sm" onClick={() => onVerify(entry)}>
+                          <Check data-icon="inline-start" />
+                          Verify
+                        </Button>
+                      ) : null}
+                    </td>
+                  ) : null}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+      <TablePager {...paged} label="Financial entries" />
+    </div>
+  );
+}
+
+const statusVariant = (status: string) => (status === "rejected" || status === "paid" ? "secondary" : "default");
+
+function DisbursementsTable({
+  disbursements,
+  onOpen,
+}: {
+  readonly disbursements: DisbursementRow[];
+  readonly onOpen: (row: DisbursementRow) => void;
+}) {
+  const paged = usePagedRows(disbursements);
+  return (
+    <div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b text-left text-muted-foreground">
+              <th className="px-2 py-2 font-medium">Title</th>
+              <th className="px-2 py-2 font-medium">Amount</th>
+              <th className="px-2 py-2 font-medium">Purpose</th>
+              <th className="px-2 py-2 font-medium">Status</th>
+              <th className="w-8 px-2 py-2">
+                <span className="sr-only">Details</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {disbursements.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-2 py-6 text-center text-muted-foreground">
+                  No disbursement requests.
+                </td>
+              </tr>
+            ) : (
+              paged.rows.map((row) => (
+                // T03 HA4: the whole row opens the request; the title button is the keyboard target.
+                <tr
+                  key={row.id}
+                  className="cursor-pointer border-b last:border-0 hover:bg-muted/50"
+                  onClick={() => onOpen(row)}
+                >
+                  <td className="px-2 py-2 font-medium">
+                    <button
+                      type="button"
+                      className="rounded-sm text-left underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-label={`Open ${row.title}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onOpen(row);
+                      }}
+                    >
+                      {row.title}
+                    </button>
+                  </td>
+                  <td className="px-2 py-2 tabular-nums">₱{(row.amount_cents / 100).toLocaleString()}</td>
+                  <td className="max-w-64 truncate px-2 py-2 text-muted-foreground">{row.purpose}</td>
+                  <td className="px-2 py-2">
+                    <Badge variant={statusVariant(row.status)}>{row.status}</Badge>
+                  </td>
+                  <td className="px-2 py-2 text-muted-foreground">
+                    <ChevronRight className="size-4" aria-hidden="true" />
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+      <TablePager {...paged} label="Disbursement requests" />
+    </div>
+  );
+}
+
+function DisbursementDetail({
+  row,
+  canAdvance,
+  reason,
+  onReasonChange,
+  busy,
+  onAdvance,
+}: {
+  readonly row: DisbursementRow;
+  readonly canAdvance: boolean;
+  readonly reason: string;
+  readonly onReasonChange: (value: string) => void;
+  readonly busy: boolean;
+  readonly onAdvance: (eventKind: string, notes?: string) => void;
+}) {
+  const flow = DISBURSEMENT_FLOW[row.status];
+  const canReject = canAdvance && (row.status === "draft" || row.status === "submitted");
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>{row.title}</DialogTitle>
+        <DialogDescription>
+          Requested {new Date(row.created_at).toLocaleDateString()} ·{" "}
+          {formatCurrency(row.amount_cents / 100, { noDecimals: true })}
+        </DialogDescription>
+      </DialogHeader>
+
+      <dl className="flex flex-col gap-4 text-sm">
+        <div className="flex items-center gap-2">
+          <dt className="text-muted-foreground">Status</dt>
+          <dd>
+            <Badge variant={statusVariant(row.status)}>{flow?.label ?? row.status}</Badge>
+          </dd>
+        </div>
+        <div className="flex flex-col gap-1">
+          <dt className="text-muted-foreground">Purpose</dt>
+          <dd className="max-h-64 overflow-y-auto whitespace-pre-wrap break-words rounded-md border bg-muted/30 p-3">
+            {row.purpose}
+          </dd>
+        </div>
+        {row.notes ? (
+          <div className="flex flex-col gap-1">
+            <dt className="text-muted-foreground">Notes</dt>
+            <dd className="whitespace-pre-wrap break-words">{row.notes}</dd>
+          </div>
+        ) : null}
+      </dl>
+
+      {canReject ? (
+        <Field>
+          <FieldLabel htmlFor="disbursement-reject-reason">Reason for rejecting</FieldLabel>
+          <Textarea
+            id="disbursement-reject-reason"
+            value={reason}
+            onChange={(event) => onReasonChange(event.target.value)}
+            rows={2}
+            maxLength={1000}
+            placeholder="Needed only if you reject this request"
+          />
+        </Field>
+      ) : null}
+
+      {!canAdvance && row.status === "draft" ? (
+        <p className="text-muted-foreground text-sm">Awaiting approval by finance roles.</p>
+      ) : null}
+
+      {canAdvance && flow?.next ? (
+        <DialogFooter>
+          {canReject ? (
+            <Button
+              variant="outline"
+              disabled={busy || reason.trim().length === 0}
+              onClick={() => onAdvance("rejected", reason.trim())}
+            >
+              <Undo2 data-icon="inline-start" />
+              Reject
+            </Button>
+          ) : null}
+          <Button disabled={busy} onClick={() => onAdvance(flow.next ?? "")}>
+            {DISBURSEMENT_EVENT_LABELS[flow.next ?? ""]}
+          </Button>
+        </DialogFooter>
+      ) : null}
+    </>
+  );
+}
+
 export function FinanceClient({
   entries,
   disbursements,
@@ -146,6 +397,9 @@ export function FinanceClient({
   const [loading, setLoading] = useState(false);
   const [verifyTarget, setVerifyTarget] = useState<FinancialEntryRow | null>(null);
   const [verifying, setVerifying] = useState(false);
+  const [detail, setDetail] = useState<DisbursementRow | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [advancing, setAdvancing] = useState(false);
 
   const { revenueTotal, expenseTotal } = getFinanceSummary(entries);
   const pendingApprovals = disbursements.filter(
@@ -216,16 +470,22 @@ export function FinanceClient({
     router.refresh();
   }
 
-  async function advance(disbursementId: string, eventKind: string) {
+  async function advance(disbursementId: string, eventKind: string, notes = "") {
     const fd = new FormData();
     fd.set("disbursement_id", disbursementId);
     fd.set("event_kind", eventKind);
+    if (notes) fd.set("notes", notes);
+    setAdvancing(true);
     const result = await advanceDisbursement(fd);
+    setAdvancing(false);
     if ("error" in result && result.error) {
       toast.error(result.error);
       return;
     }
-    toast.success(`Disbursement ${DISBURSEMENT_EVENT_LABELS[eventKind].toLowerCase()}d.`);
+    // Event kinds are already past tense ("approved", "rejected"); only "paid" needs a verb.
+    toast.success(`Disbursement ${eventKind === "paid" ? "marked paid" : eventKind}.`);
+    setDetail(null);
+    setRejectReason("");
     router.refresh();
   }
 
@@ -373,138 +633,12 @@ export function FinanceClient({
                   <summary className="cursor-pointer text-muted-foreground text-sm">
                     View full ledger ({entries.length} entries) — collapsed for informant
                   </summary>
-                  <div className="mt-4 overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b text-left text-muted-foreground">
-                          <th className="px-2 py-2 font-medium">Type</th>
-                          <th className="px-2 py-2 font-medium">Description</th>
-                          <th className="px-2 py-2 font-medium">Amount</th>
-                          <th className="px-2 py-2 font-medium">Recorded</th>
-                          <th className="px-2 py-2 font-medium">Verified</th>
-                          {canVerify ? <th className="px-2 py-2" /> : null}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {entries.length === 0 ? (
-                          <tr>
-                            <td colSpan={canVerify ? 6 : 5} className="px-2 py-6 text-center text-muted-foreground">
-                              No financial entries recorded.
-                            </td>
-                          </tr>
-                        ) : (
-                          entries.map((entry) => (
-                            <tr key={entry.id} className="border-b last:border-0">
-                              <td className="px-2 py-2">
-                                <Badge variant="secondary" className="capitalize">
-                                  {ENTRY_LABELS[entry.entry_kind]}
-                                </Badge>
-                              </td>
-                              <td className="px-2 py-2 text-muted-foreground">{entry.description}</td>
-                              <td
-                                className={cn(
-                                  "px-2 py-2 font-medium",
-                                  entry.entry_kind === "expense" || entry.entry_kind === "disbursement"
-                                    ? "text-red-600 dark:text-red-400"
-                                    : "text-green-600 dark:text-green-400",
-                                )}
-                              >
-                                {entry.entry_kind === "expense" || entry.entry_kind === "disbursement" ? "−" : "+"}₱
-                                {(entry.amount_cents / 100).toLocaleString()}
-                              </td>
-                              <td className="px-2 py-2 text-muted-foreground">
-                                {new Date(entry.recorded_at).toLocaleDateString()}
-                              </td>
-                              <td className="px-2 py-2">
-                                {entry.verified_by ? (
-                                  <Badge variant="default">Verified</Badge>
-                                ) : (
-                                  <Badge variant="outline">Pending</Badge>
-                                )}
-                              </td>
-                              {canVerify ? (
-                                <td className="px-2 py-2 text-right">
-                                  {!entry.verified_by ? (
-                                    <Button variant="ghost" size="sm" onClick={() => setVerifyTarget(entry)}>
-                                      <Check data-icon="inline-start" />
-                                      Verify
-                                    </Button>
-                                  ) : null}
-                                </td>
-                              ) : null}
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
+                  <div className="mt-4">
+                    <LedgerTable entries={entries} canVerify={canVerify} onVerify={setVerifyTarget} />
                   </div>
                 </details>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b text-left text-muted-foreground">
-                        <th className="px-2 py-2 font-medium">Type</th>
-                        <th className="px-2 py-2 font-medium">Description</th>
-                        <th className="px-2 py-2 font-medium">Amount</th>
-                        <th className="px-2 py-2 font-medium">Recorded</th>
-                        <th className="px-2 py-2 font-medium">Verified</th>
-                        {canVerify ? <th className="px-2 py-2" /> : null}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {entries.length === 0 ? (
-                        <tr>
-                          <td colSpan={canVerify ? 6 : 5} className="px-2 py-6 text-center text-muted-foreground">
-                            No financial entries recorded.
-                          </td>
-                        </tr>
-                      ) : (
-                        entries.map((entry) => (
-                          <tr key={entry.id} className="border-b last:border-0">
-                            <td className="px-2 py-2">
-                              <Badge variant="secondary" className="capitalize">
-                                {ENTRY_LABELS[entry.entry_kind]}
-                              </Badge>
-                            </td>
-                            <td className="px-2 py-2 text-muted-foreground">{entry.description}</td>
-                            <td
-                              className={cn(
-                                "px-2 py-2 font-medium",
-                                entry.entry_kind === "expense" || entry.entry_kind === "disbursement"
-                                  ? "text-red-600 dark:text-red-400"
-                                  : "text-green-600 dark:text-green-400",
-                              )}
-                            >
-                              {entry.entry_kind === "expense" || entry.entry_kind === "disbursement" ? "−" : "+"}₱
-                              {(entry.amount_cents / 100).toLocaleString()}
-                            </td>
-                            <td className="px-2 py-2 text-muted-foreground">
-                              {new Date(entry.recorded_at).toLocaleDateString()}
-                            </td>
-                            <td className="px-2 py-2">
-                              {entry.verified_by ? (
-                                <Badge variant="default">Verified</Badge>
-                              ) : (
-                                <Badge variant="outline">Pending</Badge>
-                              )}
-                            </td>
-                            {canVerify ? (
-                              <td className="px-2 py-2 text-right">
-                                {!entry.verified_by ? (
-                                  <Button variant="ghost" size="sm" onClick={() => setVerifyTarget(entry)}>
-                                    <Check data-icon="inline-start" />
-                                    Verify
-                                  </Button>
-                                ) : null}
-                              </td>
-                            ) : null}
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                <LedgerTable entries={entries} canVerify={canVerify} onVerify={setVerifyTarget} />
               )}
             </CardContent>
           </Card>
@@ -516,80 +650,37 @@ export function FinanceClient({
               <CardTitle>Disbursement Requests</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-left text-muted-foreground">
-                      <th className="px-2 py-2 font-medium">Title</th>
-                      <th className="px-2 py-2 font-medium">Amount</th>
-                      <th className="px-2 py-2 font-medium">Purpose</th>
-                      <th className="px-2 py-2 font-medium">Status</th>
-                      <th className="px-2 py-2" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {disbursements.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="px-2 py-6 text-center text-muted-foreground">
-                          No disbursement requests.
-                        </td>
-                      </tr>
-                    ) : (
-                      disbursements.map((disbursement) => {
-                        const flow = DISBURSEMENT_FLOW[disbursement.status];
-                        return (
-                          <tr key={disbursement.id} className="border-b last:border-0">
-                            <td className="px-2 py-2 font-medium">{disbursement.title}</td>
-                            <td className="px-2 py-2">₱{(disbursement.amount_cents / 100).toLocaleString()}</td>
-                            <td className="max-w-64 truncate px-2 py-2 text-muted-foreground">
-                              {disbursement.purpose}
-                            </td>
-                            <td className="px-2 py-2">
-                              <Badge
-                                variant={
-                                  disbursement.status === "rejected" || disbursement.status === "paid"
-                                    ? "secondary"
-                                    : "default"
-                                }
-                              >
-                                {disbursement.status}
-                              </Badge>
-                            </td>
-                            <td className="px-2 py-2 text-right">
-                              {canAdvance && flow.next ? (
-                                <div className="flex justify-end gap-2">
-                                  {disbursement.status === "draft" || disbursement.status === "submitted" ? (
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => advance(disbursement.id, "rejected")}
-                                    >
-                                      <Undo2 data-icon="inline-start" />
-                                      Reject
-                                    </Button>
-                                  ) : null}
-                                  <Button size="sm" onClick={() => advance(disbursement.id, flow.next ?? "")}>
-                                    {DISBURSEMENT_EVENT_LABELS[flow.next ?? ""]}
-                                  </Button>
-                                </div>
-                              ) : null}
-                              {!canAdvance && disbursement.status === "draft" ? (
-                                <span className="text-muted-foreground text-xs">
-                                  Awaiting approval by finance roles
-                                </span>
-                              ) : null}
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <DisbursementsTable
+                disbursements={disbursements}
+                onOpen={(row) => {
+                  setRejectReason("");
+                  setDetail(row);
+                }}
+              />
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Dialog
+        open={!!detail}
+        onOpenChange={(open) => {
+          if (!open && !advancing) setDetail(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          {detail ? (
+            <DisbursementDetail
+              row={detail}
+              canAdvance={canAdvance}
+              reason={rejectReason}
+              onReasonChange={setRejectReason}
+              busy={advancing}
+              onAdvance={(eventKind, notes) => advance(detail.id, eventKind, notes)}
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={entryOpen} onOpenChange={setEntryOpen}>
         <DialogContent>

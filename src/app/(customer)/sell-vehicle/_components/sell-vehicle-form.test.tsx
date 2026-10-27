@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { sellVehicleSchema } from "@/lib/validation/transactions";
 
-import { SellVehicleForm, validateSellPhotos } from "./sell-vehicle-form";
+import { composeDeclaredIssues, SellVehicleForm, validateIssuePhotos, validateSellPhotos } from "./sell-vehicle-form";
 
 if (typeof window !== "undefined" && !window.HTMLElement.prototype.scrollIntoView) {
   window.HTMLElement.prototype.scrollIntoView =
@@ -45,6 +45,7 @@ function baseData(overrides: Record<string, unknown> = {}) {
     offered_amount: 450000,
     has_known_issues: "no",
     meetup_method: "gce_visit",
+    owner_number: "1",
     ...overrides,
   };
 }
@@ -181,7 +182,17 @@ describe("condition_items payload", () => {
   });
 });
 
-describe("SellVehicleForm photo + checklist UI", () => {
+const NODES = [
+  { id: "00000000-0000-4000-a000-000000000001", parent_id: null, level: "system" as const, name: "Brakes" },
+  {
+    id: "00000000-0000-4000-a000-000000000002",
+    parent_id: "00000000-0000-4000-a000-000000000001",
+    level: "component" as const,
+    name: "Pads",
+  },
+];
+
+describe("SellVehicleForm photo + issues UI", () => {
   it("renders the required photo file input", () => {
     render(<SellVehicleForm />);
     const input = screen.getByLabelText("Vehicle photos");
@@ -190,66 +201,70 @@ describe("SellVehicleForm photo + checklist UI", () => {
     expect(input).toHaveAttribute("multiple");
   });
 
-  it("renders the optional checklist trigger when nodes are provided", () => {
-    render(
-      <SellVehicleForm
-        checklistNodes={[
-          { id: "00000000-0000-4000-a000-000000000001", parent_id: null, level: "system", name: "Brakes" },
-          {
-            id: "00000000-0000-4000-a000-000000000002",
-            parent_id: "00000000-0000-4000-a000-000000000001",
-            level: "component",
-            name: "Pads",
-          },
-        ]}
-      />,
-    );
-    expect(screen.getByText("Known issues checklist (optional)")).toBeInTheDocument();
+  it("labels the vehicle fields Brand, Model, Year and Owner number", () => {
+    render(<SellVehicleForm />);
+    expect(screen.getByLabelText("Brand", { exact: false })).toBeInTheDocument();
+    expect(screen.getByLabelText("Model", { exact: false })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /^Year/ })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /^Owner number/ })).toBeInTheDocument();
   });
 
-  it("hides the checklist trigger when no nodes are provided", () => {
-    render(<SellVehicleForm />);
+  it("shows one issues checklist with Others and issue photos only after the seller declares issues", async () => {
+    render(<SellVehicleForm checklistNodes={NODES} />);
+    expect(screen.queryByLabelText("Pads")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("The vehicle has known issues"));
+    await waitFor(() => expect(screen.getByLabelText("Pads")).toBeInTheDocument());
+    expect(screen.getByLabelText("Others")).toBeInTheDocument();
+    expect(screen.getByLabelText("Photos of the issues (optional, up to 6)")).toBeInTheDocument();
     expect(screen.queryByText("Known issues checklist (optional)")).not.toBeInTheDocument();
+  });
+
+  it("asks for the other issues text once Others is ticked", async () => {
+    render(<SellVehicleForm checklistNodes={NODES} />);
+    fireEvent.click(screen.getByLabelText("The vehicle has known issues"));
+    fireEvent.click(await screen.findByLabelText("Others"));
+    expect(await screen.findByLabelText("Describe the other issues *")).toBeInTheDocument();
   });
 });
 
-describe("SellVehicleForm Select + Other detail", () => {
-  it("renders condition Select with placeholder", () => {
-    render(<SellVehicleForm />);
-    expect(screen.getByText("Condition *")).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: /^Condition/ })).toBeInTheDocument();
-    expect(screen.getByText("Select condition")).toBeInTheDocument();
-  });
-
-  it("renders 4 enum items + Other when opened", async () => {
+describe("SellVehicleForm condition", () => {
+  it("offers Brand New and Second Hand only", async () => {
     render(<SellVehicleForm />);
     fireEvent.click(screen.getByRole("combobox", { name: /^Condition/ }));
-    await waitFor(() => expect(screen.getAllByText("Excellent").length).toBeGreaterThanOrEqual(1));
-    expect(screen.getAllByText("Good").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText("Fair").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText("Needs Repair").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText("Other").length).toBeGreaterThanOrEqual(1);
-    expect(getVisibleOption("Excellent")).toBeInTheDocument();
-    expect(getVisibleOption("Other")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByText("Brand New").length).toBeGreaterThanOrEqual(1));
+    expect(getVisibleOption("Second Hand")).toBeInTheDocument();
+    expect(screen.queryByText("Excellent")).not.toBeInTheDocument();
+    expect(screen.queryByText("Other")).not.toBeInTheDocument();
   });
 
-  it("reveals detail textarea when Other selected", async () => {
-    render(<SellVehicleForm />);
-    fireEvent.click(screen.getByRole("combobox", { name: /^Condition/ }));
-    await waitFor(() => expect(screen.getAllByText("Other").length).toBeGreaterThanOrEqual(1));
-    const otherOption = getVisibleOption("Other");
-    fireEvent.click(otherOption);
-    await waitFor(() => expect(screen.getByPlaceholderText("Describe the condition...")).toBeInTheDocument());
+  it("stores the two conditions as written", () => {
+    for (const condition of ["Brand New", "Second Hand"]) {
+      const parsed = sellVehicleSchema.safeParse(baseData({ condition }));
+      expect(parsed.success && parsed.data.condition).toBe(condition);
+    }
+  });
+});
+
+describe("issue helpers", () => {
+  it("joins ticked parts and the Others text", () => {
+    expect(composeDeclaredIssues(["Pads", "Rotors"], "dent on bumper")).toBe("Pads; Rotors; Others: dent on bumper");
+    expect(composeDeclaredIssues(["Pads"], "  ")).toBe("Pads");
+    expect(composeDeclaredIssues([], null)).toBe("");
   });
 
-  it("keeps detail hidden for non-Other selection", async () => {
-    render(<SellVehicleForm />);
-    expect(screen.queryByPlaceholderText("Describe the condition...")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("combobox", { name: /^Condition/ }));
-    await waitFor(() => expect(screen.getAllByText("Good").length).toBeGreaterThanOrEqual(1));
-    const goodOption = getVisibleOption("Good");
-    fireEvent.click(goodOption);
-    await waitFor(() => expect(screen.queryByPlaceholderText("Describe the condition...")).not.toBeInTheDocument());
+  it("allows no issue photos but checks the ones given", () => {
+    expect(validateIssuePhotos([])).toBeNull();
+    expect(validateIssuePhotos([sizedPhoto("x.pdf", "application/pdf", 10)])).toBe(
+      "Photos must be JPEG, PNG, or WebP images.",
+    );
+  });
+});
+
+describe("sellVehicleSchema owner number", () => {
+  it("requires the owner number and stores it as a number", () => {
+    expect(sellVehicleSchema.safeParse(baseData({ owner_number: undefined })).success).toBe(false);
+    const parsed = sellVehicleSchema.safeParse(baseData({ owner_number: "4" }));
+    expect(parsed.success && parsed.data.owner_number).toBe(4);
   });
 });
 

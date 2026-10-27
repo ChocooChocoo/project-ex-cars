@@ -3,9 +3,9 @@ import {
   BriefcaseBusiness,
   CalendarClock,
   Car,
-  CircleDollarSign,
   FileCheck2,
   Megaphone,
+  PhilippinePeso,
   ShoppingCart,
   Stamp,
   Users,
@@ -65,7 +65,7 @@ export async function Phase6Overview() {
     {
       label: "Revenue (Verified)",
       value: `₱${Math.round(totalRevenueCents / 100).toLocaleString()}`,
-      icon: CircleDollarSign,
+      icon: PhilippinePeso,
       href: "/dashboard/finance",
     },
     {

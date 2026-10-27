@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { VEHICLE_PURPOSES } from "@/lib/vehicles/catalog";
+
 export const vehicleSchema = z.object({
   stock_code: z.string().min(1, "Stock code is required.").max(50, "Stock code must be at most 50 characters."),
   vin: z.string().max(50).optional().or(z.literal("")),
@@ -13,6 +15,7 @@ export const vehicleSchema = z.object({
   exterior_color: z.string().max(50).optional().or(z.literal("")),
   interior_color: z.string().max(50).optional().or(z.literal("")),
   body_type: z.string().max(50).optional().or(z.literal("")),
+  purpose: z.enum(VEHICLE_PURPOSES).optional().or(z.literal("")),
   engine: z.string().max(200).optional().or(z.literal("")),
   description: z.string().max(2000).optional().or(z.literal("")),
   current_price: z.coerce.number().min(0, "Price cannot be negative.").optional(),

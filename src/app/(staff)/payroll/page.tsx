@@ -29,11 +29,8 @@ export default async function PayrollPage() {
   );
   const employees = (profiles ?? []).filter((profile) => employeeIds.has(profile.id));
 
-  const admin = await import("@/lib/supabase/admin").then((m) => m.createAdminClient());
-  const { data: compensation } = await admin
-    .from("staff_compensation")
-    .select("*, profiles(full_name)")
-    .order("created_at", { ascending: false });
+  // Compensation lives in the private schema; the RPC checks the role in the database.
+  const { data: compensation } = await supabase.rpc("list_staff_compensation");
 
   return (
     <PayrollClient

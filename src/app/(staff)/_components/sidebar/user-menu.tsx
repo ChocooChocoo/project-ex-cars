@@ -62,7 +62,7 @@ export function UserMenu() {
           <DropdownMenuContent className="w-56" align="start" side="right" sideOffset={8}>
             <DropdownMenuLabel>My Account</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => router.push("/dashboard/profile")}>
+            <DropdownMenuItem onClick={() => router.push("/profile")}>
               <User className="mr-2 size-4" />
               Profile
             </DropdownMenuItem>

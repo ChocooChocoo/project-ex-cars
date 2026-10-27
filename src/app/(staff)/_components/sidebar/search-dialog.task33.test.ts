@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { getSearchItems } from "./search-dialog";
 
 describe("SearchDialog Task 33 role access", () => {
-  it("shows the Create Walk-In deep-link only to Account Managers", () => {
+  it("shows the Create Walk-In deep-link to the Account Manager and the CEO only (T03 R1)", () => {
     const accountManagerItem = getSearchItems("account_manager").find((item) => item.id === "create-walk-in");
     const ceoItem = getSearchItems("ceo").find((item) => item.id === "create-walk-in");
     const salesManagerItem = getSearchItems("sales_manager").find((item) => item.id === "create-walk-in");
@@ -12,7 +12,7 @@ describe("SearchDialog Task 33 role access", () => {
       label: "Create Walk-In",
       url: "/account_manager/staff-records?createWalkIn=1",
     });
-    expect(ceoItem).toBeUndefined();
+    expect(ceoItem).toMatchObject({ label: "Create Walk-In", url: "/ceo/staff-records?createWalkIn=1" });
     expect(salesManagerItem).toBeUndefined();
   });
 

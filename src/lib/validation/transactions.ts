@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { SELL_MEETUP_METHODS } from "@/lib/transactions/sell-flow";
 import { PAYMENT_METHODS } from "@/lib/transactions/state-machine";
+import { VEHICLE_PURPOSES } from "@/lib/vehicles/catalog";
 
 export const buyTransactionSchema = z.object({
   vehicle_id: z.string().uuid(),
@@ -35,9 +36,9 @@ export type BuyDetailsFormData = z.infer<typeof buyDetailsSchema>;
 
 export const sellVehicleSchema = z
   .object({
-    make: z.string().min(1, "Make is required.").max(100),
-    model: z.string().min(1, "Model is required.").max(100),
-    year: z.coerce.number().int().min(1900).max(2100),
+    make: z.string().trim().min(1, "Brand is required.").max(100),
+    model: z.string().trim().min(1, "Model is required.").max(100),
+    year: z.coerce.number({ error: "Choose the year." }).int().min(1900, "Choose the year.").max(2100),
     mileage: z.coerce.number().int().min(0, "Mileage cannot be negative."),
     condition: z
       .enum(["excellent", "good", "fair", "needs_repair"])
@@ -80,9 +81,11 @@ export const sellVehicleSchema = z
     has_known_issues: z.enum(["yes", "no"], { error: "Declare the vehicle's issues, or that it has no known issue." }),
     declared_issues: z.string().trim().max(2000).optional().or(z.literal("")),
     meetup_method: z.enum(SELL_MEETUP_METHODS, { error: "Choose a meet-up method." }),
+    // C10: 1st, 2nd, 3rd, or 4 for "4th owner or more".
+    owner_number: z.enum(["1", "2", "3", "4"], { error: "Choose which owner you are." }).transform(Number),
   })
   .refine((data) => data.has_known_issues === "no" || !!data.declared_issues, {
-    message: "Describe the known issues.",
+    message: "Tick the issues, or tick Others and describe them.",
     path: ["declared_issues"],
   });
 
@@ -90,8 +93,9 @@ export type SellVehicleFormData = z.infer<typeof sellVehicleSchema>;
 
 export const requestCarSchema = z
   .object({
-    requested_make: z.string().min(1, "Make is required.").max(100),
-    requested_model: z.string().min(1, "Model is required.").max(100),
+    requested_make: z.string().trim().min(1, "Brand is required.").max(100),
+    requested_model: z.string().trim().min(1, "Model is required.").max(100),
+    purpose: z.enum(VEHICLE_PURPOSES).optional().or(z.literal("")),
     year_min: z.coerce.number().int().min(1900).optional(),
     year_max: z.coerce.number().int().min(1900).optional(),
     budget: z.coerce.number().min(0, "Budget cannot be negative."),

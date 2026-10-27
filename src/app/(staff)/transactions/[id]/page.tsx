@@ -20,7 +20,7 @@ export default async function TransactionDetailPage({ params }: { readonly param
   const { data: transaction } = await supabase
     .from("transactions")
     .select(
-      "*, vehicles(make, model, year, stock_code, listing_state), profiles(full_name), purchase_details(*), sell_details(*), vehicle_requests(*), sale_handovers(*)",
+      "*, vehicles(make, model, year, stock_code, listing_state, condition, mileage), profiles(full_name), purchase_details(*), sell_details(*), vehicle_requests(*), sale_handovers(*)",
     )
     .eq("id", id)
     .single();
@@ -49,6 +49,17 @@ export default async function TransactionDetailPage({ params }: { readonly param
     .select("*")
     .eq("transaction_id", id)
     .order("settlement_date", { ascending: false });
+
+  // T03 HA2: sign the cheque / deposit-slip photo the same way as document images; the path never reaches the page.
+  const paymentRows = (
+    await withSignedTransactionDocumentUrls(
+      supabase.storage,
+      ((payments as Record<string, unknown>[] | null) ?? []).map(({ proof_path, ...payment }) => ({
+        ...payment,
+        storage_path: proof_path ?? null,
+      })),
+    )
+  ).map(({ signed_url, is_image: _isImage, ...payment }) => ({ ...payment, proof_url: signed_url }));
 
   const { data: installmentAccount } = await supabase
     .from("installment_accounts")
@@ -110,7 +121,7 @@ export default async function TransactionDetailPage({ params }: { readonly param
   const { data: deliveryCase } = isDelivery
     ? await supabase
         .from("field_cases")
-        .select("id, state, delivery_status, delay_note, expected_arrival")
+        .select("id, state, delivery_status, delay_note, expected_arrival, last_lat, last_lng, last_located_at")
         .eq("transaction_id", id)
         .eq("case_kind", "delivery")
         .neq("state", "cancelled")
@@ -196,7 +207,7 @@ export default async function TransactionDetailPage({ params }: { readonly param
         transaction={transaction as Record<string, unknown>}
         history={(history as Record<string, unknown>[]) ?? []}
         documents={signedDocuments}
-        payments={(payments as Record<string, unknown>[]) ?? []}
+        payments={paymentRows}
         installmentAccount={installmentAccount as Record<string, unknown> | null}
         paymentTerms={paymentTerms as Record<string, unknown> | null}
         viewingArrangements={(viewingArrangements as Record<string, unknown>[]) ?? []}

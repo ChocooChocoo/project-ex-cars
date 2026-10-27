@@ -13,6 +13,8 @@ import {
 } from "@tanstack/react-table";
 import { ArrowUpDown } from "lucide-react";
 
+import { RejectReasonDialog } from "@/components/reject-reason-dialog";
+import { TransactionImagePreview } from "@/components/transaction-image-preview";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,14 +26,22 @@ type PaymentRow = Record<string, unknown>;
 
 export function TransactionPaymentsTableV1({
   payments,
+  canReview,
   onVerifyPayment,
+  onRejectPayment,
 }: {
   readonly payments: Record<string, unknown>[];
+  /** CEO and Head Accountant: may verify or reject (same roles as the server actions). */
+  readonly canReview: boolean;
   readonly onVerifyPayment: (paymentId: string) => Promise<void>;
+  readonly onRejectPayment: (paymentId: string, reason: string) => Promise<void>;
 }) {
-  const totalPaid = payments.reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
-  const verified = payments.filter((p) => p.verified_by).length;
-  const pending = payments.length - verified;
+  // T03 HA3: a rejected payment stays listed but never counts.
+  const counted = payments.filter((p) => !p.rejected_at);
+  const totalPaid = counted.reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
+  const verified = counted.filter((p) => p.verified_by).length;
+  const pending = counted.length - verified;
+  const rejected = payments.length - counted.length;
 
   const [sorting, setSorting] = React.useState<SortingState>([{ id: "amount", desc: true }]);
 
@@ -69,12 +79,35 @@ export function TransactionPaymentsTableV1({
       ),
     },
     {
+      id: "proof",
+      header: () => <span className="text-xs">Photo</span>,
+      enableSorting: false,
+      cell: ({ row }: { row: { original: PaymentRow } }) =>
+        typeof row.original.proof_url === "string" ? (
+          <TransactionImagePreview
+            src={row.original.proof_url}
+            alt="payment proof"
+            className="object-cover"
+            triggerClassName="h-10 w-14 border"
+          />
+        ) : (
+          <span className="text-muted-foreground text-xs">—</span>
+        ),
+    },
+    {
       accessorKey: "verified_by",
       header: () => <span className="text-xs">Verified</span>,
       enableSorting: false,
       cell: ({ row }: { row: { original: PaymentRow } }) => (
         <span className="text-xs">
-          {row.original.paymongo_payment_id ? (
+          {row.original.rejected_at ? (
+            <span className="flex flex-col items-start gap-1">
+              <Badge variant="destructive" className="h-5 px-2 text-[11px]">
+                Rejected
+              </Badge>
+              <span className="max-w-48 text-muted-foreground">{String(row.original.rejection_reason ?? "")}</span>
+            </span>
+          ) : row.original.paymongo_payment_id ? (
             <Badge
               className="h-5 border-green-600/35 bg-green-600/10 px-2 text-[11px] text-green-600"
               title={String(row.original.paymongo_payment_id)}
@@ -101,15 +134,29 @@ export function TransactionPaymentsTableV1({
       enableSorting: false,
       cell: ({ row }: { row: { original: PaymentRow } }) =>
         // PayMongo confirms its own payments through the webhook; only payments recorded by staff are verified here.
-        !row.original.verified_by && !row.original.paymongo_checkout_id ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 px-2 text-xs"
-            onClick={() => onVerifyPayment(row.original.id as string)}
-          >
-            Verify
-          </Button>
+        canReview && !row.original.verified_by && !row.original.rejected_at && !row.original.paymongo_checkout_id ? (
+          <div className="flex justify-end gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-xs"
+              onClick={() => onVerifyPayment(row.original.id as string)}
+            >
+              Verify
+            </Button>
+            <RejectReasonDialog
+              trigger={
+                <Button variant="ghost" size="sm" className="h-6 px-2 text-destructive text-xs">
+                  Reject
+                </Button>
+              }
+              title="Reject this payment?"
+              description={`${formatCurrency(Number(row.original.amount))} stays on record as rejected and stops counting toward what was paid. The buyer sees your reason.`}
+              placeholder="e.g. The amount on the cheque does not match"
+              confirmLabel="Reject payment"
+              onConfirm={(reason) => onRejectPayment(row.original.id as string, reason)}
+            />
+          </div>
         ) : null,
     },
   ];
@@ -136,10 +183,10 @@ export function TransactionPaymentsTableV1({
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-3 rounded-lg border bg-muted/20 p-3 text-sm sm:grid-cols-4 sm:divide-x sm:divide-border/60">
-          <LedgerStat label="Total paid" value={formatCurrency(totalPaid)} detail="all records" />
+          <LedgerStat label="Total paid" value={formatCurrency(totalPaid)} detail="verified and pending" />
           <LedgerStat label="Verified" value={String(verified)} detail="confirmed payments" />
           <LedgerStat label="Pending" value={String(pending)} detail="awaiting verification" />
-          <LedgerStat label="Records" value={String(payments.length)} detail="payment entries" />
+          <LedgerStat label="Rejected" value={String(rejected)} detail="not counted" />
         </div>
 
         <div className="min-w-0 overflow-hidden rounded-lg border">

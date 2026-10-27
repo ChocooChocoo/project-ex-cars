@@ -24,12 +24,12 @@ export default async function FinancePage() {
     .from("financial_entries")
     .select("*")
     .order("recorded_at", { ascending: false })
-    .limit(100);
+    .limit(1000);
   let disbursementsQuery = supabase
     .from("disbursement_requests")
     .select("*")
     .order("created_at", { ascending: false })
-    .limit(100);
+    .limit(1000);
 
   if (isInformant && user) {
     disbursementsQuery = disbursementsQuery.eq("requested_by", user.id);
@@ -71,12 +71,12 @@ export default async function FinancePage() {
     supabase
       .from("transactions")
       .select(
-        "id, completed_at, vehicles(make, model, year, stock_code), profiles(full_name), purchase_details(final_price, payment_method), payment_records(amount, payment_kind)",
+        "id, completed_at, vehicles(make, model, year, stock_code), profiles(full_name), purchase_details(final_price, payment_method), payment_records(amount, payment_kind, rejected_at)",
       )
       .eq("transaction_kind", "buy")
       .eq("current_state", "completed")
       .order("completed_at", { ascending: false })
-      .limit(100),
+      .limit(1000),
   ]);
 
   return (

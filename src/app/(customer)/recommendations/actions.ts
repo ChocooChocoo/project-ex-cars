@@ -2,21 +2,18 @@
 
 import { revalidatePath } from "next/cache";
 
-import { rankVehicles, type VehicleInput } from "@/lib/recommendations/engine";
+import { rankVehicles, rankWithinBudget, type VehicleInput } from "@/lib/recommendations/engine";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const CRITERIA_VERSION = "1.0";
 
-export async function runRecommendation(budget: number, _preferences: Record<string, string>) {
-  const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Not authenticated" };
+type ServerSupabase = Awaited<ReturnType<typeof createServerSupabaseClient>>;
 
+// Available vehicles with the inspection and demand signals the ranking uses.
+async function loadRankInputs(supabase: ServerSupabase) {
   const { data: vehicles, error: vehicleError } = await supabase
     .from("vehicles")
-    .select("id, current_price, condition, mileage, fuel_type, make, model, body_type")
+    .select("id, current_price, condition, mileage, fuel_type, make, model, body_type, year")
     .eq("listing_state", "available");
 
   if (vehicleError) return { error: vehicleError.message };
@@ -64,6 +61,20 @@ export async function runRecommendation(budget: number, _preferences: Record<str
     inquiry_count: inquiryCounter.get(v.id) ?? 0,
   }));
 
+  return { vehicles, vehicleInputs };
+}
+
+export async function runRecommendation(budget: number, _preferences: Record<string, string>) {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const loaded = await loadRankInputs(supabase);
+  if ("error" in loaded) return { error: loaded.error };
+  const { vehicleInputs } = loaded;
+
   const scored = rankVehicles(vehicleInputs, budget);
 
   const { data: run, error: runError } = await supabase
@@ -97,6 +108,42 @@ export async function runRecommendation(budget: number, _preferences: Record<str
   revalidatePath("/recommendations");
 
   return { success: true, runId: run.id, scored };
+}
+
+export interface BudgetCar {
+  id: string;
+  make: string | null;
+  model: string | null;
+  year: number | null;
+  current_price: number;
+}
+
+/** T03 C4: a short list of available cars priced at or below the budget. Read only; no recommendation run is saved. */
+export async function listCarsWithinBudget(budget: number): Promise<{ error: string } | { cars: BudgetCar[] }> {
+  if (!Number.isFinite(budget) || budget <= 0) return { cars: [] };
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated" };
+
+  const loaded = await loadRankInputs(supabase);
+  if ("error" in loaded) return { cars: [] };
+
+  const byId = new Map(loaded.vehicles.map((v) => [v.id as string, v]));
+  const cars = rankWithinBudget(loaded.vehicleInputs, budget)
+    .slice(0, 6)
+    .map(({ vehicleId }) => {
+      const v = byId.get(vehicleId);
+      return {
+        id: vehicleId,
+        make: (v?.make as string | null) ?? null,
+        model: (v?.model as string | null) ?? null,
+        year: (v?.year as number | null) ?? null,
+        current_price: Number(v?.current_price ?? 0),
+      };
+    });
+  return { cars };
 }
 
 export async function getRecommendationRun(runId: string) {

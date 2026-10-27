@@ -1,7 +1,10 @@
+"use client";
+
 import Link from "next/link";
 
 import { format } from "date-fns";
 
+import { TablePager, usePagedRows } from "@/components/table-pager";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { paymentMethodLabel } from "@/lib/transactions/labels";
@@ -16,7 +19,7 @@ export interface SaleRecordRow {
     | { final_price: number | null; payment_method: string }
     | { final_price: number | null; payment_method: string }[]
     | null;
-  payment_records: { amount: number; payment_kind: string | null }[] | null;
+  payment_records: { amount: number; payment_kind: string | null; rejected_at?: string | null }[] | null;
 }
 
 const KIND_LABELS: Record<string, string> = {
@@ -38,6 +41,7 @@ function breakdown(payments: { amount: number; payment_kind: string | null }[]) 
 
 // §2 step 7: once a car is marked sold, its sale figures are listed for the Head Accountant's records.
 export function SaleRecordsCard({ sales }: { readonly sales: SaleRecordRow[] }) {
+  const paged = usePagedRows(sales);
   return (
     <Card>
       <CardHeader>
@@ -61,11 +65,13 @@ export function SaleRecordsCard({ sales }: { readonly sales: SaleRecordRow[] }) 
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sales.map((sale) => {
+                {paged.rows.map((sale) => {
                   const details = Array.isArray(sale.purchase_details)
                     ? sale.purchase_details[0]
                     : sale.purchase_details;
-                  const received = (sale.payment_records ?? []).reduce((sum, p) => sum + Number(p.amount), 0);
+                  // T03 HA3: rejected payments are not money received.
+                  const counted = (sale.payment_records ?? []).filter((p) => !p.rejected_at);
+                  const received = counted.reduce((sum, p) => sum + Number(p.amount), 0);
                   return (
                     <TableRow key={sale.id}>
                       <TableCell className="tabular-nums">
@@ -86,13 +92,14 @@ export function SaleRecordsCard({ sales }: { readonly sales: SaleRecordRow[] }) 
                       <TableCell className="text-right tabular-nums">
                         {formatCurrency(received)}
                         {/* §4 step 10: a delivery sale shows its fee and downpayment separately. */}
-                        {breakdown(sale.payment_records ?? [])}
+                        {breakdown(counted)}
                       </TableCell>
                     </TableRow>
                   );
                 })}
               </TableBody>
             </Table>
+            <TablePager {...paged} label="Sale records" />
           </div>
         )}
       </CardContent>

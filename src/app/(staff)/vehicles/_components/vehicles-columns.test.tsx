@@ -1,7 +1,6 @@
+import { flexRender, getCoreRowModel, useReactTable, type VisibilityState } from "@tanstack/react-table";
 import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-import { flexRender, getCoreRowModel, useReactTable, type VisibilityState } from "@tanstack/react-table";
 
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 
@@ -90,5 +89,16 @@ describe("vehicle table columns", () => {
     // A missing year renders the same em dash the price and mileage cells use.
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
     expect(screen.queryByText(/undefined/)).not.toBeInTheDocument();
+  });
+
+  it("drops the Actions column for roles that can neither manage nor delete (Sales Manager)", () => {
+    const ids = createColumns(noop, noop, noop, noop, noop, false, false).map((column) => column.id);
+
+    expect(ids).not.toContain("actions");
+  });
+
+  it("keeps the Actions column when the role can manage or delete", () => {
+    expect(createColumns(noop, noop, noop, noop, noop, true, false).map((c) => c.id)).toContain("actions");
+    expect(createColumns(noop, noop, noop, noop, noop, false, true).map((c) => c.id)).toContain("actions");
   });
 });

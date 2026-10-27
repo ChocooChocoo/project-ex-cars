@@ -11,10 +11,13 @@ export function TransactionImagePreview({
   src,
   alt,
   className,
+  triggerClassName = "h-48 w-full",
 }: {
   readonly src: string;
   readonly alt: string;
   readonly className?: string;
+  /** Size of the clickable thumbnail; tables pass a small one. */
+  readonly triggerClassName?: string;
 }) {
   const [failed, setFailed] = useState(false);
 
@@ -26,7 +29,7 @@ export function TransactionImagePreview({
     <Dialog>
       <DialogTrigger
         aria-label={`Open ${alt} in a larger view`}
-        className="relative block h-48 w-full cursor-zoom-in overflow-hidden rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        className={`relative block shrink-0 cursor-zoom-in overflow-hidden rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 ${triggerClassName}`}
       >
         <Image
           src={src}
