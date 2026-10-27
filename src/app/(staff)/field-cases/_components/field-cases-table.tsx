@@ -18,6 +18,7 @@ import {
   useReactTable,
   type VisibilityState,
 } from "@tanstack/react-table";
+import { format } from "date-fns";
 import {
   ArrowUpDown,
   CalendarDays,
@@ -185,7 +186,14 @@ export function FieldCasesTable({
         filterFn: "arrIncludes",
         enableHiding: true,
       },
-      { accessorKey: "created_at", enableHiding: true },
+      {
+        accessorKey: "created_at",
+        header: "Created",
+        enableHiding: true,
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">{format(new Date(row.original.created_at), "MMM d, yyyy")}</span>
+        ),
+      },
       {
         id: "actions",
         header: () => <span className="sr-only">Actions</span>,
