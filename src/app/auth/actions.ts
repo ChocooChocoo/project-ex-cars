@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
@@ -12,7 +12,7 @@ import { ACCEPTED_ID_TYPES } from "@/lib/auth/roles";
 import { landingPath } from "@/lib/routing/paths";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase, createServerSupabaseClient } from "@/lib/supabase/server";
-import { emailSchema, fullNameSchema, passwordSchema } from "@/lib/validation/forms";
+import { emailSchema, fullNameSchema, newPasswordSchema, passwordSchema } from "@/lib/validation/forms";
 import { changePasswordSchema, ownProfileSchema } from "@/lib/validation/profile";
 
 export async function signIn(formData: FormData) {
@@ -74,7 +74,12 @@ export async function signIn(formData: FormData) {
 export async function signUp(formData: FormData) {
   const supabase = await createServerSupabaseClient();
 
-  const parsed = z.object({ email: emailSchema, password: passwordSchema, full_name: fullNameSchema }).safeParse({
+  // T04 X1: both policy boxes are required server side too, not only in the form.
+  if (formData.get("accept_terms") !== "true" || formData.get("accept_policy") !== "true") {
+    return { error: "You must agree to the Terms and Conditions and the Company Policy." };
+  }
+
+  const parsed = z.object({ email: emailSchema, password: newPasswordSchema, full_name: fullNameSchema }).safeParse({
     email: formData.get("email"),
     password: formData.get("password"),
     full_name: formData.get("full_name"),
@@ -84,12 +89,15 @@ export async function signUp(formData: FormData) {
   }
 
   const { email, password, full_name: fullName } = parsed.data;
+  const origin = (await headers()).get("origin") ?? process.env.NEXT_PUBLIC_SITE_URL ?? "";
 
+  // The handle_new_user trigger creates the profile from the full_name metadata.
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
-      data: { full_name: fullName },
+      emailRedirectTo: `${origin}/auth/callback`,
+      data: { full_name: fullName, terms_accepted_at: new Date().toISOString() },
     },
   });
 
@@ -97,13 +105,18 @@ export async function signUp(formData: FormData) {
     return { error: error.message };
   }
 
-  if (data.user) {
-    const admin = createAdminClient();
-    await admin.from("profiles").update({ full_name: fullName }).eq("id", data.user.id);
-
-    const cookieStore = await cookies();
-    cookieStore.set("gce-role", "customer", { httpOnly: true, sameSite: "lax", maxAge: 604800, path: "/" });
+  // With confirmations on, Supabase hides an existing email by returning a user with no identities.
+  if (data.user?.identities?.length === 0) {
+    return { error: "This email is already registered. Please log in instead." };
   }
+
+  // T04 A3: no session means the email still needs verifying; the callback signs the user in later.
+  if (!data.session) {
+    return { notice: "Check your email to verify your account." };
+  }
+
+  const cookieStore = await cookies();
+  cookieStore.set("gce-role", "customer", { httpOnly: true, sameSite: "lax", maxAge: 604800, path: "/" });
 
   revalidatePath("/", "layout");
   redirect("/customer/showroom");
@@ -193,7 +206,7 @@ interface CreateWalkInAccountParams {
 const createWalkInAccountSchema = z.object({
   fullName: fullNameSchema,
   email: emailSchema,
-  password: passwordSchema,
+  password: newPasswordSchema,
 });
 
 export async function createWalkInAccount(params: CreateWalkInAccountParams) {
@@ -585,4 +598,97 @@ export async function changeOwnPassword(formData: FormData): Promise<{ error: st
   const { error } = await supabase.auth.updateUser({ password: parsed.data.new_password });
   if (error) return { error: error.message };
   return { success: true };
+}
+
+// Test sheet #4 (C15): own profile photo, stored at avatars/<user id>/ (storage rules allow only that folder).
+const AVATAR_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+
+function avatarPath(url: string | null | undefined) {
+  const marker = "/storage/v1/object/public/avatars/";
+  const at = url?.indexOf(marker) ?? -1;
+  return url && at >= 0 ? decodeURIComponent(url.slice(at + marker.length)) : null;
+}
+
+async function saveOwnAvatar(avatarUrl: string | null): Promise<{ error: string } | { success: true }> {
+  const supabase = await createServerSupabaseClient();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+
+  const { data: profile } = await supabase.from("profiles").select("avatar_url").eq("id", user.user.id).maybeSingle();
+  const { error } = await supabase.from("profiles").update({ avatar_url: avatarUrl }).eq("id", user.user.id);
+  if (error) return { error: error.message };
+  await supabase.auth.updateUser({ data: { avatar_url: avatarUrl } });
+
+  const oldPath = avatarPath(profile?.avatar_url);
+  if (oldPath) await supabase.storage.from("avatars").remove([oldPath]);
+
+  revalidatePath("/profile");
+  revalidatePath("/my-profile");
+  return { success: true };
+}
+
+export async function updateOwnAvatar(formData: FormData): Promise<{ error: string } | { success: true }> {
+  const file = formData.get("avatar");
+  if (!(file instanceof File) || file.size === 0) return { error: "Choose a photo to upload." };
+  const ext = AVATAR_TYPES[file.type];
+  if (!ext) return { error: "Use a JPG, PNG or WebP photo." };
+  if (file.size > AVATAR_MAX_BYTES) return { error: "The photo must be 2 MB or smaller." };
+
+  const supabase = await createServerSupabaseClient();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+
+  const path = `${user.user.id}/avatar-${Date.now()}.${ext}`;
+  const bucket = supabase.storage.from("avatars");
+  const { error } = await bucket.upload(path, file, { contentType: file.type });
+  if (error) return { error: "The photo could not be uploaded. Please try again." };
+
+  const result = await saveOwnAvatar(bucket.getPublicUrl(path).data.publicUrl);
+  if ("error" in result) await bucket.remove([path]);
+  return result;
+}
+
+export async function removeOwnAvatar(): Promise<{ error: string } | { success: true }> {
+  return saveOwnAvatar(null);
+}
+
+// Test sheet #4 (C15): a customer changes their sign-in email. Supabase emails a confirmation link to
+// the new address; the email changes when the link is opened. Staff emails stay managed by the
+// Account Manager and CEO.
+function emailChangeError(error: { code?: string; status?: number; message: string }) {
+  if (error.code === "email_exists" || /already (been )?registered/i.test(error.message)) {
+    return "This email is already used by another account.";
+  }
+  if (error.status === 429 || error.code?.startsWith("over_")) {
+    return "Too many emails sent. Please wait a few minutes and try again.";
+  }
+  return "We could not send the email. Please try again.";
+}
+
+export async function requestEmailChange(
+  formData: FormData,
+): Promise<{ error: string } | { success: true; email: string }> {
+  const authorization = await authorizeAction(["customer"]);
+  if (!authorization.ok) return { error: authorization.message };
+
+  const parsed = emailSchema.safeParse(
+    String(formData.get("email") ?? "")
+      .trim()
+      .toLowerCase(),
+  );
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Please enter a valid email address." };
+
+  const supabase = await createServerSupabaseClient();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+  if (parsed.data === user.user.email?.toLowerCase()) return { error: "This is already your email." };
+
+  const origin = (await headers()).get("origin") ?? process.env.NEXT_PUBLIC_SITE_URL ?? "";
+  const { error } = await supabase.auth.updateUser(
+    { email: parsed.data },
+    { emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent("/customer/profile")}` },
+  );
+  if (error) return { error: emailChangeError(error) };
+  return { success: true, email: parsed.data };
 }

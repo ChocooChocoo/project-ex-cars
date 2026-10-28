@@ -11,6 +11,24 @@ export const passwordSchema = z
   .min(8, "Password must be at least 8 characters.")
   .max(128, "Password must be at most 128 characters.");
 
+// Character rules for new passwords. Sign-in keeps `passwordSchema` so older passwords still work.
+// The symbol set matches Supabase Auth's "symbols" requirement.
+export const PASSWORD_RULES = [
+  { label: "An uppercase letter", pattern: /[A-Z]/, message: "Add an uppercase letter." },
+  { label: "A lowercase letter", pattern: /[a-z]/, message: "Add a lowercase letter." },
+  { label: "A number", pattern: /\d/, message: "Add a number." },
+  {
+    label: "A special character",
+    pattern: /[!@#$%^&*()_+\-=[\]{};'\\:"|<>?,./`~]/,
+    message: "Add a special character.",
+  },
+] as const;
+
+export const newPasswordSchema = PASSWORD_RULES.reduce(
+  (schema, rule) => schema.regex(rule.pattern, rule.message),
+  passwordSchema,
+);
+
 export const phoneSchema = z
   .string()
   .min(10, "Phone must be at least 10 characters.")

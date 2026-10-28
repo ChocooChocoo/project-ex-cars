@@ -1,11 +1,17 @@
 import Link from "next/link";
 
 import { GceLogo } from "@/components/gce-logo";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 import { LoginForm } from "../../_components/login-form";
-import { GoogleButton } from "../../_components/social-auth/google-button";
 
-export default function LoginV1() {
+export default async function LoginV1({
+  searchParams,
+}: {
+  readonly searchParams: Promise<{ error?: string; notice?: string }>;
+}) {
+  const { error, notice } = await searchParams;
+
   return (
     <div className="flex h-dvh">
       <div className="hidden bg-primary lg:block lg:w-1/3">
@@ -29,8 +35,17 @@ export default function LoginV1() {
             </div>
           </div>
           <div className="space-y-4">
+            {error === "auth_callback_failed" && (
+              <Alert variant="destructive">
+                <AlertDescription>Sign-in could not be completed. Please try again.</AlertDescription>
+              </Alert>
+            )}
+            {notice === "email_confirmed" && (
+              <Alert>
+                <AlertDescription>Your new email is confirmed. Sign in with it to continue.</AlertDescription>
+              </Alert>
+            )}
             <LoginForm />
-            <GoogleButton className="w-full" variant="outline" />
             <p className="text-center text-muted-foreground text-xs">
               Don&apos;t have an account?{" "}
               <Link prefetch={false} href="register" className="text-primary">
