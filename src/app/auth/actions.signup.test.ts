@@ -80,6 +80,11 @@ describe("signUp", () => {
     expect(authSignUp).not.toHaveBeenCalled();
   });
 
+  it("refuses a weak password before calling Supabase", async () => {
+    await expect(signUp(form({ password: "abcdefgh" }))).resolves.toEqual({ error: "Add an uppercase letter." });
+    expect(authSignUp).not.toHaveBeenCalled();
+  });
+
   it("signs the customer in when confirmations are off", async () => {
     authSignUp.mockResolvedValue({ data: { user, session: { access_token: "t" } }, error: null });
 

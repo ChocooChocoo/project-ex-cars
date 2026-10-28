@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { addressSchema, fullNameSchema, passwordSchema, phoneSchema } from "@/lib/validation/forms";
+import { addressSchema, fullNameSchema, newPasswordSchema, phoneSchema } from "@/lib/validation/forms";
 
 // T03 C15: what a signed-in user may change about themselves.
 export const ownProfileSchema = z.object({
@@ -14,7 +14,7 @@ export type OwnProfileData = z.infer<typeof ownProfileSchema>;
 export const changePasswordSchema = z
   .object({
     current_password: z.string().min(1, "Enter your current password."),
-    new_password: passwordSchema,
+    new_password: newPasswordSchema,
     confirm_password: z.string(),
   })
   .refine((data) => data.new_password === data.confirm_password, {
