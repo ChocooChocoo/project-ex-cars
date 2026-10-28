@@ -6,6 +6,13 @@ const nextConfig = {
   experimental: {
     serverActions: { bodySizeLimit: "4mb" },
   },
+  // Landing page photos: showroom media from Supabase storage, and stock photos from Unsplash.
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "*.supabase.co", pathname: "/storage/v1/object/public/**" },
+      { protocol: "https", hostname: "images.unsplash.com" },
+    ],
+  },
   compiler: {
     removeConsole: process.env.NODE_ENV === "production",
   },
