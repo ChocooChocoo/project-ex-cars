@@ -24,7 +24,7 @@ const createWalkInAccountMock = vi.mocked(createWalkInAccount);
 function fillValidAccount() {
   fireEvent.change(screen.getByLabelText("Full Name"), { target: { value: "Walk-in Customer" } });
   fireEvent.change(screen.getByLabelText("Email"), { target: { value: "walkin@example.com" } });
-  fireEvent.change(screen.getByLabelText("Password"), { target: { value: "correct-horse" } });
+  fireEvent.change(screen.getByLabelText("Password"), { target: { value: "Correct-horse-9" } });
 }
 
 describe("WalkInForm Task 33", () => {
@@ -60,7 +60,7 @@ describe("WalkInForm Task 33", () => {
       expect(createWalkInAccountMock).toHaveBeenCalledWith({
         fullName: "Walk-in Customer",
         email: "walkin@example.com",
-        password: "correct-horse",
+        password: "Correct-horse-9",
       }),
     );
   });
@@ -95,5 +95,16 @@ describe("WalkInForm Task 33", () => {
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(replaceMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses a weak password with the first missing rule", () => {
+    render(<WalkInForm />);
+    fireEvent.click(screen.getByRole("button", { name: "Create Walk-in Account" }));
+    fillValidAccount();
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "abcdefgh" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create Account" }));
+
+    expect(toastMock.error).toHaveBeenCalledWith("Add an uppercase letter.");
+    expect(createWalkInAccountMock).not.toHaveBeenCalled();
   });
 });

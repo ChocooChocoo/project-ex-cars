@@ -9,18 +9,19 @@ import { z } from "zod";
 
 import { signUp } from "@/app/auth/actions";
 import { PasswordInput } from "@/components/password-input";
+import { PasswordRules } from "@/components/password-rules";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldContent, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { emailSchema, fullNameSchema, passwordSchema } from "@/lib/validation/forms";
+import { emailSchema, fullNameSchema, newPasswordSchema } from "@/lib/validation/forms";
 
 const formSchema = z
   .object({
     fullName: fullNameSchema,
     email: emailSchema,
-    password: passwordSchema,
+    password: newPasswordSchema,
     confirmPassword: z.string(),
     acceptTerms: z.boolean().refine((v) => v, { message: "You must agree to the Terms and Conditions." }),
     acceptPolicy: z.boolean().refine((v) => v, { message: "You must agree to the Company Policy." }),
@@ -135,7 +136,9 @@ export function RegisterForm() {
                 placeholder="••••••••"
                 autoComplete="new-password"
                 aria-invalid={fieldState.invalid}
+                aria-describedby="register-password-rules"
               />
+              <PasswordRules id="register-password-rules" value={field.value} />
               {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
             </Field>
           )}
