@@ -1,6 +1,6 @@
 [← Previous: Phase 3](./phase-3.md)
 
-**Status:** 🔲 Not Started
+**Status:** 🟡 In progress (2026-10-28). Everything is done locally; the deployed-site walk waits for the owner to push and deploy.
 
 # Phase 4: Test sheet fixes and re-test
 
@@ -29,27 +29,47 @@ photo) is out of scope by the owner's decision.
 
 ## Tasks
 
-- [ ] #14: As the Marketing Specialist, open a sell offer and check that condition, owner number, ticked issues,
+- [x] #14: As the Marketing Specialist, open a sell offer and check that condition, owner number, ticked issues,
   Others text and issue photos all show. If any is missing, fix it in
   `src/app/(staff)/transactions/[id]/_components/transaction-detail-sidebar-v1.tsx`. Change step 7 of the sheet to
   the Marketing Specialist.
-- [ ] #12: Prepare one buy request for the Buyer account with a recorded, unverified payment. Rewrite the steps with
+- [x] #12: Prepare one buy request for the Buyer account with a recorded, unverified payment. Rewrite the steps with
   the exact path: Transactions → open the buy request → scroll to **Payment Records** → Reject.
-- [ ] #13: Prepare one rejected request with a reason, so the test does not depend on #12.
-- [ ] #2: Remove the "Subscribed or Plan" wording and describe what the tester should see instead.
-- [ ] #5: Add a note: yes, the Marketing Specialist picks Purpose when adding or editing a vehicle (Vehicles → Add
+- [x] #13: Prepare one rejected request with a reason, so the test does not depend on #12.
+- [x] #2: Remove the "Subscribed or Plan" wording and describe what the tester should see instead.
+- [x] #5: Add a note: yes, the Marketing Specialist picks Purpose when adding or editing a vehicle (Vehicles → Add
   vehicle → Purpose).
-- [ ] #17: Keep the test. Confirm the E2E delivery case still exists, and recreate it if needed.
-- [ ] Add tests for Phases 1-3: password rule, profile photo and layout, customer email change.
-- [ ] Republish the "GCE Change Requests Test Sheet" artifact (`d2cb09aa-1c2e-4661-aee2-6a29210a5464`) with the
+- [x] #17: Keep the test. Confirm the E2E delivery case still exists, and recreate it if needed.
+- [x] Add tests for Phases 1-3: password rule, profile photo and layout, customer email change.
+- [x] Republish the "GCE Change Requests Test Sheet" artifact (`d2cb09aa-1c2e-4661-aee2-6a29210a5464`) with the
   changed tests. Clear saved answers only for changed tests, so passed ones stay. Leave #11 untouched.
-- [ ] Update `GCE-CHANGE-REQUESTS-FEEDBACK.md` with what changed per item.
+- [x] Update `GCE-CHANGE-REQUESTS-FEEDBACK.md` with what changed per item.
 
 ## Done when
 
 - [ ] Each changed test is walked once in the Playwright MCP browser on the deployed site and works as written.
-- [ ] The artifact is republished and the link is shared with the owner.
+- [x] The artifact is republished and the link is shared with the owner.
 - [ ] The client re-tests, and every item is "Works" or its new feedback is logged.
+
+## Status notes (2026-10-28)
+
+- All checks ran on localhost:3000 against hosted Supabase, because the owner asked not to push yet. The code from
+  Phases 1-3 is not deployed. The "Done when" walk on the deployed site is still open.
+- #14: as Buyer, submitted sell offer `#e679def3` (Honda City 2018) with 2 ticked parts, Others text and 2 issue photos.
+  The Marketing Specialist sees condition, owner number, "Declared issues: Engine Block; Cylinder Head; Others: ..."
+  and two "Issue photo" documents. No code change.
+- #12: as Head Accountant, recorded a ₱25,000 Bank Transfer downpayment, left unverified, on `#e0dd00f7`
+  (E2E Test P5-FINANCE; its contract is signed). Rejected two extra payments (₱10,000 and ₱5,000) to walk the steps:
+  the dialog blocks an empty reason, the row turns Rejected without a reload (about 6 s on the dev server), and the
+  Buyer sees both amounts crossed out as "Not accepted".
+- #13: the Marketing Specialist rejected `#e679def3` with a reason. The Buyer's "See reason" shows it.
+- #17: case `307390ab` (field case `42a75761…`) is In Progress. As Head Security with a mocked location, the page
+  showed "Sharing. Last sent 8:52 AM". The Sales Manager and the Buyer (transaction `754f6cc7`) see "Last seen" and
+  the map link. Sharing was turned off afterwards.
+- Sheet: artifact `d2cb09aa-…` republished (version `1793148961-6918`). Tests #2, #4, #5, #12, #13, #14, #17 and #23
+  were edited. Saved answers were deleted only for #4, #12, #13, #14 and #23; #2 was "Works" again and was kept. #11
+  was not touched.
+- `GCE-CHANGE-REQUESTS-FEEDBACK.md` has a "Changes after feedback" table.
 
 ---
 
