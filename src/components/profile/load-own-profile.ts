@@ -26,5 +26,6 @@ export async function loadOwnProfile(): Promise<OwnProfile> {
     address: profile?.address ?? "",
     avatar_url: profile?.avatar_url ?? null,
     role_label: role ? (ROLE_LABELS[role as GceRole] ?? null) : null,
+    can_change_email: role === "customer",
   };
 }

@@ -6,12 +6,27 @@ import { useRouter } from "next/navigation";
 
 import { toast } from "sonner";
 
-import { changeOwnPassword, removeOwnAvatar, updateOwnAvatar, updateOwnProfile } from "@/app/auth/actions";
+import {
+  changeOwnPassword,
+  removeOwnAvatar,
+  requestEmailChange,
+  updateOwnAvatar,
+  updateOwnProfile,
+} from "@/app/auth/actions";
 import { PasswordRules } from "@/components/password-rules";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,6 +39,112 @@ export interface OwnProfile {
   readonly address: string;
   readonly avatar_url: string | null;
   readonly role_label: string | null;
+  readonly can_change_email: boolean;
+}
+
+function ChangeEmailDialog({ currentEmail }: { readonly currentEmail: string }) {
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState("");
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  function reset(nextOpen: boolean) {
+    setOpen(nextOpen);
+    if (nextOpen) return;
+    setEmail("");
+    setSentTo(null);
+    setError(null);
+  }
+
+  async function send(event?: React.FormEvent) {
+    event?.preventDefault();
+    setBusy(true);
+    setError(null);
+    const fd = new FormData();
+    fd.set("email", sentTo ?? email);
+    const result = await requestEmailChange(fd);
+    setBusy(false);
+    if ("error" in result) {
+      setError(result.error);
+      return;
+    }
+    if (sentTo) toast.success("We sent the link again.");
+    setSentTo(result.email);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={reset}>
+      <DialogTrigger asChild>
+        <Button type="button" variant="outline" size="sm" className="self-start">
+          Change email
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{sentTo ? "Check your email" : "Change email"}</DialogTitle>
+          <DialogDescription>
+            {sentTo
+              ? `We sent a confirmation link to ${sentTo}. Open it to finish. Until then you still sign in with ${currentEmail}.`
+              : `You sign in with ${currentEmail}. We will email a confirmation link to your new address.`}
+          </DialogDescription>
+        </DialogHeader>
+        {sentTo ? (
+          <div className="flex flex-col gap-2 text-sm">
+            {error ? (
+              <p role="alert" className="text-destructive">
+                {error}
+              </p>
+            ) : null}
+            <p className="text-muted-foreground">
+              No email? Check your spam folder or{" "}
+              <button
+                type="button"
+                className="underline underline-offset-4 hover:text-foreground disabled:opacity-50"
+                disabled={busy}
+                onClick={() => send()}
+              >
+                send the link again
+              </button>
+              .
+            </p>
+          </div>
+        ) : (
+          <form id="change-email-form" onSubmit={send}>
+            <Field data-invalid={!!error}>
+              <FieldLabel htmlFor="change-email-new">New email</FieldLabel>
+              <Input
+                id="change-email-new"
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                aria-invalid={!!error}
+                required
+              />
+              {error ? <FieldError errors={[{ message: error }]} /> : null}
+            </Field>
+          </form>
+        )}
+        <DialogFooter>
+          {sentTo ? (
+            <Button type="button" onClick={() => reset(false)}>
+              Done
+            </Button>
+          ) : (
+            <>
+              <Button type="button" variant="ghost" onClick={() => reset(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" form="change-email-form" disabled={busy}>
+                {busy ? "Sending..." : "Send link"}
+              </Button>
+            </>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -148,7 +269,11 @@ function DetailsCard({ profile }: { readonly profile: OwnProfile }) {
           <Field>
             <FieldLabel htmlFor="profile-email">Email</FieldLabel>
             <Input id="profile-email" value={profile.email} readOnly disabled />
-            <FieldDescription>Contact GCE to change the email you sign in with.</FieldDescription>
+            {profile.can_change_email ? (
+              <ChangeEmailDialog currentEmail={profile.email} />
+            ) : (
+              <FieldDescription>Contact GCE to change the email you sign in with.</FieldDescription>
+            )}
           </Field>
           <Field>
             <FieldLabel htmlFor="profile-name">Full name *</FieldLabel>

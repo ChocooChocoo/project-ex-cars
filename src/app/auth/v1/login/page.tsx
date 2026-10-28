@@ -5,8 +5,12 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 
 import { LoginForm } from "../../_components/login-form";
 
-export default async function LoginV1({ searchParams }: { readonly searchParams: Promise<{ error?: string }> }) {
-  const { error } = await searchParams;
+export default async function LoginV1({
+  searchParams,
+}: {
+  readonly searchParams: Promise<{ error?: string; notice?: string }>;
+}) {
+  const { error, notice } = await searchParams;
 
   return (
     <div className="flex h-dvh">
@@ -34,6 +38,11 @@ export default async function LoginV1({ searchParams }: { readonly searchParams:
             {error === "auth_callback_failed" && (
               <Alert variant="destructive">
                 <AlertDescription>Sign-in could not be completed. Please try again.</AlertDescription>
+              </Alert>
+            )}
+            {notice === "email_confirmed" && (
+              <Alert>
+                <AlertDescription>Your new email is confirmed. Sign in with it to continue.</AlertDescription>
               </Alert>
             )}
             <LoginForm />

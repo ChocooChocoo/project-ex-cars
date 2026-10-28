@@ -652,3 +652,43 @@ export async function updateOwnAvatar(formData: FormData): Promise<{ error: stri
 export async function removeOwnAvatar(): Promise<{ error: string } | { success: true }> {
   return saveOwnAvatar(null);
 }
+
+// Test sheet #4 (C15): a customer changes their sign-in email. Supabase emails a confirmation link to
+// the new address; the email changes when the link is opened. Staff emails stay managed by the
+// Account Manager and CEO.
+function emailChangeError(error: { code?: string; status?: number; message: string }) {
+  if (error.code === "email_exists" || /already (been )?registered/i.test(error.message)) {
+    return "This email is already used by another account.";
+  }
+  if (error.status === 429 || error.code?.startsWith("over_")) {
+    return "Too many emails sent. Please wait a few minutes and try again.";
+  }
+  return "We could not send the email. Please try again.";
+}
+
+export async function requestEmailChange(
+  formData: FormData,
+): Promise<{ error: string } | { success: true; email: string }> {
+  const authorization = await authorizeAction(["customer"]);
+  if (!authorization.ok) return { error: authorization.message };
+
+  const parsed = emailSchema.safeParse(
+    String(formData.get("email") ?? "")
+      .trim()
+      .toLowerCase(),
+  );
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Please enter a valid email address." };
+
+  const supabase = await createServerSupabaseClient();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+  if (parsed.data === user.user.email?.toLowerCase()) return { error: "This is already your email." };
+
+  const origin = (await headers()).get("origin") ?? process.env.NEXT_PUBLIC_SITE_URL ?? "";
+  const { error } = await supabase.auth.updateUser(
+    { email: parsed.data },
+    { emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent("/customer/profile")}` },
+  );
+  if (error) return { error: emailChangeError(error) };
+  return { success: true, email: parsed.data };
+}
