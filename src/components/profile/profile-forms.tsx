@@ -1,24 +1,113 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { useRouter } from "next/navigation";
 
 import { toast } from "sonner";
 
-import { changeOwnPassword, updateOwnProfile } from "@/app/auth/actions";
+import { changeOwnPassword, removeOwnAvatar, updateOwnAvatar, updateOwnProfile } from "@/app/auth/actions";
 import { PasswordRules } from "@/components/password-rules";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { getInitials } from "@/lib/utils";
 
 export interface OwnProfile {
   readonly email: string;
   readonly full_name: string;
   readonly phone: string;
   readonly address: string;
+  readonly avatar_url: string | null;
+  readonly role_label: string | null;
+}
+
+const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const PHOTO_MAX_BYTES = 2 * 1024 * 1024;
+
+function ProfileHeader({ profile }: { readonly profile: OwnProfile }) {
+  const router = useRouter();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function run(action: () => Promise<{ error: string } | { success: true }>, done: string) {
+    setBusy(true);
+    setError(null);
+    const result = await action();
+    setBusy(false);
+    if ("error" in result) {
+      setError(result.error);
+      return;
+    }
+    toast.success(done);
+    router.refresh();
+  }
+
+  async function onPick(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!PHOTO_TYPES.includes(file.type)) return setError("Use a JPG, PNG or WebP photo.");
+    if (file.size > PHOTO_MAX_BYTES) return setError("The photo must be 2 MB or smaller.");
+    const fd = new FormData();
+    fd.set("avatar", file);
+    await run(() => updateOwnAvatar(fd), "Photo updated.");
+  }
+
+  return (
+    <Card>
+      <CardContent className="flex flex-col items-center gap-5 text-center sm:flex-row sm:text-left">
+        <Avatar className="size-24 text-2xl">
+          {profile.avatar_url ? <AvatarImage src={profile.avatar_url} alt="" /> : null}
+          <AvatarFallback className="text-2xl">{getInitials(profile.full_name || profile.email)}</AvatarFallback>
+        </Avatar>
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          <div className="flex flex-col items-center gap-2 sm:flex-row">
+            <h2 className="truncate font-semibold text-xl">{profile.full_name || "Your profile"}</h2>
+            {profile.role_label ? <Badge variant="secondary">{profile.role_label}</Badge> : null}
+          </div>
+          <p className="truncate text-muted-foreground text-sm">{profile.email}</p>
+          <div className="mt-2 flex flex-wrap justify-center gap-2 sm:justify-start">
+            <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => inputRef.current?.click()}>
+              {busy ? "Saving..." : profile.avatar_url ? "Change photo" : "Add photo"}
+            </Button>
+            {profile.avatar_url ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={busy}
+                onClick={() => run(removeOwnAvatar, "Photo removed.")}
+              >
+                Remove
+              </Button>
+            ) : null}
+          </div>
+          <input
+            ref={inputRef}
+            type="file"
+            accept={PHOTO_TYPES.join(",")}
+            className="sr-only"
+            tabIndex={-1}
+            aria-label="Profile photo"
+            onChange={onPick}
+          />
+          {error ? (
+            <p role="alert" className="text-destructive text-sm">
+              {error}
+            </p>
+          ) : (
+            <p className="text-muted-foreground text-xs">JPG, PNG or WebP, up to 2 MB.</p>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 function DetailsCard({ profile }: { readonly profile: OwnProfile }) {
@@ -208,8 +297,9 @@ export function ProfileForms({ profile }: { readonly profile: OwnProfile }) {
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
         <h1 className="text-3xl leading-none tracking-tight">Profile</h1>
-        <p className="text-muted-foreground text-sm">Your details and password.</p>
+        <p className="text-muted-foreground text-sm">Your photo, details and password.</p>
       </div>
+      <ProfileHeader profile={profile} />
       <div className="grid items-start gap-6 lg:grid-cols-2">
         <DetailsCard profile={profile} />
         <PasswordCard />
