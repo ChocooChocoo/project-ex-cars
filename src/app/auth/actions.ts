@@ -8,7 +8,7 @@ import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import { authorizeAction } from "@/lib/auth/action-guard";
-import { ACCEPTED_ID_TYPES } from "@/lib/auth/roles";
+import { ACCEPTED_ID_TYPES, EMPLOYEE_ROLES, ROLE_LABELS } from "@/lib/auth/roles";
 import { landingPath } from "@/lib/routing/paths";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase, createServerSupabaseClient } from "@/lib/supabase/server";
@@ -256,6 +256,72 @@ export async function createWalkInAccount(params: CreateWalkInAccountParams) {
     await admin.auth.admin.deleteUser(createdUserId);
     return { error: auditResult.error.message };
   }
+
+  revalidatePath("/staff-records");
+  return { success: true };
+}
+
+const createEmployeeAccountSchema = z.object({
+  fullName: fullNameSchema,
+  email: emailSchema,
+  password: newPasswordSchema,
+  role: z.enum(EMPLOYEE_ROLES as [string, ...string[]], { message: "Choose a staff role." }),
+});
+
+// T04 E6: the CEO or the Account Manager creates an account for a new employee. The role is set by
+// set_new_employee_role (service role only), which only turns a fresh account into a staff account.
+export async function createEmployeeAccount(params: z.input<typeof createEmployeeAccountSchema>) {
+  const parsed = createEmployeeAccountSchema.safeParse(params);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid employee account details." };
+
+  const authorization = await authorizeAction(["ceo", "account_manager"]);
+  if (!authorization.ok) return { error: authorization.message };
+  const actorId = authorization.data.userId;
+
+  const admin = createAdminClient();
+  const { data, error } = await admin.auth.admin.createUser({
+    email: parsed.data.email,
+    password: parsed.data.password,
+    email_confirm: true,
+    user_metadata: { full_name: parsed.data.fullName },
+  });
+  if (error) return { error: error.message };
+  const createdUserId = data.user?.id;
+  if (!createdUserId) return { error: "The employee account could not be created." };
+
+  // Any failure after this point removes the half-made account, so a retry with the same email works.
+  const undo = async (message: string) => {
+    await admin.auth.admin.deleteUser(createdUserId);
+    return { error: message };
+  };
+
+  const roleResult = await admin.rpc("set_new_employee_role", {
+    p_account_id: createdUserId,
+    p_role: parsed.data.role,
+    p_assigned_by: actorId,
+  });
+  if (roleResult.error) return undo(roleResult.error.message);
+
+  const profileResult = await admin
+    .from("profiles")
+    .update({
+      full_name: parsed.data.fullName,
+      account_state: "active",
+      created_by: actorId,
+      activated_at: new Date().toISOString(),
+    })
+    .eq("id", createdUserId);
+  if (profileResult.error) return undo(profileResult.error.message);
+
+  const roleLabel = ROLE_LABELS[parsed.data.role as keyof typeof ROLE_LABELS];
+  const auditResult = await admin.from("audit_events").insert({
+    actor_id: actorId,
+    action: "employee_account_created",
+    record_kind: "profile",
+    record_id: createdUserId,
+    summary: `${roleLabel} account created for ${parsed.data.fullName} (${parsed.data.email})`,
+  });
+  if (auditResult.error) return undo(auditResult.error.message);
 
   revalidatePath("/staff-records");
   return { success: true };

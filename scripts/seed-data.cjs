@@ -177,8 +177,12 @@ async function loadUsers() {
     account_manager: "account_manager@gce.local",
     head_accountant: "head_accountant@gce.local",
     confidential_informant: "confidential_informant@gce.local",
+    confidential_informant2: "confidential_informant2@gce.local",
+    confidential_informant3: "confidential_informant3@gce.local",
     marketing_specialist: "marketing_specialist@gce.local",
     mechanic: "mechanic@gce.local",
+    mechanic2: "mechanic2@gce.local",
+    mechanic3: "mechanic3@gce.local",
     sales_manager: "sales_manager@gce.local",
     head_security: "head_security@gce.local",
   };
@@ -1119,8 +1123,13 @@ async function seedTransactions(users, vehicles) {
       vehicle_id: v.id,
       transaction_id: created[i % created.length].id,
       case_kind: pick(["acquisition", "delivery", "recovery", "sourcing"]),
-      assigned_confidential_informant: users.confidential_informant,
-      mechanic_id: rand() < 0.4 ? users.mechanic : null,
+      // T04 L3: field cases spread over the three CIs and three Mechanics.
+      assigned_confidential_informant: pick([
+        users.confidential_informant,
+        users.confidential_informant2,
+        users.confidential_informant3,
+      ]),
+      mechanic_id: rand() < 0.4 ? pick([users.mechanic, users.mechanic2, users.mechanic3]) : null,
       schedule: iso(addDays(now, randInt(1, 10))),
       location: pick(["Cavite", "Laguna", "Batangas", "Rizal", "Quezon"]),
       state: pick(["assigned", "accepted", "in_progress", "completed", "cancelled"]),
@@ -1291,11 +1300,15 @@ async function seedStaffRecords(users) {
   const staff = [
     { role: "ceo", id: users.ceo },
     { role: "mechanic", id: users.mechanic },
+    { role: "mechanic", id: users.mechanic2 },
+    { role: "mechanic", id: users.mechanic3 },
     { role: "sales_manager", id: users.sales_manager },
     { role: "marketing_specialist", id: users.marketing_specialist },
     { role: "account_manager", id: users.account_manager },
     { role: "head_accountant", id: users.head_accountant },
     { role: "confidential_informant", id: users.confidential_informant },
+    { role: "confidential_informant", id: users.confidential_informant2 },
+    { role: "confidential_informant", id: users.confidential_informant3 },
     { role: "head_security", id: users.head_security },
   ];
 
