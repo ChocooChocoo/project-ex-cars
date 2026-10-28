@@ -368,7 +368,18 @@ describe("contract", () => {
     expect(paymentAllowedBeforeSigning(cashDelivery, "balance")).toBe(false);
     expect(paymentAllowedBeforeSigning(cashDelivery, null)).toBe(false);
     expect(paymentAllowedBeforeSigning(financedVisit, "downpayment")).toBe(false);
-    expect(paymentAllowedBeforeSigning(cashMeetup, "downpayment")).toBe(false);
+  });
+
+  // T04 X2: a Bank Transfer (or Cash) meet-up takes its downpayment before the contract is signed at the meet-up.
+  it("allows only the downpayment of a direct-payment meet-up before signing", () => {
+    const bankMeetup = { payment_method: "bank_transfer", arrangement_kind: "meetup" };
+    expect(paymentAllowedBeforeSigning(bankMeetup, "downpayment")).toBe(true);
+    expect(paymentAllowedBeforeSigning(cashMeetup, "downpayment")).toBe(true);
+    expect(paymentAllowedBeforeSigning(bankMeetup, "full")).toBe(false);
+    expect(paymentAllowedBeforeSigning(bankMeetup, "balance")).toBe(false);
+    expect(paymentAllowedBeforeSigning(bankMeetup, "delivery_fee")).toBe(false);
+    // A financed meet-up signs in the app before any money.
+    expect(paymentAllowedBeforeSigning(financedMeetup, "downpayment")).toBe(false);
   });
 
   it("prefills the template from the financing terms", () => {

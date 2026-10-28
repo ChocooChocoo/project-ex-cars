@@ -284,7 +284,9 @@ export function contractReadyForSale(
 const PRE_DELIVERY_PAYMENT_KINDS: readonly unknown[] = ["delivery_fee", "reschedule_fee", "downpayment"];
 
 // A delivery takes its fee and downpayment before the day, so before the contract is signed on arrival.
+// T04 X2: a Cash or Bank Transfer meet-up may also take its downpayment before the contract is signed there.
 export function paymentAllowedBeforeSigning(details: SaleDetails, paymentKind: unknown): boolean {
+  if (isHalfwayCashRequest(details)) return paymentKind === "downpayment";
   return details?.arrangement_kind === "delivery" && PRE_DELIVERY_PAYMENT_KINDS.includes(paymentKind);
 }
 
