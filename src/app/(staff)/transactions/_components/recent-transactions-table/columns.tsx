@@ -112,7 +112,7 @@ export function createTransactionColumns(
     },
     {
       accessorKey: "kind",
-      header: "Billing",
+      header: "Kind",
       filterFn: "equalsString",
       cell: ({ row }) => (
         <Badge variant="outline" className="px-1.5 text-muted-foreground">
@@ -123,7 +123,7 @@ export function createTransactionColumns(
     },
     {
       id: "vehicle",
-      header: "Plan",
+      header: "Vehicle",
       cell: ({ row }) =>
         row.original.vehicleMake ? (
           <span className="text-sm">
@@ -147,7 +147,7 @@ export function createTransactionColumns(
     },
     {
       accessorKey: "openedAt",
-      header: "Joined",
+      header: "Opened",
       cell: ({ row }) => (
         <div className="grid gap-0.5">
           <span className="text-sm">{format(parseISO(row.original.openedAt), "do MMMM yyyy")}</span>
