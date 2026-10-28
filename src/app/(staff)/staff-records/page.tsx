@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { STAFF_ROLES } from "@/lib/auth/roles";
 import { createServerSupabase } from "@/lib/supabase/server";
 
+import { EmployeeAccountForm } from "./_components/employee-account-form";
 import { type PerformanceReviewRow, PerformanceReviews } from "./_components/performance-reviews";
 import { StaffRecordsTable, type StaffTableRow } from "./_components/staff-table/table";
 import { WalkInForm } from "./_components/walk-in-form";
@@ -78,7 +79,12 @@ export default async function StaffRecordsPage({
           <h1 className="font-semibold text-3xl tracking-tight">Staff Records</h1>
           <p className="text-muted-foreground text-sm">Manage employee accounts.</p>
         </div>
-        {role === "account_manager" || role === "ceo" ? <WalkInForm initialOpen={createWalkIn === "1"} /> : null}
+        {role === "account_manager" || role === "ceo" ? (
+          <div className="flex flex-wrap gap-2">
+            <WalkInForm initialOpen={createWalkIn === "1"} />
+            <EmployeeAccountForm />
+          </div>
+        ) : null}
       </div>
 
       <TabsList className="w-fit gap-1">

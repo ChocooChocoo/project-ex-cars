@@ -37,6 +37,9 @@ export const STAFF_ROLES: GceRole[] = [
   "head_security",
 ];
 
+// T04 E6: roles a new employee account can get. The CEO role is never handed out this way.
+export const EMPLOYEE_ROLES = STAFF_ROLES.filter((role) => role !== "ceo");
+
 /**
  * Roles that may open the staff transaction list and a transaction detail page.
  * Kept in one place so both routes deny with the same `/unauthorized` screen —
