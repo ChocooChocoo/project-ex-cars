@@ -7,6 +7,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { createWalkInAccount } from "@/app/auth/actions";
+import { PasswordInput } from "@/components/password-input";
+import { PasswordRules } from "@/components/password-rules";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -19,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { newPasswordSchema } from "@/lib/validation/forms";
 
 export function WalkInForm({ initialOpen = false }: { readonly initialOpen?: boolean }) {
   const router = useRouter();
@@ -59,8 +62,9 @@ export function WalkInForm({ initialOpen = false }: { readonly initialOpen?: boo
       return;
     }
 
-    if (password.length < 8) {
-      toast.error("Password must be at least 8 characters.");
+    const passwordCheck = newPasswordSchema.safeParse(password.trim());
+    if (!passwordCheck.success) {
+      toast.error(passwordCheck.error.issues[0]?.message ?? "Choose a stronger password.");
       return;
     }
 
@@ -118,13 +122,14 @@ export function WalkInForm({ initialOpen = false }: { readonly initialOpen?: boo
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="walkin-password">Password</Label>
-            <Input
+            <PasswordInput
               id="walkin-password"
-              type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Min. 8 characters"
+              autoComplete="new-password"
+              aria-describedby="walkin-password-rules"
             />
+            <PasswordRules id="walkin-password-rules" value={password} />
           </div>
         </div>
         <DialogFooter>

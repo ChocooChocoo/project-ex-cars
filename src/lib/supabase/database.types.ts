@@ -7,6 +7,7 @@ export type Database = {
           full_name: string | null;
           address: string | null;
           phone: string | null;
+          avatar_url: string | null;
           account_state: string;
           created_by: string | null;
           activated_at: string | null;
@@ -19,6 +20,7 @@ export type Database = {
           address?: string | null;
           phone?: string | null;
           account_state?: string;
+          avatar_url?: string | null;
           created_by?: string | null;
           activated_at?: string | null;
         };
@@ -28,6 +30,7 @@ export type Database = {
           address?: string | null;
           phone?: string | null;
           account_state?: string;
+          avatar_url?: string | null;
           created_by?: string | null;
           activated_at?: string | null;
         };
