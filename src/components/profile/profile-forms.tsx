@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { changeOwnPassword, updateOwnProfile } from "@/app/auth/actions";
+import { PasswordRules } from "@/components/password-rules";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
@@ -141,7 +142,9 @@ function PasswordCard() {
     <Card>
       <CardHeader>
         <CardTitle>Password</CardTitle>
-        <CardDescription>At least 8 characters.</CardDescription>
+        <CardDescription>
+          Use 8 or more characters with upper and lower case letters, a number and a symbol.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={save} className="flex flex-col gap-4">
@@ -166,7 +169,9 @@ function PasswordCard() {
               autoComplete="new-password"
               minLength={8}
               required
+              aria-describedby="password-new-rules"
             />
+            <PasswordRules id="password-new-rules" value={next} />
           </Field>
           <Field data-invalid={!!confirm && confirm !== next}>
             <FieldLabel htmlFor="password-confirm">Confirm new password</FieldLabel>

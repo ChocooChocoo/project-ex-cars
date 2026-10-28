@@ -12,7 +12,7 @@ import { ACCEPTED_ID_TYPES } from "@/lib/auth/roles";
 import { landingPath } from "@/lib/routing/paths";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase, createServerSupabaseClient } from "@/lib/supabase/server";
-import { emailSchema, fullNameSchema, passwordSchema } from "@/lib/validation/forms";
+import { emailSchema, fullNameSchema, newPasswordSchema, passwordSchema } from "@/lib/validation/forms";
 import { changePasswordSchema, ownProfileSchema } from "@/lib/validation/profile";
 
 export async function signIn(formData: FormData) {
@@ -79,7 +79,7 @@ export async function signUp(formData: FormData) {
     return { error: "You must agree to the Terms and Conditions and the Company Policy." };
   }
 
-  const parsed = z.object({ email: emailSchema, password: passwordSchema, full_name: fullNameSchema }).safeParse({
+  const parsed = z.object({ email: emailSchema, password: newPasswordSchema, full_name: fullNameSchema }).safeParse({
     email: formData.get("email"),
     password: formData.get("password"),
     full_name: formData.get("full_name"),
@@ -206,7 +206,7 @@ interface CreateWalkInAccountParams {
 const createWalkInAccountSchema = z.object({
   fullName: fullNameSchema,
   email: emailSchema,
-  password: passwordSchema,
+  password: newPasswordSchema,
 });
 
 export async function createWalkInAccount(params: CreateWalkInAccountParams) {
