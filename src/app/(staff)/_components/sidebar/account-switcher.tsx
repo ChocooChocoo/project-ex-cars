@@ -8,7 +8,7 @@ import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { LogOut, User } from "lucide-react";
 
 import { signOut as signOutAction } from "@/app/auth/actions";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,10 +43,13 @@ export function AccountSwitcher() {
     user.email?.slice(0, 2).toUpperCase() ??
     "??";
 
+  const avatarUrl: string | undefined = user.user_metadata?.avatar_url ?? undefined;
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Avatar className="size-8 rounded-lg">
+          <AvatarImage src={avatarUrl} alt="" className="rounded-lg" />
           <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
         </Avatar>
       </DropdownMenuTrigger>
@@ -54,6 +57,7 @@ export function AccountSwitcher() {
         <DropdownMenuLabel className="p-0 font-normal">
           <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
             <Avatar className="size-9 rounded-lg">
+              <AvatarImage src={avatarUrl} alt="" className="rounded-lg" />
               <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
             </Avatar>
             <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
