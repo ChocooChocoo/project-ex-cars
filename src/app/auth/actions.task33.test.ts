@@ -35,7 +35,7 @@ const actor = "11111111-1111-4111-8111-111111111111";
 const createdUser = "22222222-2222-4222-8222-222222222222";
 
 function validParams() {
-  return { fullName: "Walk-in Customer", email: "walkin@example.com", password: "correct-horse" };
+  return { fullName: "Walk-in Customer", email: "walkin@example.com", password: "Correct-horse-9" };
 }
 
 describe("createWalkInAccount Task 33", () => {
@@ -63,6 +63,13 @@ describe("createWalkInAccount Task 33", () => {
   it("rejects malformed input before creating an auth user", async () => {
     await expect(createWalkInAccount({ ...validParams(), email: "not-an-email" })).resolves.toEqual({
       error: expect.stringMatching(/email/i),
+    });
+    expect(adminCreateUser).not.toHaveBeenCalled();
+  });
+
+  it("refuses a weak password before creating an auth user", async () => {
+    await expect(createWalkInAccount({ ...validParams(), password: "abcdefgh" })).resolves.toEqual({
+      error: "Add an uppercase letter.",
     });
     expect(adminCreateUser).not.toHaveBeenCalled();
   });

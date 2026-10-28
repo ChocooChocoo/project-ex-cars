@@ -83,8 +83,8 @@ describe("updateOwnProfile", () => {
 describe("changeOwnPassword", () => {
   const valid = {
     current_password: "old-password",
-    new_password: "new-password-1",
-    confirm_password: "new-password-1",
+    new_password: "New-password-1",
+    confirm_password: "New-password-1",
   };
 
   it("checks the current password, then sets the new one", async () => {
@@ -92,7 +92,7 @@ describe("changeOwnPassword", () => {
 
     expect(await changeOwnPassword(form(valid))).toEqual({ success: true });
     expect(signInWithPassword).toHaveBeenCalledWith({ email: "buyer@example.com", password: "old-password" });
-    expect(updateUser).toHaveBeenCalledWith({ password: "new-password-1" });
+    expect(updateUser).toHaveBeenCalledWith({ password: "New-password-1" });
   });
 
   it("refuses a wrong current password", async () => {
@@ -110,5 +110,14 @@ describe("changeOwnPassword", () => {
       await changeOwnPassword(form({ ...valid, new_password: "short", confirm_password: "short" })),
     ).toHaveProperty("error");
     expect(signInWithPassword).not.toHaveBeenCalled();
+  });
+
+  it("refuses a weak new password", async () => {
+    expect(await changeOwnPassword(form({ ...valid, new_password: "abcdefgh", confirm_password: "abcdefgh" }))).toEqual(
+      {
+        error: "Add an uppercase letter.",
+      },
+    );
+    expect(updateUser).not.toHaveBeenCalled();
   });
 });
