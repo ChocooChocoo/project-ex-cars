@@ -8,6 +8,7 @@ import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { LogOut, User } from "lucide-react";
 
 import { signOut as signOutAction } from "@/app/auth/actions";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,9 +51,12 @@ export function UserMenu() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton size="lg">
-              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary font-medium text-sidebar-primary-foreground text-xs">
-                {initials}
-              </div>
+              <Avatar className="size-8 rounded-lg after:rounded-lg">
+                <AvatarImage src={user.user_metadata?.avatar_url ?? undefined} alt="" className="rounded-lg" />
+                <AvatarFallback className="rounded-lg bg-sidebar-primary font-medium text-sidebar-primary-foreground text-xs">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
               <div className="flex flex-col gap-0.5 leading-none">
                 <span className="font-semibold">{displayName}</span>
                 <span className="text-muted-foreground text-xs">{user.email}</span>
