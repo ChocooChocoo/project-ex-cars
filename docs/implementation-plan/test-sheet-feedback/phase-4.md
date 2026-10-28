@@ -70,6 +70,11 @@ photo) is out of scope by the owner's decision.
   were edited. Saved answers were deleted only for #4, #12, #13, #14 and #23; #2 was "Works" again and was kept. #11
   was not touched.
 - `GCE-CHANGE-REQUESTS-FEEDBACK.md` has a "Changes after feedback" table.
+- #17 developer test (2026-10-28, 09:18): on case `307390ab`, the blocked-location message showed, sharing worked
+  with a mocked location, and Mark Arriving kept the switch. The Buyer saw "Last seen" and the map link.
+  `share-location.test.tsx` and `delivery-location.test.ts` pass (9 tests). Step 5 (Mark Delivered) was left for the
+  client because it closes the only test delivery; the other two "In Progress" deliveries are not dispatched yet. The
+  sheet's #17 note says so.
 
 ---
 
