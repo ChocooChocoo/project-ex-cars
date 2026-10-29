@@ -14,7 +14,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { STAFF_ROLES } from "@/lib/auth/roles";
+import { ATTENDANCE_TRACKED_ROLES, STAFF_ROLES } from "@/lib/auth/roles";
 
 import type { StaffTableRow } from "./schema";
 
@@ -32,12 +32,17 @@ export function isStaffAccount(account: StaffTableRow) {
   return (STAFF_ROLES as readonly string[]).includes(account.role ?? "");
 }
 
+export function isAttendanceTrackedAccount(account: StaffTableRow) {
+  return (ATTENDANCE_TRACKED_ROLES as readonly string[]).includes(account.role ?? "");
+}
+
 // T04 E1: clock-in is refused without a schedule ("No work schedule is assigned.").
 export function isMissingSchedule(account: StaffTableRow) {
-  return isStaffAccount(account) && (!account.startTime || !account.endTime);
+  return isAttendanceTrackedAccount(account) && (!account.startTime || !account.endTime);
 }
 
 export function formatSchedule(account: StaffTableRow) {
+  if (isStaffAccount(account) && !isAttendanceTrackedAccount(account)) return "Attendance not required";
   if (!isStaffAccount(account) || !account.startTime || !account.endTime) return "—";
   const days = WORKDAYS.filter((day) => account.workdays?.includes(day.value))
     .map((day) => day.short)

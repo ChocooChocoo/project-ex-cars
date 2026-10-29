@@ -37,6 +37,8 @@ export const STAFF_ROLES: GceRole[] = [
   "head_security",
 ];
 
+export const ATTENDANCE_TRACKED_ROLES: GceRole[] = STAFF_ROLES.filter((role) => role !== "head_security");
+
 // T04 E6: roles a new employee account can get. The CEO role is never handed out this way.
 export const EMPLOYEE_ROLES = STAFF_ROLES.filter((role) => role !== "ceo");
 
@@ -309,7 +311,6 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
     "default",
     "vehicles",
     "field-cases",
-    "attendance",
     "employee-requests",
     "security-duty-checks",
     "announcements",
