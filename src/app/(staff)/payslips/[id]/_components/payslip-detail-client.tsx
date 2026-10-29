@@ -35,6 +35,8 @@ interface PayslipDetailClientProps {
   netCents: number;
   earnings: PayslipItemRow[];
   deductions: PayslipItemRow[];
+  /** Regular and overtime hours of an hours-based payslip; null for older day-based payslips. */
+  hours: { regular: number; overtime: number } | null;
   canEdit: boolean;
   canPay: boolean;
   periodLabel: string;
@@ -50,6 +52,7 @@ export function PayslipDetailClient({
   netCents,
   earnings,
   deductions,
+  hours,
   canEdit,
   canPay,
   periodLabel,
@@ -139,6 +142,19 @@ export function PayslipDetailClient({
           <CardTitle>Summary</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
+          {hours ? (
+            <>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Regular Hours</span>
+                <span className="tabular-nums">{hours.regular.toFixed(2)} h</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Overtime Hours</span>
+                <span className="tabular-nums">{hours.overtime.toFixed(2)} h</span>
+              </div>
+              <Separator />
+            </>
+          ) : null}
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Gross Pay</span>
             <span>₱{(grossCents / 100).toLocaleString()}</span>
