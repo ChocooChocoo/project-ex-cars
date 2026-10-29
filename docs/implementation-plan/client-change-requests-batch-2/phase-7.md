@@ -1,6 +1,6 @@
 [← Previous: Phase 6](./phase-6.md) | [Next: Phase 8 →](./phase-8.md)
 
-**Status:** ✅ Done (2026-10-29). Not committed.
+**Status:** ✅ Done (2026-10-29). Committed as `c2fb999` on local branch `fix/auth-batch2-phase-1` (not pushed).
 
 > 2026-10-29: Resumed with `/implement-phase`. Phase 6 is committed (`68d113d`), so the dependency is met.
 

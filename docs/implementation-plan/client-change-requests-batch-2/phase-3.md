@@ -1,7 +1,7 @@
 [← Previous: Phase 2](./phase-2.md) | [Next: Phase 4 →](./phase-4.md)
 
 **Status:** ✅ Done (user accepted the e2e result on 2026-10-28; open e2e failures are listed under the last Done-when
-item as separate follow-up work)
+item as separate follow-up work). Committed as `a63b3d5` on local branch `fix/auth-batch2-phase-1` (not pushed).
 
 > 2026-10-28: Started. User decisions: Financing keeps `payment_method = 'financing'` (many flow checks use it); the new
 > `payment_option` column stores `full`/`financing`, and the Payment Method select is hidden for Financing. Full Payment

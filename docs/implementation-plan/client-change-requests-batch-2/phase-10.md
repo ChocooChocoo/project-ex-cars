@@ -1,6 +1,6 @@
 [← Previous: Phase 9](./phase-9.md)
 
-**Status:** ✅ Done (confirmed implementation scope, 2026-10-29); deferred decisions remain open. Development migration applied and confirmed-scope browser checks passed. No site deployment performed.
+**Status:** ✅ Done (confirmed implementation scope, 2026-10-29); deferred decisions remain open. Development migration applied and confirmed-scope browser checks passed. No site deployment performed. Committed as `32aac9f` on local branch `fix/auth-batch2-phase-1` (not pushed).
 
 > 2026-10-29: Started with `/implement-phase` after the user approved the recommendations in chat.
 > Reviewed Phase 9 and Phase 7 prerequisites. Phase 9 is marked Done, but review identified a payment-to-posting

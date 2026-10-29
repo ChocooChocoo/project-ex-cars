@@ -1,6 +1,6 @@
 [← Previous: Phase 5](./phase-5.md) | [Next: Phase 7 →](./phase-7.md)
 
-**Status:** ✅ Done (2026-10-28). Not committed.
+**Status:** ✅ Done (2026-10-28). Committed as `68d113d` on local branch `fix/auth-batch2-phase-1` (not pushed).
 
 > 2026-10-28: Started. User decisions: (1) the CEO **and** the Account Manager create employee accounts, even though
 > T03 R2 (`20261026090000_t03_rbac_ceo_only.sql`) made `assign_user_role` CEO-only; a new migration adds a
