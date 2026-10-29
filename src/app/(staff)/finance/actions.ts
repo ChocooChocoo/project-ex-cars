@@ -5,10 +5,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { getCurrentRole } from "@/app/auth/actions";
-import { notify } from "@/lib/notifications/notify";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { loadSellTransaction, moveSellTransaction } from "@/lib/transactions/sell-flow-server";
 import { disbursementEventSchema, disbursementRequestSchema, financialEntrySchema } from "@/lib/validation/phase6";
 
 type Phase6ActionResult = { error: string } | { success: true };
@@ -206,6 +204,20 @@ export async function advanceDisbursement(formData: FormData): Promise<Phase6Act
     return { error: "Only the Head Accountant can approve or release car-purchase funds." };
   }
 
+  // Keep purchase payment, completion, posting and notifications in one database transaction.
+  if (parsed.data.event_kind === "paid" && request.purchase_transaction_id) {
+    const { error } = await supabase.rpc("complete_purchase_disbursement", {
+      p_disbursement_id: parsed.data.disbursement_id,
+      p_notes: parsed.data.notes || null,
+    });
+    if (error) return { error: error.message };
+    revalidatePath("/dashboard/finance");
+    revalidatePath("/dashboard/transactions");
+    revalidatePath(`/dashboard/transactions/${request.purchase_transaction_id}`);
+    revalidatePath("/dashboard/vehicles");
+    return { success: true };
+  }
+
   const nextStatus: Record<string, string> = {
     draft: "approved",
     approved: "released",
@@ -246,32 +258,6 @@ export async function advanceDisbursement(formData: FormData): Promise<Phase6Act
     notes: parsed.data.notes || null,
   });
   if (eventError) return { error: eventError.message };
-
-  // Selling step 10: once the seller is paid, GCE owns the car; the payment is reported to the CEO.
-  if (parsed.data.event_kind === "paid" && request.purchase_transaction_id) {
-    const admin = createAdminClient();
-    const tx = await loadSellTransaction(admin, request.purchase_transaction_id);
-    if (tx && tx.current_state === "approved") {
-      const moveError = await moveSellTransaction(
-        admin,
-        tx,
-        user.user.id,
-        { current_state: "completed" },
-        "Seller paid by the Head Accountant",
-      );
-      if (moveError) return { error: moveError };
-      await notify(
-        admin,
-        { role: "ceo" },
-        {
-          kind: "sell_payment_disbursed",
-          title: "Seller payment disbursed",
-          body: `The Head Accountant paid ₱${Number(tx.sell?.agreed_price ?? 0).toLocaleString()} for a seller's car.`,
-          transactionId: tx.id,
-        },
-      );
-    }
-  }
 
   revalidatePath("/dashboard/finance");
   return { success: true };

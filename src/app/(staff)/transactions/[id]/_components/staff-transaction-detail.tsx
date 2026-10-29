@@ -21,6 +21,7 @@ import {
 import { rejectPayment } from "@/app/(staff)/transactions/payment-review-actions";
 import {
   contractTemplate,
+  financedTotal,
   isFieldArrangement,
   isHalfwayCashRequest,
   needsContract,
@@ -391,6 +392,7 @@ export function StaffTransactionDetail({
           threadId={financing.threadId ?? null}
           arrangementKind={(purchaseDetails?.arrangement_kind as string | undefined) ?? "gce_visit"}
           signingReported={Boolean(handover.signing_reported_at)}
+          defaultTotal={financedTotal(Number(purchaseDetails?.final_price ?? 0)) || undefined}
         />
       ) : null}
 

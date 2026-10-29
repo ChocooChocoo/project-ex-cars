@@ -126,6 +126,31 @@ describe("StaffRecordsTable", () => {
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });
 
+  // T04 E1: clock-in is refused without a schedule, so an employee missing one is flagged.
+  it("flags staff accounts that have no work schedule", () => {
+    const noSchedule: StaffTableRow = {
+      ...staffAccount,
+      id: "00000000-0000-4000-8000-000000000006",
+      fullName: "New Mechanic",
+      workdays: null,
+      startTime: null,
+      endTime: null,
+      graceMinutes: null,
+    };
+    renderTable([staffAccount, noSchedule, customerAccount]);
+
+    expect(screen.getByText("No schedule")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("1 employee has no work schedule");
+    expect(screen.getByRole("alert")).toHaveTextContent("New Mechanic");
+  });
+
+  it("shows no schedule warning when every staff account has one", () => {
+    renderTable([staffAccount, customerAccount]);
+
+    expect(screen.queryByText("No schedule")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   it("searches rows by name, role, and id, and clears the filter", () => {
     renderTable();
 
@@ -232,6 +257,34 @@ describe("StaffRecordsTable", () => {
     expect(graceInput).toHaveValue(10);
     expect(graceInput).toHaveAttribute("min", "5");
     expect(graceInput).toHaveAttribute("max", "10");
+  });
+
+  it("exempts Head Security without hiding the CEO missing-schedule warning", () => {
+    renderTable([
+      { ...staffAccount, role: "head_security", workdays: null, startTime: null, endTime: null },
+      { ...staffAccount, id: "ceo-1", fullName: "Test CEO", role: "ceo", startTime: null, endTime: null },
+    ]);
+    expect(screen.getByText("Attendance not required")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("1 employee has no work schedule");
+    expect(screen.getByRole("alert")).toHaveTextContent("Test CEO");
+    expect(screen.getByRole("alert")).not.toHaveTextContent("Ada Staff");
+  });
+
+  it("hides Head Security schedule inputs and omits them when saving its profile", async () => {
+    saveStaffRecordMock.mockResolvedValue({ success: true, row: { id: staffAccount.id, account_state: "active" } });
+    renderTable([{ ...staffAccount, role: "head_security", workdays: null, startTime: null, endTime: null }]);
+    openActions("Ada Staff");
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Edit" }));
+    expect(await screen.findByLabelText("Full name")).toHaveValue("Ada Staff");
+    expect(screen.queryByRole("group", { name: "Workdays" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Start time")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("End time")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Grace minutes")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(saveStaffRecordMock).toHaveBeenCalledTimes(1));
+    const form = saveStaffRecordMock.mock.calls[0][0];
+    expect(form.get("fullName")).toBe("Ada Staff");
+    for (const field of ["workdays", "startTime", "endTime", "graceMinutes"]) expect(form.has(field)).toBe(false);
   });
 
   it("keeps the edit Sheet open when saving fails", async () => {

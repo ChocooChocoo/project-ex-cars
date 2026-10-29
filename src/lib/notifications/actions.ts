@@ -22,6 +22,13 @@ export interface NotificationRow {
   href?: string | null;
 }
 
+// amount_due is NUMERIC pesos, not cents.
+function installmentDueBody(amount: number, label: string, dueDate: string, today: string): string {
+  const pesos = amount.toLocaleString("en-PH", { maximumFractionDigits: 2 });
+  const when = dueDate === today ? `is due today (${dueDate})` : `was due on ${dueDate}`;
+  return `An installment of ₱${pesos} for ${label} ${when}. Contact the buyer.`;
+}
+
 /**
  * Scans installments that are due or overdue (not paid/waived) and creates an
  * unread notification for the Account Manager role, once per installment.
@@ -63,7 +70,7 @@ export async function checkAndNotifyDueInstallments(): Promise<void> {
         recipient_role: "account_manager",
         kind: "installment_due",
         title: "Installment due",
-        body: `An installment of ₱${(Number(installment.amount_due) / 100).toLocaleString()} for ${label} is due today (${installment.due_date}). Contact the buyer.`,
+        body: installmentDueBody(Number(installment.amount_due), label, installment.due_date, today),
         reference_table: "installments",
         reference_id: installment.id,
       };

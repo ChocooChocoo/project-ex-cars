@@ -86,8 +86,9 @@ test.describe
       await upload(page, "Valid ID", "Passport");
       await upload(page, "Valid ID", "Driver's License");
       await upload(page, "Proof of Billing");
-      await pick(page, "payment_method", "Financing");
+      await pick(page, "payment_option", "Financing");
       await pick(page, "arrangement_kind", "GCE Visit");
+      await pick(page, "requested_term", "1 year");
       await page.getByLabel(/I have reviewed this car's condition/).check();
       await page.getByRole("button", { name: "Save Details" }).click();
       await expect(page.getByText("Details saved.")).toBeVisible();
@@ -103,7 +104,7 @@ test.describe
       await page.getByRole("button", { name: /^Transition Approve/ }).click();
 
       await page.getByLabel("Payment duration (months)").fill("12");
-      await page.getByLabel("Vehicle price (₱)").fill("500000");
+      await page.getByLabel("Total with financing (₱)").fill("500000");
       await page.getByLabel("Initial Downpayment (₱)").fill("100000");
       await page.getByLabel("Monthly payment (₱)").fill("33334");
       await page.getByLabel("First installment due").fill("2032-12-01");

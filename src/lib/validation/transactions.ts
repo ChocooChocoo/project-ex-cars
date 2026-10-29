@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { FINANCING_TERM_MONTHS } from "@/lib/transactions/buy-flow";
 import { SELL_MEETUP_METHODS } from "@/lib/transactions/sell-flow";
 import { PAYMENT_METHODS } from "@/lib/transactions/state-machine";
 import { VEHICLE_PURPOSES } from "@/lib/vehicles/catalog";
@@ -12,10 +13,11 @@ export type BuyTransactionFormData = z.infer<typeof buyTransactionSchema>;
 
 export const buyDetailsSchema = z.object({
   transaction_id: z.string().uuid(),
+  // T04 P5: Full Payment or Financing. Older forms send only the method; the option then follows it.
+  payment_option: z.enum(["full", "financing"]).optional().or(z.literal("")),
   payment_method: z.enum(PAYMENT_METHODS, {
     error: "Select a payment method.",
   }),
-  final_price: z.coerce.number().min(0, "Price cannot be negative.").optional(),
   arrangement_kind: z.enum(["delivery", "meetup", "gce_visit"]).optional().or(z.literal("")),
   schedule: z.string().optional().or(z.literal("")),
   location: z.string().max(500).optional().or(z.literal("")),
@@ -24,10 +26,10 @@ export const buyDetailsSchema = z.object({
   acknowledge_condition: z.literal("yes").optional().or(z.literal("")),
   // The delivery terms notice: a fee and a downpayment are paid first.
   agree_delivery_terms: z.literal("yes").optional().or(z.literal("")),
-  // A financed meet-up: the term the buyer asks for (1, 2, 3 or 5 years).
+  // Financing: the term the buyer asks for (6 months to 5 years).
   requested_term_months: z.coerce
     .number()
-    .refine((months) => [12, 24, 36, 60].includes(months), "Choose a payment term.")
+    .refine((months) => (FINANCING_TERM_MONTHS as readonly number[]).includes(months), "Choose a payment term.")
     .optional()
     .or(z.literal("")),
 });
@@ -117,7 +119,7 @@ export const paymentRecordSchema = z.object({
   transaction_id: z.string().uuid(),
   installment_id: z.string().uuid().optional().or(z.literal("")),
   amount: z.coerce.number().min(0, "Amount cannot be negative."),
-  method: z.enum(["cash", "financing", "cheque", "bank_transfer"]),
+  method: z.enum(["cash", "financing", "bank_transfer"]),
   external_reference: z.string().max(100).optional().or(z.literal("")),
   settlement_date: z.string().min(1, "Settlement date is required."),
   payment_kind: z

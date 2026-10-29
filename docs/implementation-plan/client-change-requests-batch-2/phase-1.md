@@ -1,8 +1,12 @@
 [Next: Phase 2 →](./phase-2.md)
 
-**Status:** 🚧 Blocked: code done, waiting on the hosted Supabase URL settings (see Blockers)
+**Status:** ✅ Done (2026-10-28). Committed on branch `fix/auth-batch2-phase-1`, pushed and open as PR #4; not yet merged or
+deployed. Phases 2–10 are committed on the same branch.
 
 > 2026-10-27: Work started (A1, A2, A3, X1 code and tests).
+>
+> 2026-10-27: All code tasks are done and verified locally. Two Done-when checks waited on owner changes in the hosted
+> Supabase dashboard: Google provider credentials and Site URL / Redirect URLs.
 >
 > 2026-10-28: **A2 dropped by the client.** "Continue with Google" is removed completely: the button file, its use
 > on the v1/v2 login and register pages (with the "Or continue with" divider), the `[auth.external.google]` block in
@@ -10,8 +14,12 @@
 > the email verification link also goes through `/auth/callback`. `src/app/template/**` keeps its own copy (upstream
 > design preview, not product). The A2 tasks below are kept for history and marked ~~struck~~.
 >
-> 2026-10-27: All code tasks are done and verified locally. Two Done-when checks wait on owner changes in the hosted
-> Supabase dashboard: Google provider credentials and Site URL / Redirect URLs. Nothing committed.
+> 2026-10-28: Committed on local branch `fix/auth-batch2-phase-1` (not pushed, not merged): `f4381d9` (phase work)
+> and `2a90337` (Google removal). Re-tested the committed code in the Playwright MCP browser on localhost: all pass
+> (see Test results). Only blocker left: the hosted Supabase Site URL (Blocker 1).
+>
+> 2026-10-28: The owner fixed the Site URL and Redirect URLs (Blocker 1 resolved), then registered with a real email
+> and verified through the link. Every Done-when item is checked. Phase set to Done.
 
 # Phase 1: Auth fixes and policy checkboxes
 
@@ -106,19 +114,55 @@ Source: `docs/tasks/T04.md`.
   - tsc exit 0. `npx biome check` on touched files: no findings. Full `npm run check` only reports existing
     findings in `.opencode/skills/**` (not part of this phase).
 
+## Test results
+
+Playwright MCP browser, `http://localhost:3000`, 2026-10-28, branch `fix/auth-batch2-phase-1` at `2a90337`:
+
+| Check | Result |
+| --- | --- |
+| `/auth/v1/login`, `/auth/v1/register`, `/auth/v2/login`, `/auth/v2/register` load | ✅ HTTP 200 each |
+| No "Continue with Google" or "Or continue with" on those 4 pages | ✅ none found |
+| Eye buttons: 1 on each login page, 2 on each register page | ✅ |
+| Login password toggle, 5 rounds | ✅ `text,password` × 5 |
+| Both policy checkboxes on both register pages | ✅ |
+| Empty register submit | ✅ 5 errors, including "You must agree to the Terms and Conditions." and "You must agree to the Company Policy." |
+| `?error=auth_callback_failed` alert | ✅ "Sign-in could not be completed. Please try again." |
+
+Playwright MCP browser, `http://localhost:3000`, 2026-10-27 (before the Google removal, same sign-up code):
+
+| Check | Result |
+| --- | --- |
+| Register password and confirm toggle, 5 rounds each | ✅ value kept, no submit |
+| Only Terms checked | ✅ refused: "You must agree to the Company Policy." |
+| Both boxes checked | ✅ "Check your email to verify your account." shown; no `gce-role` cookie; `terms_accepted_at` in user metadata |
+
+End-to-end email verification, 2026-10-28 (owner, real inbox, after Blocker 1 was fixed):
+
+| Check | Result |
+| --- | --- |
+| Register, open the email link, land signed in | ✅ Reported working by the owner. Supabase shows account `ab9d0295-…` confirmed at 16:16:54Z and signed in at 16:16:54Z, with `terms_accepted_at` set and its profile row created by the trigger. |
+| Second attempt `ac1b8308-…` | ⚠️ Email confirmed but no sign-in recorded. This fits the known PKCE limit: the link must be opened in the same browser that registered. That user can log in normally. |
+
+Not tested in a browser yet:
+
+- Registering an already-taken email: covered by unit tests only.
+- The live Vercel site: the branch is not pushed or deployed.
+
 ## Blockers (owner, hosted Supabase dashboard)
 
-1. **Authentication → URL Configuration:** set Site URL to `https://global-exchange-car.vercel.app` and add
-   `https://global-exchange-car.vercel.app/**` and `http://localhost:3000/**` to Redirect URLs. Until then,
-   verification emails link to localhost (A3).
+1. ~~**Authentication → URL Configuration:** set Site URL to `https://global-exchange-car.vercel.app` and add
+   `https://global-exchange-car.vercel.app/**` and `http://localhost:3000/**` to Redirect URLs.~~ **Resolved
+   2026-10-28** by the owner. Checked with `auth.admin.generateLink`: the default `redirect_to` is now
+   `https://global-exchange-car.vercel.app`, and both `https://global-exchange-car.vercel.app/auth/callback` and
+   `http://localhost:3000/auth/callback` are accepted.
 2. ~~Google provider~~: no longer needed (A2 dropped).
 3. **Cleanup:** delete the three QA users created on the hosted project during this phase (the automated delete was
    not permitted): `3732e353-d5a0-49bb-9faf-527c46bae106` (gce.qa.a3.20261027@gmail.com),
    `cf1e0c75-0036-4d4e-9b46-69f4f33f3cc4` (gce.qa.a3b.20261027@gmail.com),
    `03d0ce08-a64e-4d98-815c-1c98f4c91cd6` (gce.qa.x1.20261027@gmail.com).
 
-After 1, re-test: register on the Vercel site, then open the email link and land signed in on `/customer/showroom`
-with `gce-role=customer` set.
+After the branch is merged and deployed, run a short smoke test on the Vercel site: register, open the email link, and
+try an already-taken email. Until then, the live site still runs the old sign-up code.
 
 ## Files changed
 

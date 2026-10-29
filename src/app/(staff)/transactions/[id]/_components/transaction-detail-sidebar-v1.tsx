@@ -321,7 +321,6 @@ export function TransactionDetailSidebarV1({
                   <SelectContent>
                     <SelectItem value="cash">Cash</SelectItem>
                     <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                    <SelectItem value="cheque">Cheque</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -358,7 +357,7 @@ export function TransactionDetailSidebarV1({
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="pay_proof" className="text-xs">
-                  Photo of cheque / deposit slip (optional)
+                  Photo of deposit slip / receipt (optional)
                 </Label>
                 <Input
                   id="pay_proof"

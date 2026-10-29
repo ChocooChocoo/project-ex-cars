@@ -78,8 +78,8 @@ export async function buyerRequest(
     method: "Cash" | "Financing" | "Bank Transfer";
     arrangement: "GCE Visit" | "CALABARZON Meet-up" | "Delivery";
     when?: string;
-    // A financed meet-up: the payment term the buyer asks for.
-    term?: "1 year" | "2 years" | "3 years" | "5 years";
+    // Financing: the payment term the buyer asks for (defaults to 1 year).
+    term?: "6 months" | "1 year" | "2 years" | "3 years" | "5 years";
   },
 ): Promise<string> {
   await open(page, `/customer/showroom/${vehicleId}`);
@@ -91,11 +91,14 @@ export async function buyerRequest(
   await upload(page, "Valid ID", "Passport");
   await upload(page, "Valid ID", "Driver's License");
   await upload(page, "Proof of Billing");
-  await pick(page, "payment_method", options.method);
+  // T04: Financing is a Payment Option; Cash and Bank Transfer are Full Payment methods.
+  if (options.method === "Financing") await pick(page, "payment_option", "Financing");
+  else await pick(page, "payment_method", options.method);
   await pick(page, "arrangement_kind", options.arrangement);
   if (options.when) await page.locator("#schedule").fill(options.when);
   if (options.arrangement !== "GCE Visit") await page.locator("#location").fill("SM Calamba parking, Laguna");
-  if (options.term) await pick(page, "requested_term", options.term);
+  // Every financing request asks for a term.
+  if (options.term || options.method === "Financing") await pick(page, "requested_term", options.term ?? "1 year");
   const acknowledge = page.getByLabel(/I have reviewed this car's condition/);
   if (await acknowledge.isVisible()) await acknowledge.check();
   // Delivery: the buyer agrees to the delivery terms notice before the request can be sent.
@@ -138,7 +141,7 @@ export async function approveAsSalesManager(page: Page, transactionId: string) {
 // §6 steps 6–10: the Sales Manager proposes terms, the Head Accountant approves, the CEO confirms.
 export async function proposeTerms(page: Page, months: number, price: number, downpayment: number) {
   await page.getByLabel("Payment duration (months)").fill(String(months));
-  await page.getByLabel("Vehicle price (₱)").fill(String(price));
+  await page.getByLabel("Total with financing (₱)").fill(String(price));
   await page.getByLabel("Initial Downpayment (₱)").fill(String(downpayment));
   await page.getByLabel("Monthly payment (₱)").fill(String(Math.ceil((price - downpayment) / months)));
   await page.getByLabel("First installment due").fill("2033-12-01");

@@ -26,11 +26,13 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Search,
+  TriangleAlert,
   UsersRound,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { saveStaffRecord, setAccountState } from "@/app/(staff)/staff-records/actions";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -46,7 +48,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-import { isStaffAccount, staffTableColumns, WORKDAYS } from "./columns";
+import { isAttendanceTrackedAccount, isMissingSchedule, staffTableColumns, WORKDAYS } from "./columns";
 import type { StaffTableRow } from "./schema";
 
 export type { StaffTableRow };
@@ -91,6 +93,7 @@ function hasVerifiedRow(result: unknown, accountId: string, state?: string) {
 
 export function StaffRecordsTable({ data }: { data: StaffTableRow[] }) {
   const router = useRouter();
+  const missingSchedule = data.filter(isMissingSchedule);
   const [rowSelection, setRowSelection] = React.useState({});
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [sorting, setSorting] = React.useState<SortingState>([{ id: "joined", desc: true }]);
@@ -200,7 +203,7 @@ export function StaffRecordsTable({ data }: { data: StaffTableRow[] }) {
     formData.set("fullName", fullName.trim());
     formData.set("phone", phone.trim());
     formData.set("address", address.trim());
-    if (isStaffAccount(selectedAccount)) {
+    if (isAttendanceTrackedAccount(selectedAccount)) {
       formData.set("workdays", workdays.join(","));
       formData.set("startTime", startTime);
       formData.set("endTime", endTime);
@@ -254,6 +257,20 @@ export function StaffRecordsTable({ data }: { data: StaffTableRow[] }) {
   return (
     <>
       <div className="space-y-4">
+        {missingSchedule.length > 0 ? (
+          <Alert variant="destructive">
+            <TriangleAlert />
+            <AlertTitle>
+              {missingSchedule.length === 1
+                ? "1 employee has no work schedule"
+                : `${missingSchedule.length} employees have no work schedule`}
+            </AlertTitle>
+            <AlertDescription>
+              {missingSchedule.map((account) => account.fullName ?? "Unnamed account").join(", ")} cannot clock in until
+              a schedule is set. Use Edit on their row to add one.
+            </AlertDescription>
+          </Alert>
+        ) : null}
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative w-full lg:w-80">
@@ -519,7 +536,7 @@ export function StaffRecordsTable({ data }: { data: StaffTableRow[] }) {
                     onChange={(event) => setAddress(event.target.value)}
                   />
                 </div>
-                {isStaffAccount(selectedAccount) ? (
+                {isAttendanceTrackedAccount(selectedAccount) ? (
                   <>
                     <fieldset className="flex flex-col gap-2">
                       <legend className="font-medium text-sm">Workdays</legend>

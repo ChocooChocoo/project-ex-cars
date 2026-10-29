@@ -93,6 +93,55 @@ describe("saveBuyDetails", () => {
     });
     expect(saved()).toMatchObject({ requested_term_months: 36 });
   });
+
+  // T04 P5–P7: Payment Option and every financing term.
+  it("asks every financing arrangement for a term and offers 6 months", async () => {
+    const visit = { payment_option: "financing", payment_method: "cash", arrangement_kind: "gce_visit" };
+
+    await expect(saveBuyDetails(details(visit))).resolves.toEqual({ error: "Choose a payment term." });
+    await expect(saveBuyDetails(details({ ...visit, requested_term_months: "48" }))).resolves.toEqual({
+      error: "Choose a payment term.",
+    });
+
+    await expect(saveBuyDetails(details({ ...visit, requested_term_months: "6" }))).resolves.toEqual({
+      success: true,
+    });
+    expect(saved()).toMatchObject({
+      payment_option: "financing",
+      payment_method: "financing",
+      requested_term_months: 6,
+    });
+  });
+
+  it("saves Full Payment with its method, including PayMongo", async () => {
+    await expect(
+      saveBuyDetails(details({ payment_option: "full", payment_method: "paymongo", arrangement_kind: "gce_visit" })),
+    ).resolves.toEqual({ success: true });
+    expect(saved()).toMatchObject({ payment_option: "full", payment_method: "paymongo" });
+  });
+
+  it("refuses Full Payment with the financing method", async () => {
+    await expect(
+      saveBuyDetails(details({ payment_option: "full", payment_method: "financing", arrangement_kind: "gce_visit" })),
+    ).resolves.toEqual({ error: "Select a payment method." });
+    expect(saved()).toBeUndefined();
+  });
+
+  it("saves no location for a GCE Visit", async () => {
+    await expect(
+      saveBuyDetails(
+        details({
+          payment_option: "full",
+          payment_method: "cash",
+          arrangement_kind: "gce_visit",
+          schedule: slot,
+          location: "12 Mabini St",
+        }),
+      ),
+    ).resolves.toEqual({ success: true });
+    const arrangement = db.writes.find((write) => write.table === "viewing_arrangements")?.payload;
+    expect(arrangement).toMatchObject({ arrangement_kind: "gce_visit", location: null });
+  });
 });
 
 describe("submitBuyRequest", () => {

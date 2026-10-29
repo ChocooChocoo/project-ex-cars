@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { FLOW_STATUSES, PAYMENT_METHODS, TRANSACTION_FLAGS } from "@/lib/transactions/state-machine";
+import { FLOW_STATUSES, TRANSACTION_FLAGS } from "@/lib/transactions/state-machine";
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -42,7 +42,14 @@ describe("T01 Phase 0 foundations migration", () => {
       expect(migration).toContain(`'${kind}'`);
     }
     const methods = migration.match(/CHECK \(payment_method IN \(([^)]*)\)\)/i)?.[1] ?? "";
-    expect([...methods.matchAll(/'([a-z_]+)'/g)].map((m) => m[1])).toEqual([...PAYMENT_METHODS]);
+    // The app's list now follows the T04 migration (20261028100000), which replaces this check.
+    expect([...methods.matchAll(/'([a-z_]+)'/g)].map((m) => m[1])).toEqual([
+      "cash",
+      "financing",
+      "cheque",
+      "down_payment",
+      "bank_transfer",
+    ]);
   });
 
   it("lets customers only read their own standing and only Sales Manager and CEO write it", () => {
