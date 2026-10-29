@@ -1,10 +1,60 @@
 [← Previous: Phase 8](./phase-8.md) | [Next: Phase 10 →](./phase-10.md)
 
-**Status:** ✅ Done (2026-10-29). Not committed.
+**Status:** ✅ Done (2026-10-29). Original phase committed as `21d5d42`; recovery follow-up is tracked separately below.
 
 > 2026-10-29: Started with `/implement-phase`. This phase has no dependencies inside the plan.
 
 # Phase 9: Selling — post after selling and interior photos
+
+## Recovery follow-up (2026-10-29)
+
+**Follow-up status:** Implemented and migration applied to the approved development database; browser verification attempted but blocked.
+The original phase acceptance record below is unchanged.
+
+The user authorized this separate follow-up after the Phase 10 prerequisite review. Previously, a failed vehicle
+update could leave the disbursement paid and the sell completed while the car remained in `draft`; repeating the
+action then failed with "Cannot move from paid to paid."
+
+- [x] Add `20261029110000_atomic_purchase_disbursement.sql`: authenticated Head Accountant-only database function,
+  fixed empty search path, request and transaction row locks, and one transaction covering payment/event recording,
+  sale completion/history, posting-queue entry and notifications. Any database error rolls back all those writes.
+- [x] Allow already-paid purchase retries to repair the old partial-completion state without duplicate paid events,
+  completion history or role notifications. Preserve cars already beyond draft and non-selling purchase behavior.
+- [x] Route purchase-paid actions through the function in `src/app/(staff)/finance/actions.ts`. Ordinary disbursements
+  retain their existing path. Revalidate finance, transaction and vehicle views after success.
+- [x] Verify action regressions and migration contracts: action tests failed before implementation, then passed.
+  `npm run test -- --maxWorkers=2`: 111 files, 712 tests passed. The unrestricted run overlapped the production build
+  and had timeout-related failures; the limited-worker rerun passed without changing unrelated tests.
+- [x] `npx tsc --noEmit` and `npm run build` passed. Targeted Biome checks passed for the three changed TypeScript files.
+- [x] Execute the SQL in an isolated PGlite database with a minimal schema: successful completion and repeated retry,
+  injected failures at events/transaction/history/vehicle/notification writes followed by successful retries, legacy
+  paid/approved and paid/completed recovery, preservation of an already-listed car, non-selling purchase behavior,
+  invalid states, unauthorized callers, and anonymous execute restrictions all passed. This checks the SQL's behavior,
+  not full hosted-schema integration or production concurrency. No repository dependency was added.
+  Proof harness: `C:/Users/marka/AppData/Local/Temp/opencode/purchase-rpc-proof/proof.mjs` (temporary, not committed).
+- [x] Apply the migration to the approved development database before deploying the application change.
+  > 2026-10-29: With the user's explicit permission, applied only
+  > `20261029110000_atomic_purchase_disbursement.sql` to the linked development project
+  > `nsdwyxwrsmtarrxgzeuj` through its pooler on port 6543. Confirmed the database URL and application URL match
+  > the linked project before execution. Migration and permission checks ran in one transaction and committed.
+  > Verified the exact installed function body, SECURITY DEFINER, empty search_path, denied anonymous execution,
+  > granted authenticated execution, and rejection of an unauthenticated invocation. Requested a PostgREST schema
+  > reload. No business records changed. Applied directly through `pg`, consistent with the earlier Phase 9
+  > migration; this does not claim a Supabase CLI migration-history entry.
+- [ ] Verify the paid action and retry through the hosted application. No hosted records were changed for this fix.
+  > 2026-10-29: Attempted through Playwright MCP on localhost:3000 against the configured hosted development backend,
+  > with visible UI actions only. Signed in as Head Accountant and inspected all 4 disbursement pages. The already-paid
+  > one-peso test purchase (`a58398c5-01f9-4a43-adc8-75ecdb1eb7a8`) has a details dialog with only Close; no visible Retry
+  > control. Draft purchase transaction `b6cfbc56-39ff-4ea6-8ccb-78d692d8ea65` returned 404. Draft purchase transaction
+  > `abdd42ef-50f3-4815-a4a9-a569b4021b4b` returned 500 and the runtime error "Jest worker encountered 2 child process
+  > exceptions, exceeding retry limit", also after browser refresh. Did not mark an unverified purchase paid or invoke
+  > hidden APIs. Payment completion, duplicate suppression and failure recovery are therefore NOT browser-verified.
+  > No product code or business records were changed during the attempt. Evidence is recorded in Phase 10's browser
+  > verification note and `test-results/phase-10-browser-errors.log`.
+
+Deploy the migration before the server action that calls it. Do not deploy the action alone. Phase 10's confirmed
+scope and deferred client decisions are tracked separately in `phase-10.md`; this follow-up does not reopen the
+original Phase 9 acceptance record.
 
 **Goal:** A car bought from a seller goes straight to the posting queue (S2). The showroom shows interior photos in
 their own tab (S3), and staff have a free guide for taking them (S4).
