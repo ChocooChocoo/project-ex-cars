@@ -14,6 +14,7 @@ import {
   priceProposalSchema,
   vehicleSchema,
 } from "@/lib/validation/vehicles";
+import { isVehicleMediaKind } from "@/lib/vehicles/media-kinds";
 
 export async function createVehicle(formData: FormData) {
   const supabase = await createServerSupabaseClient();
@@ -300,7 +301,7 @@ export async function uploadVehicleMedia(formData: FormData) {
   const file = formData.get("file") as File | null;
 
   if (!vehicleId || !file || file.size === 0) return { error: "Vehicle and file are required" };
-  if (!["photo", "360_view"].includes(mediaKind)) return { error: "Invalid media kind" };
+  if (!isVehicleMediaKind(mediaKind)) return { error: "Invalid media kind" };
 
   const fileExt = file.name.split(".").pop() ?? "bin";
   const storagePath = `${vehicleId}/${mediaKind}-${Date.now()}.${fileExt}`;

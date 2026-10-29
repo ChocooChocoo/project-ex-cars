@@ -270,6 +270,29 @@ export async function advanceDisbursement(formData: FormData): Promise<Phase6Act
           transactionId: tx.id,
         },
       );
+
+      // S2: the car GCE now owns goes straight to the posting queue for the Marketing Specialist to price and post.
+      if (tx.vehicle_id) {
+        const { data: queued, error: vehicleError } = await admin
+          .from("vehicles")
+          .update({ listing_state: "awaiting_price_approval" })
+          .eq("id", tx.vehicle_id)
+          .eq("listing_state", "draft")
+          .select("id");
+        if (vehicleError) return { error: vehicleError.message };
+        if (queued?.length) {
+          await notify(
+            admin,
+            { role: "marketing_specialist" },
+            {
+              kind: "sell_vehicle_ready_to_post",
+              title: "Bought car ready to post",
+              body: "GCE paid the seller. Add photos, propose a selling price and post the car.",
+              transactionId: tx.id,
+            },
+          );
+        }
+      }
     }
   }
 
