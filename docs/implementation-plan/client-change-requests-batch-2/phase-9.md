@@ -8,7 +8,7 @@
 
 ## Recovery follow-up (2026-10-29)
 
-**Follow-up status:** Implemented and migration applied to the approved development database; browser verification attempted but blocked.
+**Follow-up status:** Implemented and migration applied to the approved development database; browser verification attempted but blocked. Committed as `d56a78b`.
 The original phase acceptance record below is unchanged.
 
 The user authorized this separate follow-up after the Phase 10 prerequisite review. Previously, a failed vehicle

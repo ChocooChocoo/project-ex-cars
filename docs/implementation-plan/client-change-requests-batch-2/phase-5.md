@@ -1,6 +1,6 @@
 [← Previous: Phase 4](./phase-4.md) | [Next: Phase 6 →](./phase-6.md)
 
-**Status:** ✅ Done (2026-10-28). Not committed.
+**Status:** ✅ Done (2026-10-28). Committed as `1cf67e6` on local branch `fix/auth-batch2-phase-1` (not pushed).
 
 > 2026-10-28: Started and finished. Found during the work: signed out, the landing page showed no cars or content.
 > The anon role cannot read `vehicles` or `content_items` ("permission denied for table user_roles", code 42501):

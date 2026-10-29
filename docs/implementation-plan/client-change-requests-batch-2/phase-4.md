@@ -1,6 +1,6 @@
 [← Previous: Phase 3](./phase-3.md) | [Next: Phase 5 →](./phase-5.md)
 
-**Status:** ✅ Done (2026-10-28). Not committed.
+**Status:** ✅ Done (2026-10-28). Committed as `b46be46` on local branch `fix/auth-batch2-phase-1` (not pushed).
 
 > 2026-10-28: Started. The client's exact steps are not recorded, so all three candidate causes below are reproduced
 > in turn (user decision), and whichever fails is fixed.

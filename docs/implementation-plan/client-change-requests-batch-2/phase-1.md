@@ -1,7 +1,7 @@
 [Next: Phase 2 →](./phase-2.md)
 
 **Status:** ✅ Done (2026-10-28). Committed on local branch `fix/auth-batch2-phase-1`; not yet pushed, merged or
-deployed.
+deployed. Phases 2–10 are committed on the same branch.
 
 > 2026-10-27: Work started (A1, A2, A3, X1 code and tests).
 >

@@ -1,6 +1,6 @@
 [← Previous: Phase 1](./phase-1.md) | [Next: Phase 3 →](./phase-3.md)
 
-**Status:** ✅ Done
+**Status:** ✅ Done (2026-10-28). Committed as `5904e15` on local branch `fix/auth-batch2-phase-1` (not pushed).
 
 > 2026-10-28: Done. Code, unit tests, build and the Playwright MCP live check all pass. Live-QA data left in inquiry
 > `4e702e2b-a434-42cc-bb24-c9346a3cdaf3` (E2E Test CLIENT-DELIVERY): five "Phase 2 QA" messages with attachments, and the
