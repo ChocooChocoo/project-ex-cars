@@ -9,13 +9,17 @@ import { ChevronLeft, ChevronRight, RotateCw, Sparkles } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import type { VehicleMediaKind } from "@/lib/vehicles/media-kinds";
 
 export interface VehicleMediaItem {
   id: string;
-  media_kind: "photo" | "360_view";
+  media_kind: VehicleMediaKind;
   storage_path: string;
   display_order: number;
 }
+
+type ViewerMode = "360" | "photo" | "interior";
+const MODE_LABELS: Record<ViewerMode, string> = { "360": "360°", photo: "Gallery", interior: "Interior" };
 
 const PUBLIC_BUCKET_BASE = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/showroom-media`;
 
@@ -24,11 +28,19 @@ function mediaUrl(storagePath: string): string {
 }
 
 export function VehicleMediaViewer({ media }: { readonly media: VehicleMediaItem[] }) {
+  const byOrder = (a: VehicleMediaItem, b: VehicleMediaItem) => a.display_order - b.display_order;
   const photos = media.filter((m) => m.media_kind === "photo");
-  const spinFrames = media.filter((m) => m.media_kind === "360_view").sort((a, b) => a.display_order - b.display_order);
+  const interiors = media.filter((m) => m.media_kind === "interior").sort(byOrder);
+  const spinFrames = media.filter((m) => m.media_kind === "360_view").sort(byOrder);
 
-  const [mode, setMode] = useState<"photo" | "360">(spinFrames.length >= 3 ? "360" : "photo");
+  // Interior is its own tab, shown only when the car has interior photos.
+  const modes = (["360", "photo", "interior"] as const).filter((m) =>
+    m === "360" ? spinFrames.length >= 3 : (m === "photo" ? photos : interiors).length > 0,
+  );
+
+  const [mode, setMode] = useState<ViewerMode>(modes[0] ?? "photo");
   const [photoIndex, setPhotoIndex] = useState(0);
+  const slides = mode === "interior" ? interiors : photos;
   const [frame, setFrame] = useState(0);
   const [dragging, setDragging] = useState(false);
   const dragStartX = useRef(0);
@@ -104,21 +116,22 @@ export function VehicleMediaViewer({ media }: { readonly media: VehicleMediaItem
       ) : (
         <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg bg-muted">
           <Image
-            src={mediaUrl(photos[photoIndex]?.storage_path ?? "")}
+            src={mediaUrl(slides[photoIndex]?.storage_path ?? "")}
             alt=""
             unoptimized
             fill
             sizes="(max-width: 1024px) 100vw, 66vw"
             className="object-cover"
           />
-          {photos.length > 1 ? (
+          {slides.length > 1 ? (
             <>
               <Button
                 type="button"
                 variant="secondary"
                 size="icon"
+                aria-label="Previous photo"
                 className="absolute top-1/2 left-2 -translate-y-1/2"
-                onClick={() => setPhotoIndex((photoIndex - 1 + photos.length) % photos.length)}
+                onClick={() => setPhotoIndex((photoIndex - 1 + slides.length) % slides.length)}
               >
                 <ChevronLeft className="size-4" />
               </Button>
@@ -126,8 +139,9 @@ export function VehicleMediaViewer({ media }: { readonly media: VehicleMediaItem
                 type="button"
                 variant="secondary"
                 size="icon"
+                aria-label="Next photo"
                 className="absolute top-1/2 right-2 -translate-y-1/2"
-                onClick={() => setPhotoIndex((photoIndex + 1) % photos.length)}
+                onClick={() => setPhotoIndex((photoIndex + 1) % slides.length)}
               >
                 <ChevronRight className="size-4" />
               </Button>
@@ -136,23 +150,23 @@ export function VehicleMediaViewer({ media }: { readonly media: VehicleMediaItem
         </div>
       )}
 
-      {has360 && photos.length > 0 ? (
+      {modes.length > 1 ? (
         <div className="flex justify-center">
           <div className="inline-flex rounded-lg border bg-background p-0.5">
-            <button
-              type="button"
-              className={`rounded-md px-3 py-1 font-medium text-xs ${mode === "360" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
-              onClick={() => setMode("360")}
-            >
-              360°
-            </button>
-            <button
-              type="button"
-              className={`rounded-md px-3 py-1 font-medium text-xs ${mode === "photo" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
-              onClick={() => setMode("photo")}
-            >
-              Gallery
-            </button>
+            {modes.map((m) => (
+              <button
+                key={m}
+                type="button"
+                aria-pressed={mode === m}
+                className={`min-h-11 rounded-md px-3 py-1 font-medium text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-0 ${mode === m ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                onClick={() => {
+                  setMode(m);
+                  setPhotoIndex(0);
+                }}
+              >
+                {MODE_LABELS[m]}
+              </button>
+            ))}
           </div>
         </div>
       ) : null}

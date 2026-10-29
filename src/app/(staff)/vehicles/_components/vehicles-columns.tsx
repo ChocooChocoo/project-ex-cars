@@ -167,8 +167,10 @@ export function createColumns(
                   Edit
                 </DropdownMenuItem>
               ) : null}
-              {/* §6 step 38: a reconditioned repossessed car ("repairing") is repriced from here too. */}
-              {canManage && (state === "draft" || state === "repairing") && (
+              {/* §6 step 38: a reconditioned repossessed car ("repairing") is repriced from here too.
+                  S2: a car bought from a seller arrives as "awaiting_price_approval" with no proposal yet;
+                  proposePrice refuses a second pending proposal. */}
+              {canManage && (state === "draft" || state === "repairing" || state === "awaiting_price_approval") && (
                 <DropdownMenuItem onClick={() => onProposePrice(vehicle)}>
                   <PhilippinePeso className="mr-2 size-4" />
                   Propose Price
