@@ -32,6 +32,11 @@ export function isStaffAccount(account: StaffTableRow) {
   return (STAFF_ROLES as readonly string[]).includes(account.role ?? "");
 }
 
+// T04 E1: clock-in is refused without a schedule ("No work schedule is assigned.").
+export function isMissingSchedule(account: StaffTableRow) {
+  return isStaffAccount(account) && (!account.startTime || !account.endTime);
+}
+
 export function formatSchedule(account: StaffTableRow) {
   if (!isStaffAccount(account) || !account.startTime || !account.endTime) return "—";
   const days = WORKDAYS.filter((day) => account.workdays?.includes(day.value))
@@ -115,7 +120,12 @@ export function staffTableColumns(
     {
       id: "schedule",
       header: "Schedule",
-      cell: ({ row }) => <span className="text-muted-foreground text-sm">{formatSchedule(row.original)}</span>,
+      cell: ({ row }) =>
+        isMissingSchedule(row.original) ? (
+          <Badge variant="destructive">No schedule</Badge>
+        ) : (
+          <span className="text-muted-foreground text-sm">{formatSchedule(row.original)}</span>
+        ),
     },
     {
       id: "joinedWindow",
