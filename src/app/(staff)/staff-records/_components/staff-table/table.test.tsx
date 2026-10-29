@@ -126,6 +126,31 @@ describe("StaffRecordsTable", () => {
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });
 
+  // T04 E1: clock-in is refused without a schedule, so an employee missing one is flagged.
+  it("flags staff accounts that have no work schedule", () => {
+    const noSchedule: StaffTableRow = {
+      ...staffAccount,
+      id: "00000000-0000-4000-8000-000000000006",
+      fullName: "New Mechanic",
+      workdays: null,
+      startTime: null,
+      endTime: null,
+      graceMinutes: null,
+    };
+    renderTable([staffAccount, noSchedule, customerAccount]);
+
+    expect(screen.getByText("No schedule")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("1 employee has no work schedule");
+    expect(screen.getByRole("alert")).toHaveTextContent("New Mechanic");
+  });
+
+  it("shows no schedule warning when every staff account has one", () => {
+    renderTable([staffAccount, customerAccount]);
+
+    expect(screen.queryByText("No schedule")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   it("searches rows by name, role, and id, and clears the filter", () => {
     renderTable();
 
