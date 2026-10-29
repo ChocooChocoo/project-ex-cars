@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { updateFieldCase } from "@/app/(staff)/field-cases/actions";
 import { assignMechanic, createFieldCase } from "@/app/(staff)/transactions/actions";
 
 import { type FieldCaseRow, FieldCasesClient } from "./field-cases-client";
@@ -104,6 +105,37 @@ describe("FieldCasesClient template table", () => {
     const menu = screen.getByRole("menu");
     expect(within(menu).queryByRole("menuitem", { name: "Assign Mechanic" })).not.toBeInTheDocument();
     expect(within(menu).getByRole("menuitem", { name: "Update" })).toBeInTheDocument();
+  });
+
+  it("saves the expenses entered in pesos as centavos", async () => {
+    vi.mocked(updateFieldCase).mockResolvedValue({ success: true });
+    render(
+      <FieldCasesClient
+        cases={[fieldCase]}
+        canUpdate
+        canCreate={false}
+        canAssignMechanic={false}
+        informants={[]}
+        mechanics={[]}
+        userRole="sales_manager"
+      />,
+    );
+
+    const trigger = screen.getByRole("button", { name: "Open field case actions" });
+    fireEvent.pointerDown(trigger);
+    fireEvent.mouseDown(trigger, { button: 0 });
+    fireEvent.mouseUp(trigger, { button: 0 });
+    fireEvent.click(trigger);
+    fireEvent.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: "Update" }));
+    const dialog = await screen.findByRole("dialog");
+    const expenses = within(dialog).getByPlaceholderText("0.00");
+    // The form loads the saved ₱1,200.00 back in pesos.
+    expect(expenses).toHaveValue(1200);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await vi.waitFor(() => expect(updateFieldCase).toHaveBeenCalledTimes(1));
+    const formData = vi.mocked(updateFieldCase).mock.calls[0]?.[0] as FormData;
+    expect(formData.get("expenses_cents")).toBe("120000");
   });
 });
 

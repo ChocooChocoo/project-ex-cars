@@ -30,6 +30,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { TRANSACTION_STATE_LABELS, transactionKindLabel } from "@/lib/transactions/labels";
 import type { TransactionKind, TransactionState } from "@/lib/transactions/state-machine";
+import { toCents } from "@/lib/utils";
 import { FIELD_CASE_STATES, type FieldCaseState } from "@/lib/validation/phase6";
 
 import { FieldCasesTable } from "./field-cases-table";
@@ -245,7 +246,7 @@ export function FieldCasesClient({
     const fd = new FormData();
     fd.set("field_case_id", editTarget.id);
     fd.set("state", state);
-    fd.set("expenses_cents", expenses);
+    fd.set("expenses_cents", toCents(expenses));
     fd.set("notes", notes);
     const result = await updateFieldCase(fd);
     setLoading(false);

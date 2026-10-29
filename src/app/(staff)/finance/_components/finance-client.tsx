@@ -42,7 +42,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency, toCents } from "@/lib/utils";
 import { FINANCIAL_ENTRY_KINDS, type FinancialEntryKind } from "@/lib/validation/phase6";
 
 export interface FinancialEntryRow {
@@ -101,12 +101,6 @@ const DISBURSEMENT_FLOW: Record<string, { label: string; next: string | null }> 
   received: { label: "Received", next: "paid" },
   paid: { label: "Paid", next: null },
 };
-
-// The amount fields are entered in pesos and stored in centavos (the tables divide by 100 to display).
-function toCents(pesos: string): string {
-  const value = Number(pesos);
-  return Number.isFinite(value) ? String(Math.round(value * 100)) : pesos;
-}
 
 const DISBURSEMENT_EVENT_LABELS: Record<string, string> = {
   submitted: "Submit",

@@ -17,6 +17,7 @@ import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { toCents } from "@/lib/utils";
 
 export interface PayslipItemRow {
   id: string;
@@ -89,7 +90,7 @@ export function PayslipDetailClient({
     fd.set("payslip_id", payslipId);
     fd.set("item_kind", itemKind);
     fd.set("label", label);
-    fd.set("amount_cents", amount);
+    fd.set("amount_cents", toCents(amount));
     fd.set("calculation_note", calculationNote);
     const result = await addPayslipItem(fd);
     setLoading(false);

@@ -49,3 +49,9 @@ export function formatCurrency(
 
   return new Intl.NumberFormat(locale, formatOptions).format(amount);
 }
+
+// Amount fields are entered in pesos and stored in centavos (tables divide by 100 to display).
+export function toCents(pesos: string): string {
+  const value = Number(pesos);
+  return Number.isFinite(value) ? String(Math.round(value * 100)) : pesos;
+}
