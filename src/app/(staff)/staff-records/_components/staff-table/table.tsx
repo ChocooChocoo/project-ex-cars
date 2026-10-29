@@ -48,7 +48,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-import { isMissingSchedule, isStaffAccount, staffTableColumns, WORKDAYS } from "./columns";
+import { isAttendanceTrackedAccount, isMissingSchedule, staffTableColumns, WORKDAYS } from "./columns";
 import type { StaffTableRow } from "./schema";
 
 export type { StaffTableRow };
@@ -203,7 +203,7 @@ export function StaffRecordsTable({ data }: { data: StaffTableRow[] }) {
     formData.set("fullName", fullName.trim());
     formData.set("phone", phone.trim());
     formData.set("address", address.trim());
-    if (isStaffAccount(selectedAccount)) {
+    if (isAttendanceTrackedAccount(selectedAccount)) {
       formData.set("workdays", workdays.join(","));
       formData.set("startTime", startTime);
       formData.set("endTime", endTime);
@@ -536,7 +536,7 @@ export function StaffRecordsTable({ data }: { data: StaffTableRow[] }) {
                     onChange={(event) => setAddress(event.target.value)}
                   />
                 </div>
-                {isStaffAccount(selectedAccount) ? (
+                {isAttendanceTrackedAccount(selectedAccount) ? (
                   <>
                     <fieldset className="flex flex-col gap-2">
                       <legend className="font-medium text-sm">Workdays</legend>

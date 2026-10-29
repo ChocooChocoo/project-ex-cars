@@ -259,6 +259,34 @@ describe("StaffRecordsTable", () => {
     expect(graceInput).toHaveAttribute("max", "10");
   });
 
+  it("exempts Head Security without hiding the CEO missing-schedule warning", () => {
+    renderTable([
+      { ...staffAccount, role: "head_security", workdays: null, startTime: null, endTime: null },
+      { ...staffAccount, id: "ceo-1", fullName: "Test CEO", role: "ceo", startTime: null, endTime: null },
+    ]);
+    expect(screen.getByText("Attendance not required")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("1 employee has no work schedule");
+    expect(screen.getByRole("alert")).toHaveTextContent("Test CEO");
+    expect(screen.getByRole("alert")).not.toHaveTextContent("Ada Staff");
+  });
+
+  it("hides Head Security schedule inputs and omits them when saving its profile", async () => {
+    saveStaffRecordMock.mockResolvedValue({ success: true, row: { id: staffAccount.id, account_state: "active" } });
+    renderTable([{ ...staffAccount, role: "head_security", workdays: null, startTime: null, endTime: null }]);
+    openActions("Ada Staff");
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Edit" }));
+    expect(await screen.findByLabelText("Full name")).toHaveValue("Ada Staff");
+    expect(screen.queryByRole("group", { name: "Workdays" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Start time")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("End time")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Grace minutes")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(saveStaffRecordMock).toHaveBeenCalledTimes(1));
+    const form = saveStaffRecordMock.mock.calls[0][0];
+    expect(form.get("fullName")).toBe("Ada Staff");
+    for (const field of ["workdays", "startTime", "endTime", "graceMinutes"]) expect(form.has(field)).toBe(false);
+  });
+
   it("keeps the edit Sheet open when saving fails", async () => {
     saveStaffRecordMock.mockResolvedValue({ error: "Could not save the account." });
     renderTable([staffAccount]);
