@@ -321,7 +321,7 @@ async function seedSuppliers(users) {
         supplier_id: s.id,
         document_kind: "business_permit",
         is_primary_id: s.state === "approved",
-        storage_path: `seed/suppliers/${s.id}/business_permit.pdf`,
+        storage_path: `suppliers/${s.id}/business_permit.pdf`,
         verification_state: s.state === "approved" ? "verified" : "pending",
         verified_by: s.state === "approved" ? users.account_manager : null,
         verified_at: s.state === "approved" ? iso(daysAgo(19)) : null,
@@ -330,7 +330,7 @@ async function seedSuppliers(users) {
         supplier_id: s.id,
         document_kind: "dti_registration",
         is_primary_id: false,
-        storage_path: `seed/suppliers/${s.id}/dti_registration.pdf`,
+        storage_path: `suppliers/${s.id}/dti_registration.pdf`,
         verification_state: s.state === "approved" ? "verified" : "pending",
         verified_by: s.state === "approved" ? users.account_manager : null,
         verified_at: s.state === "approved" ? iso(daysAgo(19)) : null,
@@ -424,7 +424,7 @@ async function seedVehicles(users) {
     const color = pick(COLORS);
     return {
       stock_code: `GCE-${String(i + 1).padStart(3, "0")}`,
-      vin: `SEEDVIN${String(i + 1).padStart(12, "0")}`,
+      vin: `MHFAB3EM${String(100000000 + i * 7919).slice(-9)}`,
       make,
       model,
       year,
@@ -464,7 +464,7 @@ async function seedVehicles(users) {
     const vehicleId = inserted[i].id;
     const hue = (i * 37) % 360;
     for (let p = 0; p < 3; p++) {
-      const path = `seed/vehicles/${vehicleId}/photo-${p + 1}.png`;
+      const path = `vehicles/${vehicleId}/photo-${p + 1}.png`;
       mediaRows.push({
         vehicle_id: vehicleId,
         media_kind: "photo",
@@ -480,7 +480,7 @@ async function seedVehicles(users) {
     }
     if (i < 3) {
       for (let f = 0; f < 8; f++) {
-        const path = `seed/vehicles/${vehicleId}/360-${f + 1}.png`;
+        const path = `vehicles/${vehicleId}/360-${f + 1}.png`;
         mediaRows.push({
           vehicle_id: vehicleId,
           media_kind: "360_view",
@@ -499,7 +499,7 @@ async function seedVehicles(users) {
   const mediaInserted = await insert("vehicle_media", mediaRows);
   log("P2", "vehicle_media", mediaInserted.length);
 
-  console.log("  Uploading placeholder media to showroom-media bucket...");
+  console.log("  Uploading vehicle media to showroom-media bucket...");
   let uploaded = 0;
   for (const u of uploads) {
     const { error } = await admin.storage.from("showroom-media").upload(u.path, u.buf, {
@@ -697,7 +697,7 @@ async function seedInspections(users, vehicles, checklistNodes) {
         document_kind: kind,
         required_state: true,
         submitted_state: roll < 0.6 ? "verified" : roll < 0.8 ? "submitted" : "required",
-        storage_path: roll < 0.6 ? `seed/vehicles/${v.id}/${kind}.pdf` : null,
+        storage_path: roll < 0.6 ? `vehicles/${v.id}/${kind}.pdf` : null,
         checker_id: roll < 0.6 ? users.sales_manager : null,
         checked_at: roll < 0.6 ? iso(daysAgo(randInt(1, 40))) : null,
       });
@@ -814,7 +814,7 @@ async function seedInquiries(users, vehicles) {
     attRows.push({
       message_id: msg.id,
       file_kind: "image",
-      storage_path: `seed/messages/${msg.id}/photo.png`,
+      storage_path: `messages/${msg.id}/photo.png`,
       original_name: pick(["vehicle-photo.png", "documents.png", "odometer.png", "plate.png"]),
       file_size: randInt(50000, 900000),
       uploader_id: users.customer,
@@ -1355,7 +1355,7 @@ async function seedStaffRecords(users) {
       time_in: phtTimestamp(now, 8),
       time_out: phtTimestamp(now, 17),
       status: "present",
-      notes: "Deterministic Task 18 present fixture",
+      notes: "Arrived on time",
       checked_by: null,
       checked_at: null,
     },
@@ -1365,7 +1365,7 @@ async function seedStaffRecords(users) {
       time_in: phtTimestamp(now, 8, 20),
       time_out: phtTimestamp(now, 17),
       status: "late",
-      notes: "Deterministic Task 18 late fixture",
+      notes: "Arrived 25 minutes late, heavy traffic on SLEX",
       checked_by: users.ceo,
       checked_at: iso(now),
     },
@@ -1375,7 +1375,7 @@ async function seedStaffRecords(users) {
       time_in: null,
       time_out: null,
       status: "absent",
-      notes: "Deterministic Task 18 absent fixture",
+      notes: "Did not report for work, no notice given",
       checked_by: users.ceo,
       checked_at: iso(now),
     },
@@ -1385,7 +1385,7 @@ async function seedStaffRecords(users) {
       time_in: phtTimestamp(now, 8),
       time_out: phtTimestamp(now, 12),
       status: "half_day",
-      notes: "Deterministic Task 18 half-day fixture",
+      notes: "Half day, left after lunch for a clinic appointment",
       checked_by: users.account_manager,
       checked_at: iso(now),
     },
@@ -1395,7 +1395,7 @@ async function seedStaffRecords(users) {
       time_in: null,
       time_out: null,
       status: "on_leave",
-      notes: "Deterministic Task 18 leave fixture",
+      notes: "On approved vacation leave",
       checked_by: users.account_manager,
       checked_at: iso(now),
     },
@@ -1433,9 +1433,9 @@ async function seedStaffRecords(users) {
     status: "approved",
     start_date: phtDateOnly(now),
     end_date: phtDateOnly(now),
-    reason: "Deterministic Task 18 approved-leave fixture",
+    reason: "Family event in the province",
     reviewed_by: users.account_manager,
-    review_notes: "Approved fixture",
+    review_notes: "Approved by Account Manager",
     reviewed_at: iso(now),
   });
   const requests = await insert("employee_requests", reqRows);
@@ -1791,8 +1791,8 @@ async function seedOps(users, suppliers) {
     dutyRows.push({
       security_id: users.head_security,
       duty_date: dateOnly(date),
-      before_image_path: `seed/security/${users.head_security}/${dateOnly(date)}/before.png`,
-      after_image_path: rand() < 0.7 ? `seed/security/${users.head_security}/${dateOnly(date)}/after.png` : null,
+      before_image_path: `security/${users.head_security}/${dateOnly(date)}/before.png`,
+      after_image_path: rand() < 0.7 ? `security/${users.head_security}/${dateOnly(date)}/after.png` : null,
       notes: "Standard lot inspection.",
       status: pick(["completed", "in_progress", "pending"]),
       completed_at: rand() < 0.7 ? iso(date) : null,
@@ -2024,6 +2024,15 @@ async function seedOps(users, suppliers) {
 async function main() {
   console.log("=== GCE seed-data ===");
   console.log(`Connected to ${supabaseUrl}\n`);
+
+  // The wipe below deletes every row in WIPE_TABLES, including hand-curated records. Refuse unless the
+  // caller names the exact project: SEED_CONFIRM_WIPE=<project ref>.
+  const projectRef = new URL(supabaseUrl).hostname.split(".")[0];
+  if (process.env.SEED_CONFIRM_WIPE !== projectRef) {
+    console.error(`Refusing to wipe ${projectRef}. This deletes all seeded tables and their current data.`);
+    console.error(`Re-run with SEED_CONFIRM_WIPE=${projectRef} only if that is intended.`);
+    process.exit(1);
+  }
 
   const users = await loadUsers();
   console.log("Users loaded: 10 seed accounts found\n");
