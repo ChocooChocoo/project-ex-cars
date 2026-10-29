@@ -100,6 +100,20 @@ describe("proxy refreshes the session for the render it is about to make", () =>
     expect(sessionCookies(response)).toHaveLength(1);
   });
 
+  // T04 L1: signed-out visitors see the public landing page at /.
+  it("serves the landing page at / to a visitor with no role", async () => {
+    const response = await proxy(new NextRequest("https://app.test/"));
+
+    expect(response.headers.get("location")).toBeNull();
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+  });
+
+  it("still sends a signed-in user from / to their landing path", async () => {
+    const response = await proxy(renderRequest("/", "customer"));
+
+    expect(response.headers.get("location")).toBe("https://app.test/customer/showroom");
+  });
+
   it("leaves the skipped prefixes alone", async () => {
     for (const pathname of ["/auth/v1/login", "/template/landing", "/api/health", "/_next/static/chunk.js"]) {
       const request = renderRequest(pathname);

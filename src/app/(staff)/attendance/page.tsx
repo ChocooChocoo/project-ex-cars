@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { getMyAttendanceState } from "@/app/(staff)/attendance/actions";
 import { getCurrentRole } from "@/app/auth/actions";
 import { requireRole } from "@/lib/auth/guards";
-import { STAFF_ROLES } from "@/lib/auth/roles";
+import { ATTENDANCE_TRACKED_ROLES } from "@/lib/auth/roles";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { ATTENDANCE_STATUSES, type AttendanceStatus } from "@/lib/validation/phase6";
 
@@ -356,7 +356,7 @@ function buildUnavailableAttendanceState(
 }
 
 export default async function AttendancePage() {
-  await requireRole(STAFF_ROLES);
+  await requireRole(ATTENDANCE_TRACKED_ROLES);
   const role = await getCurrentRole();
   if (!role) redirect("/unauthorized");
 

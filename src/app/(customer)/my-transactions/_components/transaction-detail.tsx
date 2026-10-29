@@ -50,6 +50,7 @@ import {
   DELIVERY_STATUSES,
   type DeliveryStatus,
   deliveryBalanceNote,
+  financedTotal,
   isFinancingRequest,
   isOnsiteCashRequest,
   isQueuedRequest,
@@ -273,8 +274,12 @@ export function TransactionDetail({
   }
 
   // Buy detail form state
-  const [paymentMethod, setPaymentMethod] = useState((purchaseDetails?.payment_method as string) ?? "");
-  const [finalPrice, setFinalPrice] = useState(purchaseDetails?.final_price ? String(purchaseDetails.final_price) : "");
+  // T04 P5: Payment Option, then the method for a Full Payment. Financing keeps the method 'financing'.
+  const savedMethod = (purchaseDetails?.payment_method as string) ?? "";
+  const [paymentOption, setPaymentOption] = useState(
+    (purchaseDetails?.payment_option as string) ?? (savedMethod === "financing" ? "financing" : "full"),
+  );
+  const [paymentMethod, setPaymentMethod] = useState(savedMethod === "financing" ? "" : savedMethod);
   const [arrangementKind, setArrangementKind] = useState((purchaseDetails?.arrangement_kind as string) ?? "");
   const [schedule, setSchedule] = useState("");
   const [location, setLocation] = useState(autofill?.address ?? "");
@@ -340,12 +345,13 @@ export function TransactionDetail({
   // Delivery: a fee and a downpayment are paid first, and the buyer agrees to that before sending.
   const deliveryTermsAgreedAt = (purchaseDetails?.delivery_terms_agreed_at as string | null) ?? null;
   const [agreeDeliveryTerms, setAgreeDeliveryTerms] = useState(false);
-  // Financed meet-up: the term the buyer asks for. The amount is an estimate until GCE confirms it.
+  // Financing: the term the buyer asks for. The amount is an estimate until GCE confirms it.
   const [termMonths, setTermMonths] = useState(
     purchaseDetails?.requested_term_months ? String(purchaseDetails.requested_term_months) : "",
   );
-  const financedMeetupPicked = paymentMethod === "financing" && arrangementKind === "meetup";
-  const priceForEstimate = Number(finalPrice || vehicles?.current_price || 0);
+  const financingPicked = paymentOption === "financing";
+  // T04 P6: financing adds a flat 10% to the Showroom price.
+  const financingTotal = financedTotal(Number(vehicles?.current_price || 0));
   // A delivery is dated at request, financed or not; other financing books after the approval.
   const savedDelivery = purchaseDetails?.arrangement_kind === "delivery";
   const booksAfterApproval = financingSaved && !savedDelivery;
@@ -374,8 +380,8 @@ export function TransactionDetail({
     setSaving(true);
     const fd = new FormData();
     fd.set("transaction_id", id);
-    fd.set("payment_method", paymentMethod);
-    fd.set("final_price", finalPrice);
+    fd.set("payment_option", paymentOption);
+    fd.set("payment_method", financingPicked ? "financing" : paymentMethod);
     fd.set("arrangement_kind", arrangementKind);
     // Sent as an instant, so a server in another timezone books the moment the buyer picked.
     const when = pickedTime(schedule);
@@ -384,7 +390,7 @@ export function TransactionDetail({
     fd.set("notes", notes);
     if (acknowledge) fd.set("acknowledge_condition", "yes");
     if (agreeDeliveryTerms) fd.set("agree_delivery_terms", "yes");
-    if (financedMeetupPicked) fd.set("requested_term_months", termMonths);
+    if (financingPicked) fd.set("requested_term_months", termMonths);
     const result = await saveBuyDetails(fd);
     setSaving(false);
     if (result.error) {
@@ -540,37 +546,48 @@ export function TransactionDetail({
                 <h2 className="font-medium tracking-tight">Purchase Details</h2>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="payment_method">Payment Method</Label>
-                    <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                      <SelectTrigger id="payment_method">
-                        <SelectValue placeholder="Select method" />
+                    <Label htmlFor="payment_option">Payment Option</Label>
+                    <Select value={paymentOption} onValueChange={setPaymentOption}>
+                      <SelectTrigger id="payment_option">
+                        <SelectValue placeholder="Select option" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectGroup>
-                          <SelectItem value="cash">Cash</SelectItem>
+                          <SelectItem value="full">Full Payment</SelectItem>
                           <SelectItem value="financing">Financing</SelectItem>
-                          <SelectItem value="cheque">Cheque</SelectItem>
-                          <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                          {/* Legacy method: shown only so older requests still display their saved choice. */}
-                          {paymentMethod === "down_payment" && (
-                            <SelectItem value="down_payment">Down Payment</SelectItem>
-                          )}
                         </SelectGroup>
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="final_price">Final Price (₱)</Label>
-                    <Input
-                      id="final_price"
-                      type="number"
-                      min="0"
-                      value={finalPrice}
-                      onChange={(e) => setFinalPrice(e.target.value)}
-                      placeholder="0.00"
-                    />
-                  </div>
+                  {financingPicked ? null : (
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="payment_method">Payment Method</Label>
+                      <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                        <SelectTrigger id="payment_method">
+                          <SelectValue placeholder="Select method" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            <SelectItem value="cash">Cash</SelectItem>
+                            <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                            <SelectItem value="paymongo">PayMongo</SelectItem>
+                            {/* Legacy method: shown only so older requests still display their saved choice. */}
+                            {paymentMethod === "down_payment" && (
+                              <SelectItem value="down_payment">Down Payment</SelectItem>
+                            )}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                 </div>
+                {financingPicked && financingTotal > 0 ? (
+                  <p className="text-sm">
+                    Total with financing:{" "}
+                    <span className="font-medium tabular-nums">{formatCurrency(financingTotal)}</span>
+                    <span className="text-muted-foreground"> (Showroom price plus 10%)</span>
+                  </p>
+                ) : null}
                 <Separator />
                 <p className="font-medium text-sm">Viewing Arrangement</p>
                 <div className="grid gap-4 sm:grid-cols-2">
@@ -605,7 +622,7 @@ export function TransactionDetail({
                     Your account is limited to GCE visits after missed meet-ups or a declined purchase.
                   </p>
                 ) : null}
-                {(arrangementKind === "meetup" || arrangementKind === "delivery" || paymentMethod === "financing") &&
+                {(arrangementKind === "meetup" || arrangementKind === "delivery" || financingPicked) &&
                 !acknowledgedAt ? (
                   <div className="flex items-start gap-2 rounded-md border p-3 text-sm">
                     <Checkbox
@@ -623,7 +640,7 @@ export function TransactionDetail({
                     </label>
                   </div>
                 ) : null}
-                {financedMeetupPicked ? (
+                {financingPicked ? (
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="requested_term">Payment term</Label>
                     <Select value={termMonths} onValueChange={setTermMonths}>
@@ -632,6 +649,7 @@ export function TransactionDetail({
                       </SelectTrigger>
                       <SelectContent>
                         <SelectGroup>
+                          <SelectItem value="6">6 months</SelectItem>
                           <SelectItem value="12">1 year</SelectItem>
                           <SelectItem value="24">2 years</SelectItem>
                           <SelectItem value="36">3 years</SelectItem>
@@ -640,9 +658,9 @@ export function TransactionDetail({
                       </SelectContent>
                     </Select>
                     <p id="requested-term-estimate" className="text-muted-foreground text-xs">
-                      {termMonths && priceForEstimate > 0
-                        ? `About ${formatCurrency(priceForEstimate / Number(termMonths))} a month for ${termMonths} months. The Sales Manager confirms the final amount.`
-                        : "Pick a term to see the monthly payment. No date or time is needed yet."}
+                      {termMonths && financingTotal > 0
+                        ? `About ${formatCurrency(financingTotal / Number(termMonths))} a month for ${termMonths} months. The Sales Manager confirms the final amount.`
+                        : "Pick a term to see the monthly payment."}
                     </p>
                   </div>
                 ) : null}
@@ -657,7 +675,7 @@ export function TransactionDetail({
                       <span>
                         Delivery has a delivery fee and a downpayment. The downpayment and fee are paid first through
                         PayMongo.{" "}
-                        {paymentMethod === "financing"
+                        {financingPicked
                           ? "The rest is paid in monthly instalments."
                           : "The rest is paid in cash when the car arrives."}
                       </span>
@@ -677,15 +695,18 @@ export function TransactionDetail({
                       : " No slots are taken for this car yet."}
                   </p>
                 ) : null}
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="location">Location</Label>
-                  <Input
-                    id="location"
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                    placeholder="Address or meeting point"
-                  />
-                </div>
+                {/* T04 P2: a GCE Visit happens at GCE, so it asks for no location. */}
+                {arrangementKind === "gce_visit" ? null : (
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="location">Location</Label>
+                    <Input
+                      id="location"
+                      value={location}
+                      onChange={(e) => setLocation(e.target.value)}
+                      placeholder="Address or meeting point"
+                    />
+                  </div>
+                )}
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="notes">Notes</Label>
                   <Textarea

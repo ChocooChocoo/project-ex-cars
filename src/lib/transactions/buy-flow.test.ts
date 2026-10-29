@@ -7,6 +7,8 @@ import {
   contractReadyForSale,
   contractTemplate,
   deliveryBalanceNote,
+  FINANCING_TERM_MONTHS,
+  financedTotal,
   financingFullyPaid,
   isBusinessSlot,
   isDeliveryCashRequest,
@@ -92,7 +94,13 @@ describe("§7–9 bank transfer", () => {
     expect(isHalfwayCashRequest({ payment_method: "bank_transfer", arrangement_kind: "meetup" })).toBe(true);
     expect(isDeliveryCashRequest({ payment_method: "bank_transfer", arrangement_kind: "delivery" })).toBe(true);
     expect(isQueuedRequest({ payment_method: "bank_transfer", arrangement_kind: "gce_visit" })).toBe(false);
-    expect(isOnsiteCashRequest({ payment_method: "cheque", arrangement_kind: "gce_visit" })).toBe(false);
+    expect(isOnsiteCashRequest({ payment_method: "down_payment", arrangement_kind: "gce_visit" })).toBe(false);
+  });
+
+  it("treats a PayMongo full payment like Cash", () => {
+    expect(isOnsiteCashRequest({ payment_method: "paymongo", arrangement_kind: "gce_visit" })).toBe(true);
+    expect(isHalfwayCashRequest({ payment_method: "paymongo", arrangement_kind: "meetup" })).toBe(true);
+    expect(deliveryBalanceNote("paymongo", "buyer")).toBe("The balance is paid through PayMongo on delivery.");
   });
 
   it("words the delivery balance by method", () => {
@@ -103,6 +111,18 @@ describe("§7–9 bank transfer", () => {
     expect(deliveryBalanceNote("financing", "team")).toBe(
       "Collect nothing on delivery: the balance is financed by GCE.",
     );
+  });
+});
+
+describe("T04 financing", () => {
+  it("adds a flat 10% to the price", () => {
+    expect(financedTotal(1_000_000)).toBe(1_100_000);
+    expect(financedTotal(499_999)).toBe(549_999);
+    expect(financedTotal(0)).toBe(0);
+  });
+
+  it("offers 6, 12, 24, 36 and 60 months", () => {
+    expect(FINANCING_TERM_MONTHS).toEqual([6, 12, 24, 36, 60]);
   });
 });
 
@@ -348,7 +368,18 @@ describe("contract", () => {
     expect(paymentAllowedBeforeSigning(cashDelivery, "balance")).toBe(false);
     expect(paymentAllowedBeforeSigning(cashDelivery, null)).toBe(false);
     expect(paymentAllowedBeforeSigning(financedVisit, "downpayment")).toBe(false);
-    expect(paymentAllowedBeforeSigning(cashMeetup, "downpayment")).toBe(false);
+  });
+
+  // T04 X2: a Bank Transfer (or Cash) meet-up takes its downpayment before the contract is signed at the meet-up.
+  it("allows only the downpayment of a direct-payment meet-up before signing", () => {
+    const bankMeetup = { payment_method: "bank_transfer", arrangement_kind: "meetup" };
+    expect(paymentAllowedBeforeSigning(bankMeetup, "downpayment")).toBe(true);
+    expect(paymentAllowedBeforeSigning(cashMeetup, "downpayment")).toBe(true);
+    expect(paymentAllowedBeforeSigning(bankMeetup, "full")).toBe(false);
+    expect(paymentAllowedBeforeSigning(bankMeetup, "balance")).toBe(false);
+    expect(paymentAllowedBeforeSigning(bankMeetup, "delivery_fee")).toBe(false);
+    // A financed meet-up signs in the app before any money.
+    expect(paymentAllowedBeforeSigning(financedMeetup, "downpayment")).toBe(false);
   });
 
   it("prefills the template from the financing terms", () => {

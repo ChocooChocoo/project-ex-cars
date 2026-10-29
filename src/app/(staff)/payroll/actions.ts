@@ -3,6 +3,14 @@
 import { revalidatePath } from "next/cache";
 
 import { getCurrentRole } from "@/app/auth/actions";
+import {
+  computePayslip,
+  DEFAULT_SCHEDULED_HOURS,
+  OVERTIME_MULTIPLIER,
+  type OvertimeRange,
+  type PayslipAttendance,
+  scheduledHours,
+} from "@/lib/payroll/compute";
 import { rolePath } from "@/lib/routing/paths";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
@@ -16,9 +24,14 @@ type Phase6ActionResult = { error: string } | { success: true };
 
 const PAYROLL_PREPARERS = ["ceo", "account_manager"];
 const PAYROLL_REVIEWERS = ["ceo", "head_accountant"];
-const WORKING_DAYS_PER_MONTH = 30;
-// Days a checked attendance status pays for. Absent and on leave pay nothing.
-const PAID_DAYS: Record<string, number> = { present: 1, late: 1, half_day: 0.5 };
+
+function groupByEmployee<T>(rows: unknown[] | null): Map<string, T[]> {
+  const groups = new Map<string, T[]>();
+  for (const row of (rows ?? []) as (T & { employee_id: string })[]) {
+    groups.set(row.employee_id, [...(groups.get(row.employee_id) ?? []), row]);
+  }
+  return groups;
+}
 
 // Pages are served at /{role}/payroll (rewritten to /payroll), so refresh both.
 function revalidatePayroll(role: string, page: "payroll" | "payslips", id?: string) {
@@ -126,47 +139,90 @@ export async function createPayrollRun(formData: FormData): Promise<Phase6Action
   // Only checked attendance feeds payroll input.
   const { data: attendance } = await supabase
     .from("attendance_entries")
-    .select("employee_id, attendance_date, status")
+    .select("employee_id, attendance_date, status, hours_worked")
     .gte("attendance_date", parsed.data.period_start)
     .lte("attendance_date", parsed.data.period_end)
     .not("checked_by", "is", null);
 
-  // Ordered by effective_from, so the latest record for an employee wins in the maps below.
+  // Ordered by effective_from, so the latest record for an employee wins in the map below.
   const { data: compensation, error: compensationError } = await supabase.rpc("list_staff_compensation", {
     p_period_start: parsed.data.period_start,
     p_period_end: parsed.data.period_end,
   });
   if (compensationError) return { error: compensationError.message };
 
-  const workedDaysByEmployee = new Map<string, number>();
-  for (const entry of attendance ?? []) {
-    const employeeId = entry.employee_id as string;
-    const worked = PAID_DAYS[entry.status as string] ?? 0;
-    workedDaysByEmployee.set(employeeId, (workedDaysByEmployee.get(employeeId) ?? 0) + worked);
-  }
+  const { data: schedules } = await supabase
+    .from("employee_work_schedules")
+    .select("employee_id, start_time, end_time");
+
+  // Requests ending before the period are filtered out by computePayslip's date check.
+  const { data: overtimeRequests } = await supabase
+    .from("employee_requests")
+    .select("employee_id, start_date, end_date")
+    .eq("request_kind", "overtime")
+    .eq("status", "approved")
+    .lte("start_date", parsed.data.period_end);
+
+  const entriesByEmployee = groupByEmployee<PayslipAttendance>(attendance);
+  const overtimeByEmployee = groupByEmployee<OvertimeRange>(overtimeRequests);
 
   const compensationByEmployee = new Map<string, Record<string, unknown>>();
   for (const comp of compensation ?? []) {
     compensationByEmployee.set(comp.employee_id as string, comp as Record<string, unknown>);
   }
 
-  const dailyRateByEmployee = new Map<string, number>();
-  for (const comp of compensation ?? []) {
-    dailyRateByEmployee.set(
-      comp.employee_id as string,
-      Math.round((comp.base_salary_cents as number) / WORKING_DAYS_PER_MONTH),
+  const scheduledHoursByEmployee = new Map<string, number>();
+  for (const schedule of schedules ?? []) {
+    scheduledHoursByEmployee.set(
+      schedule.employee_id as string,
+      scheduledHours(schedule.start_time as string, schedule.end_time as string),
     );
   }
 
   let totalGross = 0;
   let totalDeductions = 0;
 
-  for (const [employeeId, workedDays] of workedDaysByEmployee) {
-    const dailyRate = dailyRateByEmployee.get(employeeId);
-    if (!dailyRate || workedDays === 0) continue;
-
-    const gross = Math.round(dailyRate * workedDays);
+  for (const [employeeId, entries] of entriesByEmployee) {
     const compRecord = compensationByEmployee.get(employeeId);
+    const baseSalaryCents = Number(compRecord?.base_salary_cents ?? 0);
+    if (!baseSalaryCents) continue;
+
+    const hasSchedule = scheduledHoursByEmployee.has(employeeId);
+    const hoursPerDay = scheduledHoursByEmployee.get(employeeId) ?? DEFAULT_SCHEDULED_HOURS;
+    const pay = computePayslip({
+      baseSalaryCents,
+      scheduledHoursPerDay: hoursPerDay,
+      entries,
+      overtimeRanges: overtimeByEmployee.get(employeeId) ?? [],
+    });
+    if (pay.regularHours === 0) continue;
+
+    const gross = pay.regularCents + pay.overtimeCents;
+    const rate = `₱${(pay.hourlyRateCents / 100).toFixed(2)}/h`;
+    const scheduleNote = hasSchedule ? `${hoursPerDay} h a day` : `${hoursPerDay} h a day, no work schedule on file`;
+    const hourItems = [
+      {
+        item_kind: "earning",
+        label: "Regular hours",
+        amount_cents: pay.regularCents,
+        source_value: pay.regularHours.toFixed(2),
+        calculation_note: `${pay.regularHours.toFixed(2)} h × ${rate} (base salary / 30 / ${scheduleNote})`,
+      },
+      {
+        item_kind: "earning",
+        label: "Overtime hours",
+        amount_cents: pay.overtimeCents,
+        source_value: pay.overtimeHours.toFixed(2),
+        calculation_note: `${pay.overtimeHours.toFixed(2)} h × ${rate} × ${OVERTIME_MULTIPLIER} (approved overtime)`,
+      },
+      {
+        item_kind: "deduction",
+        label: "Late / undertime",
+        amount_cents: pay.lateCents,
+        source_value: String(pay.shortMinutes),
+        calculation_note: `${pay.shortMinutes} min × ${rate} ÷ 60 (late arrival and early leave)`,
+      },
+    ].filter((item) => item.amount_cents > 0);
 
     const statutoryDeductions = [
       { label: "SSS contribution", cents: Number(compRecord?.sss_contribution_cents ?? 0) },
@@ -174,7 +230,7 @@ export async function createPayrollRun(formData: FormData): Promise<Phase6Action
       { label: "PhilHealth contribution", cents: Number(compRecord?.philhealth_contribution_cents ?? 0) },
     ].filter((item) => item.cents > 0);
 
-    const deductions = statutoryDeductions.reduce((sum, item) => sum + item.cents, 0);
+    const deductions = pay.lateCents + statutoryDeductions.reduce((sum, item) => sum + item.cents, 0);
     const net = Math.max(0, gross - deductions);
 
     totalGross += gross;
@@ -194,14 +250,9 @@ export async function createPayrollRun(formData: FormData): Promise<Phase6Action
       .single();
     if (payslipError) return { error: payslipError.message };
 
-    await supabase.from("payslip_items").insert({
-      payslip_id: payslip.id,
-      item_kind: "earning",
-      label: "Base salary",
-      amount_cents: gross,
-      source_value: String(workedDays),
-      calculation_note: `${workedDays} checked attendance day(s) × daily rate ₱${(dailyRate / 100).toFixed(2)} (base salary / 30)`,
-    });
+    for (const item of hourItems) {
+      await supabase.from("payslip_items").insert({ payslip_id: payslip.id, ...item });
+    }
 
     for (const item of statutoryDeductions) {
       await supabase.from("payslip_items").insert({

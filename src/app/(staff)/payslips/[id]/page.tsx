@@ -34,6 +34,12 @@ export default async function PayslipDetailPage({ params }: { readonly params: P
 
   const earnings = (items ?? []).filter((i) => i.item_kind === "earning");
   const deductions = (items ?? []).filter((i) => i.item_kind === "deduction");
+  // Hours payslips (Phase 8) carry the hours in source_value; older day-based payslips have no such item.
+  const hoursOf = (label: string) => {
+    const item = earnings.find((i) => i.label === label);
+    return item ? Number(item.source_value) : null;
+  };
+  const regularHours = hoursOf("Regular hours");
 
   const payrollRun = payslip.payroll_runs as Record<string, unknown> | null;
   const periodLabel = payrollRun
@@ -51,6 +57,7 @@ export default async function PayslipDetailPage({ params }: { readonly params: P
         netCents={(payslip.net_cents as number) ?? 0}
         earnings={(earnings as unknown as PayslipItemRow[]) ?? []}
         deductions={(deductions as unknown as PayslipItemRow[]) ?? []}
+        hours={regularHours === null ? null : { regular: regularHours, overtime: hoursOf("Overtime hours") ?? 0 }}
         canEdit={["ceo", "account_manager"].includes(role)}
         canPay={role === "head_accountant"}
         periodLabel={periodLabel}

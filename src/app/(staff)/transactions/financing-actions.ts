@@ -8,7 +8,7 @@ import { getCurrentRole } from "@/app/auth/actions";
 import { notify } from "@/lib/notifications/notify";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { addWorkingDays, DOWNPAYMENT_WORKING_DAYS } from "@/lib/transactions/buy-flow";
+import { addWorkingDays, DOWNPAYMENT_WORKING_DAYS, financedTotal } from "@/lib/transactions/buy-flow";
 import { loadFinancing, openFinancingAccount } from "@/lib/transactions/financing-server";
 
 type FinancingResult = { error: string } | { success: true };
@@ -35,11 +35,15 @@ async function history(admin: Admin, tx: { id: string; current_state: string }, 
   });
 }
 
-function arrangementKind(tx: { purchase_details: unknown }): string | null {
-  const details = (Array.isArray(tx.purchase_details) ? tx.purchase_details[0] : tx.purchase_details) as {
+function purchase(tx: { purchase_details: unknown }) {
+  return (Array.isArray(tx.purchase_details) ? tx.purchase_details[0] : tx.purchase_details) as {
     arrangement_kind?: string;
+    final_price?: number | null;
   } | null;
-  return details?.arrangement_kind ?? null;
+}
+
+function arrangementKind(tx: { purchase_details: unknown }): string | null {
+  return purchase(tx)?.arrangement_kind ?? null;
 }
 
 function done(transactionId: string): FinancingResult {
@@ -57,7 +61,8 @@ export async function proposeFinancingTerms(formData: FormData): Promise<Financi
   const parsed = z
     .object({
       duration_months: z.coerce.number().int().min(1, "Choose a payment duration.").max(84),
-      total_amount: z.coerce.number().positive("Enter the vehicle price."),
+      // T04 P6: left blank, it defaults to the car's price plus 10%.
+      total_amount: z.coerce.number().positive("Enter the vehicle price.").optional().or(z.literal("")),
       down_payment: z.coerce.number().min(0).optional(),
       monthly_payment: z.coerce.number().positive("Enter the monthly payment."),
       first_due_date: z.string().min(1, "Set the first due date."),
@@ -74,20 +79,23 @@ export async function proposeFinancingTerms(formData: FormData): Promise<Financi
   if (tx.current_state !== "approved") return { error: "Approve the request before proposing terms." };
   if (tx.terms && !["returned"].includes(tx.terms.state)) return { error: "Terms are already in review." };
 
+  const totalAmount = parsed.data.total_amount || financedTotal(Number(purchase(tx)?.final_price ?? 0));
+  if (!totalAmount) return { error: "Enter the vehicle price." };
+
   // A meet-up takes no downpayment. A delivery's fee and downpayment are approved with the terms.
   const kind = arrangementKind(tx);
   const delivery = kind === "delivery";
   if (delivery && !String(formData.get("delivery_fee") ?? "").trim()) return { error: "Enter the delivery fee." };
   const downPayment = kind === "meetup" ? 0 : (parsed.data.down_payment ?? 0);
   if (delivery && downPayment <= 0) return { error: "Enter the downpayment." };
-  if (downPayment >= parsed.data.total_amount) {
+  if (downPayment >= totalAmount) {
     return { error: "The Initial Downpayment must be below the vehicle price." };
   }
 
   const row = {
     purchase_transaction_id: tx.id,
     arrangement_description: parsed.data.notes || `${parsed.data.duration_months}-month In-House Financing`,
-    total_amount: parsed.data.total_amount,
+    total_amount: totalAmount,
     down_payment: downPayment,
     monthly_payment: parsed.data.monthly_payment,
     missed_payment_policy: parsed.data.missed_payment_policy,
@@ -119,7 +127,7 @@ export async function proposeFinancingTerms(formData: FormData): Promise<Financi
     {
       kind: "financing_terms_proposed",
       title: "Financing terms to review",
-      body: `${parsed.data.duration_months} months on ${peso(parsed.data.total_amount)}, Initial Downpayment ${peso(downPayment)}.`,
+      body: `${parsed.data.duration_months} months on ${peso(totalAmount)}, Initial Downpayment ${peso(downPayment)}.`,
       transactionId: tx.id,
     },
   );

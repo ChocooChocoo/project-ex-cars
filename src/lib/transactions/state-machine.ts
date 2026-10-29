@@ -15,7 +15,7 @@ export const TRANSACTION_KINDS = ["buy", "sell", "request_a_car"] as const;
 export type TransactionKind = (typeof TRANSACTION_KINDS)[number];
 
 // down_payment stays for old rows only; new forms offer bank_transfer (a downpayment is an amount, not a method).
-export const PAYMENT_METHODS = ["cash", "financing", "cheque", "down_payment", "bank_transfer"] as const;
+export const PAYMENT_METHODS = ["cash", "financing", "down_payment", "bank_transfer", "paymongo"] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
 export const ARRANGEMENT_KINDS = ["delivery", "meetup", "gce_visit"] as const;

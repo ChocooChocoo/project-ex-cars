@@ -37,6 +37,11 @@ export const STAFF_ROLES: GceRole[] = [
   "head_security",
 ];
 
+export const ATTENDANCE_TRACKED_ROLES: GceRole[] = STAFF_ROLES.filter((role) => role !== "head_security");
+
+// T04 E6: roles a new employee account can get. The CEO role is never handed out this way.
+export const EMPLOYEE_ROLES = STAFF_ROLES.filter((role) => role !== "ceo");
+
 /**
  * Roles that may open the staff transaction list and a transaction detail page.
  * Kept in one place so both routes deny with the same `/unauthorized` screen —
@@ -248,11 +253,13 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
     "vehicles",
     "transactions",
     "attendance",
+    "employee-requests",
     "payroll",
     "payslips",
     "reports",
     "announcements",
   ]),
+  // T04 E1/E5: every staff role has Attendance and Requests (clock in/out, leave requests).
   confidential_informant: new Set([
     "default",
     "finance",
@@ -261,9 +268,20 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
     "sell-submissions",
     "transactions",
     "field-cases",
+    "attendance",
+    "employee-requests",
     "announcements",
   ]),
-  marketing_specialist: new Set(["default", "vehicles", "showroom", "content", "transactions", "announcements"]),
+  marketing_specialist: new Set([
+    "default",
+    "vehicles",
+    "showroom",
+    "content",
+    "transactions",
+    "attendance",
+    "employee-requests",
+    "announcements",
+  ]),
   sales_manager: new Set([
     "default",
     "vehicles",
@@ -275,14 +293,24 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
     "roadmap",
     "field-cases",
     "staff-records",
+    "attendance",
+    "employee-requests",
     "announcements",
   ]),
-  mechanic: new Set(["default", "vehicles", "inspections", "sell-submissions", "field-cases", "announcements"]),
+  mechanic: new Set([
+    "default",
+    "vehicles",
+    "inspections",
+    "sell-submissions",
+    "field-cases",
+    "attendance",
+    "employee-requests",
+    "announcements",
+  ]),
   head_security: new Set([
     "default",
     "vehicles",
     "field-cases",
-    "attendance",
     "employee-requests",
     "security-duty-checks",
     "announcements",

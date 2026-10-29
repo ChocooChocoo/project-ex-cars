@@ -10,6 +10,7 @@ import { getProfileAutoFill } from "@/lib/autofill";
 import {
   type AttachmentMeta,
   attachmentError,
+  attachmentMimeType,
   MESSAGE_ATTACHMENT_TYPES,
   MESSAGE_ATTACHMENTS_BUCKET,
   type SignedAttachment,
@@ -106,7 +107,7 @@ export async function prepareMessageAttachment(
   const { data: inquiry } = await supabase.from("inquiries").select("id").eq("id", inquiryId).maybeSingle();
   if (!inquiry) return { error: "You cannot send files in this conversation." };
 
-  const path = `${inquiryId}/${randomUUID()}.${MESSAGE_ATTACHMENT_TYPES[file.type]}`;
+  const path = `${inquiryId}/${randomUUID()}.${MESSAGE_ATTACHMENT_TYPES[attachmentMimeType(file)]}`;
   const { data, error } = await createAdminClient()
     .storage.from(MESSAGE_ATTACHMENTS_BUCKET)
     .createSignedUploadUrl(path);

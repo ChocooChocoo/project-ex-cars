@@ -102,20 +102,20 @@ describe("rejectPayment (T03 HA3)", () => {
 
   it("marks the payment rejected with the reason and tells the buyer", async () => {
     useRows({ payment_records: pending });
-    await expect(rejectPayment(paymentId, "Cheque photo does not match the amount")).resolves.toEqual({
+    await expect(rejectPayment(paymentId, "Deposit slip does not match the amount")).resolves.toEqual({
       success: true,
     });
 
     const update = calls.find((c) => c.table === "payment_records" && c.op === "update");
     expect(update?.payload).toMatchObject({
       rejected_by: userId,
-      rejection_reason: "Cheque photo does not match the amount",
+      rejection_reason: "Deposit slip does not match the amount",
     });
     expect(update?.filters).toContainEqual(["verified_by", null]);
     expect(notify).toHaveBeenCalledWith(
       expect.anything(),
       { userId: "cust-1" },
-      expect.objectContaining({ transactionId, body: expect.stringContaining("Cheque photo does not match") }),
+      expect.objectContaining({ transactionId, body: expect.stringContaining("Deposit slip does not match") }),
     );
   });
 
@@ -124,7 +124,7 @@ describe("rejectPayment (T03 HA3)", () => {
       payment_records: { ...pending, installment_id: installmentId },
       installments: { due_date: "2020-01-15" },
     });
-    await rejectPayment(paymentId, "Bounced cheque");
+    await rejectPayment(paymentId, "Transfer was reversed");
 
     const installment = calls.find((c) => c.table === "installments" && c.op === "update");
     expect(installment?.payload).toEqual({ state: "overdue", payment_date: null });

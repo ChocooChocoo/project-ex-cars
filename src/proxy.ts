@@ -89,9 +89,10 @@ export async function proxy(request: NextRequest) {
   const role = request.cookies.get("gce-role")?.value ?? null;
   const url = request.nextUrl.clone();
 
-  // Root → redirect based on role
+  // Root: signed-in users go to their landing path; visitors see the public landing page.
   if (pathname === "/") {
-    url.pathname = role ? landingPath(role) : "/auth/v1/login";
+    if (!role) return withSession(NextResponse.next({ request: { headers: request.headers } }), refreshed);
+    url.pathname = landingPath(role);
     return withSession(NextResponse.redirect(url), refreshed);
   }
 

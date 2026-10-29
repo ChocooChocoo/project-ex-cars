@@ -93,6 +93,15 @@ describe("proposeFinancingTerms", () => {
     });
   });
 
+  it("defaults the total to the car's price plus 10% when left blank", async () => {
+    request("gce_visit", {
+      purchase_details: { payment_method: "financing", arrangement_kind: "gce_visit", final_price: 1_000_000 },
+    });
+
+    await expect(proposeFinancingTerms(form({ ...offer, total_amount: "" }))).resolves.toEqual({ success: true });
+    expect(written("payment_terms")[0]).toMatchObject({ total_amount: 1_100_000 });
+  });
+
   it.each([
     ["monthly_payment", "Enter the monthly payment."],
     ["missed_payment_policy", "State the missed payment policy."],

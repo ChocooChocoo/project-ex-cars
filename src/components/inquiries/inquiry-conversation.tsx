@@ -18,6 +18,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import {
   attachmentError,
+  attachmentMimeType,
   MESSAGE_ATTACHMENT_ACCEPT,
   MESSAGE_ATTACHMENTS_BUCKET,
   type SignedAttachment,
@@ -160,8 +161,10 @@ export function InquiryConversation({
         },
       )
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "message_attachments" }, (payload) => {
-        const row = payload.new as { id?: string };
-        if (!row.id) return;
+        // The table has no inquiry_id and realtime filters cannot prefix-match, so filter on the
+        // storage path, which the server always puts under `${inquiryId}/`.
+        const row = payload.new as { id?: string; storage_path?: string };
+        if (!row.id || !row.storage_path?.startsWith(`${inquiryId}/`)) return;
         void getMessageAttachment(row.id).then((attachment) => {
           if (attachment) setExtraAttachments((prev) => withAttachment(prev, attachment));
         });
@@ -210,11 +213,8 @@ export function InquiryConversation({
     try {
       if (file) {
         // The file goes straight to storage on a signed URL; only its path goes through the server action.
-        const prepared = await prepareMessageAttachment(inquiryId, {
-          name: file.name,
-          type: file.type,
-          size: file.size,
-        });
+        const type = attachmentMimeType(file);
+        const prepared = await prepareMessageAttachment(inquiryId, { name: file.name, type, size: file.size });
         if ("error" in prepared) {
           setFileError(prepared.error);
           toast.error(prepared.error);
@@ -222,7 +222,7 @@ export function InquiryConversation({
         }
         const { error: uploadError } = await supabase.storage
           .from(MESSAGE_ATTACHMENTS_BUCKET)
-          .uploadToSignedUrl(prepared.path, prepared.token, file, { contentType: file.type });
+          .uploadToSignedUrl(prepared.path, prepared.token, file, { contentType: type });
         if (uploadError) {
           const message = `The file did not upload: ${uploadError.message}`;
           setFileError(message);
@@ -231,7 +231,7 @@ export function InquiryConversation({
         }
         fd.set("attachment_path", prepared.path);
         fd.set("attachment_name", file.name);
-        fd.set("attachment_type", file.type);
+        fd.set("attachment_type", type);
         fd.set("attachment_size", String(file.size));
       }
 
