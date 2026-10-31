@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import { ROLE_NAV_ACCESS, SELL_SUBMISSION_VIEWER_ROLES } from "./roles";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-
-import { ROLE_NAV_ACCESS, SELL_SUBMISSION_VIEWER_ROLES } from "./roles";
 
 const read = (relative: string) => readFileSync(resolve(process.cwd(), relative), "utf8");
 
@@ -13,7 +12,16 @@ describe("SELL_SUBMISSION_VIEWER_ROLES", () => {
   });
 
   it("excludes every role that already has the transaction list or no field duty", () => {
-    for (const role of ["ceo", "account_manager", "head_accountant", "sales_manager", "marketing_specialist", "head_security", "customer", "supplier"]) {
+    for (const role of [
+      "ceo",
+      "account_manager",
+      "head_accountant",
+      "sales_manager",
+      "marketing_specialist",
+      "head_security",
+      "customer",
+      "supplier",
+    ]) {
       expect(SELL_SUBMISSION_VIEWER_ROLES).not.toContain(role);
     }
   });

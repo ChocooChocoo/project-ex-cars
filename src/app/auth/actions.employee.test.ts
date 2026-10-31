@@ -6,6 +6,7 @@ const {
   profileUpdate,
   profileEq,
   auditInsert,
+  scheduleInsert,
   deleteUser,
   authorizeAction,
   revalidatePath,
@@ -15,6 +16,7 @@ const {
   profileUpdate: vi.fn(),
   profileEq: vi.fn(),
   auditInsert: vi.fn(),
+  scheduleInsert: vi.fn(),
   deleteUser: vi.fn(),
   authorizeAction: vi.fn(),
   revalidatePath: vi.fn(),
@@ -27,9 +29,10 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     auth: { admin: { createUser: adminCreateUser, deleteUser } },
     rpc: adminRpc,
-    from: vi.fn((table: string) =>
-      table === "profiles" ? { update: profileUpdate, eq: profileEq } : { insert: auditInsert },
-    ),
+    from: vi.fn((table: string) => {
+      if (table === "profiles") return { update: profileUpdate, eq: profileEq };
+      return { insert: table === "employee_work_schedules" ? scheduleInsert : auditInsert };
+    }),
   }),
 }));
 
@@ -51,6 +54,7 @@ describe("createEmployeeAccount (T04 E6)", () => {
     profileUpdate.mockReturnValue({ eq: profileEq });
     profileEq.mockResolvedValue({ error: null });
     auditInsert.mockResolvedValue({ error: null });
+    scheduleInsert.mockResolvedValue({ error: null });
     deleteUser.mockResolvedValue({ error: null });
   });
 
@@ -89,5 +93,38 @@ describe("createEmployeeAccount (T04 E6)", () => {
     await expect(createEmployeeAccount(params())).resolves.toEqual({ error: "Permission denied" });
     expect(deleteUser).toHaveBeenCalledWith(createdUser);
     expect(auditInsert).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["mechanic", "07:00", "16:00"],
+    ["confidential_informant", "07:00", "16:00"],
+    ["head_accountant", "09:00", "18:00"],
+    ["account_manager", "08:00", "17:00"],
+    ["marketing_specialist", "08:00", "17:00"],
+    ["sales_manager", "08:00", "17:00"],
+  ])("creates a ready-to-use schedule for a new %s", async (role, start, end) => {
+    await expect(createEmployeeAccount(params(role))).resolves.toEqual({ success: true });
+    expect(scheduleInsert).toHaveBeenCalledWith({
+      employee_id: createdUser,
+      workdays: [1, 2, 3, 4, 5, 6],
+      start_time: start,
+      end_time: end,
+      grace_minutes: 10,
+      timezone: "Asia/Manila",
+      created_by: actor,
+      updated_by: actor,
+    });
+  });
+
+  it("removes the half-created user if saving its schedule fails", async () => {
+    scheduleInsert.mockResolvedValue({ error: { message: "Schedule could not be saved" } });
+    await expect(createEmployeeAccount(params())).resolves.toEqual({ error: "Schedule could not be saved" });
+    expect(deleteUser).toHaveBeenCalledWith(createdUser);
+    expect(auditInsert).not.toHaveBeenCalled();
+  });
+
+  it("does not invent a schedule for Head Security", async () => {
+    await expect(createEmployeeAccount(params("head_security"))).resolves.toEqual({ success: true });
+    expect(scheduleInsert).not.toHaveBeenCalled();
   });
 });

@@ -232,7 +232,7 @@ export async function confirmFinancingTerms(formData: FormData): Promise<Financi
       .in("confirmation_state", ["pending", "confirmed"])
       .maybeSingle();
     if (!slot) return { error: "The request has no delivery date." };
-    deliveryOn = new Date(slot.schedule).toLocaleString("en-PH");
+    deliveryOn = new Date(slot.schedule).toLocaleString("en-PH", { timeZone: "Asia/Manila" });
   }
 
   const { error } = await admin
@@ -266,7 +266,7 @@ export async function confirmFinancingTerms(formData: FormData): Promise<Financi
       {
         kind: "financing_offer",
         title: "Your financing and delivery are confirmed",
-        body: `Delivery fee ${peso(fee)} and downpayment ${peso(tx.terms.down_payment)}: pay ${peso(fee + Number(tx.terms.down_payment))} now through PayMongo, by ${due.toLocaleDateString("en-PH")}. Amount financed ${peso(remaining)}, ${monthly}. Delivery on ${deliveryOn}.`,
+        body: `Delivery fee ${peso(fee)} and downpayment ${peso(tx.terms.down_payment)}: pay ${peso(fee + Number(tx.terms.down_payment))} now through PayMongo, by ${due.toLocaleDateString("en-PH", { timeZone: "Asia/Manila" })}. Amount financed ${peso(remaining)}, ${monthly}. Delivery on ${deliveryOn}.`,
         transactionId: tx.id,
       },
     );

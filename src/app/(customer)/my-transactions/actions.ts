@@ -253,23 +253,41 @@ export async function saveBuyDetails(formData: FormData) {
 
   // Create viewing arrangement if schedule provided.
   if (slot) {
-    // Rebooking frees the buyer's previous slot. Customers have no UPDATE on arrangements, so the
-    // release runs with the service role after the ownership check above.
-    await releaseVisitSlots(createAdminClient(), transactionId);
-
-    const { error: arrError } = await supabase.from("viewing_arrangements").insert({
-      inquiry_id: null, // nullable — linked via purchase_transaction_id
-      purchase_transaction_id: transactionId,
+    // Hold the new slot before releasing the old one: a 23505 must leave the buyer's old slot booked.
+    const { data: live } = await supabase
+      .from("viewing_arrangements")
+      .select("id, schedule")
+      .eq("purchase_transaction_id", transactionId)
+      .in("confirmation_state", ["pending", "confirmed"]);
+    const arrangement = {
       arrangement_kind: arrangement_kind || "gce_visit",
-      schedule: slot.toISOString(),
       // T04 P2: a GCE Visit happens at GCE, so it has no location.
       location: arrangement_kind === "gce_visit" ? null : location || null,
       notes,
-    });
-
-    // 23505: the slot lock index (00050) — another buyer holds this car at this time.
-    if (arrError?.code === "23505") return { error: "That visit slot is already taken. Choose another time." };
-    if (arrError) return { error: arrError.message };
+    };
+    const sameTime = (live ?? []).find((row) => new Date(row.schedule).getTime() === slot.getTime());
+    // Customers have no UPDATE on arrangements, so the service role writes after the ownership check above.
+    const admin = createAdminClient();
+    if (sameTime) {
+      // The buyer re-picked their own time: refresh that booking instead of locking a second one.
+      const { error: updateError } = await admin.from("viewing_arrangements").update(arrangement).eq("id", sameTime.id);
+      if (updateError) return { error: updateError.message };
+    } else {
+      const { error: arrError } = await supabase.from("viewing_arrangements").insert({
+        inquiry_id: null, // nullable — linked via purchase_transaction_id
+        purchase_transaction_id: transactionId,
+        schedule: slot.toISOString(),
+        ...arrangement,
+      });
+      // 23505: the slot lock index (00050) — another buyer holds this car at this time.
+      if (arrError?.code === "23505") return { error: "That visit slot is already taken. Choose another time." };
+      if (arrError) return { error: arrError.message };
+    }
+    // Rebooking frees the buyer's previous slots, now that the new one is held.
+    const stale = (live ?? []).map((row) => row.id).filter((id) => id !== sameTime?.id);
+    if (stale.length > 0) {
+      await admin.from("viewing_arrangements").update({ confirmation_state: "cancelled" }).in("id", stale);
+    }
   }
 
   revalidatePath(`/my-transactions/${transactionId}`);
@@ -368,14 +386,15 @@ export async function submitBuyRequest(formData: FormData) {
   if (error) return { error: error.message };
 
   const onHold = queueState === "on_hold";
+  const methodLabel = details?.payment_method === "bank_transfer" ? "Bank Transfer" : "Cash";
   await admin.from("transaction_status_history").insert({
     transaction_id: tx.id,
     from_state: "pending",
     to_state: onHold ? "pending" : "under_review",
     actor_id: user.user.id,
     reason: queued
-      ? `Buyer submitted ${financing ? "an In-House Financing" : `a Cash ${details?.arrangement_kind === "delivery" ? "Delivery" : "Meet Halfway"}`} request (${onHold ? "On Hold" : "Active"})`
-      : "Buyer submitted a Cash request with a GCE visit slot",
+      ? `Buyer submitted ${financing ? "an In-House Financing" : `a ${methodLabel} ${details?.arrangement_kind === "delivery" ? "Delivery" : "Meet Halfway"}`} request (${onHold ? "On Hold" : "Active"})`
+      : `Buyer submitted a ${methodLabel} request with a GCE visit slot`,
   });
   // Financing is agreed in chat, so the request gets its own thread with GCE (as a sell offer does).
   // 23505: the thread already exists.
@@ -388,7 +407,7 @@ export async function submitBuyRequest(formData: FormData) {
     });
     if (threadError && threadError.code !== "23505") return { error: threadError.message };
   }
-  const when = scheduledAt ? scheduledAt.toLocaleString("en-PH") : "";
+  const when = scheduledAt ? scheduledAt.toLocaleString("en-PH", { timeZone: "Asia/Manila" }) : "";
   await notify(
     admin,
     { userId: user.user.id },
@@ -492,6 +511,8 @@ export async function respondToFinancingOffer(formData: FormData) {
   if (kind !== "gce_visit" && !parsed.data.location) {
     return { error: kind === "delivery" ? "Enter the delivery address." : "Enter the meet-up location." };
   }
+  // Manila time in every message: the server may run in UTC.
+  const when = visit.toLocaleString("en-PH", { timeZone: "Asia/Manila" });
   // A time saved before approval is replaced by this appointment.
   await releaseVisitSlots(admin, tx.id);
   const { error: slotError } = await supabase.from("viewing_arrangements").insert({
@@ -514,7 +535,7 @@ export async function respondToFinancingOffer(formData: FormData) {
     from_state: tx.current_state,
     to_state: tx.current_state,
     actor_id: user.user.id,
-    reason: `Buyer accepted the financing and booked a ${label} for ${visit.toLocaleString("en-PH")}`,
+    reason: `Buyer accepted the financing and booked a ${label} for ${when}`,
   });
   await notify(
     admin,
@@ -524,8 +545,8 @@ export async function respondToFinancingOffer(formData: FormData) {
       title: `Financing buyer booked a ${label}`,
       body:
         kind === "delivery"
-          ? `Delivery on ${visit.toLocaleString("en-PH")}. Confirm the address and set the delivery terms.`
-          : `Inspection and purchase decision ${label} on ${visit.toLocaleString("en-PH")}.`,
+          ? `Delivery on ${when}. Confirm the address and set the delivery terms.`
+          : `Inspection and purchase decision ${label} on ${when}.`,
       transactionId: tx.id,
     },
   );
@@ -867,7 +888,7 @@ export async function startOnlinePayment(
   const { data: tx } = await admin
     .from("transactions")
     .select(
-      "id, customer_id, current_state, flow_status, purchase_details(payment_method, arrangement_kind, delivery_fee, downpayment_amount, downpayment_due_at), payment_records(id, payment_kind, method, paymongo_checkout_id, paid_at, verified_by), payment_terms(down_payment, state), sale_handovers(contract_state)",
+      "id, customer_id, current_state, flow_status, purchase_details(payment_method, arrangement_kind, delivery_fee, downpayment_amount, downpayment_due_at, final_price), payment_records(id, payment_kind, method, amount, paymongo_checkout_id, paid_at, verified_by, rejected_at), payment_terms(down_payment, state), sale_handovers(contract_state)",
     )
     .eq("id", id.data)
     .maybeSingle();
@@ -876,7 +897,16 @@ export async function startOnlinePayment(
   }
   const one = <T>(value: T | T[] | null | undefined) => (Array.isArray(value) ? value[0] : value) ?? null;
   const details = one(tx.purchase_details);
-  const due = onlinePaymentsDue(details, one(tx.payment_terms), tx.flow_status);
+  const due = onlinePaymentsDue(details, one(tx.payment_terms), tx.flow_status, {
+    contract_state: one(tx.sale_handovers)?.contract_state,
+    final_price: details?.final_price,
+    payments: (tx.payment_records ?? []) as {
+      payment_kind?: unknown;
+      amount?: unknown;
+      verified_by?: unknown;
+      rejected_at?: unknown;
+    }[],
+  });
   if (due.length === 0) return { error: "Nothing is due online right now." };
 
   type Row = {

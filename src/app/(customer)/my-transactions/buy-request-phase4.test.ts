@@ -5,8 +5,9 @@ const { getUser, notify, db } = vi.hoisted(() => {
   // (and count) set for it, and every write is recorded.
   const rows: Record<string, unknown> = {};
   const writes: { table: string; op: string; payload: Record<string, unknown> }[] = [];
+  const insertErrors: Record<string, { code: string; message: string }> = {};
   const from = (table: string) => {
-    const answer = () => Promise.resolve({ data: rows[table] ?? null, count: 0, error: null });
+    const answer = () => Promise.resolve({ data: rows[table] ?? null, count: 0, error: insertErrors[table] ?? null });
     const builder: Record<string, unknown> = {};
     for (const step of ["select", "eq", "neq", "in", "order", "limit"]) builder[step] = () => builder;
     for (const op of ["insert", "upsert", "update"]) {
@@ -20,7 +21,7 @@ const { getUser, notify, db } = vi.hoisted(() => {
     builder.then = (resolve: (value: unknown) => unknown) => answer().then(resolve);
     return builder;
   };
-  return { getUser: vi.fn(), notify: vi.fn(), db: { rows, writes, from } };
+  return { getUser: vi.fn(), notify: vi.fn(), db: { rows, writes, from, insertErrors } };
 });
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -51,6 +52,7 @@ const saved = () => db.writes.find((write) => write.table === "purchase_details"
 beforeEach(() => {
   vi.clearAllMocks();
   for (const table of Object.keys(db.rows)) delete db.rows[table];
+  for (const table of Object.keys(db.insertErrors)) delete db.insertErrors[table];
   db.writes.length = 0;
   getUser.mockResolvedValue({ data: { user: { id: buyerId } } });
 });
@@ -113,11 +115,20 @@ describe("saveBuyDetails", () => {
     });
   });
 
-  it("saves Full Payment with its method, including PayMongo", async () => {
+  it("saves Bank Transfer as the Full Payment method", async () => {
+    await expect(
+      saveBuyDetails(
+        details({ payment_option: "full", payment_method: "bank_transfer", arrangement_kind: "gce_visit" }),
+      ),
+    ).resolves.toEqual({ success: true });
+    expect(saved()).toMatchObject({ payment_option: "full", payment_method: "bank_transfer" });
+  });
+
+  it("no longer accepts PayMongo as a payment method", async () => {
     await expect(
       saveBuyDetails(details({ payment_option: "full", payment_method: "paymongo", arrangement_kind: "gce_visit" })),
-    ).resolves.toEqual({ success: true });
-    expect(saved()).toMatchObject({ payment_option: "full", payment_method: "paymongo" });
+    ).resolves.toEqual({ error: "Select a payment method." });
+    expect(saved()).toBeUndefined();
   });
 
   it("refuses Full Payment with the financing method", async () => {
@@ -141,6 +152,42 @@ describe("saveBuyDetails", () => {
     ).resolves.toEqual({ success: true });
     const arrangement = db.writes.find((write) => write.table === "viewing_arrangements")?.payload;
     expect(arrangement).toMatchObject({ arrangement_kind: "gce_visit", location: null });
+  });
+
+  it("takes the new slot before releasing the buyer's old one", async () => {
+    db.rows.viewing_arrangements = [{ id: "old-slot", schedule: "2033-03-01T02:00:00.000Z" }];
+
+    await expect(saveBuyDetails(details({ ...delivery, agree_delivery_terms: "yes" }))).resolves.toEqual({
+      success: true,
+    });
+
+    expect(db.writes.filter((write) => write.table === "viewing_arrangements").map((write) => write.op)).toEqual([
+      "insert",
+      "update",
+    ]);
+  });
+
+  it("keeps the buyer's old slot when the new time is already taken (23505)", async () => {
+    db.rows.viewing_arrangements = [{ id: "old-slot", schedule: "2033-03-01T02:00:00.000Z" }];
+    db.insertErrors.viewing_arrangements = { code: "23505", message: "duplicate key value" };
+
+    await expect(saveBuyDetails(details({ ...delivery, agree_delivery_terms: "yes" }))).resolves.toEqual({
+      error: "That visit slot is already taken. Choose another time.",
+    });
+
+    expect(db.writes.filter((write) => write.table === "viewing_arrangements" && write.op === "update")).toEqual([]);
+  });
+
+  it("refreshes the buyer's own booking when they re-pick the same time", async () => {
+    db.rows.viewing_arrangements = [{ id: "own-slot", schedule: slot }];
+
+    await expect(saveBuyDetails(details({ ...delivery, agree_delivery_terms: "yes" }))).resolves.toEqual({
+      success: true,
+    });
+
+    expect(db.writes.filter((write) => write.table === "viewing_arrangements").map((write) => write.op)).toEqual([
+      "update",
+    ]);
   });
 });
 
@@ -199,5 +246,27 @@ describe("submitBuyRequest", () => {
         transaction_id: transactionId,
       },
     });
+  });
+
+  it("tells the Sales Manager the booked visit in Manila time, not UTC", async () => {
+    db.rows.transactions = {
+      id: transactionId,
+      customer_id: buyerId,
+      vehicle_id: "car-1",
+      transaction_kind: "buy",
+      current_state: "pending",
+      queue_state: null,
+      purchase_details: { payment_method: "cash", arrangement_kind: "gce_visit" },
+    };
+    db.rows.transaction_documents = [
+      { document_kind: "valid_id", verification_state: "pending" },
+      { document_kind: "valid_id", verification_state: "pending" },
+    ];
+    db.rows.viewing_arrangements = { schedule: "2033-03-08T02:00:00.000Z", arrangement_kind: "gce_visit" };
+
+    await expect(submitBuyRequest(form())).resolves.toMatchObject({ success: true });
+
+    const bodies = notify.mock.calls.map((call) => (call[2] as { body: string }).body).join(" ");
+    expect(bodies).toContain("3/8/2033, 10:00:00 AM");
   });
 });

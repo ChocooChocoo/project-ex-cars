@@ -13,7 +13,9 @@ const migration = (() => {
 })();
 
 function functionBody() {
-  const match = migration.match(/CREATE OR REPLACE FUNCTION public\.list_field_sell_submissions\(\)[\s\S]*?\$\$([\s\S]*?)\$\$;/i);
+  const match = migration.match(
+    /CREATE OR REPLACE FUNCTION public\.list_field_sell_submissions\(\)[\s\S]*?\$\$([\s\S]*?)\$\$;/i,
+  );
   return match?.[1] ?? "";
 }
 

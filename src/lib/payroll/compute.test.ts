@@ -40,7 +40,7 @@ describe("computePayslip", () => {
     const result = computePayslip({
       ...base,
       entries: [day("2026-10-01", 11), day("2026-10-02", 10)],
-      overtimeRanges: [{ start_date: "2026-10-01", end_date: null }],
+      overtimeRanges: [{ start_date: "2026-10-01", end_date: null, overtime_hours: null }],
     });
 
     expect(result).toMatchObject({ overtimeHours: 2, overtimeCents: 25_000, shortMinutes: 0 });
@@ -50,10 +50,41 @@ describe("computePayslip", () => {
     const result = computePayslip({
       ...base,
       entries: [day("2026-10-01", 10), day("2026-10-02", 10), day("2026-10-04", 10)],
-      overtimeRanges: [{ start_date: "2026-10-01", end_date: "2026-10-03" }],
+      overtimeRanges: [{ start_date: "2026-10-01", end_date: "2026-10-03", overtime_hours: null }],
     });
 
     expect(result.overtimeHours).toBe(2);
+  });
+
+  it("caps overtime at the approved hours when more were worked", () => {
+    // 4 h past the 9 h schedule, but only 2 h were approved.
+    const result = computePayslip({
+      ...base,
+      entries: [day("2026-10-01", 13)],
+      overtimeRanges: [{ start_date: "2026-10-01", end_date: null, overtime_hours: 2 }],
+    });
+
+    expect(result).toMatchObject({ overtimeHours: 2, overtimeCents: 25_000, shortMinutes: 0 });
+  });
+
+  it("pays only the hours worked when they are under the approved hours", () => {
+    const result = computePayslip({
+      ...base,
+      entries: [day("2026-10-01", 10)],
+      overtimeRanges: [{ start_date: "2026-10-01", end_date: null, overtime_hours: 3 }],
+    });
+
+    expect(result).toMatchObject({ overtimeHours: 1, overtimeCents: 12_500, shortMinutes: 0 });
+  });
+
+  it("keeps the uncapped rule for a legacy request with null approved hours", () => {
+    const result = computePayslip({
+      ...base,
+      entries: [day("2026-10-01", 13)],
+      overtimeRanges: [{ start_date: "2026-10-01", end_date: null, overtime_hours: null }],
+    });
+
+    expect(result).toMatchObject({ overtimeHours: 4, overtimeCents: 50_000 });
   });
 
   it("pays no overtime for extra hours without an approved request", () => {
@@ -74,7 +105,7 @@ describe("computePayslip", () => {
       baseSalaryCents: 3_000_000,
       scheduledHoursPerDay: 9,
       entries: [day("2026-10-01", 9.5), day("2026-10-02", 8.75)],
-      overtimeRanges: [{ start_date: "2026-10-01", end_date: null }],
+      overtimeRanges: [{ start_date: "2026-10-01", end_date: null, overtime_hours: null }],
     });
 
     expect(result.hourlyRateCents).toBe(11_111);

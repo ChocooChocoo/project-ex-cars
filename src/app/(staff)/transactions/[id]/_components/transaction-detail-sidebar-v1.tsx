@@ -36,6 +36,7 @@ export function TransactionDetailSidebarV1({
   kind,
   state,
   userRole,
+  paymentMethod,
   payments,
   documents,
   history,
@@ -56,6 +57,8 @@ export function TransactionDetailSidebarV1({
   readonly kind: string;
   readonly state: string;
   readonly userRole: string;
+  // The purchase method. A Bank Transfer buy is paid online through PayMongo, so staff do not record it by hand.
+  readonly paymentMethod?: string;
   readonly payments: Record<string, unknown>[];
   readonly documents: Record<string, unknown>[];
   readonly history: Record<string, unknown>[];
@@ -105,6 +108,8 @@ export function TransactionDetailSidebarV1({
   // Processing actions (upload / record payment / record paperwork) are hidden for CEO;
   // docs and payments stay visible read-only. Head Accountant verifies documents.
   const isCeo = userRole === "ceo";
+  // T06: a Bank Transfer buy is paid online through PayMongo, so it never enters the records by hand.
+  const manualBankTransfer = !(kind === "buy" && paymentMethod === "bank_transfer");
   // Only the Head Accountant may verify purchase documents, so the buttons match
   // the server-side guard in verifyTransactionDocument.
   const isHeadAccountant = userRole === "head_accountant";
@@ -314,15 +319,21 @@ export function TransactionDetailSidebarV1({
                 <Label htmlFor="pay_method" className="text-xs">
                   Method
                 </Label>
-                <Select value={payMethod} onValueChange={setPayMethod}>
+                <Select value={manualBankTransfer ? payMethod : "cash"} onValueChange={setPayMethod}>
                   <SelectTrigger id="pay_method" className="h-7 w-full text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="cash">Cash</SelectItem>
-                    <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                    {/* A Bank Transfer buy is confirmed by PayMongo, not recorded by hand. */}
+                    {manualBankTransfer ? <SelectItem value="bank_transfer">Bank Transfer</SelectItem> : null}
                   </SelectContent>
                 </Select>
+                {manualBankTransfer ? null : (
+                  <p className="text-muted-foreground text-xs">
+                    Bank Transfer is paid online through PayMongo and confirmed automatically.
+                  </p>
+                )}
               </div>
               {kind === "buy" ? (
                 <div className="flex flex-col gap-1.5">

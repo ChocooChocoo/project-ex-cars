@@ -91,9 +91,10 @@ export async function buyerRequest(
   await upload(page, "Valid ID", "Passport");
   await upload(page, "Valid ID", "Driver's License");
   await upload(page, "Proof of Billing");
-  // T04: Financing is a Payment Option; Cash and Bank Transfer are Full Payment methods.
+  // T04: Financing is a Payment Option. T06: Full Payment is Cash or Bank Transfer (via PayMongo); PayMongo is
+  // the channel, so it is never an option of its own.
   if (options.method === "Financing") await pick(page, "payment_option", "Financing");
-  else await pick(page, "payment_method", options.method);
+  else await pick(page, "payment_method", options.method === "Bank Transfer" ? "Bank Transfer (via PayMongo)" : "Cash");
   await pick(page, "arrangement_kind", options.arrangement);
   if (options.when) await page.locator("#schedule").fill(options.when);
   if (options.arrangement !== "GCE Visit") await page.locator("#location").fill("SM Calamba parking, Laguna");

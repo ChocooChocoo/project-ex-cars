@@ -21,6 +21,7 @@ import { DeliveryLastSeen } from "@/components/delivery-last-seen";
 import { RejectReasonDialog } from "@/components/reject-reason-dialog";
 import { TransactionImagePreview } from "@/components/transaction-image-preview";
 import { TransactionStatusBadge } from "@/components/transaction-status-badge";
+import { SlotPicker } from "@/components/transactions/slot-picker";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -46,6 +47,7 @@ import type { ProfileAutoFill } from "@/lib/autofill";
 import { createClient } from "@/lib/supabase/client";
 import {
   activeBuyerIdCount,
+  DELIVERY_LEAD_DAYS,
   DELIVERY_STATUS_LABELS,
   DELIVERY_STATUSES,
   type DeliveryStatus,
@@ -58,7 +60,6 @@ import {
   PAPERS_STATUS_LABELS,
   type PapersStatus,
   paidTowardPrice,
-  pickedTime,
   signsInApp,
 } from "@/lib/transactions/buy-flow";
 import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_SIZE, transactionDocumentLabel } from "@/lib/transactions/document-media";
@@ -75,6 +76,15 @@ import { ContractSign } from "./contract-sign";
 import { OnlinePayment } from "./online-payment";
 import type { TransactionPaperProps } from "./transaction-paper";
 import { TransactionPreview } from "./transaction-preview";
+
+// The already-taken slot list, in Manila time wherever the buyer's browser is.
+const manilaSlot = new Intl.DateTimeFormat("en-PH", {
+  timeZone: "Asia/Manila",
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+});
 
 function ProgressStepper({ state }: { readonly state: TransactionState }) {
   const isCancelled = state === "cancelled" || state === "rejected";
@@ -183,11 +193,22 @@ export function TransactionDetail({
   const handover = (Array.isArray(handoverRaw) ? handoverRaw[0] : handoverRaw) ?? {};
   const papersStatus = (handover.papers_status as PapersStatus | null | undefined) ?? null;
   const contractState = (handover.contract_state as string | null | undefined) ?? null;
-  // What is paid on the PayMongo link: a delivery's fee and downpayment, or a claimed financing downpayment.
+  // What is paid on the PayMongo link: a delivery's fee and downpayment, a claimed financing downpayment, or
+  // the Bank Transfer downpayment and, once the contract is signed, the remaining balance.
   const onlineDue = onlinePaymentsDue(
     purchaseDetails ?? null,
     paymentTerms,
     (transaction.flow_status as string | null) ?? null,
+    {
+      contract_state: contractState,
+      final_price: purchaseDetails?.final_price,
+      payments: payments as {
+        payment_kind?: unknown;
+        amount?: unknown;
+        verified_by?: unknown;
+        rejected_at?: unknown;
+      }[],
+    },
   );
 
   const [localState, setLocalState] = useState<TransactionState | null>(null);
@@ -282,6 +303,8 @@ export function TransactionDetail({
   const [paymentMethod, setPaymentMethod] = useState(savedMethod === "financing" ? "" : savedMethod);
   const [arrangementKind, setArrangementKind] = useState((purchaseDetails?.arrangement_kind as string) ?? "");
   const [schedule, setSchedule] = useState("");
+  // The date half of the slot: a date without an hour cannot be saved.
+  const [scheduleDate, setScheduleDate] = useState("");
   const [location, setLocation] = useState(autofill?.address ?? "");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
@@ -322,8 +345,7 @@ export function TransactionDetail({
     const fd = new FormData();
     fd.set("transaction_id", id);
     fd.set("decision", decision);
-    const visit = pickedTime(visitAt);
-    if (visit) fd.set("schedule", visit.toISOString());
+    if (visitAt) fd.set("schedule", visitAt);
     fd.set("location", location);
     const result = await respondToFinancingOffer(fd);
     setResponding(false);
@@ -383,9 +405,8 @@ export function TransactionDetail({
     fd.set("payment_option", paymentOption);
     fd.set("payment_method", financingPicked ? "financing" : paymentMethod);
     fd.set("arrangement_kind", arrangementKind);
-    // Sent as an instant, so a server in another timezone books the moment the buyer picked.
-    const when = pickedTime(schedule);
-    fd.set("schedule", when ? when.toISOString() : "");
+    // Already a Manila ISO slot, or "" until an hour is picked.
+    fd.set("schedule", schedule);
     fd.set("location", location);
     fd.set("notes", notes);
     if (acknowledge) fd.set("acknowledge_condition", "yes");
@@ -569,8 +590,7 @@ export function TransactionDetail({
                         <SelectContent>
                           <SelectGroup>
                             <SelectItem value="cash">Cash</SelectItem>
-                            <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                            <SelectItem value="paymongo">PayMongo</SelectItem>
+                            <SelectItem value="bank_transfer">Bank Transfer (via PayMongo)</SelectItem>
                             {/* Legacy method: shown only so older requests still display their saved choice. */}
                             {paymentMethod === "down_payment" && (
                               <SelectItem value="down_payment">Down Payment</SelectItem>
@@ -606,17 +626,18 @@ export function TransactionDetail({
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="schedule">Schedule</Label>
-                    <Input
-                      id="schedule"
-                      type="datetime-local"
-                      step={3600}
-                      value={schedule}
-                      onChange={(e) => setSchedule(e.target.value)}
-                    />
-                  </div>
                 </div>
+                <SlotPicker
+                  id="schedule"
+                  label={arrangementKind === "delivery" ? "Delivery date and time" : "Schedule"}
+                  value={schedule}
+                  onChange={(value, draft) => {
+                    setSchedule(value);
+                    setScheduleDate(draft.date);
+                  }}
+                  minDays={arrangementKind === "delivery" ? DELIVERY_LEAD_DAYS : 0}
+                  takenSlots={takenSlots}
+                />
                 {gceVisitOnly ? (
                   <p className="text-muted-foreground text-xs">
                     Your account is limited to GCE visits after missed meet-ups or a declined purchase.
@@ -677,21 +698,19 @@ export function TransactionDetail({
                         PayMongo.{" "}
                         {financingPicked
                           ? "The rest is paid in monthly instalments."
-                          : "The rest is paid in cash when the car arrives."}
+                          : paymentMethod === "bank_transfer"
+                            ? "The rest is paid by bank transfer through PayMongo when the car arrives."
+                            : "The rest is paid in cash when the car arrives."}
                       </span>
                       <span className="font-medium">I agree</span>
                     </label>
                   </div>
                 ) : null}
-                <p className="text-muted-foreground text-xs">
-                  Pick a time on the hour, 9 AM to 9 PM, Monday to Saturday.
-                  {arrangementKind === "delivery" ? " Delivery needs at least 7 days from today." : ""}
-                </p>
                 {arrangementKind === "gce_visit" ? (
                   <p className="text-muted-foreground text-xs">
                     Once saved, your slot is locked for you.
                     {takenSlots.length > 0
-                      ? ` Already taken: ${takenSlots.map((slot) => format(new Date(slot), "MMM d, h:mm a")).join(", ")}.`
+                      ? ` Already taken: ${takenSlots.map((slot) => manilaSlot.format(new Date(slot))).join(", ")}.`
                       : " No slots are taken for this car yet."}
                   </p>
                 ) : null}
@@ -717,7 +736,14 @@ export function TransactionDetail({
                     rows={2}
                   />
                 </div>
-                <Button onClick={handleSaveBuyDetails} disabled={saving} className="self-start">
+                {scheduleDate && !schedule ? (
+                  <p className="text-muted-foreground text-xs">Pick an hour for your slot before saving.</p>
+                ) : null}
+                <Button
+                  onClick={handleSaveBuyDetails}
+                  disabled={saving || (scheduleDate !== "" && !schedule)}
+                  className="self-start"
+                >
                   {saving ? "Saving..." : "Save Details"}
                 </Button>
                 {onsiteCashSaved || queuedCashSaved ? (
@@ -790,24 +816,20 @@ export function TransactionDetail({
                     : "You pay the downpayment only after you inspect and accept the car at GCE."}
                 </p>
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="financing-visit">
-                    {offerKind === "gce_visit"
-                      ? "GCE visit date and time"
-                      : financedDelivery
-                        ? "Delivery date and time"
-                        : "Meet-up date and time"}
-                  </Label>
-                  <Input
+                  <SlotPicker
                     id="financing-visit"
-                    type="datetime-local"
-                    step={3600}
-                    aria-describedby="financing-visit-rule"
+                    label={
+                      offerKind === "gce_visit"
+                        ? "GCE visit date and time"
+                        : financedDelivery
+                          ? "Delivery date and time"
+                          : "Meet-up date and time"
+                    }
                     value={visitAt}
-                    onChange={(e) => setVisitAt(e.target.value)}
+                    onChange={(value) => setVisitAt(value)}
+                    minDays={financedDelivery ? DELIVERY_LEAD_DAYS : 0}
+                    takenSlots={takenSlots}
                   />
-                  <p id="financing-visit-rule" className="text-muted-foreground text-xs">
-                    Pick a time on the hour, 9 AM to 9 PM, Monday to Saturday.
-                  </p>
                   {offerKind !== "gce_visit" ? (
                     <>
                       <Label htmlFor="financing-location">
@@ -818,7 +840,7 @@ export function TransactionDetail({
                   ) : null}
                   {offerKind === "gce_visit" && takenSlots.length > 0 ? (
                     <p className="text-muted-foreground text-xs">
-                      Already taken: {takenSlots.map((slot) => format(new Date(slot), "MMM d, h:mm a")).join(", ")}.
+                      Already taken: {takenSlots.map((slot) => manilaSlot.format(new Date(slot))).join(", ")}.
                     </p>
                   ) : null}
                 </div>
@@ -857,8 +879,8 @@ export function TransactionDetail({
                 <h2 className="font-medium tracking-tight">Delivery</h2>
                 <p className="text-sm">
                   Delivery fee {formatCurrency(Number(purchaseDetails.delivery_fee ?? 0))} and downpayment{" "}
-                  {formatCurrency(Number(purchaseDetails.downpayment_amount ?? 0))} through PayMongo before{" "}
-                  {format(new Date(purchaseDetails.downpayment_due_at as string), "MMM d, yyyy")}.{" "}
+                  {formatCurrency(Number(purchaseDetails.downpayment_amount ?? 0))} are paid online through PayMongo
+                  before {format(new Date(purchaseDetails.downpayment_due_at as string), "MMM d, yyyy")}.{" "}
                   {deliveryBalanceNote(purchaseDetails.payment_method, "buyer")}
                 </p>
                 {purchaseDetails.downpayment_forfeited_at ? (

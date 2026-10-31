@@ -17,7 +17,8 @@ const nextConfig = {
     removeConsole: process.env.NODE_ENV === "production",
   },
   async redirects() {
-    return [];
+    // The client shares the landing-page link as /auth/v1; only login/ and register/ have pages.
+    return [{ source: "/auth/v1", destination: "/auth/v1/login", permanent: false }];
   },
 };
 
