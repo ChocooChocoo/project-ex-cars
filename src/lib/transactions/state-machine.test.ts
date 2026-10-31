@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { canCancelScheduled, isOverdue, nextQueueState } from "./state-machine";
+import { canCancelScheduled, canSalesManagerCancel, isOverdue, nextQueueState } from "./state-machine";
 
 const now = new Date("2026-09-30T12:00:00Z");
 
@@ -31,6 +31,32 @@ describe("canCancelScheduled", () => {
   it("refuses inside the 5-hour cut-off and after the schedule", () => {
     expect(canCancelScheduled("2026-09-30T16:59:59Z", now)).toBe(false);
     expect(canCancelScheduled("2026-09-30T10:00:00Z", now)).toBe(false);
+  });
+});
+
+describe("canSalesManagerCancel", () => {
+  const buy = (paymentMethod: string) => ({
+    transaction_kind: "buy",
+    purchase_details: { payment_method: paymentMethod },
+  });
+
+  it("refuses every direct-payment buy", () => {
+    expect(canSalesManagerCancel(buy("cash"))).toBe(false);
+    expect(canSalesManagerCancel(buy("bank_transfer"))).toBe(false);
+  });
+
+  it("keeps the Sales Manager's Cancel on a financing buy", () => {
+    expect(canSalesManagerCancel(buy("financing"))).toBe(true);
+  });
+
+  it("is not about sell offers or a missing request", () => {
+    expect(canSalesManagerCancel({ transaction_kind: "sell", purchase_details: null })).toBe(true);
+  });
+
+  it("reads purchase_details whether it comes as a row or an array", () => {
+    expect(canSalesManagerCancel({ transaction_kind: "buy", purchase_details: [{ payment_method: "cash" }] })).toBe(
+      false,
+    );
   });
 });
 

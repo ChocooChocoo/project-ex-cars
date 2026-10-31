@@ -5,9 +5,9 @@ import { format } from "date-fns";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { canRecordNoShow } from "@/lib/transactions/buy-flow";
+import { canRecordNoShow, isDirectPayment } from "@/lib/transactions/buy-flow";
 import { TRANSACTION_STATE_LABELS, transactionKindLabel } from "@/lib/transactions/labels";
-import { getAllowedTransitions, type TransactionState } from "@/lib/transactions/state-machine";
+import { canSalesManagerCancel, getAllowedTransitions, type TransactionState } from "@/lib/transactions/state-machine";
 import { cn } from "@/lib/utils";
 
 const stateTone: Record<TransactionState, string> = {
@@ -52,6 +52,8 @@ export function TransactionStatusTriageV1({
   userRole,
   transitioning,
   onTransition,
+  paymentMethod = null,
+  papersRequested = false,
   visit = null,
   onVisitOutcome,
 }: {
@@ -63,12 +65,24 @@ export function TransactionStatusTriageV1({
   readonly userRole: string;
   readonly transitioning: boolean;
   readonly onTransition: (to: TransactionState) => Promise<void>;
+  readonly paymentMethod?: string | null;
+  readonly papersRequested?: boolean;
   readonly visit?: { kind: string; schedule: string; deliveryStatus?: string | null } | null;
   readonly onVisitOutcome?: (outcome: VisitOutcome) => Promise<void>;
 }) {
   const daysOpen = Math.max(0, Math.floor((Date.now() - new Date(openedAt).getTime()) / 86_400_000));
-  const allowed = getAllowedTransitions(state, userRole);
+  const cashBuy = kind === "buy" && isDirectPayment({ payment_method: paymentMethod });
+  // T05: a CASH buy is cancelled by the buyer or the CEO, so the Sales Manager loses the Cancel tile.
+  const allowed = getAllowedTransitions(state, userRole).filter(
+    (to) =>
+      to !== "cancelled" ||
+      userRole !== "sales_manager" ||
+      canSalesManagerCancel({ transaction_kind: kind, purchase_details: { payment_method: paymentMethod } }),
+  );
   const canRecordOutcome = kind === "buy" && state === "approved" && ["sales_manager", "ceo"].includes(userRole);
+  // T05: once the papers are requested, the Sales Manager loses the decline outcomes on a CASH buy. A
+  // delivery's "Buyer unavailable" (a no-show) is still recorded.
+  const declinesBlocked = cashBuy && papersRequested && userRole === "sales_manager";
   // §3 steps 6–7 / §4 steps 7c–8: Meet Halfway and Delivery declines are classified. A halfway no-show
   // is allowed 2h30m after the meet-up; a delivery buyer is "unavailable" once the team has arrived.
   const delivery = visit?.kind === "delivery";
@@ -101,6 +115,7 @@ export function TransactionStatusTriageV1({
             : []),
         ]
       : [{ outcome: "declined", label: "Buyer declined", detail: "Close the request; the car stays listed" }];
+  const visibleOutcomes = outcomes.filter((item) => !(declinesBlocked && item.outcome !== "no_show"));
 
   return (
     <Card className="shadow-xs">
@@ -147,7 +162,7 @@ export function TransactionStatusTriageV1({
               </button>
             ))}
             {onVisitOutcome
-              ? outcomes.map((item) => (
+              ? visibleOutcomes.map((item) => (
                   <button
                     key={item.outcome}
                     type="button"

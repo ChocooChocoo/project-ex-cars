@@ -1,6 +1,8 @@
 // Pure state machine for Phase 5 transaction states (R-18).
 // No I/O, no server imports — usable from both server actions and client UI.
 
+import { isDirectPayment } from "./buy-flow";
+
 export const TRANSACTION_STATES = [
   "pending",
   "under_review",
@@ -131,6 +133,18 @@ export function getAllowedTransitions(from: TransactionState, role: string): Tra
 
 export function isTerminal(state: TransactionState): boolean {
   return state === "rejected" || state === "completed" || state === "cancelled";
+}
+
+type CancellableBuy = {
+  transaction_kind?: unknown;
+  purchase_details?: { payment_method?: unknown } | { payment_method?: unknown }[] | null;
+};
+
+// T05: a buy paid in cash or by bank transfer is cancelled by the buyer or the CEO; the Sales Manager
+// loses Cancel before and after approval. A financing buy keeps its current actions.
+export function canSalesManagerCancel(tx: CancellableBuy): boolean {
+  const details = Array.isArray(tx.purchase_details) ? tx.purchase_details[0] : tx.purchase_details;
+  return !(tx.transaction_kind === "buy" && isDirectPayment(details ?? null));
 }
 
 // Review window lapsed without a decision. Decisions clear review_due_at; nothing auto-cancels.

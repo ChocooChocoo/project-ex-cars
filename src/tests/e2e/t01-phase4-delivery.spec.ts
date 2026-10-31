@@ -8,10 +8,10 @@ const expect = baseExpect.configure({ timeout: 20_000 });
 
 // T01 Phase 4 — Cash Purchase: Delivery (GCE Process Flows §4):
 // buyer asks for delivery → Sales Manager approves and sets the fee and downpayment → Head Accountant
-// records and verifies both → delivery team (CI, Mechanic, Head Security) is created → the team moves
+// records and verifies both → delivery team (CI, Head Security) is created → the team moves
 // the status to Delivered → the buyer declines for a legitimate reason, which queues a refund.
 // The missed-deadline path needs a deadline in the past, so it is covered by unit tests, not here.
-// Needs migration 00052 applied (the spec lists its own E2E-T01 test car) and active CI, Mechanic and Head Security accounts
+// Needs migration 00052 applied (the spec lists its own E2E-T01 test car) and active CI and Head Security accounts
 // (the first of each in the worker directory must be the seeded @gce.local account).
 
 const seedPassword = process.env.SEED_USER_PASSWORD;
@@ -140,7 +140,6 @@ test.describe
       await signInAs(page, "sales_manager@gce.local");
       await page.goto(`/sales_manager/transactions/${txId}`);
       await pickByLabel(page, "Confidential Informant");
-      await pickByLabel(page, "Mechanic");
       await pickByLabel(page, "Head Security");
       await page.getByRole("button", { name: "Create delivery field case" }).click();
       const open = page.getByRole("link", { name: "Open field case" });

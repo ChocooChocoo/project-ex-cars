@@ -18,9 +18,10 @@ import {
 
 type DeliveryFieldResult = { error: string } | { success: true };
 
-const DELIVERY_TEAM = ["confidential_informant", "mechanic", "head_security"];
+// A delivery team is the Confidential Informant and Head Security; a delivery takes no Mechanic (T05).
+const DELIVERY_TEAM = ["confidential_informant", "head_security"];
 
-// The delivery team's own case: the caller must be its Informant, Mechanic or Head Security.
+// The delivery team's own case: the caller must be its Informant or Head Security.
 async function assignedDelivery(fieldCaseId: unknown) {
   const supabase = await createServerSupabaseClient();
   const { data } = await supabase.auth.getUser();

@@ -160,7 +160,6 @@ test.describe
       await signInAs(page, "sales_manager@gce.local");
       await open(page, `/sales_manager/transactions/${id}`);
       await pickByLabel(page, "Confidential Informant");
-      await pickByLabel(page, "Mechanic");
       await pickByLabel(page, "Head Security");
       await page.getByRole("button", { name: "Create delivery field case" }).click();
       const caseLink = page.getByRole("link", { name: "Open field case" });
@@ -180,12 +179,6 @@ test.describe
       await expect(
         page.getByText("The Confidential Informant must record the vehicle papers as released before dispatch."),
       ).toBeVisible();
-
-      // Neither can the Mechanic.
-      await signInAs(page, "mechanic@gce.local");
-      await open(page, `/mechanic${casePath}`);
-      await expect(page.getByText("Vehicle papers", { exact: true })).toBeVisible();
-      await expect(release).toHaveCount(0);
 
       // The assigned CI records the release.
       await signInAs(page, "confidential_informant@gce.local");
