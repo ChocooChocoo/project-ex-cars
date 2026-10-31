@@ -205,7 +205,8 @@ async function assignedInformant(admin: Admin, sale: Sale, userId: string): Prom
   return team.informant === userId ? null : "Only the Confidential Informant assigned to this field case can do this.";
 }
 
-// The assigned Confidential Informant or Mechanic, whichever the user is.
+// The assigned Confidential Informant or, at a Meet Halfway only, the Mechanic. A delivery has no
+// Mechanic (T05).
 async function assignedMember(
   admin: Admin,
   sale: Sale,
@@ -214,7 +215,9 @@ async function assignedMember(
   const team = await fieldTeam(admin, sale);
   if ("error" in team) return team;
   if (who.role === "confidential_informant" && team.informant === who.userId) return "informant";
-  if (who.role === "mechanic" && team.mechanic === who.userId) return "mechanic";
+  if (who.role === "mechanic" && team.mechanic === who.userId && sale.details?.arrangement_kind === "meetup") {
+    return "mechanic";
+  }
   return { error: "Only the team assigned to this field case can do this." };
 }
 

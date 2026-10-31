@@ -37,7 +37,6 @@ type Result = { error: string } | { success: true };
 
 export interface DeliveryTeam {
   readonly informants: Person[];
-  readonly mechanics: Person[];
   readonly headSecurity: Person[];
 }
 
@@ -238,12 +237,6 @@ export function DeliveryPanel({
                 onChange={set("informant_id")}
               />
               <PersonSelect
-                label="Mechanic"
-                people={team.mechanics}
-                value={form.mechanic_id}
-                onChange={set("mechanic_id")}
-              />
-              <PersonSelect
                 label="Head Security"
                 people={team.headSecurity}
                 value={form.head_security_id}
@@ -259,7 +252,6 @@ export function DeliveryPanel({
                   createDeliveryFieldCase,
                   {
                     informant_id: form.informant_id,
-                    mechanic_id: form.mechanic_id,
                     head_security_id: form.head_security_id,
                   },
                   "Delivery field case created.",

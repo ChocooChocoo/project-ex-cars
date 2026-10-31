@@ -338,6 +338,8 @@ export function StaffTransactionDetail({
               userRole={userRole}
               transitioning={transitioning}
               onTransition={doTransition}
+              paymentMethod={(purchaseDetails?.payment_method as string | undefined) ?? null}
+              papersRequested={papersStatus !== null && papersStatus !== "returned"}
               visit={
                 liveVisit
                   ? {

@@ -15,6 +15,7 @@ import {
   canRecordNoShow,
   contractReadyForSale,
   DOWNPAYMENT_WORKING_DAYS,
+  isDirectPayment,
   isHalfwayCashRequest,
   MISSED_INSTALLMENTS_BEFORE_REPOSSESSION,
   missedInstallments,
@@ -29,7 +30,7 @@ import { closeFinancingIfPaid, confirmInitialDownpaymentIfPaid } from "@/lib/tra
 import { bookedMeetup, meetupTeamError, openMeetupCase } from "@/lib/transactions/meetup-server";
 import { SELL_PAPER_KINDS } from "@/lib/transactions/sell-flow";
 import type { TransactionState } from "@/lib/transactions/state-machine";
-import { canTransition, reviewDueAt } from "@/lib/transactions/state-machine";
+import { canSalesManagerCancel, canTransition, reviewDueAt } from "@/lib/transactions/state-machine";
 import { fieldCaseCreateSchema } from "@/lib/validation/phase6";
 import { paymentRecordSchema, transitionSchema } from "@/lib/validation/transactions";
 
@@ -83,6 +84,12 @@ export async function transitionTransaction(formData: FormData) {
 
   if (!canTransition(fromState, toState, role)) {
     return { error: "This action is not allowed for your role." };
+  }
+
+  // T05: the Sales Manager loses Cancel on a CASH buy, before and after approval. The buyer or the CEO
+  // still closes it; a financing buy keeps Cancel.
+  if (toState === "cancelled" && role === "sales_manager" && !canSalesManagerCancel(tx)) {
+    return { error: "The Sales Manager cannot cancel a cash purchase." };
   }
 
   // Use admin client for state transitions (bypass RLS for role-gated logic).
@@ -336,7 +343,7 @@ async function loadBuyRequest(admin: ReturnType<typeof createAdminClient>, id: s
   const { data: tx } = await admin
     .from("transactions")
     .select(
-      "id, customer_id, vehicle_id, current_state, queue_state, transaction_kind, viewing_arrangements(schedule, arrangement_kind, confirmation_state)",
+      "id, customer_id, vehicle_id, current_state, queue_state, transaction_kind, purchase_details(payment_method), viewing_arrangements(schedule, arrangement_kind, confirmation_state)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -408,6 +415,20 @@ export async function recordBuyerDecline(formData: FormData) {
   const tx = await loadBuyRequest(admin, parsed.data.transaction_id);
   if (!tx) return { error: "Transaction not found." };
   if (tx.current_state !== "approved") return { error: "Only an approved request can be declined at the visit." };
+  // T05: once the papers are requested the Sales Manager loses the decline outcomes on a CASH buy. A
+  // returned handover puts them back.
+  const details = Array.isArray(tx.purchase_details) ? tx.purchase_details[0] : tx.purchase_details;
+  const { data: handover } = await admin
+    .from("sale_handovers")
+    .select("papers_status")
+    .eq("transaction_id", tx.id)
+    .maybeSingle();
+  const papers = (handover as { papers_status?: string | null } | null)?.papers_status;
+  if (isDirectPayment(details ?? null) && papers && papers !== "returned") {
+    return {
+      error: "The vehicle papers were already requested, so the buyer can no longer be recorded as declining.",
+    };
+  }
   // Meet Halfway and Delivery declines are classified; a GCE visit decline is not.
   const classified = ["meetup", "delivery"].includes(tx.arrangement?.arrangement_kind ?? "");
   const delivery = tx.arrangement?.arrangement_kind === "delivery";
@@ -736,6 +757,15 @@ export async function recordPaperwork(formData: FormData) {
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid paperwork." };
+  }
+
+  // T05: the buyer sends their own valid ID and proof of billing; the Sales Manager verifies them but no
+  // longer adds them. Invoices and receipts stay with the Sales Manager.
+  if (
+    role === "sales_manager" &&
+    (parsed.data.document_kind === "valid_id" || parsed.data.document_kind === "proof_of_billing")
+  ) {
+    return { error: "The buyer uploads the valid ID and proof of billing. The Sales Manager verifies them." };
   }
 
   const transactionId = parsed.data.transaction_id;
