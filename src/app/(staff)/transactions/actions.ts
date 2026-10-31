@@ -11,6 +11,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
   addWorkingDays,
+  buyerIdsComplete,
   canRecordNoShow,
   contractReadyForSale,
   DOWNPAYMENT_WORKING_DAYS,
@@ -87,13 +88,13 @@ export async function transitionTransaction(formData: FormData) {
   // Use admin client for state transitions (bypass RLS for role-gated logic).
   const admin = await createAdminClient();
 
-  // Two verified valid IDs + proof of billing are required before a purchase is
+  // The front and back of two verified valid IDs + proof of billing are required before a purchase is
   // approved (not only at completion), so no unverified request is approved (G16).
   if (toState === "approved" && tx.transaction_kind === "buy") {
-    const [{ count: verifiedIds }, { count: verifiedBilling }] = await Promise.all([
+    const [{ data: verifiedIds }, { count: verifiedBilling }] = await Promise.all([
       admin
         .from("transaction_documents")
-        .select("id", { count: "exact", head: true })
+        .select("document_kind, verification_state, id_type, id_side")
         .eq("transaction_id", id)
         .eq("document_kind", "valid_id")
         .eq("verification_state", "verified"),
@@ -104,7 +105,7 @@ export async function transitionTransaction(formData: FormData) {
         .eq("document_kind", "proof_of_billing")
         .eq("verification_state", "verified"),
     ]);
-    if ((verifiedIds ?? 0) < 2 || (verifiedBilling ?? 0) < 1) {
+    if (!buyerIdsComplete(verifiedIds ?? []) || (verifiedBilling ?? 0) < 1) {
       return {
         error:
           "Two verified valid IDs and a verified proof of billing are required before approval. Verify the buyer's documents first.",
@@ -150,12 +151,12 @@ export async function transitionTransaction(formData: FormData) {
     };
   }
 
-  // Two valid IDs + proof of billing must be verified before a purchase completes (G16).
+  // The front and back of two valid IDs + proof of billing must be verified before a purchase completes (G16).
   if (toState === "completed" && tx.transaction_kind === "buy") {
-    const [{ count: verifiedIds }, { count: verifiedBilling }] = await Promise.all([
+    const [{ data: verifiedIds }, { count: verifiedBilling }] = await Promise.all([
       admin
         .from("transaction_documents")
-        .select("id", { count: "exact", head: true })
+        .select("document_kind, verification_state, id_type, id_side")
         .eq("transaction_id", id)
         .eq("document_kind", "valid_id")
         .eq("verification_state", "verified"),
@@ -166,7 +167,7 @@ export async function transitionTransaction(formData: FormData) {
         .eq("document_kind", "proof_of_billing")
         .eq("verification_state", "verified"),
     ]);
-    if ((verifiedIds ?? 0) < 2 || (verifiedBilling ?? 0) < 1) {
+    if (!buyerIdsComplete(verifiedIds ?? []) || (verifiedBilling ?? 0) < 1) {
       return {
         error: "Two verified valid IDs and a verified proof of billing are required before completing this purchase.",
       };

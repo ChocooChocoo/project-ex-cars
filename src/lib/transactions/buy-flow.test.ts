@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  activeBuyerIdCount,
   addWorkingDays,
+  buyerIdsComplete,
   canRecordNoShow,
   contractReadyForSale,
   contractTemplate,
@@ -123,16 +123,76 @@ describe("paidTowardPrice", () => {
   });
 });
 
-describe("activeBuyerIdCount", () => {
-  it("counts pending and verified IDs but not rejected ones or other papers", () => {
+describe("buyerIdsComplete", () => {
+  const id = (idType: string, idSide: string | null, verificationState = "pending") => ({
+    document_kind: "valid_id",
+    verification_state: verificationState,
+    id_type: idType,
+    id_side: idSide,
+  });
+
+  it("needs the front and back of two different IDs", () => {
     expect(
-      activeBuyerIdCount([
-        { document_kind: "valid_id", verification_state: "pending" },
-        { document_kind: "valid_id", verification_state: "verified" },
-        { document_kind: "valid_id", verification_state: "rejected" },
-        { document_kind: "proof_of_billing", verification_state: "verified" },
+      buyerIdsComplete([
+        id("passport", "front"),
+        id("passport", "back"),
+        id("drivers_license", "front"),
+        id("drivers_license", "back"),
       ]),
-    ).toBe(2);
+    ).toBe(true);
+    expect(buyerIdsComplete([id("passport", "front"), id("passport", "back"), id("drivers_license", "front")])).toBe(
+      false,
+    );
+  });
+
+  it("does not count the same side twice, or one ID as two IDs", () => {
+    expect(
+      buyerIdsComplete([
+        id("passport", "front"),
+        id("passport", "front"),
+        id("passport", "back"),
+        id("drivers_license", "back"),
+      ]),
+    ).toBe(false);
+    expect(
+      buyerIdsComplete([
+        id("passport", "front"),
+        id("passport", "back"),
+        id("passport", "front"),
+        id("passport", "back"),
+      ]),
+    ).toBe(false);
+  });
+
+  it("frees the place of a rejected image so the buyer can upload it again", () => {
+    expect(
+      buyerIdsComplete([
+        id("passport", "front"),
+        id("passport", "back", "rejected"),
+        id("drivers_license", "front"),
+        id("drivers_license", "back"),
+      ]),
+    ).toBe(false);
+  });
+
+  it("keeps the two-ID rule for rows uploaded before IDs had a side", () => {
+    expect(buyerIdsComplete([id("passport", null), id("drivers_license", null)])).toBe(true);
+    expect(buyerIdsComplete([id("passport", null)])).toBe(false);
+  });
+
+  it("switches to sides as soon as one row has one", () => {
+    expect(buyerIdsComplete([id("passport", null), id("drivers_license", null), id("passport", "front")])).toBe(false);
+  });
+
+  it("ignores proofs of billing", () => {
+    expect(
+      buyerIdsComplete([
+        id("passport", "front"),
+        id("passport", "back"),
+        id("drivers_license", "front"),
+        { document_kind: "proof_of_billing", verification_state: "verified", id_side: "back" },
+      ]),
+    ).toBe(false);
   });
 });
 
