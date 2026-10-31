@@ -47,4 +47,10 @@ describe("T05 profile address parts migration", () => {
     expect(migration).not.toMatch(/NOT NULL,/);
     expect(migration).not.toMatch(/DEFAULT '/);
   });
+
+  it("can be replayed on a database that already has the constraints", () => {
+    for (const name of ["chk_profiles_psgc_codes", "chk_profiles_address_line_length"]) {
+      expect(migration).toMatch(new RegExp(`DROP CONSTRAINT IF EXISTS ${name};`));
+    }
+  });
 });
