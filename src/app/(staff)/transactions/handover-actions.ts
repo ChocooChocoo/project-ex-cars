@@ -86,6 +86,7 @@ async function setHandover(
   });
   revalidatePath(`/dashboard/transactions/${sale.id}`);
   revalidatePath("/dashboard/field-cases");
+  revalidatePath("/vehicle-papers");
   revalidatePath(`/my-transactions/${sale.id}`);
   return null;
 }
@@ -127,7 +128,7 @@ export async function requestPapersRelease(formData: FormData): Promise<Handover
     {
       kind: "papers_release_requested",
       title: "Vehicle papers requested",
-      body: "The Sales Manager asks for a sold car's papers. Approve and hand them over from Field Cases.",
+      body: "The Sales Manager asks for a sold car's papers. Approve and hand them over from Vehicle Papers.",
       transactionId: sale.id,
     },
   );

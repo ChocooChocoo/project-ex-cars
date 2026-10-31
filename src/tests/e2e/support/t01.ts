@@ -209,18 +209,19 @@ export async function verifyPayments(page: Page, id: string) {
   await verifyAll(page, await page.getByRole("button", { name: "Verify", exact: true }).count());
 }
 
-// Phase 2 papers chain at GCE: the Sales Manager requests the papers, the CI hands them over from Field
-// Cases, the Sales Manager receives them and marks the car sold. The payment must already be checked.
+// Phase 2 papers chain at GCE: the Sales Manager requests the papers, the CI hands them over from
+// Vehicle Papers, the Sales Manager receives them and marks the car sold. The payment must already be checked.
 export async function papersThenSold(page: Page, id: string, vehicleLabel: string) {
   await signInAs(page, "sales_manager@gce.local");
   await open(page, `/sales_manager/transactions/${id}`);
   await page.getByRole("button", { name: "Request papers release" }).click();
   await expect(page.getByText("Papers requested from the Confidential Informant.")).toBeVisible();
   await signInAs(page, "confidential_informant@gce.local");
-  await open(page, "/confidential_informant/field-cases");
-  const request = page.getByRole("listitem").filter({ hasText: vehicleLabel });
-  await request.getByRole("button", { name: "Approve and hand over" }).click();
-  await expect(page.getByText("Papers handed over to the Sales Manager.")).toBeVisible();
+  await open(page, "/confidential_informant/vehicle-papers");
+  const request = page.getByRole("row").filter({ hasText: vehicleLabel });
+  await request.getByRole("button", { name: /Actions for/ }).click();
+  await page.getByRole("menuitem", { name: "Mark Released" }).click();
+  await expect(page.getByText("Papers released to the Sales Manager.")).toBeVisible();
   await signInAs(page, "sales_manager@gce.local");
   await open(page, `/sales_manager/transactions/${id}`);
   await page.getByRole("button", { name: "Receive papers" }).click();
