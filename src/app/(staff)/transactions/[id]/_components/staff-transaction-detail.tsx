@@ -106,6 +106,10 @@ export function StaffTransactionDetail({
   const openedAt = transaction.opened_at as string;
   const completedAt = transaction.completed_at as string | null;
   const customerName = ((transaction.profiles as Record<string, unknown> | null)?.full_name as string | null) ?? null;
+  // T05 P7: the buyer's region sets the delivery fee range on both pricing panels.
+  const buyerRegionCode =
+    ((transaction.profiles as Record<string, unknown> | null)?.region_code as string | null) ?? null;
+  const vehiclePrice = Number(purchaseDetails?.final_price ?? 0);
   const updatedAt = transaction.updated_at as string;
 
   const [transitioning, setTransitioning] = useState(false);
@@ -161,7 +165,13 @@ export function StaffTransactionDetail({
     }
   }
 
-  async function onRecordPayment(amount: string, method: string, date: string, paymentKind: string, proof?: File) {
+  async function onRecordPayment(
+    amount: string,
+    method: string,
+    date: string,
+    paymentKind: string,
+    proof?: File,
+  ): Promise<boolean> {
     const fd = new FormData();
     fd.set("transaction_id", id);
     fd.set("amount", amount);
@@ -170,11 +180,13 @@ export function StaffTransactionDetail({
     if (paymentKind) fd.set("payment_kind", paymentKind);
     if (proof) fd.set("proof", proof);
     const result = await recordPayment(fd);
-    if (result.error) toast.error(result.error);
-    else {
-      toast.success("Payment recorded.");
-      router.refresh();
+    if (result.error) {
+      toast.error(result.error);
+      return false;
     }
+    toast.success("Payment recorded.");
+    router.refresh();
+    return true;
   }
 
   async function onUploadDocument(documentKind: string, idType: string, file: File) {
@@ -338,6 +350,8 @@ export function StaffTransactionDetail({
               userRole={userRole}
               transitioning={transitioning}
               onTransition={doTransition}
+              paymentMethod={(purchaseDetails?.payment_method as string | undefined) ?? null}
+              papersRequested={papersStatus !== null && papersStatus !== "returned"}
               visit={
                 liveVisit
                   ? {
@@ -356,6 +370,9 @@ export function StaffTransactionDetail({
           state={state}
           userRole={userRole}
           paymentMethod={(purchaseDetails?.payment_method as string | undefined) ?? undefined}
+          purchaseDetails={purchaseDetails ?? null}
+          paymentTerms={paymentTerms}
+          flowStatus={(transaction.flow_status as string | null) ?? null}
           payments={countedPayments}
           documents={documents}
           history={history}
@@ -394,7 +411,9 @@ export function StaffTransactionDetail({
           threadId={financing.threadId ?? null}
           arrangementKind={(purchaseDetails?.arrangement_kind as string | undefined) ?? "gce_visit"}
           signingReported={Boolean(handover.signing_reported_at)}
-          defaultTotal={financedTotal(Number(purchaseDetails?.final_price ?? 0)) || undefined}
+          defaultTotal={financedTotal(vehiclePrice) || undefined}
+          vehiclePrice={vehiclePrice}
+          buyerRegionCode={buyerRegionCode}
         />
       ) : null}
 
@@ -431,6 +450,7 @@ export function StaffTransactionDetail({
           flowStatus={(transaction.flow_status as string | null) ?? null}
           team={delivery.team}
           userRole={userRole}
+          buyerRegionCode={buyerRegionCode}
         />
       ) : null}
 

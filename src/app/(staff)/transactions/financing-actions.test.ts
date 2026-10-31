@@ -50,7 +50,7 @@ function request(arrangement: string, overrides: Record<string, unknown> = {}) {
     current_state: "approved",
     flow_status: null,
     transaction_kind: "buy",
-    purchase_details: { payment_method: "financing", arrangement_kind: arrangement },
+    purchase_details: { payment_method: "financing", arrangement_kind: arrangement, final_price: 1_000_000 },
     payment_records: [],
     ...overrides,
   };
@@ -119,17 +119,32 @@ describe("proposeFinancingTerms", () => {
     expect(written("payment_terms")[0]).toMatchObject({ down_payment: 0 });
   });
 
-  it("needs the delivery fee and the downpayment on a delivery", async () => {
+  it("needs the delivery fee on a delivery", async () => {
     request("delivery");
 
     await expect(proposeFinancingTerms(form(offer))).resolves.toEqual({ error: "Enter the delivery fee." });
-    await expect(proposeFinancingTerms(form({ ...offer, delivery_fee: "2500", down_payment: "" }))).resolves.toEqual({
-      error: "Enter the downpayment.",
-    });
     expect(written("payment_terms")).toEqual([]);
 
     await expect(proposeFinancingTerms(form({ ...offer, delivery_fee: "2500" }))).resolves.toEqual({ success: true });
     expect(written("payment_terms")[0]).toMatchObject({ delivery_fee: 2500, down_payment: 100000 });
+  });
+
+  it("sets the down payment from 10% of the vehicle price, not from the form", async () => {
+    request("gce_visit", {
+      purchase_details: { payment_method: "financing", arrangement_kind: "gce_visit", final_price: 850_000 },
+    });
+
+    await expect(proposeFinancingTerms(form({ ...offer, down_payment: "1" }))).resolves.toEqual({ success: true });
+    expect(written("payment_terms")[0]).toMatchObject({ down_payment: 85_000 });
+  });
+
+  it("refuses terms when the request has no vehicle price", async () => {
+    request("gce_visit", {
+      purchase_details: { payment_method: "financing", arrangement_kind: "gce_visit", final_price: null },
+    });
+
+    await expect(proposeFinancingTerms(form(offer))).resolves.toEqual({ error: "Set the vehicle price first." });
+    expect(written("payment_terms")).toEqual([]);
   });
 });
 

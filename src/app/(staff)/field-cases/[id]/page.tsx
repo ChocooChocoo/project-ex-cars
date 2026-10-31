@@ -17,6 +17,8 @@ const OVERSEERS: Record<string, string[]> = {
   buyer_meetup: ["ceo", "sales_manager"],
 };
 const FIELD_TEAM = ["confidential_informant", "mechanic", "head_security"];
+// Any Confidential Informant may read a delivery or a meet-up; only the assigned team acts on it.
+const CI_OPEN_CASES = ["delivery", "buyer_meetup"];
 
 // Selling steps 5–6 and 11, Delivery steps 7–7b: the case pack for the field team.
 // The field roles cannot read transactions under RLS (Task 32 kept it that way), so the pack is read
@@ -46,7 +48,8 @@ export default async function FieldCasePage({ params }: { readonly params: Promi
     fieldCase.head_security_id,
   ].includes(user.id);
   const overseer = OVERSEERS[fieldCase.case_kind]?.includes(role) ?? false;
-  if (!overseer && !(assigned && FIELD_TEAM.includes(role))) redirect("/unauthorized");
+  const ciViewer = role === "confidential_informant" && CI_OPEN_CASES.includes(fieldCase.case_kind);
+  if (!overseer && !ciViewer && !(assigned && FIELD_TEAM.includes(role))) redirect("/unauthorized");
 
   // The papers the Confidential Informant carries to a meet-up or a delivery.
   const { data: handover } =
@@ -54,11 +57,12 @@ export default async function FieldCasePage({ params }: { readonly params: Promi
       ? { data: null }
       : await admin.from("sale_handovers").select("*").eq("transaction_id", fieldCase.transaction_id).maybeSingle();
   const papersStatus = (handover?.papers_status as PapersStatus | null | undefined) ?? null;
-  // Who the user is on this case, for the contract steps only the assigned team may record.
+  // Who the user is on this case, for the contract steps only the assigned team may record. A delivery
+  // has no Mechanic (T05); the Mechanic belongs to a Meet Halfway.
   const member =
     role === "confidential_informant" && fieldCase.assigned_confidential_informant === user.id
       ? "informant"
-      : role === "mechanic" && fieldCase.mechanic_id === user.id
+      : fieldCase.case_kind === "buyer_meetup" && role === "mechanic" && fieldCase.mechanic_id === user.id
         ? "mechanic"
         : null;
 

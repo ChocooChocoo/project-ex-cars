@@ -42,6 +42,9 @@ export function VehicleForm({ defaultValues, onSuccess, onCancel }: VehicleFormP
     defaultValues: (defaultValues ?? {
       stock_code: "",
       vin: "",
+      plate_number: "",
+      engine_number: "",
+      chassis_number: "",
       make: "",
       model: "",
       year: new Date().getFullYear(),
@@ -130,6 +133,51 @@ export function VehicleForm({ defaultValues, onSuccess, onCancel }: VehicleFormP
                   </Field>
                 )}
               />
+              <div className="flex flex-col gap-4">
+                <Controller
+                  control={form.control}
+                  name="plate_number"
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor="vehicle-plate-number">Plate Number (optional)</FieldLabel>
+                      <Input {...field} id="vehicle-plate-number" value={field.value ?? ""} placeholder="ABC 1234" />
+                      {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                    </Field>
+                  )}
+                />
+                <Controller
+                  control={form.control}
+                  name="engine_number"
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor="vehicle-engine-number">Engine Number (optional)</FieldLabel>
+                      <Input
+                        {...field}
+                        id="vehicle-engine-number"
+                        value={field.value ?? ""}
+                        placeholder="Engine number on the OR/CR"
+                      />
+                      {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                    </Field>
+                  )}
+                />
+                <Controller
+                  control={form.control}
+                  name="chassis_number"
+                  render={({ field, fieldState }) => (
+                    <Field data-invalid={fieldState.invalid}>
+                      <FieldLabel htmlFor="vehicle-chassis-number">Chassis Number (optional)</FieldLabel>
+                      <Input
+                        {...field}
+                        id="vehicle-chassis-number"
+                        value={field.value ?? ""}
+                        placeholder="Chassis number on the OR/CR"
+                      />
+                      {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                    </Field>
+                  )}
+                />
+              </div>
               <div className="flex flex-col gap-4">
                 <Controller
                   control={form.control}

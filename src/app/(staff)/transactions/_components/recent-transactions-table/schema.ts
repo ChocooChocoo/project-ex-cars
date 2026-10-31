@@ -6,6 +6,7 @@ export const transactionRowSchema = z.object({
   customerEmail: z.string(),
   kind: z.string(),
   state: z.string(),
+  paymentMethod: z.string(),
   vehicleMake: z.string(),
   vehicleModel: z.string(),
   vehicleYear: z.string(),

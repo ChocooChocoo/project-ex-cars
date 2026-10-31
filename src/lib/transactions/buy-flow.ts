@@ -1,12 +1,38 @@
 // Pure rules for the buying flows (GCE Process Flows §2 onward). No I/O.
 
-export const BUYER_ID_COUNT = 2;
+const BUYER_ID_COUNT = 2;
+export const ID_SIDES = ["front", "back"] as const;
+export type IdSide = (typeof ID_SIDES)[number];
+// Each of the two IDs is sent as a front and a back.
+export const BUYER_ID_IMAGES = BUYER_ID_COUNT * ID_SIDES.length;
 
-type DocumentLike = { document_kind: unknown; verification_state: unknown };
+type DocumentLike = {
+  document_kind: unknown;
+  verification_state: unknown;
+  id_type?: unknown;
+  id_side?: unknown;
+};
 
 // IDs still in play: a rejected ID frees its place so the buyer can upload a replacement.
-export function activeBuyerIdCount(documents: DocumentLike[]): number {
-  return documents.filter((doc) => doc.document_kind === "valid_id" && doc.verification_state !== "rejected").length;
+export function activeBuyerIds(documents: DocumentLike[]): DocumentLike[] {
+  return documents.filter((doc) => doc.document_kind === "valid_id" && doc.verification_state !== "rejected");
+}
+
+// Two different IDs, each with an active front and back. Rows uploaded before IDs had a side keep the
+// old two-ID rule, so a request sent under the old rule still passes the staff checks.
+export function buyerIdsComplete(documents: DocumentLike[]): boolean {
+  const ids = activeBuyerIds(documents);
+  if (ids.every((doc) => doc.id_side == null)) return ids.length >= BUYER_ID_COUNT;
+  const sidesByIdType = new Map<string, Set<unknown>>();
+  for (const doc of ids) {
+    if (!doc.id_type || !doc.id_side) continue;
+    const sides = sidesByIdType.get(String(doc.id_type)) ?? new Set<unknown>();
+    sides.add(doc.id_side);
+    sidesByIdType.set(String(doc.id_type), sides);
+  }
+  return (
+    [...sidesByIdType.values()].filter((sides) => sides.has("front") && sides.has("back")).length >= BUYER_ID_COUNT
+  );
 }
 
 // §7–9 (Phase 6 default, not yet in the source): a bank-transfer purchase follows the same steps as its
@@ -253,7 +279,7 @@ export type PapersStatus = (typeof PAPERS_STATUSES)[number];
 export const PAPERS_STATUS_LABELS: Record<PapersStatus, string> = {
   requested: "Papers Requested",
   released_to_ci: "Papers Released to CI",
-  handed_over: "Papers Handed Over",
+  handed_over: "Released",
   received: "Papers Received",
   returned: "Papers Returned to CI",
 };
@@ -329,6 +355,9 @@ export function paymentAllowedBeforeSigning(details: SaleDetails, paymentKind: u
 
 const peso = (amount: unknown) => `PHP ${Number(amount ?? 0).toLocaleString("en-PH")}`;
 
+// GCE's own name as it prints on the papers: the financing contract and the Deed of Sale / Policy & Warranty.
+export const GCE_SELLER = "GCE Auto Sales";
+
 // The pre-made contract the Sales Manager can start from, filled in from the agreed financing terms.
 export function contractTemplate(sale: {
   buyer: string;
@@ -345,7 +374,7 @@ export function contractTemplate(sale: {
   return [
     "VEHICLE SALE AND IN-HOUSE FINANCING CONTRACT",
     "",
-    `Seller: GCE Auto Sales. Buyer: ${sale.buyer}.`,
+    `Seller: ${GCE_SELLER}. Buyer: ${sale.buyer}.`,
     `Vehicle: ${sale.vehicle}.`,
     `Vehicle price: ${peso(sale.price)}.`,
     ...(terms
@@ -358,7 +387,7 @@ export function contractTemplate(sale: {
     "The buyer has inspected the vehicle and accepts it in its present condition.",
     "The vehicle stays under this contract until every payment is made. If the payments are not made, GCE will take back the vehicle.",
     "",
-    "Signed by the buyer and by GCE Auto Sales.",
+    `Signed by the buyer and by ${GCE_SELLER}.`,
   ].join("\n");
 }
 
@@ -429,4 +458,44 @@ export function onlinePaymentsDue(
     return amount > 0 ? [{ kind: "downpayment", label: "Downpayment", amount }] : [];
   }
   return [];
+}
+
+export type DuePaymentKind = OnlinePayment["kind"] | "full";
+
+export type DuePayment = { kind: DuePaymentKind; amount: number; method: "cash" };
+
+type DuePaymentRecord = { payment_kind?: unknown; amount?: unknown; verified_by?: unknown; rejected_at?: unknown };
+
+// T05: the one payment the Sales Manager records next on a CASH buy, so Record Payment fills itself in.
+// A GCE visit and a cash meet-up are paid in full; a delivery takes its fee and downpayment first, then
+// the balance. A bank transfer is confirmed by PayMongo and a financing buy pays in installments, so
+// neither is recorded here. Returns null when nothing is left or the delivery terms are not set yet.
+export function nextDuePayment(
+  details: OnlinePaymentDetail | null,
+  payments: DuePaymentRecord[],
+  flowStatus: unknown,
+): DuePayment | null {
+  if (details?.payment_method !== "cash") return null;
+  // A cash delivery has no figures to show until the Sales Manager sets its fee and downpayment.
+  if (details.arrangement_kind === "delivery" && !details.downpayment_due_at) return null;
+
+  const recordedKind = (kind: string) =>
+    payments.some((payment) => payment.payment_kind === kind && !payment.rejected_at);
+  const price = Number(details.final_price ?? 0);
+
+  // What the arrangement collects before the buyer signs (a delivery's fee and downpayment, a meet-up's
+  // downpayment), in the order onlinePaymentsDue already lists them.
+  const beforeSigning =
+    paymentAllowedBeforeSigning(details, "delivery_fee") || paymentAllowedBeforeSigning(details, "downpayment");
+  if (beforeSigning) {
+    const due = onlinePaymentsDue(details, null, flowStatus, { final_price: price, payments }).find(
+      (payment) => !recordedKind(payment.kind),
+    );
+    if (due) return { kind: due.kind, amount: due.amount, method: "cash" };
+  }
+
+  const remaining = price - paidTowardPrice(payments);
+  if (!(remaining > 0)) return null;
+  // The first money for the car is the full price; after a downpayment it is the balance.
+  return { kind: remaining === price ? "full" : "balance", amount: remaining, method: "cash" };
 }

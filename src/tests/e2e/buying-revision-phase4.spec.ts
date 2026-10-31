@@ -55,7 +55,7 @@ test.describe
 
       await signInAs(page, "sales_manager@gce.local");
       await open(page, `/sales_manager/transactions/${id}`);
-      await verifyAll(page, 3);
+      await verifyAll(page, 5);
       const approve = page.getByRole("button", { name: /^Transition Approve/ });
       await approve.click();
       await expect(page.getByText("Choose a Confidential Informant and a Mechanic before approving.")).toBeVisible();
@@ -279,7 +279,6 @@ test.describe
       await signInAs(page, "sales_manager@gce.local");
       await open(page, `/sales_manager/transactions/${id}`);
       await pickByLabel(page, "Confidential Informant");
-      await pickByLabel(page, "Mechanic");
       await pickByLabel(page, "Head Security");
       await page.getByRole("button", { name: "Create delivery field case" }).click();
       const casePath = await fieldCasePath(page);

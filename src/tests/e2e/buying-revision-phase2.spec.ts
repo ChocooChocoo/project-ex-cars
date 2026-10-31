@@ -86,23 +86,24 @@ test.describe
       await expect(page.getByText("Papers Requested").first()).toBeVisible();
       await page.screenshot({ path: "test-results/phase2-papers-requested-desktop.png", fullPage: true });
 
-      // Papers Handed Over: the CI approves from Field Cases.
+      // Released: the CI finds the request on the Vehicle Papers tab and marks it released.
       await signInAs(page, "confidential_informant@gce.local");
-      await open(page, "/confidential_informant/field-cases");
-      const request = page.getByRole("listitem").filter({ hasText: "E2E Test P2-VISIT" });
+      await open(page, "/confidential_informant/vehicle-papers");
+      const request = page.getByRole("row").filter({ hasText: "E2E Test P2-VISIT" });
       await expect(request).toHaveCount(1);
       await page.screenshot({ path: "test-results/phase2-ci-requests-desktop.png" });
       await page.setViewportSize({ width: 390, height: 844 });
       await page.screenshot({ path: "test-results/phase2-ci-requests-mobile.png" });
       await page.setViewportSize({ width: 1280, height: 720 });
-      await request.getByRole("button", { name: "Approve and hand over" }).click();
-      await expect(page.getByText("Papers handed over to the Sales Manager.")).toBeVisible();
-      await expect(request).toHaveCount(0);
+      await request.getByRole("button", { name: /Actions for/ }).click();
+      await page.getByRole("menuitem", { name: "Mark Released" }).click();
+      await expect(page.getByText("Papers released to the Sales Manager.")).toBeVisible();
+      await expect(request.getByText("Released", { exact: true })).toBeVisible();
 
       // Still not sold until the Sales Manager has received them.
       await signInAs(page, "sales_manager@gce.local");
       await open(page, `/sales_manager/transactions/${id}`);
-      await expect(page.getByText("Papers Handed Over").first()).toBeVisible();
+      await expect(page.getByText("Released", { exact: true }).first()).toBeVisible();
       await markSold(page).click();
       await expect(page.getByText(PAPERS_FIRST)).toBeVisible();
 
@@ -159,7 +160,6 @@ test.describe
       await signInAs(page, "sales_manager@gce.local");
       await open(page, `/sales_manager/transactions/${id}`);
       await pickByLabel(page, "Confidential Informant");
-      await pickByLabel(page, "Mechanic");
       await pickByLabel(page, "Head Security");
       await page.getByRole("button", { name: "Create delivery field case" }).click();
       const caseLink = page.getByRole("link", { name: "Open field case" });
@@ -179,12 +179,6 @@ test.describe
       await expect(
         page.getByText("The Confidential Informant must record the vehicle papers as released before dispatch."),
       ).toBeVisible();
-
-      // Neither can the Mechanic.
-      await signInAs(page, "mechanic@gce.local");
-      await open(page, `/mechanic${casePath}`);
-      await expect(page.getByText("Vehicle papers", { exact: true })).toBeVisible();
-      await expect(release).toHaveCount(0);
 
       // The assigned CI records the release.
       await signInAs(page, "confidential_informant@gce.local");

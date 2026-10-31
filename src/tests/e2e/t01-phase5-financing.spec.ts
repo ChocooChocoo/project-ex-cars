@@ -100,7 +100,7 @@ test.describe
     test("Sales Manager approves the request and proposes the terms", async ({ page }) => {
       await signInAs(page, "sales_manager@gce.local");
       await page.goto(`/sales_manager/transactions/${txId}`);
-      await verifyAll(page, 3);
+      await verifyAll(page, 5);
       await page.getByRole("button", { name: /^Transition Approve/ }).click();
 
       await page.getByLabel("Payment duration (months)").fill("12");

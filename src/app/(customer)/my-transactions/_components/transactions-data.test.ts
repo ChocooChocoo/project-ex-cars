@@ -44,9 +44,7 @@ describe("buildTransactionRows", () => {
   });
 
   it("never renders the string 'undefined' for a joined but empty vehicle row", () => {
-    const [buy] = buildTransactionRows([
-      row({ vehicles: { make: null, model: null, year: null, stock_code: null } }),
-    ]);
+    const [buy] = buildTransactionRows([row({ vehicles: { make: null, model: null, year: null, stock_code: null } })]);
 
     expect(buy.vehicleLabel).toBe("Buy");
     expect(buy.vehicleLabel).not.toContain("undefined");

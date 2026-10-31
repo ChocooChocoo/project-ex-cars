@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { missedInstallments } from "@/lib/transactions/buy-flow";
+import { deliveryArea, deliveryFeeRangeLabel, downPaymentFor } from "@/lib/transactions/delivery-fee";
 import { formatCurrency } from "@/lib/utils";
 
 type Row = Record<string, unknown>;
@@ -51,6 +52,8 @@ export function FinancingPanel({
   signingReported = false,
   threadId = null,
   defaultTotal,
+  vehiclePrice = 0,
+  buyerRegionCode = null,
 }: {
   readonly transactionId: string;
   readonly state: string;
@@ -64,6 +67,10 @@ export function FinancingPanel({
   readonly threadId?: string | null;
   // T04 P6: the Showroom price plus 10%, prefilled for the Sales Manager.
   readonly defaultTotal?: number;
+  /** T05 P7: the vehicle price; the Initial Downpayment is 10% of it, read-only. */
+  readonly vehiclePrice?: number;
+  /** T05 P7: the buyer's `profiles.region_code`, which sets the delivery fee range. */
+  readonly buyerRegionCode?: string | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -73,14 +80,19 @@ export function FinancingPanel({
   // A meet-up takes no downpayment; a delivery's fee and downpayment are approved with the terms.
   const meetup = arrangementKind === "meetup";
   const delivery = arrangementKind === "delivery";
+  // T05 P7: the Initial Downpayment is 10% of the vehicle price, read-only; CALABARZON delivery is free.
+  const downPayment = downPaymentFor(vehiclePrice);
+  const area = deliveryArea(buyerRegionCode);
+  const free = area === "calabarzon";
+  const feeRangeLabel = area ? deliveryFeeRangeLabel(area) : null;
   const termsReady =
     form.duration_months &&
     form.total_amount &&
     form.monthly_payment &&
     form.first_due_date &&
     form.missed_payment_policy?.trim() &&
-    (meetup || form.down_payment) &&
-    (!delivery || form.delivery_fee);
+    (meetup || vehiclePrice > 0) &&
+    (!delivery || free || form.delivery_fee);
   // In the field the account opens once the Confidential Informant reports the signing.
   const canComplete =
     termsState === "approved" &&
@@ -188,22 +200,40 @@ export function FinancingPanel({
                 type="number"
               />
               {meetup ? null : (
-                <Field
-                  id="fin-dp"
-                  label={delivery ? "Downpayment (₱)" : "Initial Downpayment (₱)"}
-                  value={form.down_payment}
-                  onChange={set("down_payment")}
-                  type="number"
-                />
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-muted-foreground text-xs">
+                    {delivery ? "Downpayment" : "Initial Downpayment"} (10% of the vehicle price)
+                  </p>
+                  <p className="font-medium tabular-nums">
+                    {vehiclePrice > 0 ? formatCurrency(downPayment) : "Set the vehicle price first"}
+                  </p>
+                </div>
               )}
               {delivery ? (
-                <Field
-                  id="fin-delivery-fee"
-                  label="Delivery fee (₱)"
-                  value={form.delivery_fee}
-                  onChange={set("delivery_fee")}
-                  type="number"
-                />
+                <div className="flex flex-col gap-1.5">
+                  {free ? (
+                    <p className="text-sm">
+                      <span className="text-muted-foreground text-xs">Delivery fee</span>
+                      <br />
+                      ₱0 · Free in CALABARZON
+                    </p>
+                  ) : (
+                    <Field
+                      id="fin-delivery-fee"
+                      label="Delivery fee (₱)"
+                      value={form.delivery_fee}
+                      onChange={set("delivery_fee")}
+                      type="number"
+                    />
+                  )}
+                  {feeRangeLabel ? (
+                    <p className="text-muted-foreground text-xs">
+                      Price Range: <span className="tabular-nums">{feeRangeLabel}</span>
+                    </p>
+                  ) : (
+                    <p className="text-destructive text-xs">Buyer has no region in their profile.</p>
+                  )}
+                </div>
               ) : null}
               <Field
                 id="fin-monthly"
@@ -241,8 +271,7 @@ export function FinancingPanel({
                   {
                     duration_months: form.duration_months,
                     total_amount: form.total_amount,
-                    down_payment: form.down_payment,
-                    delivery_fee: form.delivery_fee,
+                    delivery_fee: free ? "0" : form.delivery_fee,
                     monthly_payment: form.monthly_payment,
                     first_due_date: form.first_due_date,
                     missed_payment_policy: form.missed_payment_policy,

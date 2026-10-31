@@ -19,6 +19,13 @@ import {
   verifiedPaid,
 } from "@/lib/transactions/buy-flow";
 import { releaseVisitSlots } from "@/lib/transactions/buy-flow-server";
+import {
+  DELIVERY_AREA_LABELS,
+  deliveryArea,
+  deliveryFeeRangeLabel,
+  downPaymentFor,
+  feeWithinRange,
+} from "@/lib/transactions/delivery-fee";
 import { bookedMeetup, meetupTeamError, openMeetupCase } from "@/lib/transactions/meetup-server";
 import { canCancelScheduled } from "@/lib/transactions/state-machine";
 
@@ -105,7 +112,6 @@ export async function setDeliveryTerms(formData: FormData): Promise<DeliveryActi
     .object({
       serviceable: z.enum(["yes", "no"]),
       delivery_fee: z.coerce.number().min(0).optional().or(z.literal("")),
-      downpayment_amount: z.coerce.number().positive().optional().or(z.literal("")),
     })
     .safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: "Invalid delivery terms." };
@@ -148,45 +154,44 @@ export async function setDeliveryTerms(formData: FormData): Promise<DeliveryActi
     return done(tx.id);
   }
 
-  if (parsed.data.delivery_fee === "" || parsed.data.delivery_fee === undefined || !parsed.data.downpayment_amount) {
-    return { error: "Set the delivery fee and the downpayment." };
+  if (parsed.data.delivery_fee === "" || parsed.data.delivery_fee === undefined) {
+    return { error: "Set the delivery fee." };
   }
-  // §11 (Phase 6 default): a financed delivery's downpayment is the Initial Downpayment of the approved terms.
-  if (tx.details?.payment_method === "financing") {
-    const { data: terms } = await admin
-      .from("payment_terms")
-      .select("down_payment")
-      .eq("purchase_transaction_id", tx.id)
-      .maybeSingle();
-    if (!terms || Number(terms.down_payment) !== parsed.data.downpayment_amount) {
-      return { error: `Set the downpayment to the Initial Downpayment of ${peso(terms?.down_payment ?? 0)}.` };
-    }
+
+  // T05 P7: the fee must sit in the range for the buyer's region, and a CALABARZON delivery is free.
+  const { data: buyer } = await admin.from("profiles").select("region_code").eq("id", tx.customer_id).maybeSingle();
+  const area = deliveryArea(buyer?.region_code);
+  if (!area) return { error: "Buyer has no region in their profile." };
+  const fee = area === "calabarzon" ? 0 : parsed.data.delivery_fee;
+  if (!feeWithinRange(area, fee)) {
+    return { error: `The delivery fee for ${DELIVERY_AREA_LABELS[area]} is ${deliveryFeeRangeLabel(area)}.` };
   }
+
+  // T05 P7: the down payment is 10% of the vehicle price, computed here and never typed by hand.
+  const price = Number(tx.details?.final_price ?? 0);
+  if (!(price > 0)) return { error: "Set the vehicle price first." };
+  const downPayment = downPaymentFor(price);
+
   const due = addWorkingDays(new Date(), DOWNPAYMENT_WORKING_DAYS);
   const { error } = await admin
     .from("purchase_details")
     .update({
       delivery_serviceable: true,
-      delivery_fee: parsed.data.delivery_fee,
-      downpayment_amount: parsed.data.downpayment_amount,
+      delivery_fee: fee,
+      downpayment_amount: downPayment,
       downpayment_due_at: due.toISOString(),
     })
     .eq("transaction_id", tx.id);
   if (error) return { error: error.message };
 
-  await history(
-    admin,
-    tx,
-    actor.userId,
-    `Delivery confirmed: fee ${peso(parsed.data.delivery_fee)}, downpayment ${peso(parsed.data.downpayment_amount)}`,
-  );
+  await history(admin, tx, actor.userId, `Delivery confirmed: fee ${peso(fee)}, downpayment ${peso(downPayment)}`);
   await notify(
     admin,
     { userId: tx.customer_id },
     {
       kind: "delivery_terms_set",
       title: "Your delivery is confirmed",
-      body: `Pay the delivery fee of ${peso(parsed.data.delivery_fee)} and the downpayment of ${peso(parsed.data.downpayment_amount)} through PayMongo before ${due.toLocaleDateString("en-PH", { timeZone: "Asia/Manila" })}. ${deliveryBalanceNote(tx.details.payment_method, "buyer")}`,
+      body: `Pay the delivery fee of ${peso(fee)} and the downpayment of ${peso(downPayment)} through PayMongo before ${due.toLocaleDateString("en-PH", { timeZone: "Asia/Manila" })}. ${deliveryBalanceNote(tx.details.payment_method, "buyer")}`,
       transactionId: tx.id,
     },
   );
@@ -196,7 +201,7 @@ export async function setDeliveryTerms(formData: FormData): Promise<DeliveryActi
     {
       kind: "delivery_payment_expected",
       title: "Delivery payments expected",
-      body: `A buyer will pay a delivery fee of ${peso(parsed.data.delivery_fee)} and a downpayment of ${peso(parsed.data.downpayment_amount)} through PayMongo. Check the receipts and verify them on the transaction.`,
+      body: `A buyer will pay a delivery fee of ${peso(fee)} and a downpayment of ${peso(downPayment)} through PayMongo. Check the receipts and verify them on the transaction.`,
       transactionId: tx.id,
     },
   );
@@ -204,14 +209,13 @@ export async function setDeliveryTerms(formData: FormData): Promise<DeliveryActi
 }
 
 // §4 step 5: once the Head Accountant has verified the delivery fee, the Sales Manager sends the
-// Mechanic, Confidential Informant and Head Security.
+// Confidential Informant and Head Security. A delivery takes no Mechanic.
 export async function createDeliveryFieldCase(formData: FormData): Promise<DeliveryActionResult> {
   const actor = await salesManager();
   if ("error" in actor) return actor;
   const parsed = z
     .object({
       informant_id: z.string().uuid("Choose a Confidential Informant."),
-      mechanic_id: z.string().uuid("Choose a Mechanic."),
       head_security_id: z.string().uuid("Choose Head Security."),
     })
     .safeParse(Object.fromEntries(formData));
@@ -235,7 +239,6 @@ export async function createDeliveryFieldCase(formData: FormData): Promise<Deliv
   const is = (id: string, role: string) => directory.some((w) => w.account_id === id && w.role === role);
   if (!is(parsed.data.informant_id, "confidential_informant"))
     return { error: "Choose an active Confidential Informant." };
-  if (!is(parsed.data.mechanic_id, "mechanic")) return { error: "Choose an active Mechanic." };
   if (!is(parsed.data.head_security_id, "head_security")) return { error: "Choose active Head Security." };
 
   const { error } = await admin.from("field_cases").insert({
@@ -243,7 +246,6 @@ export async function createDeliveryFieldCase(formData: FormData): Promise<Deliv
     vehicle_id: tx.vehicle_id,
     case_kind: "delivery",
     assigned_confidential_informant: parsed.data.informant_id,
-    mechanic_id: parsed.data.mechanic_id,
     head_security_id: parsed.data.head_security_id,
     schedule: tx.arrangement.schedule,
     location: tx.arrangement.location,
@@ -253,7 +255,7 @@ export async function createDeliveryFieldCase(formData: FormData): Promise<Deliv
   if (error) return { error: error.message };
 
   await history(admin, tx, actor.userId, "Delivery field case created");
-  for (const workerId of [parsed.data.informant_id, parsed.data.mechanic_id, parsed.data.head_security_id]) {
+  for (const workerId of [parsed.data.informant_id, parsed.data.head_security_id]) {
     await notify(
       admin,
       { userId: workerId },

@@ -126,7 +126,7 @@ test.describe
       await page.waitForLoadState("networkidle");
 
       // The request cannot be approved while an image is waiting to be resubmitted.
-      await verifyAll(page, 2);
+      await verifyAll(page, 4);
       await page.getByRole("button", { name: /^Transition Approve/ }).click();
       await expect(page.getByText(/Two verified valid IDs and a verified proof of billing/)).toBeVisible();
 

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { SellSubmissionsList, type SellSubmissionListing } from "./sell-submissions-list";
+import { type SellSubmissionListing, SellSubmissionsList } from "./sell-submissions-list";
 
 const base: SellSubmissionListing = {
   transactionId: "11111111-2222-4333-8444-555555555555",
@@ -27,7 +27,9 @@ describe("SellSubmissionsList", () => {
   });
 
   it("falls back to a placeholder when the customer sent no vehicle details", () => {
-    render(<SellSubmissionsList submissions={[{ ...base, vehicleLabel: null, photos: [], conditionItems: ["Brakes"] }]} />);
+    render(
+      <SellSubmissionsList submissions={[{ ...base, vehicleLabel: null, photos: [], conditionItems: ["Brakes"] }]} />,
+    );
 
     expect(screen.getByText("Car not recorded")).toBeInTheDocument();
     expect(screen.getByText("0 photos")).toBeInTheDocument();

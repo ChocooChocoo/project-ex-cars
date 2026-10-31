@@ -11,14 +11,17 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
   addWorkingDays,
+  buyerIdsComplete,
   canRecordNoShow,
   contractReadyForSale,
   DOWNPAYMENT_WORKING_DAYS,
+  isDirectPayment,
   isHalfwayCashRequest,
   MISSED_INSTALLMENTS_BEFORE_REPOSSESSION,
   missedInstallments,
   missingContractCopies,
   needsContract,
+  nextDuePayment,
   papersReadyForSale,
   paymentAllowedBeforeSigning,
   verifiedPaid,
@@ -28,7 +31,7 @@ import { closeFinancingIfPaid, confirmInitialDownpaymentIfPaid } from "@/lib/tra
 import { bookedMeetup, meetupTeamError, openMeetupCase } from "@/lib/transactions/meetup-server";
 import { SELL_PAPER_KINDS } from "@/lib/transactions/sell-flow";
 import type { TransactionState } from "@/lib/transactions/state-machine";
-import { canTransition, reviewDueAt } from "@/lib/transactions/state-machine";
+import { canSalesManagerCancel, canTransition, reviewDueAt } from "@/lib/transactions/state-machine";
 import { fieldCaseCreateSchema } from "@/lib/validation/phase6";
 import { paymentRecordSchema, transitionSchema } from "@/lib/validation/transactions";
 
@@ -84,16 +87,22 @@ export async function transitionTransaction(formData: FormData) {
     return { error: "This action is not allowed for your role." };
   }
 
+  // T05: the Sales Manager loses Cancel on a CASH buy, before and after approval. The buyer or the CEO
+  // still closes it; a financing buy keeps Cancel.
+  if (toState === "cancelled" && role === "sales_manager" && !canSalesManagerCancel(tx)) {
+    return { error: "The Sales Manager cannot cancel a cash purchase." };
+  }
+
   // Use admin client for state transitions (bypass RLS for role-gated logic).
   const admin = await createAdminClient();
 
-  // Two verified valid IDs + proof of billing are required before a purchase is
+  // The front and back of two verified valid IDs + proof of billing are required before a purchase is
   // approved (not only at completion), so no unverified request is approved (G16).
   if (toState === "approved" && tx.transaction_kind === "buy") {
-    const [{ count: verifiedIds }, { count: verifiedBilling }] = await Promise.all([
+    const [{ data: verifiedIds }, { count: verifiedBilling }] = await Promise.all([
       admin
         .from("transaction_documents")
-        .select("id", { count: "exact", head: true })
+        .select("document_kind, verification_state, id_type, id_side")
         .eq("transaction_id", id)
         .eq("document_kind", "valid_id")
         .eq("verification_state", "verified"),
@@ -104,7 +113,7 @@ export async function transitionTransaction(formData: FormData) {
         .eq("document_kind", "proof_of_billing")
         .eq("verification_state", "verified"),
     ]);
-    if ((verifiedIds ?? 0) < 2 || (verifiedBilling ?? 0) < 1) {
+    if (!buyerIdsComplete(verifiedIds ?? []) || (verifiedBilling ?? 0) < 1) {
       return {
         error:
           "Two verified valid IDs and a verified proof of billing are required before approval. Verify the buyer's documents first.",
@@ -150,12 +159,12 @@ export async function transitionTransaction(formData: FormData) {
     };
   }
 
-  // Two valid IDs + proof of billing must be verified before a purchase completes (G16).
+  // The front and back of two valid IDs + proof of billing must be verified before a purchase completes (G16).
   if (toState === "completed" && tx.transaction_kind === "buy") {
-    const [{ count: verifiedIds }, { count: verifiedBilling }] = await Promise.all([
+    const [{ data: verifiedIds }, { count: verifiedBilling }] = await Promise.all([
       admin
         .from("transaction_documents")
-        .select("id", { count: "exact", head: true })
+        .select("document_kind, verification_state, id_type, id_side")
         .eq("transaction_id", id)
         .eq("document_kind", "valid_id")
         .eq("verification_state", "verified"),
@@ -166,7 +175,7 @@ export async function transitionTransaction(formData: FormData) {
         .eq("document_kind", "proof_of_billing")
         .eq("verification_state", "verified"),
     ]);
-    if ((verifiedIds ?? 0) < 2 || (verifiedBilling ?? 0) < 1) {
+    if (!buyerIdsComplete(verifiedIds ?? []) || (verifiedBilling ?? 0) < 1) {
       return {
         error: "Two verified valid IDs and a verified proof of billing are required before completing this purchase.",
       };
@@ -335,7 +344,7 @@ async function loadBuyRequest(admin: ReturnType<typeof createAdminClient>, id: s
   const { data: tx } = await admin
     .from("transactions")
     .select(
-      "id, customer_id, vehicle_id, current_state, queue_state, transaction_kind, viewing_arrangements(schedule, arrangement_kind, confirmation_state)",
+      "id, customer_id, vehicle_id, current_state, queue_state, transaction_kind, purchase_details(payment_method), viewing_arrangements(schedule, arrangement_kind, confirmation_state)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -407,6 +416,20 @@ export async function recordBuyerDecline(formData: FormData) {
   const tx = await loadBuyRequest(admin, parsed.data.transaction_id);
   if (!tx) return { error: "Transaction not found." };
   if (tx.current_state !== "approved") return { error: "Only an approved request can be declined at the visit." };
+  // T05: once the papers are requested the Sales Manager loses the decline outcomes on a CASH buy. A
+  // returned handover puts them back.
+  const details = Array.isArray(tx.purchase_details) ? tx.purchase_details[0] : tx.purchase_details;
+  const { data: handover } = await admin
+    .from("sale_handovers")
+    .select("papers_status")
+    .eq("transaction_id", tx.id)
+    .maybeSingle();
+  const papers = (handover as { papers_status?: string | null } | null)?.papers_status;
+  if (isDirectPayment(details ?? null) && papers && papers !== "returned") {
+    return {
+      error: "The vehicle papers were already requested, so the buyer can no longer be recorded as declining.",
+    };
+  }
   // Meet Halfway and Delivery declines are classified; a GCE visit decline is not.
   const classified = ["meetup", "delivery"].includes(tx.arrangement?.arrangement_kind ?? "");
   const delivery = tx.arrangement?.arrangement_kind === "delivery";
@@ -611,20 +634,41 @@ export async function recordPayment(formData: FormData) {
   const transactionId = parsed.data.transaction_id;
   const installmentId = parsed.data.installment_id || null;
 
+  // T05: the Head Accountant verifies the payment. The only row they still record is an installment,
+  // written by the financing "Record paid" button.
+  if (role === "head_accountant" && !installmentId) {
+    return { error: "The Sales Manager records the payment. The Head Accountant verifies it." };
+  }
+
+  let amount = parsed.data.amount;
+  let method = parsed.data.method;
+  let paymentKind: string | null = parsed.data.payment_kind || null;
+
   // Contract first: no money is recorded on a sale that needs a contract until the buyer has signed.
   // A delivery's fee and downpayment come before the day, and an installment only exists after signing.
   if (!installmentId) {
     const { data: sale } = await createAdminClient()
       .from("transactions")
-      .select("purchase_details(payment_method, arrangement_kind), sale_handovers(contract_state)")
+      .select(
+        "flow_status, purchase_details(payment_method, arrangement_kind, final_price, delivery_fee, downpayment_amount, downpayment_due_at), payment_records(payment_kind, amount, verified_by, rejected_at), sale_handovers(contract_state)",
+      )
       .eq("id", transactionId)
       .maybeSingle();
     const details = (Array.isArray(sale?.purchase_details) ? sale.purchase_details[0] : sale?.purchase_details) ?? null;
     const handover = Array.isArray(sale?.sale_handovers) ? sale.sale_handovers[0] : sale?.sale_handovers;
+    // T05: a CASH buy has one payment due at a time. The server works it out, so a typed amount or kind
+    // cannot be spammed in, and a second submission of the same kind finds nothing left to record.
+    if (details?.payment_method === "cash") {
+      const due = nextDuePayment(details, sale?.payment_records ?? [], sale?.flow_status ?? null);
+      if (!due) return { error: "Nothing is due on this purchase." };
+      amount = due.amount;
+      method = due.method;
+      paymentKind = due.kind;
+    }
     if (
       needsContract(details) &&
       handover?.contract_state !== "signed" &&
-      !paymentAllowedBeforeSigning(details, parsed.data.payment_kind)
+      !paymentAllowedBeforeSigning(details, paymentKind)
     ) {
       return { error: "The buyer must sign the contract before a payment is recorded." };
     }
@@ -644,17 +688,19 @@ export async function recordPayment(formData: FormData) {
   const { error } = await supabase.from("payment_records").insert({
     transaction_id: transactionId,
     installment_id: installmentId ?? null,
-    amount: parsed.data.amount,
-    method: parsed.data.method,
+    amount,
+    method,
     external_reference: parsed.data.external_reference || null,
     recorded_by: user.user.id,
     settlement_date: parsed.data.settlement_date,
-    payment_kind: parsed.data.payment_kind || null,
+    payment_kind: paymentKind,
     proof_path: proofPath,
   });
 
   if (error) {
     if (proofPath) await supabase.storage.from("transaction-documents").remove([proofPath]);
+    // T05: the partial unique index refuses a second live row of the same payment kind.
+    if (error.code === "23505") return { error: "This payment is already recorded." };
     return { error: error.message };
   }
 
@@ -668,7 +714,7 @@ export async function recordPayment(formData: FormData) {
   }
 
   // §6 step 17: the Initial Downpayment of a claimed car now waits for the Head Accountant.
-  if (parsed.data.payment_kind === "downpayment") {
+  if (paymentKind === "downpayment") {
     await createAdminClient()
       .from("transactions")
       .update({ flow_status: "initial_dp_awaiting_verification" })
@@ -681,7 +727,7 @@ export async function recordPayment(formData: FormData) {
     action: "payment_recorded",
     recordKind: "payment_records",
     recordId: transactionId,
-    summary: `Payment of PHP ${parsed.data.amount} recorded for transaction ${transactionId}`,
+    summary: `Payment of PHP ${amount} recorded for transaction ${transactionId}`,
   });
 
   revalidatePath(`/dashboard/transactions/${transactionId}`);
@@ -735,6 +781,15 @@ export async function recordPaperwork(formData: FormData) {
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid paperwork." };
+  }
+
+  // T05: the buyer sends their own valid ID and proof of billing; the Sales Manager verifies them but no
+  // longer adds them. Invoices and receipts stay with the Sales Manager.
+  if (
+    role === "sales_manager" &&
+    (parsed.data.document_kind === "valid_id" || parsed.data.document_kind === "proof_of_billing")
+  ) {
+    return { error: "The buyer uploads the valid ID and proof of billing. The Sales Manager verifies them." };
   }
 
   const transactionId = parsed.data.transaction_id;
