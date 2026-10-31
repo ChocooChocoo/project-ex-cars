@@ -253,7 +253,7 @@ export type PapersStatus = (typeof PAPERS_STATUSES)[number];
 export const PAPERS_STATUS_LABELS: Record<PapersStatus, string> = {
   requested: "Papers Requested",
   released_to_ci: "Papers Released to CI",
-  handed_over: "Papers Handed Over",
+  handed_over: "Released",
   received: "Papers Received",
   returned: "Papers Returned to CI",
 };
