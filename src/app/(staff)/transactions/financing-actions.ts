@@ -9,6 +9,7 @@ import { notify } from "@/lib/notifications/notify";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { addWorkingDays, DOWNPAYMENT_WORKING_DAYS, financedTotal } from "@/lib/transactions/buy-flow";
+import { downPaymentFor } from "@/lib/transactions/delivery-fee";
 import { loadFinancing, openFinancingAccount } from "@/lib/transactions/financing-server";
 
 type FinancingResult = { error: string } | { success: true };
@@ -63,7 +64,6 @@ export async function proposeFinancingTerms(formData: FormData): Promise<Financi
       duration_months: z.coerce.number().int().min(1, "Choose a payment duration.").max(84),
       // T04 P6: left blank, it defaults to the car's price plus 10%.
       total_amount: z.coerce.number().positive("Enter the vehicle price.").optional().or(z.literal("")),
-      down_payment: z.coerce.number().min(0).optional(),
       monthly_payment: z.coerce.number().positive("Enter the monthly payment."),
       first_due_date: z.string().min(1, "Set the first due date."),
       missed_payment_policy: z.string().trim().min(1, "State the missed payment policy.").max(1000),
@@ -82,12 +82,14 @@ export async function proposeFinancingTerms(formData: FormData): Promise<Financi
   const totalAmount = parsed.data.total_amount || financedTotal(Number(purchase(tx)?.final_price ?? 0));
   if (!totalAmount) return { error: "Enter the vehicle price." };
 
-  // A meet-up takes no downpayment. A delivery's fee and downpayment are approved with the terms.
+  // A meet-up takes no downpayment. A delivery's fee is approved with the terms.
   const kind = arrangementKind(tx);
   const delivery = kind === "delivery";
   if (delivery && !String(formData.get("delivery_fee") ?? "").trim()) return { error: "Enter the delivery fee." };
-  const downPayment = kind === "meetup" ? 0 : (parsed.data.down_payment ?? 0);
-  if (delivery && downPayment <= 0) return { error: "Enter the downpayment." };
+  // T05 P7: the Initial Downpayment is 10% of the vehicle price, read-only and computed here.
+  const vehiclePrice = Number(purchase(tx)?.final_price ?? 0);
+  if (kind !== "meetup" && !(vehiclePrice > 0)) return { error: "Set the vehicle price first." };
+  const downPayment = kind === "meetup" ? 0 : downPaymentFor(vehiclePrice);
   if (downPayment >= totalAmount) {
     return { error: "The Initial Downpayment must be below the vehicle price." };
   }
