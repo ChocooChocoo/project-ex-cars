@@ -1,7 +1,7 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { saveBuyDetails } from "@/app/(customer)/my-transactions/actions";
+import { removePurchaseDocument, saveBuyDetails } from "@/app/(customer)/my-transactions/actions";
 
 import { TransactionDetail } from "./transaction-detail";
 
@@ -9,6 +9,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 vi.mock("@/app/(customer)/my-transactions/actions", () => ({
   cancelTransaction: vi.fn(),
+  removePurchaseDocument: vi.fn(),
   saveBuyDetails: vi.fn(),
   uploadPurchaseDocument: vi.fn(),
 }));
@@ -166,5 +167,65 @@ describe("TransactionDetail document previews", () => {
     );
     expect(screen.getByText("Preview unavailable")).toBeInTheDocument();
     expect(screen.queryByText(/private\/customer/)).not.toBeInTheDocument();
+  });
+});
+
+describe("TransactionDetail ID sides and removal", () => {
+  function renderPendingBuy(documents: Record<string, unknown>[]) {
+    render(
+      <TransactionDetail
+        transaction={{ ...transaction, current_state: "pending" }}
+        history={[]}
+        documents={documents}
+        payments={[]}
+        installmentAccount={null}
+        paymentTerms={null}
+        viewingArrangements={[]}
+        autofill={null}
+      />,
+    );
+  }
+
+  const pendingFront = {
+    id: "doc-front",
+    document_kind: "valid_id",
+    id_type: "passport",
+    id_side: "front",
+    verification_state: "pending",
+    is_image: false,
+    signed_url: null,
+  };
+
+  it("asks which side of the ID is being uploaded", () => {
+    renderPendingBuy([]);
+
+    expect(screen.getByLabelText("Side")).toBeInTheDocument();
+  });
+
+  it("shows the side of an ID and removes a pending image", async () => {
+    vi.mocked(removePurchaseDocument).mockResolvedValue({ success: true });
+    renderPendingBuy([pendingFront]);
+
+    expect(screen.getByText("front")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Remove Valid ID (front)" }));
+
+    await waitFor(() => expect(removePurchaseDocument).toHaveBeenCalledWith("doc-front"));
+  });
+
+  it("hides Remove once the request has been sent", () => {
+    render(
+      <TransactionDetail
+        transaction={{ ...transaction, current_state: "under_review" }}
+        history={[]}
+        documents={[pendingFront]}
+        payments={[]}
+        installmentAccount={null}
+        paymentTerms={null}
+        viewingArrangements={[]}
+        autofill={null}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /^Remove/ })).not.toBeInTheDocument();
   });
 });

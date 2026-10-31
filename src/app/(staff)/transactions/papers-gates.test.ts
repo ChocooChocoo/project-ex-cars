@@ -77,7 +77,13 @@ describe("Mark as Sold waits for the vehicle papers", () => {
       flow_status: null,
       purchase_details: { payment_method: "cash", arrangement_kind: "gce_visit" },
     };
-    db.counts.transaction_documents = 2;
+    db.rows.transaction_documents = [
+      { document_kind: "valid_id", verification_state: "verified", id_type: "passport", id_side: "front" },
+      { document_kind: "valid_id", verification_state: "verified", id_type: "passport", id_side: "back" },
+      { document_kind: "valid_id", verification_state: "verified", id_type: "drivers_license", id_side: "front" },
+      { document_kind: "valid_id", verification_state: "verified", id_type: "drivers_license", id_side: "back" },
+    ];
+    db.counts.transaction_documents = 1;
     db.counts.payment_records = 1;
   });
 
@@ -116,7 +122,13 @@ describe("Mark as Sold waits for the signed contract and its copies", () => {
       flow_status: null,
       purchase_details: { payment_method: "cash", arrangement_kind: "meetup" },
     };
-    db.counts.transaction_documents = 2;
+    db.rows.transaction_documents = [
+      { document_kind: "valid_id", verification_state: "verified", id_type: "passport", id_side: "front" },
+      { document_kind: "valid_id", verification_state: "verified", id_type: "passport", id_side: "back" },
+      { document_kind: "valid_id", verification_state: "verified", id_type: "drivers_license", id_side: "front" },
+      { document_kind: "valid_id", verification_state: "verified", id_type: "drivers_license", id_side: "back" },
+    ];
+    db.counts.transaction_documents = 1;
     db.counts.payment_records = 1;
   });
 
