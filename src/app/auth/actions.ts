@@ -125,6 +125,10 @@ export async function signUp(formData: FormData) {
 export async function signOut() {
   const supabase = await createServerSupabaseClient();
   await supabase.auth.signOut();
+  // The proxy sends "/" to the role landing while this cookie is set, so a stale one bounces a
+  // signed-out visitor from the landing page back to the login screen.
+  const cookieStore = await cookies();
+  cookieStore.delete("gce-role");
   revalidatePath("/", "layout");
   redirect("/auth/v1/login");
 }
