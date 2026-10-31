@@ -264,12 +264,17 @@ export async function approvePrice(formData: FormData) {
       await admin.from("vehicles").update({ current_price: proposal.proposed_amount }).eq("id", vehicleId);
     }
 
+    const { data: current } = await admin.from("vehicles").select("posted_at").eq("id", vehicleId).maybeSingle();
+
     await admin
       .from("vehicles")
       // §6 step 40: a rejected reprice goes back to the Marketing Specialist; the car stays off the listing.
+      // An approved price publishes the car: `available` plus `posted_at`, like publishVehicle. Without
+      // `posted_at` a car bought from a seller sorts last in the showroom and shows "Posted —".
       .update({
         listing_state:
           decision === "approved" ? "available" : proposal.proposal_kind === "reprice" ? "repairing" : "draft",
+        ...(decision === "approved" && !current?.posted_at ? { posted_at: new Date().toISOString() } : {}),
       })
       .eq("id", vehicleId);
   }
@@ -332,6 +337,9 @@ export async function uploadVehicleMedia(formData: FormData) {
   if (dbError) return { error: dbError.message };
 
   revalidatePath(`/dashboard/vehicles/${vehicleId}`);
+  // The staff page is served under the role prefix (e.g. /marketing_specialist/vehicles/<id>), so the media
+  // count on that URL only refreshes when its own path is revalidated too.
+  revalidatePath(`/${role}/vehicles/${vehicleId}`);
   return { success: true };
 }
 
@@ -345,7 +353,11 @@ export async function deleteVehicleMedia(mediaId: string) {
     return { error: "Not authorized to delete media" };
   }
 
-  const { data: row } = await supabase.from("vehicle_media").select("storage_path").eq("id", mediaId).single();
+  const { data: row } = await supabase
+    .from("vehicle_media")
+    .select("storage_path, vehicle_id")
+    .eq("id", mediaId)
+    .single();
   if (!row) return { error: "Media not found" };
 
   const { error: storageError } = await supabase.storage.from("showroom-media").remove([row.storage_path as string]);
@@ -355,6 +367,8 @@ export async function deleteVehicleMedia(mediaId: string) {
   if (dbError) return { error: dbError.message };
 
   revalidatePath("/dashboard/vehicles");
+  revalidatePath(`/dashboard/vehicles/${row.vehicle_id}`);
+  revalidatePath(`/${role}/vehicles/${row.vehicle_id}`);
   return { success: true };
 }
 

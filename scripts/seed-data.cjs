@@ -21,6 +21,7 @@ const { join } = require("node:path");
 const zlib = require("node:zlib");
 
 const { createClient } = require("@supabase/supabase-js");
+const roleWorkSchedules = require("../src/lib/attendance/role-schedules.json");
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -58,10 +59,11 @@ const addDays = (d, n) => new Date(d.getTime() + n * 86400000);
 
 // Deterministic RNG so re-runs produce identical data.
 function mulberry32(seed) {
+  let state = seed;
   return () => {
-    seed |= 0;
-    seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    state |= 0;
+    state = (state + 0x6d2b79f5) | 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
@@ -179,10 +181,12 @@ async function loadUsers() {
     confidential_informant: "confidential_informant@gce.local",
     confidential_informant2: "confidential_informant2@gce.local",
     confidential_informant3: "confidential_informant3@gce.local",
+    confidential_informant4: "confidential_informant4@gce.local",
     marketing_specialist: "marketing_specialist@gce.local",
     mechanic: "mechanic@gce.local",
     mechanic2: "mechanic2@gce.local",
     mechanic3: "mechanic3@gce.local",
+    mechanic4: "mechanic4@gce.local",
     sales_manager: "sales_manager@gce.local",
     head_security: "head_security@gce.local",
   };
@@ -957,7 +961,7 @@ async function seedTransactions(users, vehicles) {
   const buyTxs = created.filter((t) => t.kind === "buy");
   const purchaseRows = buyTxs.map((t) => ({
     transaction_id: t.id,
-    payment_method: pick(["cash", "financing", "bank_transfer", "paymongo"]),
+    payment_method: pick(["cash", "financing", "bank_transfer"]),
     final_price: randInt(500000, 1800000),
     arrangement_kind: pick(["delivery", "meetup", "gce_visit"]),
     document_check_state: t.state === "completed" ? "verified" : pick(["pending", "verified"]),
@@ -1123,13 +1127,14 @@ async function seedTransactions(users, vehicles) {
       vehicle_id: v.id,
       transaction_id: created[i % created.length].id,
       case_kind: pick(["acquisition", "delivery", "recovery", "sourcing"]),
-      // T04 L3: field cases spread over the three CIs and three Mechanics.
+      // T04 L3 plus batch 2 phase 6: field cases spread over the four CIs and four Mechanics.
       assigned_confidential_informant: pick([
         users.confidential_informant,
         users.confidential_informant2,
         users.confidential_informant3,
+        users.confidential_informant4,
       ]),
-      mechanic_id: rand() < 0.4 ? pick([users.mechanic, users.mechanic2, users.mechanic3]) : null,
+      mechanic_id: rand() < 0.4 ? pick([users.mechanic, users.mechanic2, users.mechanic3, users.mechanic4]) : null,
       schedule: iso(addDays(now, randInt(1, 10))),
       location: pick(["Cavite", "Laguna", "Batangas", "Rizal", "Quezon"]),
       state: pick(["assigned", "accepted", "in_progress", "completed", "cancelled"]),
@@ -1302,6 +1307,7 @@ async function seedStaffRecords(users) {
     { role: "mechanic", id: users.mechanic },
     { role: "mechanic", id: users.mechanic2 },
     { role: "mechanic", id: users.mechanic3 },
+    { role: "mechanic", id: users.mechanic4 },
     { role: "sales_manager", id: users.sales_manager },
     { role: "marketing_specialist", id: users.marketing_specialist },
     { role: "account_manager", id: users.account_manager },
@@ -1309,6 +1315,7 @@ async function seedStaffRecords(users) {
     { role: "confidential_informant", id: users.confidential_informant },
     { role: "confidential_informant", id: users.confidential_informant2 },
     { role: "confidential_informant", id: users.confidential_informant3 },
+    { role: "confidential_informant", id: users.confidential_informant4 },
     { role: "head_security", id: users.head_security },
   ];
 
@@ -1316,11 +1323,13 @@ async function seedStaffRecords(users) {
     "employee_work_schedules",
     staff.map((person) => ({
       employee_id: person.id,
-      workdays: [1, 2, 3, 4, 5, 6, 7],
-      start_time: "08:00:00",
-      end_time: "17:00:00",
-      grace_minutes: 10,
-      timezone: "Asia/Manila",
+      ...(roleWorkSchedules[person.role] ?? {
+        workdays: [1, 2, 3, 4, 5, 6, 7],
+        start_time: "08:00:00",
+        end_time: "17:00:00",
+        grace_minutes: 10,
+        timezone: "Asia/Manila",
+      }),
       created_by: users.account_manager,
       updated_by: users.account_manager,
     })),

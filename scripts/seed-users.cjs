@@ -38,13 +38,15 @@ const SEED_USERS = [
   { role: "account_manager", name: "Angela Reyes", email: "account_manager@gce.local" },
   { role: "head_accountant", name: "Benjamin Tan", email: "head_accountant@gce.local" },
   { role: "confidential_informant", name: "Carlos Mendoza", email: "confidential_informant@gce.local" },
-  // T04 L3: three Confidential Informants and three Mechanics.
+  // T04 L3 plus batch 2 phase 6: four Confidential Informants and four Mechanics.
   { role: "confidential_informant", name: "Rodel Pascual", email: "confidential_informant2@gce.local" },
   { role: "confidential_informant", name: "Liza Manalo", email: "confidential_informant3@gce.local" },
+  { role: "confidential_informant", name: "Joy Bautista", email: "confidential_informant4@gce.local" },
   { role: "marketing_specialist", name: "Diana Lim", email: "marketing_specialist@gce.local" },
   { role: "mechanic", name: "Eduardo Aquino", email: "mechanic@gce.local" },
   { role: "mechanic", name: "Noel Ramirez", email: "mechanic2@gce.local" },
   { role: "mechanic", name: "Arnel Santiago", email: "mechanic3@gce.local" },
+  { role: "mechanic", name: "Ramon Dela Cruz", email: "mechanic4@gce.local" },
   { role: "sales_manager", name: "Fatima Castro", email: "sales_manager@gce.local" },
   { role: "head_security", name: "Gregorio Villanueva", email: "head_security@gce.local" },
 ];
@@ -86,4 +88,7 @@ async function seed() {
   console.log(`Run: npx supabase db query --linked --file scripts/seed-roles.sql`);
 }
 
-seed();
+seed().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
