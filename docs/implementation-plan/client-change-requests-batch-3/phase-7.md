@@ -1,6 +1,6 @@
 [← Previous: Phase 6](./phase-6.md) | [Next: Phase 8 →](./phase-8.md)
 
-**Status:** Done for implementation and scoped verification (2026-10-31). The Playwright walk-through and the full
+**Status:** 🟡 In progress — code complete and unit-verified; buyer/SM browser checks outstanding (2026-10-31).
 `check:fix` / `tsc` / `test` / `build` suite are outside this phase's verification budget and remain open.
 
 Status note (2026-10-31): implemented and verified as described below.
@@ -77,6 +77,19 @@ Today: the delivery fee and the down payment are typed by hand (`transactions/[i
   - The vehicle price is `purchase_details.final_price`, the same figure the financing total builds on.
   - The fee range is refused on the cash delivery terms (`setDeliveryTerms`); on a financed delivery the fee is
     still typed in the financing terms, where the range is displayed but the Head Accountant and CEO approve it.
+
+
+Integration verification (2026-10-31)
+
+- Merged into `batch3/integration` as `e200249`. No migration needed.
+- Unit coverage: `deliveryArea`, `DELIVERY_FEE_RANGES`, `feeWithinRange` and `downPaymentFor`, including
+  the Visayas ₱9,000 refusal, plus the delivery-terms and financing-actions suites (31 tests).
+- Still to verify in a browser: the buyer-side range before the fee is set, the Sales Manager's
+  "Price Range" next to the delivery fee, and the read-only 10% down payment. Transactions inspected
+  were already past the fee-setting stage, and the Cebu case exists only in unit tests because no
+  seeded buyer has a Visayas region.
+- Region mapping assumption: BARMM (15) is treated as Mindanao; NIR (18) as Visayas; prefix 19 does not
+  exist in the PSGC bundle.
 
 ## Done when
 

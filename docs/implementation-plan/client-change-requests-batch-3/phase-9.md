@@ -1,6 +1,6 @@
 [← Previous: Phase 8](./phase-8.md)
 
-**Status:** 🟡 In Progress
+**Status:** ✅ Done (2026-10-31, integration round).
 
 _2026-10-31:_ Started. Working from the merged Phase 8 route (`src/app/(staff)/vehicle-papers/`) and the
 reserved migration timestamp `20261101130000`.
@@ -52,6 +52,19 @@ Today: no deed or warranty template exists. The only text template is `contractT
   _Filled by `paperSale()` from the joined transaction row (the buyer is the transaction's own `customer_id`); the
   date is `completed_at ?? opened_at` in Manila time. The warranty paper also states it is a draft for client
   review._
+
+
+Integration verification (2026-10-31)
+
+- Merged into `batch3/integration` as `77c2bbd`; `20261101130000_t05_vehicle_identifiers.sql` was applied
+  to the hosted dev database in this batch (`plate_number`, `engine_number`, `chassis_number`).
+- Browser (Playwright MCP) as the Confidential Informant, on transaction `83ff8fe3-…`: the Deed of Sale
+  page prints buyer "Juan Dela Cruz", Suzuki Swift 2020 Silver, PHP 540,000.00 and the sale date, with
+  Plate, Engine and Chassis as `________` because the car has none recorded.
+- The Policy & Warranty page renders the draft wording from `src/lib/papers/templates.ts`, the same buyer
+  and vehicle, and `Warranty: ________`.
+- Print media behaves: app chrome and sidebar hidden, white sheet, `[data-print-root]` measured
+  816 × 1056 px, i.e. US Letter at 96 dpi, and the deed fits on one page.
 
 ## Done when
 

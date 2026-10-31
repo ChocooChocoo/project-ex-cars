@@ -1,6 +1,6 @@
 [← Previous: Phase 3](./phase-3.md) | [Next: Phase 5 →](./phase-5.md)
 
-**Status:** 🟡 In progress — 2026-10-31: code complete; Playwright and the full `tsc`/`build` checks are
+**Status:** 🟡 In progress — code complete and migration applied; SM-side browser check outstanding (2026-10-31).
 deferred to the integrator (subagent verification budget).
 
 # Phase 4: Record Payment automation and Head Accountant cleanup
@@ -68,6 +68,23 @@ Decisions (2026-10-29):
   - `state-machine.test.ts`, `transaction-status-triage-v1.test.tsx`, `transaction-detail-sidebar-v1.test.tsx`,
     `transaction-payments-table-v1.test.tsx` and `papers-gates.test.ts` updated; the new
     `record-payment.test.ts` covers the server rules.
+
+
+Integration verification (2026-10-31)
+
+- Merged into `batch3/integration` as `4718d65`.
+- Pre-check and cleanup executed earlier in the batch: 6 duplicate live payment groups were soft-rejected
+  with user approval (4 plain rejects; 2 verified rows had `verified_by` cleared and the original verifier
+  recorded in the reason, because `payment_records_verified_or_rejected` forbids both stamps). 0 groups
+  remain, so `20261101100000_t05_payment_once.sql` applied cleanly; index
+  `idx_payment_records_once_per_kind` is live with the exact partial predicate from the plan.
+- Browser (Playwright MCP) as the Head Accountant: on `e5499f32-…` there is no Mark Sold action (only the
+  step description text remains) and no Record Payment form. On `893c0464-…` the Verify and Reject buttons
+  are real `size="sm"` controls (28 px): Verify solid primary, Reject outline with destructive text.
+- Still to verify in a browser: the Sales Manager's prefilled form, the double-submit guard and the
+  "Recorded, waiting for the Head Accountant's check" state. That needs a cash buy with a payment actually
+  due; every candidate found was waiting on signing or on a booked slot. Unit tests cover the prefill,
+  the 23505 mapping and the pending state.
 
 ## Done when
 

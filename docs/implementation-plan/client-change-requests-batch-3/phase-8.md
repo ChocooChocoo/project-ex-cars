@@ -1,6 +1,6 @@
 [← Previous: Phase 7](./phase-7.md) | [Next: Phase 9 →](./phase-9.md)
 
-**Status:** 🔄 In Progress
+**Status:** 🟡 In progress — code complete; request → release chain not exercised end to end (2026-10-31).
 
 > 2026-10-29: In Progress only because pre-existing work is ticked. Nothing new is built yet.
 >
@@ -64,6 +64,18 @@ actions in `src/app/(staff)/transactions/handover-actions.ts`, and the `PapersRe
 - Not run here (budget): the Playwright MCP scenario, `npm run test`, `npx tsc --noEmit`, `npm run build`. The e2e
   helper `papersThenSold` and `buying-revision-phase2.spec.ts` were updated to the new tab and the "Released" label,
   but not executed.
+
+
+Integration verification (2026-10-31)
+
+- Merged into `batch3/integration` as `476cdfa`.
+- Browser (Playwright MCP) as the Confidential Informant: "Vehicle Papers" appears in the sidebar and
+  `/confidential_informant/vehicle-papers` renders the table with Vehicle, Buyer and Status columns.
+  `handed_over` shows as "Released". The row 3-dot menu exposes exactly View papers, Print Deed of Sale,
+  Print Policy & Warranty and a disabled "Released" entry on already-released rows; rows that are still
+  actionable show "Mark Released". Both print entries navigate to the Phase 9 pages.
+- Still to verify: the full Sales Manager request → CI Mark Released → Sales Manager receive chain
+  through the UI. The action handlers are covered by `handover-actions` tests.
 
 ## Done when
 

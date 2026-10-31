@@ -1,6 +1,6 @@
 [← Previous: Phase 1](./phase-1.md) | [Next: Phase 3 →](./phase-3.md)
 
-**Status:** 🟡 In progress (2026-10-31: all tasks implemented and unit-verified; Playwright and the repo-wide checks are deferred to the integration round under the batch verification budget).
+**Status:** ✅ Done (2026-10-31, integration round).
 
 # Phase 2: Buyer request documents
 
@@ -50,6 +50,22 @@ billing is checked only when staff approve. No front/back exists. Customers have
 - Not run under the batch verification budget: Playwright, `npx tsc --noEmit`, full `npm run test`, `npm run build`. The migration was not applied to any database.
 - Follow-up for the integration round: `src/tests/e2e/support/t01.ts` still uploads two IDs and expects 3 documents, so its helpers need a front/back upload and a 4-ID + proof count before the Playwright scenarios can pass.
 
+
+
+Integration verification (2026-10-31)
+
+- Merged into `batch3/integration` as `4dc009b`.
+- Browser (Playwright MCP) on a live pending request `051226bb-…`, created through Buy Now: uploaded the
+  front and back of Driver's License and Passport (4 ID images) plus proof of billing. The counter moved
+  `0/4 → 2/4 → 3/4 → 4/4` and the proof line changed from pending to uploaded. Each row shows an accessible
+  Remove button (`Remove Valid ID (back)`, `Remove Proof of billing`); removing one dropped the counter to
+  `3/4` and re-uploading restored `4/4`, with the database holding the expected 5 rows.
+- `Submit Request` stayed disabled until four ID images and a proof of billing were present. It remains
+  disabled afterwards only because this request has no booked slot yet, which is the pre-existing slot rule,
+  not this phase.
+- Note for future runs: tiny fixture images make the OCR auto-check log "Image size is too small for OCR
+  Engine 2"; the upload still lands and is marked for manual review. Not a product defect.
+- Gates on the merged tree: `tsc --noEmit` exit 0, 1017 tests passed, `next build` exit 0.
 
 ## Done when
 
