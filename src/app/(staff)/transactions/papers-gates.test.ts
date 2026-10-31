@@ -189,11 +189,12 @@ describe("a payment waits for the signed contract", () => {
 
   // T05: the server works out the payment due, so each recorded row changes the next one.
   const record = (kind: string, amount: number) => {
-    const current = db.rows.transactions as { payment_records?: unknown[] } | undefined;
+    const current = (db.rows.transactions ?? {}) as { payment_records?: unknown[] };
     current.payment_records = [
       ...(current.payment_records ?? []),
       { payment_kind: kind, amount, verified_by: null, rejected_at: null },
     ];
+    db.rows.transactions = current;
   };
 
   const paid = () => db.writes.some((write) => write.table === "payment_records");
