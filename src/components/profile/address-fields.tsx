@@ -42,8 +42,10 @@ function loadJson<T>(url: string, bypassCache = false): Promise<T> {
   return request;
 }
 
+// A stored row has codes only, so the name starts empty and must be filled from the list. Only an empty
+// *list* name is treated as nothing to apply, which keeps a name already on screen.
 function matchesName(current: string, next: string) {
-  return current === "" || current === next;
+  return next === "" || current === next;
 }
 
 interface AddressSelectProps {
