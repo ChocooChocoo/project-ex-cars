@@ -29,6 +29,7 @@ import {
   type DeliveryStatus,
   verifiedPaid,
 } from "@/lib/transactions/buy-flow";
+import { deliveryArea, deliveryFeeRangeLabel, downPaymentFor } from "@/lib/transactions/delivery-fee";
 import { formatCurrency } from "@/lib/utils";
 
 type Row = Record<string, unknown>;
@@ -51,6 +52,7 @@ export function DeliveryPanel({
   flowStatus,
   team,
   userRole,
+  buyerRegionCode = null,
 }: {
   readonly transactionId: string;
   readonly state: string;
@@ -61,6 +63,8 @@ export function DeliveryPanel({
   readonly flowStatus: string | null;
   readonly team: DeliveryTeam;
   readonly userRole: string;
+  /** T05 P7: the buyer's `profiles.region_code`, which sets the delivery fee range. */
+  readonly buyerRegionCode?: string | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -94,6 +98,12 @@ export function DeliveryPanel({
   const awaitingOffer = purchaseDetails?.payment_method === "financing" && flowStatus !== "purchase_claim" && !termsSet;
   const deadlinePassed = Boolean(dueAt && new Date(dueAt).getTime() < Date.now() && downpaymentPaid < downpayment);
   const status = (fieldCase?.delivery_status as DeliveryStatus | null) ?? null;
+  // T05 P7: the buyer's region fixes the fee range; CALABARZON is free and the down payment is 10% of the price.
+  const area = deliveryArea(buyerRegionCode);
+  const free = area === "calabarzon";
+  const finalPrice = Number(purchaseDetails?.final_price ?? 0);
+  const downPayment = downPaymentFor(finalPrice);
+  const feeRangeLabel = area ? deliveryFeeRangeLabel(area) : null;
 
   return (
     <Card className="shadow-xs">
@@ -172,18 +182,37 @@ export function DeliveryPanel({
               </div>
               {form.serviceable === "yes" ? (
                 <>
-                  <MoneyInput
-                    id="delivery-fee"
-                    label="Delivery fee (₱)"
-                    value={form.delivery_fee}
-                    onChange={set("delivery_fee")}
-                  />
-                  <MoneyInput
-                    id="downpayment"
-                    label="Downpayment (₱)"
-                    value={form.downpayment_amount}
-                    onChange={set("downpayment_amount")}
-                  />
+                  <div className="flex flex-col gap-1.5">
+                    {free ? (
+                      <p className="text-sm">
+                        <span className="text-muted-foreground text-xs">Delivery fee</span>
+                        <br />
+                        ₱0 · Free in CALABARZON
+                      </p>
+                    ) : (
+                      <MoneyInput
+                        id="delivery-fee"
+                        label="Delivery fee (₱)"
+                        value={form.delivery_fee}
+                        onChange={set("delivery_fee")}
+                      />
+                    )}
+                    {feeRangeLabel ? (
+                      <p className="text-muted-foreground text-xs">
+                        Price Range: <span className="tabular-nums">{feeRangeLabel}</span>
+                      </p>
+                    ) : (
+                      <p className="text-destructive text-xs">
+                        Buyer has no region in their profile. Ask them to set it before you confirm.
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <p className="text-muted-foreground text-xs">Down payment (10% of the vehicle price)</p>
+                    <p className="font-medium tabular-nums">
+                      {finalPrice > 0 ? formatCurrency(downPayment) : "Set the vehicle price first"}
+                    </p>
+                  </div>
                 </>
               ) : null}
             </div>
@@ -191,14 +220,13 @@ export function DeliveryPanel({
               size="sm"
               className="self-start"
               variant={form.serviceable === "no" ? "destructive" : "default"}
-              disabled={busy || !form.serviceable}
+              disabled={busy || !form.serviceable || (form.serviceable === "yes" && (!area || finalPrice <= 0))}
               onClick={() =>
                 submit(
                   setDeliveryTerms,
                   {
                     serviceable: form.serviceable,
-                    delivery_fee: form.delivery_fee,
-                    downpayment_amount: form.downpayment_amount,
+                    delivery_fee: free ? "0" : form.delivery_fee,
                   },
                   form.serviceable === "no" ? "Request closed: not serviceable." : "Delivery terms sent to the buyer.",
                 )
