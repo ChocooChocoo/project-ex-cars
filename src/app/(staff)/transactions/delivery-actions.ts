@@ -204,14 +204,13 @@ export async function setDeliveryTerms(formData: FormData): Promise<DeliveryActi
 }
 
 // §4 step 5: once the Head Accountant has verified the delivery fee, the Sales Manager sends the
-// Mechanic, Confidential Informant and Head Security.
+// Confidential Informant and Head Security. A delivery takes no Mechanic.
 export async function createDeliveryFieldCase(formData: FormData): Promise<DeliveryActionResult> {
   const actor = await salesManager();
   if ("error" in actor) return actor;
   const parsed = z
     .object({
       informant_id: z.string().uuid("Choose a Confidential Informant."),
-      mechanic_id: z.string().uuid("Choose a Mechanic."),
       head_security_id: z.string().uuid("Choose Head Security."),
     })
     .safeParse(Object.fromEntries(formData));
@@ -235,7 +234,6 @@ export async function createDeliveryFieldCase(formData: FormData): Promise<Deliv
   const is = (id: string, role: string) => directory.some((w) => w.account_id === id && w.role === role);
   if (!is(parsed.data.informant_id, "confidential_informant"))
     return { error: "Choose an active Confidential Informant." };
-  if (!is(parsed.data.mechanic_id, "mechanic")) return { error: "Choose an active Mechanic." };
   if (!is(parsed.data.head_security_id, "head_security")) return { error: "Choose active Head Security." };
 
   const { error } = await admin.from("field_cases").insert({
@@ -243,7 +241,6 @@ export async function createDeliveryFieldCase(formData: FormData): Promise<Deliv
     vehicle_id: tx.vehicle_id,
     case_kind: "delivery",
     assigned_confidential_informant: parsed.data.informant_id,
-    mechanic_id: parsed.data.mechanic_id,
     head_security_id: parsed.data.head_security_id,
     schedule: tx.arrangement.schedule,
     location: tx.arrangement.location,
@@ -253,7 +250,7 @@ export async function createDeliveryFieldCase(formData: FormData): Promise<Deliv
   if (error) return { error: error.message };
 
   await history(admin, tx, actor.userId, "Delivery field case created");
-  for (const workerId of [parsed.data.informant_id, parsed.data.mechanic_id, parsed.data.head_security_id]) {
+  for (const workerId of [parsed.data.informant_id, parsed.data.head_security_id]) {
     await notify(
       admin,
       { userId: workerId },

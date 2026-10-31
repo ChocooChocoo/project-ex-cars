@@ -69,6 +69,20 @@ describe("updateDeliveryLocation", () => {
     expect(db.writes).toHaveLength(0);
   });
 
+  it("no longer lets a Mechanic act on a delivery (T05)", async () => {
+    getCurrentRole.mockResolvedValue("mechanic");
+    db.rows.field_cases = {
+      ...(db.rows.field_cases as Record<string, unknown>),
+      mechanic_id: securityId,
+      head_security_id: null,
+    };
+
+    await expect(updateDeliveryLocation(caseId, 14.5, 121)).resolves.toEqual({
+      error: "Only the assigned delivery team can update this delivery.",
+    });
+    expect(db.writes).toHaveLength(0);
+  });
+
   it("checks the latitude and longitude range", async () => {
     await expect(updateDeliveryLocation(caseId, 91, 121)).resolves.toEqual({ error: "Invalid location." });
     await expect(updateDeliveryLocation(caseId, 14.5, -181)).resolves.toEqual({ error: "Invalid location." });
