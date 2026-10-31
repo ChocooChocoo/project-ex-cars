@@ -1,6 +1,6 @@
 [Next: Phase 2 →](./phase-2.md)
 
-**Status:** 🔄 In progress — 2026-10-31: all tasks and unit tests done; full suite, typecheck, build and the Playwright pass deferred to the integration round.
+**Status:** ✅ Done (2026-10-31, integration round).
 
 # Phase 1: CI field case "Unauthorized" fix
 
@@ -29,6 +29,18 @@ Decision (2026-10-29): any CI can view any field case in read-only mode. Actions
   test covers it.
 - [x] Check that the other "Open delivery" links now open the case: `transactions/[id]/_components/delivery-panel.tsx:285`,
   `meetup-team-panel.tsx:91` and `sell-flow-panel.tsx:375`.
+
+
+Integration verification (2026-10-31)
+
+- Merged into `batch3/integration` as `4469eee`.
+- Browser (Playwright MCP): signed in as the Confidential Informant `Carlos Mendoza` and opened delivery
+  `022f0842-…`, which is assigned to another CI (`Liza Manalo`). The case rendered in full — schedule,
+  buyer, vehicle, tracking, papers and contract sections — with no redirect to `/unauthorized` and no
+  action buttons in the page body.
+- Mechanic / other roles keep the assigned-only rule; `page.access.test.ts` covers both directions.
+- Gates on the merged tree: `tsc --noEmit` exit 0, `vitest run --maxWorkers=2` 1017 passed / 148 files,
+  `next build` exit 0, scoped biome clean.
 
 ## Done when
 

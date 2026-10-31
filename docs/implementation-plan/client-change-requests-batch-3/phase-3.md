@@ -1,6 +1,6 @@
 [← Previous: Phase 2](./phase-2.md) | [Next: Phase 4 →](./phase-4.md)
 
-**Status:** 🔶 In progress — 2026-10-31: all tasks implemented and unit-verified; Playwright and the repo-wide checks are deferred to the integration round under the batch verification budget.
+**Status:** 🟡 In progress — code complete; browser pass partial (2026-10-31).
 
 # Phase 3: Sales Manager buying-request cleanup and delivery without a Mechanic
 
@@ -68,6 +68,18 @@ Assumptions). Financing buys keep their current actions.
 - The recent-transactions menu is a second Cancel entry point, so it hides Cancel for the same cash buys; the server
   guard remains the enforcement for any direct action call.
 - `field_cases.mechanic_id` is already nullable, so no migration was added and no database was touched.
+
+
+Integration verification (2026-10-31)
+
+- Merged into `batch3/integration` as `a542b94`.
+- Browser (Playwright MCP) as the Sales Manager on the approved cash delivery `e5499f32-…`: no Cancel
+  action anywhere on the page, and no Valid ID / Proof of Billing upload action. Unit coverage for the
+  same rules: `sales-manager-cash.test.ts`, triage, documents-card and delivery-team suites (135 tests).
+- Still to verify in a browser: Cancel absent on a *pre-approval* cash buy, Buyer Declined hidden after
+  papers are requested, and the delivery team form showing only the Confidential Informant and Head
+  Security. All three are covered by unit tests but were not exercised against the running app.
+- Assumption recorded: the three legacy `down_payment` buys keep the current Sales Manager actions.
 
 ## Done when
 
