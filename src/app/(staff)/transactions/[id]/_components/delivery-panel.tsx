@@ -16,13 +16,19 @@ import {
   setDeliveryTerms,
 } from "@/app/(staff)/transactions/delivery-actions";
 import { DeliveryLastSeen } from "@/components/delivery-last-seen";
+import { SlotPicker } from "@/components/transactions/slot-picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DELIVERY_STATUS_LABELS, type DeliveryStatus, verifiedPaid } from "@/lib/transactions/buy-flow";
+import {
+  DELIVERY_LEAD_DAYS,
+  DELIVERY_STATUS_LABELS,
+  type DeliveryStatus,
+  verifiedPaid,
+} from "@/lib/transactions/buy-flow";
 import { formatCurrency } from "@/lib/utils";
 
 type Row = Record<string, unknown>;
@@ -301,18 +307,14 @@ export function DeliveryPanel({
         {canManage && termsSet && status !== "delivered" ? (
           <section className="flex flex-col gap-2 rounded-md border p-3">
             <p className="font-medium">Reschedule or redirect (asked 5+ hours ahead)</p>
-            <div className="grid gap-2 sm:grid-cols-3">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="new-schedule" className="text-xs">
-                  New date and time
-                </Label>
-                <Input
-                  id="new-schedule"
-                  type="datetime-local"
-                  value={form.schedule ?? ""}
-                  onChange={(e) => set("schedule")(e.target.value)}
-                />
-              </div>
+            <SlotPicker
+              id="new-schedule"
+              label="New date and time"
+              value={form.schedule ?? ""}
+              onChange={set("schedule")}
+              minDays={DELIVERY_LEAD_DAYS}
+            />
+            <div className="grid gap-2 sm:grid-cols-2">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="new-address" className="text-xs">
                   Address
@@ -329,12 +331,12 @@ export function DeliveryPanel({
               size="sm"
               variant="outline"
               className="self-start"
-              disabled={busy}
+              disabled={busy || !form.schedule}
               onClick={() =>
                 submit(
                   rescheduleDelivery,
                   {
-                    schedule: form.schedule ? new Date(form.schedule).toISOString() : "",
+                    schedule: form.schedule ?? "",
                     location: form.location ?? String(arrangement?.location ?? ""),
                     fee: form.fee ?? "0",
                   },

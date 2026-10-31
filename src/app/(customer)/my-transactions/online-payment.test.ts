@@ -215,6 +215,47 @@ describe("startOnlinePayment", () => {
     );
   });
 
+  it("takes a bank transfer meet-up downpayment before the contract is signed", async () => {
+    request({
+      purchase_details: {
+        payment_method: "bank_transfer",
+        arrangement_kind: "meetup",
+        downpayment_amount: 50000,
+        final_price: 600000,
+      },
+      sale_handovers: { contract_state: "approved" },
+    });
+
+    await expect(pay()).resolves.toEqual({ success: true, url: CHECKOUT });
+    expect(inserted()).toEqual([[expect.objectContaining({ payment_kind: "downpayment", amount: 50000 })]]);
+  });
+
+  it("takes the bank transfer balance once the contract is signed", async () => {
+    request({
+      purchase_details: {
+        payment_method: "bank_transfer",
+        arrangement_kind: "meetup",
+        downpayment_amount: 50000,
+        final_price: 600000,
+      },
+      payment_records: [{ payment_kind: "downpayment", amount: 50000, verified_by: "head-accountant" }],
+      sale_handovers: { contract_state: "signed" },
+    });
+
+    await expect(pay()).resolves.toEqual({ success: true, url: CHECKOUT });
+    expect(inserted()).toEqual([[expect.objectContaining({ payment_kind: "balance", amount: 550000 })]]);
+  });
+
+  it("takes the full price of a bank transfer GCE visit, which has no contract", async () => {
+    request({
+      purchase_details: { payment_method: "bank_transfer", arrangement_kind: "gce_visit", final_price: 600000 },
+      sale_handovers: null,
+    });
+
+    await expect(pay()).resolves.toEqual({ success: true, url: CHECKOUT });
+    expect(inserted()).toEqual([[expect.objectContaining({ payment_kind: "balance", amount: 600000 })]]);
+  });
+
   it("refuses when nothing is due online", async () => {
     request({ purchase_details: { payment_method: "cash", arrangement_kind: "gce_visit" } });
 

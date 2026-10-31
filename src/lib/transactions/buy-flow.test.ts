@@ -6,6 +6,7 @@ import {
   canRecordNoShow,
   contractReadyForSale,
   contractTemplate,
+  DELIVERY_LEAD_DAYS,
   deliveryBalanceNote,
   FINANCING_TERM_MONTHS,
   financedTotal,
@@ -21,25 +22,81 @@ import {
   isQueuedRequest,
   isVisitSlot,
   MISSED_INSTALLMENTS_BEFORE_REPOSSESSION,
+  manilaDay,
   missedInstallments,
   missingContractCopies,
   needsContract,
   nextDeliveryStatus,
   nextStanding,
+  onlinePaymentsDue,
   paidTowardPrice,
   papersReadyForSale,
   paymentAllowedBeforeSigning,
-  pickedTime,
   signsInApp,
+  slotFromParts,
+  slotHours,
   verifiedPaid,
 } from "./buy-flow";
 import { canTransition } from "./state-machine";
 
-describe("pickedTime", () => {
-  it("keeps the minutes the buyer picked, so an off-the-hour time is refused instead of rounded", () => {
-    expect(pickedTime("2033-03-05T10:25")).toEqual(new Date("2033-03-05T10:25"));
-    expect(pickedTime("")).toBeNull();
-    expect(pickedTime("not a date")).toBeNull();
+// 2026-10-01 is a Thursday and 2026-10-04 a Sunday; times are Manila time.
+const manila = (day: string, time: string) => new Date(`${day}T${time}:00+08:00`);
+
+const ALL_SLOT_HOURS = [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21];
+
+describe("slotFromParts", () => {
+  it("builds the slot the buyer picked in Manila time, whatever time zone the browser runs in", () => {
+    expect(slotFromParts("2026-10-01", 9)).toBe("2026-10-01T09:00:00+08:00");
+    expect(slotFromParts("2026-10-01", 21)).toBe("2026-10-01T21:00:00+08:00");
+  });
+
+  it("returns nothing without a date or a whole hour", () => {
+    expect(slotFromParts("", 10)).toBe("");
+    expect(slotFromParts("2026-10-01", 24)).toBe("");
+    expect(slotFromParts("2026-10-01", 10.5)).toBe("");
+  });
+});
+
+describe("slotHours", () => {
+  it("offers every hour from 9 AM to 9 PM when the whole day is still ahead", () => {
+    expect(slotHours("2026-10-01", manila("2026-09-30", "12:00"))).toEqual(ALL_SLOT_HOURS);
+  });
+
+  // Manila is UTC+8: at 2–5 AM the UTC date is still yesterday, so a picker that reads UTC would
+  // offer the wrong day.
+  it("keeps today's hours at 2–5 AM in Manila, when UTC is still on the previous day", () => {
+    for (const hour of ["02", "03", "04", "05"]) {
+      expect(slotHours("2026-10-01", manila("2026-10-01", `${hour}:30`))).toEqual(ALL_SLOT_HOURS);
+    }
+  });
+
+  it("drops the hours already gone today", () => {
+    expect(slotHours("2026-10-01", manila("2026-10-01", "12:30"))).toEqual([13, 14, 15, 16, 17, 18, 19, 20, 21]);
+    expect(slotHours("2026-10-01", manila("2026-10-01", "21:30"))).toEqual([]);
+  });
+
+  it("offers nothing on a Sunday or on a day already gone", () => {
+    expect(slotHours("2026-10-04", manila("2026-10-01", "10:00"))).toEqual([]);
+    expect(slotHours("2026-09-30", manila("2026-10-01", "10:00"))).toEqual([]);
+  });
+
+  it("drops the GCE Visit slots another buyer already holds on this car", () => {
+    const now = manila("2026-09-30", "10:00");
+    // 02:00 UTC is 10:00 in Manila.
+    expect(slotHours("2026-10-01", now, ["2026-10-01T02:00:00.000Z"])).toEqual(
+      ALL_SLOT_HOURS.filter((hour) => hour !== 10),
+    );
+    expect(slotHours("2026-10-01", now, ["2026-10-01T15:00:00+08:00", "not a date"])).toEqual(
+      ALL_SLOT_HOURS.filter((hour) => hour !== 15),
+    );
+    expect(slotHours("2026-10-01", now, ["2026-10-02T02:00:00.000Z"])).toEqual(ALL_SLOT_HOURS);
+  });
+});
+
+describe("manilaDay", () => {
+  it("is still today at 2–5 AM in Manila, though UTC says yesterday", () => {
+    expect(manilaDay(manila("2026-10-01", "03:00"))).toBe("2026-10-01");
+    expect(manilaDay(manila("2026-10-01", "03:00"), DELIVERY_LEAD_DAYS)).toBe("2026-10-08");
   });
 });
 
@@ -97,10 +154,10 @@ describe("§7–9 bank transfer", () => {
     expect(isOnsiteCashRequest({ payment_method: "down_payment", arrangement_kind: "gce_visit" })).toBe(false);
   });
 
-  it("treats a PayMongo full payment like Cash", () => {
-    expect(isOnsiteCashRequest({ payment_method: "paymongo", arrangement_kind: "gce_visit" })).toBe(true);
-    expect(isHalfwayCashRequest({ payment_method: "paymongo", arrangement_kind: "meetup" })).toBe(true);
-    expect(deliveryBalanceNote("paymongo", "buyer")).toBe("The balance is paid through PayMongo on delivery.");
+  it("no longer treats PayMongo as a purchase method", () => {
+    expect(isOnsiteCashRequest({ payment_method: "paymongo", arrangement_kind: "gce_visit" })).toBe(false);
+    expect(isHalfwayCashRequest({ payment_method: "paymongo", arrangement_kind: "meetup" })).toBe(false);
+    expect(deliveryBalanceNote("paymongo", "buyer")).toBe("The balance is paid in cash on delivery.");
   });
 
   it("words the delivery balance by method", () => {
@@ -126,8 +183,123 @@ describe("T04 financing", () => {
   });
 });
 
-// 2026-10-01 is a Thursday and 2026-10-04 a Sunday; times are Manila time.
-const manila = (day: string, time: string) => new Date(`${day}T${time}:00+08:00`);
+describe("onlinePaymentsDue for a Bank Transfer", () => {
+  const price = 600_000;
+  const downpayment = 50_000;
+  const verified = (payment_kind: string, amount: number, rejected = false) => ({
+    payment_kind,
+    amount,
+    verified_by: "head-accountant",
+    rejected_at: rejected ? "2033-03-01T00:00:00.000Z" : null,
+  });
+
+  it("owes the full price online at a GCE visit, which has no contract", () => {
+    expect(
+      onlinePaymentsDue(
+        { payment_method: "bank_transfer", arrangement_kind: "gce_visit", final_price: price },
+        null,
+        null,
+        { payments: [] },
+      ),
+    ).toEqual([{ kind: "balance", label: "Balance", amount: price }]);
+  });
+
+  it("owes the downpayment at a meet-up before the contract is signed", () => {
+    expect(
+      onlinePaymentsDue(
+        {
+          payment_method: "bank_transfer",
+          arrangement_kind: "meetup",
+          downpayment_amount: downpayment,
+          final_price: price,
+        },
+        null,
+        null,
+        { contract_state: "approved", payments: [] },
+      ),
+    ).toEqual([{ kind: "downpayment", label: "Downpayment", amount: downpayment }]);
+  });
+
+  it("owes the remaining balance at a meet-up once the contract is signed", () => {
+    expect(
+      onlinePaymentsDue(
+        {
+          payment_method: "bank_transfer",
+          arrangement_kind: "meetup",
+          downpayment_amount: downpayment,
+          final_price: price,
+        },
+        null,
+        null,
+        {
+          contract_state: "signed",
+          payments: [verified("downpayment", downpayment), verified("downpayment", 1000, true)],
+        },
+      ),
+    ).toEqual([{ kind: "balance", label: "Balance", amount: price - downpayment }]);
+  });
+
+  it("keeps a delivery's fee and downpayment due before its contract is signed", () => {
+    expect(
+      onlinePaymentsDue(
+        {
+          payment_method: "bank_transfer",
+          arrangement_kind: "delivery",
+          delivery_fee: 2500,
+          downpayment_amount: downpayment,
+          downpayment_due_at: "2033-03-01T00:00:00.000Z",
+          final_price: price,
+        },
+        null,
+        null,
+        { contract_state: "approved", payments: [] },
+      ),
+    ).toEqual([
+      { kind: "delivery_fee", label: "Delivery Fee", amount: 2500 },
+      { kind: "downpayment", label: "Downpayment", amount: downpayment },
+    ]);
+  });
+
+  it("owes the remaining balance after the delivery contract is signed", () => {
+    expect(
+      onlinePaymentsDue(
+        {
+          payment_method: "bank_transfer",
+          arrangement_kind: "delivery",
+          delivery_fee: 2500,
+          downpayment_amount: downpayment,
+          downpayment_due_at: "2033-03-01T00:00:00.000Z",
+          final_price: price,
+        },
+        null,
+        null,
+        {
+          contract_state: "signed",
+          payments: [verified("downpayment", downpayment), verified("delivery_fee", 2500)],
+        },
+      ),
+    ).toEqual([{ kind: "balance", label: "Balance", amount: price - downpayment }]);
+  });
+
+  it("owes nothing once verified payments cover the price", () => {
+    expect(
+      onlinePaymentsDue(
+        { payment_method: "bank_transfer", arrangement_kind: "gce_visit", final_price: price },
+        null,
+        null,
+        { payments: [verified("full", price)] },
+      ),
+    ).toEqual([]);
+  });
+
+  it("does not open a Balance for a cash purchase", () => {
+    expect(
+      onlinePaymentsDue({ payment_method: "cash", arrangement_kind: "gce_visit", final_price: price }, null, null, {
+        payments: [],
+      }),
+    ).toEqual([]);
+  });
+});
 
 describe("isVisitSlot", () => {
   const now = manila("2026-09-30", "12:00");

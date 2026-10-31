@@ -66,7 +66,7 @@ export async function openMeetupCase(
       {
         kind: "field_case_assigned",
         title: "You have a client to meet halfway",
-        body: `Meet the buyer on ${new Date(meetup.schedule).toLocaleString("en-PH")} at ${meetup.location ?? "the agreed place"}. Open the field case for the vehicle and the buyer, and receive it.`,
+        body: `Meet the buyer on ${new Date(meetup.schedule).toLocaleString("en-PH", { timeZone: "Asia/Manila" })} at ${meetup.location ?? "the agreed place"}. Open the field case for the vehicle and the buyer, and receive it.`,
         transactionId: sale.id,
       },
     );

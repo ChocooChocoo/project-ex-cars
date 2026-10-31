@@ -31,7 +31,6 @@ export function OnlinePayment({
   const rowFor = (kind: string) => payments.find((p) => p.payment_kind === kind);
   // Not paid yet: never started, or started on a Checkout the buyer left. Pay reopens or replaces it.
   const unpaid = due.filter((payment) => !rowFor(payment.kind)?.verified_by);
-  const total = unpaid.reduce((sum, payment) => sum + payment.amount, 0);
 
   async function pay() {
     const fd = new FormData();
@@ -79,10 +78,10 @@ export function OnlinePayment({
       {unpaid.length > 0 ? (
         <>
           <Button className="self-start" disabled={busy} onClick={pay}>
-            {busy ? "Opening PayMongo..." : `Pay ${formatCurrency(total)} with PayMongo`}
+            {busy ? "Opening PayMongo..." : "Pay by bank transfer (PayMongo)"}
           </Button>
           <p className="text-muted-foreground text-xs">
-            You pay on PayMongo by card, GCash, Maya or online banking. Your payment is confirmed automatically.
+            You pay through PayMongo checkout. Your payment is confirmed automatically.
           </p>
         </>
       ) : (

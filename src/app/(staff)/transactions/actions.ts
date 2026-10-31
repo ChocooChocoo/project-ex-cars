@@ -10,6 +10,7 @@ import { notify } from "@/lib/notifications/notify";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
+  addWorkingDays,
   canRecordNoShow,
   contractReadyForSale,
   DOWNPAYMENT_WORKING_DAYS,
@@ -117,6 +118,7 @@ export async function transitionTransaction(formData: FormData) {
     informantId: string;
     mechanicId: string;
     meetup: { schedule: string; location: string | null };
+    downpayment: number | null;
   } | null = null;
   if (toState === "approved" && tx.transaction_kind === "buy" && isHalfwayCashRequest(purchase ?? null)) {
     const picked = z
@@ -127,7 +129,25 @@ export async function transitionTransaction(formData: FormData) {
     if (teamError) return { error: teamError };
     const meetup = await bookedMeetup(admin, id);
     if (!meetup) return { error: "The buyer has not booked the meet-up yet." };
-    meetupTeam = { informantId: picked.data.informant_id, mechanicId: picked.data.mechanic_id, meetup };
+    // Test 7: a Bank Transfer meet-up collects a downpayment online before the meet-up, so the Sales
+    // Manager sets it with the approval. A cash meet-up is paid in person and needs none.
+    let downpayment: number | null = null;
+    if (purchase?.payment_method === "bank_transfer") {
+      const parsedDownpayment = z.coerce
+        .number()
+        .positive("Enter the meet-up downpayment before approving.")
+        .safeParse(formData.get("downpayment_amount"));
+      if (!parsedDownpayment.success) {
+        return { error: parsedDownpayment.error.issues[0]?.message ?? "Enter the meet-up downpayment." };
+      }
+      downpayment = parsedDownpayment.data;
+    }
+    meetupTeam = {
+      informantId: picked.data.informant_id,
+      mechanicId: picked.data.mechanic_id,
+      meetup,
+      downpayment,
+    };
   }
 
   // Two valid IDs + proof of billing must be verified before a purchase completes (G16).
@@ -243,6 +263,26 @@ export async function transitionTransaction(formData: FormData) {
       user.user.id,
     );
     if (caseError) return { error: caseError };
+  }
+
+  // Test 7: the meet-up downpayment the buyer pays online through PayMongo. The approval stores the
+  // amount and a due date, and onlinePaymentsDue turns it into the Pay button before signing.
+  if (meetupTeam?.downpayment) {
+    const due = addWorkingDays(new Date(), DOWNPAYMENT_WORKING_DAYS);
+    await admin
+      .from("purchase_details")
+      .update({ downpayment_amount: meetupTeam.downpayment, downpayment_due_at: due.toISOString() })
+      .eq("transaction_id", id);
+    await notify(
+      admin,
+      { userId: tx.customer_id },
+      {
+        kind: "buy_downpayment_due",
+        title: "Downpayment due",
+        body: `Pay the downpayment of ₱${meetupTeam.downpayment.toLocaleString("en-PH")} through PayMongo before ${due.toLocaleDateString("en-PH", { timeZone: "Asia/Manila" })}.`,
+        transactionId: id,
+      },
+    );
   }
 
   if (tx.transaction_kind === "buy") {

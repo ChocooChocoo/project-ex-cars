@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { saveBuyDetails } from "@/app/(customer)/my-transactions/actions";
@@ -69,8 +69,7 @@ describe("TransactionDetail completed sell offer", () => {
 });
 
 describe("TransactionDetail visit time", () => {
-  it("sends the picked GCE visit time unrounded, as an instant", async () => {
-    vi.mocked(saveBuyDetails).mockResolvedValue({ success: true });
+  function renderPendingVisit() {
     render(
       <TransactionDetail
         transaction={{ ...transaction, current_state: "pending", purchase_details: { arrangement_kind: "gce_visit" } }}
@@ -83,13 +82,43 @@ describe("TransactionDetail visit time", () => {
         autofill={null}
       />,
     );
+  }
 
-    fireEvent.change(screen.getByLabelText("Schedule"), { target: { value: "2033-03-05T10:25" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save Details" }));
+  it("refuses to save a date without an hour, so no silent empty slot is booked", () => {
+    renderPendingVisit();
 
-    await waitFor(() => expect(saveBuyDetails).toHaveBeenCalled());
-    const sent = vi.mocked(saveBuyDetails).mock.calls[0][0] as FormData;
-    expect(sent.get("schedule")).toBe(new Date("2033-03-05T10:25").toISOString());
+    fireEvent.change(screen.getByLabelText("Schedule"), { target: { value: "2033-03-05" } });
+
+    expect(screen.getByRole("button", { name: "Save Details" })).toBeDisabled();
+    expect(screen.getByText("Pick an hour for your slot before saving.")).toBeInTheDocument();
+    expect(saveBuyDetails).not.toHaveBeenCalled();
+  });
+
+  it("says GCE is closed on a Sunday and offers no hour list", () => {
+    renderPendingVisit();
+
+    fireEvent.change(screen.getByLabelText("Schedule"), { target: { value: "2033-03-06" } });
+
+    expect(screen.getByText("GCE is closed on Sundays.")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Hour")).not.toBeInTheDocument();
+  });
+
+  it("lists the slots already taken in Manila time, not UTC", () => {
+    render(
+      <TransactionDetail
+        transaction={{ ...transaction, current_state: "pending", purchase_details: { arrangement_kind: "gce_visit" } }}
+        history={[]}
+        documents={[]}
+        payments={[]}
+        installmentAccount={null}
+        paymentTerms={null}
+        viewingArrangements={[]}
+        autofill={null}
+        takenSlots={["2033-03-08T02:00:00.000Z"]}
+      />,
+    );
+
+    expect(screen.getByText(/Already taken: Mar 8, 10:00 AM/)).toBeInTheDocument();
   });
 });
 

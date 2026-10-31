@@ -1,7 +1,12 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { TransactionDetailSidebarV1 } from "./transaction-detail-sidebar-v1";
+
+Element.prototype.hasPointerCapture = () => false;
+Element.prototype.releasePointerCapture = () => undefined;
+Element.prototype.setPointerCapture = () => undefined;
+Element.prototype.scrollIntoView = () => undefined;
 
 const noop = vi.fn().mockResolvedValue(undefined);
 
@@ -62,6 +67,27 @@ describe("TransactionDetailSidebarV1 private media", () => {
 
     expect(screen.getAllByText("Preview unavailable").length).toBeGreaterThan(0);
     expect(screen.queryByText(/private\/sell\/secret\.jpg/)).not.toBeInTheDocument();
+  });
+});
+
+describe("TransactionDetailSidebarV1 record payment methods", () => {
+  function openMethod(paymentMethod: string) {
+    renderSidebar([], { kind: "buy", state: "approved", userRole: "sales_manager", paymentMethod });
+    fireEvent.click(screen.getByRole("combobox", { name: "Method" }));
+  }
+
+  it("does not let staff record a bank transfer by hand for a bank-transfer buy", () => {
+    openMethod("bank_transfer");
+
+    expect(screen.getByRole("option", { name: "Cash" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Bank Transfer" })).not.toBeInTheDocument();
+    expect(screen.getByText(/paid online through PayMongo and confirmed automatically/)).toBeInTheDocument();
+  });
+
+  it("still offers bank transfer for a cash buy and a financing installment", () => {
+    openMethod("financing");
+
+    expect(screen.getByRole("option", { name: "Bank Transfer" })).toBeInTheDocument();
   });
 });
 

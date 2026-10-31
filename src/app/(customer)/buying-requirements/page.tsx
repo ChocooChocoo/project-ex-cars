@@ -23,7 +23,7 @@ const STEPS = [
     step: "Step 3",
     title: "View the car and agree on payment",
     details:
-      "Browse the showroom, view the car in person, then agree on the price. Choose Full Payment or Financing (the Showroom price plus 10%, over 6 to 60 months), then pay by cash, bank transfer, or PayMongo.",
+      "Browse the showroom, view the car in person, then agree on the price. Choose Full Payment or Financing (the Showroom price plus 10%, over 6 to 60 months). Full Payment is paid in cash or by bank transfer through PayMongo.",
   },
   {
     step: "Step 4",
@@ -34,13 +34,12 @@ const STEPS = [
 ] as const;
 
 const PAYMENT_METHODS = [
-  { label: "Full Payment", detail: "Pay the whole price by cash, bank transfer, or PayMongo." },
+  { label: "Cash", detail: "Pay the whole price in cash at GCE or on delivery." },
+  { label: "Bank Transfer (via PayMongo)", detail: "Pay the whole price online through PayMongo checkout." },
   {
     label: "Financing",
     detail: "Pay the Showroom price plus 10% in monthly installments over 6, 12, 24, 36, or 60 months.",
   },
-  { label: "Bank transfer", detail: "Transfer the amount to GCE's bank account." },
-  { label: "PayMongo", detail: "Pay online through a PayMongo payment link." },
 ] as const;
 
 const ARRANGEMENTS = [

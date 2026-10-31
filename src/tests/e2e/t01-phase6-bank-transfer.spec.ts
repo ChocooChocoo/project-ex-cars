@@ -1,4 +1,4 @@
-import { test } from "@playwright/test";
+import { type Page, test } from "@playwright/test";
 
 import {
   approveAsSalesManager,
@@ -8,22 +8,47 @@ import {
   futureSlot,
   open,
   papersThenSold,
-  pick,
   pickByLabel,
   seedPassword,
   signInAs,
 } from "./support/t01";
 import { canCreateTestVehicle, createTestVehicle } from "./support/test-vehicle";
+import { createHmac } from "node:crypto";
 
-// T01 Phase 6, §7–9 (Phase 6 default until the client writes these sections): a bank-transfer purchase
-// follows its Cash counterpart. §7: the car is marked sold only after the Head Accountant verifies the
-// transfer. §9: the delivery terms ask for the balance by bank transfer. §8 reuses §3 unchanged.
+// T01 Phase 6, §7–9, then T06: a bank-transfer purchase follows its Cash counterpart, but the transfer is paid
+// online through PayMongo. PayMongo cannot reach localhost, so the spec sends the webhook itself, signed with
+// the webhook secret exactly as PayMongo signs it. Needs PAYMONGO_SECRET_KEY and PAYMONGO_WEBHOOK_SECRET.
+
+const SECRET = process.env.PAYMONGO_SECRET_KEY ?? "";
+const WEBHOOK_SECRET = process.env.PAYMONGO_WEBHOOK_SECRET ?? "";
+
+// What PayMongo sends when the Checkout is paid.
+async function paymongoPaid(page: Page, id: string) {
+  const { data } = await db().from("payment_records").select("paymongo_checkout_id").eq("transaction_id", id);
+  const checkoutId = data?.find((row) => row.paymongo_checkout_id)?.paymongo_checkout_id as string;
+  const body = JSON.stringify({
+    data: {
+      id: `evt_${Date.now()}`,
+      attributes: {
+        type: "checkout_session.payment.paid",
+        data: { id: checkoutId, attributes: { payments: [{ id: `pay_e2e_${Date.now()}` }] } },
+      },
+    },
+  });
+  const t = Math.floor(Date.now() / 1000);
+  const signature = createHmac("sha256", WEBHOOK_SECRET).update(`${t}.${body}`).digest("hex");
+  const response = await page.request.post("/api/paymongo/webhook", {
+    data: body,
+    headers: { "Content-Type": "application/json", "Paymongo-Signature": `t=${t},te=${signature},li=` },
+  });
+  expect(response.status()).toBe(200);
+}
 
 test.describe
   .serial("T01 bank transfer", () => {
     test.skip(
-      !seedPassword || !canCreateTestVehicle(),
-      "SEED_USER_PASSWORD and the Supabase service role are required",
+      !seedPassword || !canCreateTestVehicle() || !SECRET || !WEBHOOK_SECRET,
+      "SEED_USER_PASSWORD, the Supabase service role and the PayMongo test keys are required",
     );
     // A click that cannot land fails in a minute instead of holding the run until the test timeout.
     test.use({ actionTimeout: 60_000 });
@@ -60,7 +85,7 @@ test.describe
         .eq("id", id);
     });
 
-    test("§7: a GCE visit paid by bank transfer is sold only once the transfer is verified", async ({ page }) => {
+    test("§7: a GCE visit paid by bank transfer is sold once PayMongo confirms the transfer", async ({ page }) => {
       const vehicleId = await createTestVehicle("BANK-VISIT");
       vehicleIds.push(vehicleId);
       await signInAs(page, "customer@gce.local");
@@ -71,22 +96,25 @@ test.describe
       });
       await approveAsSalesManager(page, visitId);
 
-      await page.locator("#pay_amount").fill("500000");
-      await pick(page, "pay_method", "Bank Transfer");
-      await page.getByRole("button", { name: "Record Payment" }).click();
-      await expect(page.getByRole("button", { name: "Verify", exact: true })).toHaveCount(0);
-      await page.waitForLoadState("networkidle");
-      await page.getByRole("button", { name: /Mark Sold to This Buyer/ }).click();
-      await expect(
-        page.getByText("The Head Accountant must verify the bank transfer before the car is marked sold."),
-      ).toBeVisible();
+      // T06: staff no longer record a Bank Transfer by hand. The buyer pays it online instead.
+      await page.locator("#pay_method").click();
+      await expect(page.getByRole("option", { name: "Cash", exact: true })).toBeVisible();
+      await expect(page.getByRole("option", { name: "Bank Transfer", exact: true })).toHaveCount(0);
+      await page.keyboard.press("Escape");
 
-      await signInAs(page, "head_accountant@gce.local");
-      await open(page, `/head_accountant/transactions/${visitId}`);
-      const verify = page.getByRole("button", { name: "Verify", exact: true });
-      await expect(verify).toHaveCount(1);
-      await verify.click();
-      await expect(verify).toHaveCount(0);
+      await signInAs(page, "customer@gce.local");
+      await open(page, `/my-transactions/${visitId}`);
+      await page.getByRole("button", { name: "Pay by bank transfer (PayMongo)" }).click();
+      await page.waitForURL((url) => url.hostname.endsWith("paymongo.com"), { timeout: 30_000 });
+      await paymongoPaid(page, visitId);
+
+      const { data: rows } = await db()
+        .from("payment_records")
+        .select("payment_kind, method, verified_by")
+        .eq("transaction_id", visitId);
+      expect(rows?.[0]?.payment_kind).toBe("balance");
+      expect(rows?.[0]?.method).toBe("paymongo");
+      expect(rows?.[0]?.verified_by).toBeTruthy();
 
       // Buying-flow revision Phase 2: the papers go through the CI before the sale.
       await papersThenSold(page, visitId, "E2E Test BANK-VISIT");
@@ -118,6 +146,8 @@ test.describe
       await signInAs(page, "customer@gce.local");
       await open(page, `/customer/my-transactions/${id}`);
       await expect(page.getByText(/The balance is paid by bank transfer on delivery\./)).toBeVisible();
+      // The fee and downpayment are paid online; the balance follows once the contract is signed.
+      await expect(page.getByRole("button", { name: "Pay by bank transfer (PayMongo)" })).toBeVisible();
 
       // Close the open request so later specs start clean.
       await db()

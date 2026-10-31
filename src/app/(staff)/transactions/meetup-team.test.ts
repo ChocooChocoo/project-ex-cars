@@ -137,6 +137,50 @@ describe("approving a cash Meet Halfway request", () => {
   });
 });
 
+describe("approving a Bank Transfer Meet Halfway request", () => {
+  function approve(fields: Record<string, string> = {}) {
+    const fd = new FormData();
+    fd.set("id", transactionId);
+    fd.set("to_state", "approved");
+    for (const [key, value] of Object.entries(fields)) fd.set(key, value);
+    return transitionTransaction(fd);
+  }
+
+  beforeEach(() => {
+    db.rows.transactions = {
+      id: transactionId,
+      current_state: "under_review",
+      transaction_kind: "buy",
+      vehicle_id: "car-1",
+      customer_id: "buyer-1",
+      flow_status: "pending_sm_approval",
+      purchase_details: { payment_method: "bank_transfer", arrangement_kind: "meetup" },
+    };
+    db.counts.transaction_documents = 2;
+  });
+
+  // Test 7: the buyer pays a downpayment online before a meet-up, so the approval must set it.
+  it("is refused without the downpayment the buyer pays through PayMongo", async () => {
+    await expect(approve(team)).resolves.toEqual({
+      error: "Enter the meet-up downpayment before approving.",
+    });
+    expect(db.writes).toEqual([]);
+  });
+
+  it("stores the downpayment and tells the buyer to pay it", async () => {
+    await expect(approve({ ...team, downpayment_amount: "50000" })).resolves.toEqual({ success: true });
+
+    const stored = db.writes.find((write) => write.table === "purchase_details" && write.op === "update")?.payload;
+    expect(stored).toMatchObject({ downpayment_amount: 50000 });
+    expect(typeof stored?.downpayment_due_at).toBe("string");
+    expect(notify).toHaveBeenCalledWith(
+      expect.anything(),
+      { userId: "buyer-1" },
+      expect.objectContaining({ title: "Downpayment due" }),
+    );
+  });
+});
+
 describe("assigning the team of a financed meet-up", () => {
   function assign(fields: Record<string, string> = team) {
     const fd = new FormData();

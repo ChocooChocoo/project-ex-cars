@@ -27,8 +27,8 @@ export function paymentMethodLabel(method: string): string {
     cash: "Cash",
     financing: "Financing",
     down_payment: "Down Payment",
-    bank_transfer: "Bank Transfer",
-    paymongo: "PayMongo",
+    bank_transfer: "Bank Transfer (via PayMongo)",
+    paymongo: "Bank Transfer (via PayMongo)",
   };
   return map[method] ?? method;
 }

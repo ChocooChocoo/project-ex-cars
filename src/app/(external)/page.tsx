@@ -259,14 +259,13 @@ export default async function LandingPage() {
                   Pay in full, or in monthly terms
                 </h2>
                 <p className="max-w-prose text-muted-foreground">
-                  Full payment works by cash, bank transfer or PayMongo. Financing with GCE adds 10% to the car's price,
-                  the same for every term.
+                  Full payment works by cash or bank transfer through PayMongo. Financing with GCE adds 10% to the car's
+                  price, the same for every term.
                 </p>
               </Reveal>
               <Reveal className="flex flex-wrap gap-2" delay={0.08}>
                 <Badge variant="secondary">Cash</Badge>
-                <Badge variant="secondary">Bank transfer</Badge>
-                <Badge variant="secondary">PayMongo</Badge>
+                <Badge variant="secondary">Bank Transfer (via PayMongo)</Badge>
                 <Badge>Financing +10%</Badge>
               </Reveal>
             </div>

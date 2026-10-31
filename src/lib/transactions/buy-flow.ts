@@ -10,8 +10,9 @@ export function activeBuyerIdCount(documents: DocumentLike[]): number {
 }
 
 // §7–9 (Phase 6 default, not yet in the source): a bank-transfer purchase follows the same steps as its
-// Cash counterpart in §2–4. T04: so does a Full Payment through PayMongo. The "Cash" predicates below cover all three.
-export const DIRECT_PAYMENT_METHODS = ["cash", "bank_transfer", "paymongo"] as const;
+// Cash counterpart in §2–4. The "Cash" predicates below cover both. T06: Bank Transfer is paid through
+// PayMongo, which is the channel, so it is no longer a method of its own.
+export const DIRECT_PAYMENT_METHODS = ["cash", "bank_transfer"] as const;
 
 // T04 P6/P7: financing adds a flat 10% to the car's price, for every term.
 export const FINANCING_TERM_MONTHS = [6, 12, 24, 36, 60] as const;
@@ -32,7 +33,7 @@ export function deliveryBalanceNote(method: unknown, audience: "buyer" | "team")
       ? "The balance is paid in monthly installments under your financing agreement."
       : "Collect nothing on delivery: the balance is financed by GCE.";
   }
-  const how = method === "bank_transfer" ? "by bank transfer" : method === "paymongo" ? "through PayMongo" : "in cash";
+  const how = method === "bank_transfer" ? "by bank transfer" : "in cash";
   return audience === "buyer"
     ? `The balance is paid ${how} on delivery.`
     : `Collect the remaining balance ${how} when the buyer accepts the car.`;
@@ -43,11 +44,47 @@ export function isOnsiteCashRequest(details: { payment_method?: unknown; arrange
   return isDirectPayment(details) && details?.arrangement_kind === "gce_visit";
 }
 
-// The time a buyer picked in a datetime-local field, as an instant. The minutes are kept: a time off
-// the hour is refused with the slot rule, not rounded.
-export function pickedTime(local: string): Date | null {
-  const when = new Date(local);
-  return !local || Number.isNaN(when.getTime()) ? null : when;
+const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Every bookable hour: whole hours from 9 AM to 9 PM, Manila time.
+export const SLOT_HOURS = [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21] as const;
+
+// The slot a buyer picked in a date field and an hour field, written in Manila time (UTC+8), so the
+// browser's own time zone never moves it.
+export function slotFromParts(date: string, hour: number): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isInteger(hour) || hour < 0 || hour > 23) return "";
+  return `${date}T${String(hour).padStart(2, "0")}:00:00+08:00`;
+}
+
+// The calendar day it is in Manila, "YYYY-MM-DD", plus any whole days ahead.
+export function manilaDay(now: Date = new Date(), daysAhead = 0): string {
+  return new Date(now.getTime() + MANILA_OFFSET_MS + daysAhead * DAY_MS).toISOString().slice(0, 10);
+}
+
+export function isSundayInManila(date: string): boolean {
+  const noon = new Date(`${date}T12:00:00+08:00`);
+  return !Number.isNaN(noon.getTime()) && noon.getUTCDay() === 0;
+}
+
+// A slot's Manila day and hour, so a taken time matches whatever offset it was stored in.
+function slotHourKey(schedule: string): string | null {
+  const at = new Date(schedule);
+  if (Number.isNaN(at.getTime())) return null;
+  const manila = new Date(at.getTime() + MANILA_OFFSET_MS);
+  return `${manila.toISOString().slice(0, 10)}T${manila.getUTCHours()}`;
+}
+
+// The hours still open on that day: 9 AM to 9 PM Manila, in the future, and not held by another
+// buyer's GCE Visit on the same car.
+export function slotHours(date: string, now: Date = new Date(), taken: string[] = []): number[] {
+  if (!date || isSundayInManila(date)) return [];
+  const takenKeys = new Set(taken.map(slotHourKey));
+  return SLOT_HOURS.filter((hour) => {
+    const at = new Date(slotFromParts(date, hour));
+    if (Number.isNaN(at.getTime()) || at.getTime() <= now.getTime()) return false;
+    return !takenKeys.has(`${date}T${hour}`);
+  });
 }
 
 export const SLOT_RULE_MESSAGE = "Please choose a time on the hour, between 9 AM and 9 PM, Monday to Saturday.";
@@ -325,20 +362,62 @@ export function contractTemplate(sale: {
   ].join("\n");
 }
 
-export type OnlinePayment = { kind: "delivery_fee" | "downpayment"; label: string; amount: number };
+export type OnlinePayment = { kind: "delivery_fee" | "downpayment" | "balance"; label: string; amount: number };
+
+type OnlinePaymentDetail = {
+  arrangement_kind?: unknown;
+  payment_method?: unknown;
+  delivery_fee?: unknown;
+  downpayment_amount?: unknown;
+  downpayment_due_at?: unknown;
+  final_price?: unknown;
+};
+
+type OnlinePaymentContext = {
+  contract_state?: unknown;
+  final_price?: unknown;
+  payments?: { payment_kind?: unknown; amount?: unknown; verified_by?: unknown; rejected_at?: unknown }[];
+};
+
+// Money the buyer has already paid toward the car and GCE has confirmed. A rejected payment never counts.
+function verifiedTowardPrice(payments: NonNullable<OnlinePaymentContext["payments"]>): number {
+  return payments
+    .filter((p) => p.verified_by && !p.rejected_at)
+    .filter((p) => p.payment_kind !== "delivery_fee" && p.payment_kind !== "reschedule_fee")
+    .reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
+}
 
 // What the buyer pays online: a delivery's fee and downpayment once its terms are set, or the Initial
-// Downpayment of a financing claimed at a GCE visit. Everything else is paid in person or in instalments.
+// Downpayment of a financing claimed at a GCE visit. A Bank Transfer is paid through PayMongo too: the
+// downpayment before the contract is signed, then the remaining balance. Everything else is paid in person
+// or in instalments.
 export function onlinePaymentsDue(
-  details: {
-    arrangement_kind?: unknown;
-    delivery_fee?: unknown;
-    downpayment_amount?: unknown;
-    downpayment_due_at?: unknown;
-  } | null,
+  details: OnlinePaymentDetail | null,
   terms: { down_payment?: unknown; state?: unknown } | null,
   flowStatus: unknown,
+  context: OnlinePaymentContext = {},
 ): OnlinePayment[] {
+  if (details?.payment_method === "bank_transfer") {
+    // A GCE visit has no contract, so its full price is due online straight away.
+    if (!needsContract(details) || context.contract_state === "signed") {
+      const remaining =
+        Number(context.final_price ?? details.final_price ?? 0) - verifiedTowardPrice(context.payments ?? []);
+      return remaining > 0 ? [{ kind: "balance" as const, label: "Balance", amount: remaining }] : [];
+    }
+    // Before signing, only what the arrangement allows: a delivery's fee and downpayment, or a meet-up's
+    // downpayment.
+    if (details.arrangement_kind === "delivery" && details.downpayment_due_at) {
+      return [
+        { kind: "delivery_fee" as const, label: "Delivery Fee", amount: Number(details.delivery_fee ?? 0) },
+        { kind: "downpayment" as const, label: "Downpayment", amount: Number(details.downpayment_amount ?? 0) },
+      ].filter((payment) => payment.amount > 0);
+    }
+    if (paymentAllowedBeforeSigning(details, "downpayment")) {
+      const amount = Number(details.downpayment_amount ?? 0);
+      return amount > 0 ? [{ kind: "downpayment" as const, label: "Downpayment", amount }] : [];
+    }
+    return [];
+  }
   if (details?.arrangement_kind === "delivery" && details.downpayment_due_at) {
     return [
       { kind: "delivery_fee" as const, label: "Delivery Fee", amount: Number(details.delivery_fee ?? 0) },

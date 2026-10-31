@@ -131,6 +131,7 @@ export function StaffTransactionDetail({
     if (to === "approved" && cashMeetup) {
       fd.set("informant_id", meetupPick.informant_id ?? "");
       fd.set("mechanic_id", meetupPick.mechanic_id ?? "");
+      fd.set("downpayment_amount", meetupPick.downpayment_amount ?? "");
     }
     const result = await transitionTransaction(fd);
     setTransitioning(false);
@@ -354,6 +355,7 @@ export function StaffTransactionDetail({
           kind={kind}
           state={state}
           userRole={userRole}
+          paymentMethod={(purchaseDetails?.payment_method as string | undefined) ?? undefined}
           payments={countedPayments}
           documents={documents}
           history={history}
@@ -400,6 +402,7 @@ export function StaffTransactionDetail({
         <MeetupTeamPanel
           transactionId={id}
           mode={meetupMode}
+          paymentMethod={(purchaseDetails?.payment_method as string | undefined) ?? null}
           informants={meetup.informants}
           mechanics={meetup.mechanics}
           pick={meetupPick}
