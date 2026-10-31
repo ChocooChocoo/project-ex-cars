@@ -1,0 +1,932 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GCE change requests batch 2: test sheet (dev replies)</title>
+<style>
+  :root { --ink:#111; --muted:#5b6470; --line:#d9dee5; --bg:#f6f7f9; --card:#fff; --accent:#0b57d0; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.55 ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif; }
+  .wrap { display:grid; grid-template-columns: 280px minmax(0,1fr); gap:28px; max-width:1400px; margin:0 auto; padding:24px; }
+  nav { position:sticky; top:24px; align-self:start; max-height:calc(100vh - 48px); overflow:auto; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px; }
+  nav h1 { font-size:14px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:0 0 10px; }
+  nav a { display:flex; gap:8px; padding:6px 8px; border-radius:6px; color:var(--ink); text-decoration:none; font-size:14px; }
+  nav a:hover { background:#eef2f7; }
+  .toc-n { color:var(--muted); min-width:18px; text-align:right; }
+  main { min-width:0; }
+  .top { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:18px 20px; margin-bottom:20px; }
+  .top h1 { margin:0 0 6px; font-size:22px; }
+  .top p { margin:4px 0; color:var(--muted); }
+  .actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
+  button { font:inherit; border:1px solid var(--line); background:var(--card); border-radius:8px; padding:8px 12px; cursor:pointer; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button:hover { filter:brightness(.97); }
+  .test { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:18px 20px; margin-bottom:18px; scroll-margin-top:16px; }
+  .testhead { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:center; }
+  .badge { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
+  .signin { font-size:13px; color:var(--muted); }
+  .test h2 { margin:6px 0 10px; font-size:19px; }
+  .client { margin:0 0 10px; padding:8px 10px; background:#f3f6fb; border-left:3px solid var(--accent); border-radius:4px; font-size:13px; }
+  .beforeafter { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:10px 0 14px; }
+  .beforeafter div { border:1px solid var(--line); border-radius:8px; padding:10px 12px; }
+  .beforeafter p { margin:4px 0 0; color:#333; }
+  table.steps { width:100%; border-collapse:collapse; }
+  .steps th { text-align:left; font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); border-bottom:1px solid var(--line); padding:6px 8px; }
+  .steps td { border-bottom:1px solid var(--line); padding:10px 8px; vertical-align:top; }
+  .steps .num { width:28px; color:var(--muted); }
+  .steps .do { width:36%; }
+  .steps .see { width:34%; }
+  .steps textarea, .overall textarea { width:100%; font:inherit; font-size:13px; padding:6px 8px; border:1px solid var(--line); border-radius:6px; resize:vertical; }
+  .note { margin:12px 0 0; font-size:13px; color:var(--muted); }
+  .overall { display:block; margin-top:12px; font-size:13px; color:var(--muted); }
+  .overall textarea { margin-top:4px; }
+  .save-state { font-size:13px; color:var(--muted); align-self:center; }
+  @media (max-width: 980px) {
+    .wrap { grid-template-columns: 1fr; padding:14px; }
+    nav { position:static; max-height:none; order:-1; }
+    .beforeafter { grid-template-columns: 1fr; }
+    table.steps, .steps tbody, .steps tr, .steps td { display:block; width:auto; }
+    .steps thead { display:none; }
+    .steps tr { border:1px solid var(--line); border-radius:8px; margin-bottom:10px; padding:6px 8px; }
+    .steps td { border:0; padding:4px 0; }
+    .steps .num { font-weight:600; }
+  }
+  @media print {
+    nav, .actions { display:none; }
+    .wrap { display:block; max-width:none; padding:0; }
+    .test { break-inside:avoid; border:0; padding:0 0 18px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <h1>Tests</h1>
+    <a href="#test-1"><span class="toc-n">1</span><span>Landing page with Log in and Register</span></a>
+<a href="#test-2"><span class="toc-n">2</span><span>Show-password eye button</span></a>
+<a href="#test-3"><span class="toc-n">3</span><span>Register: policy checkboxes and email link</span></a>
+<a href="#test-4"><span class="toc-n">4</span><span>Payment Option and Payment Method</span></a>
+<a href="#test-5"><span class="toc-n">5</span><span>Financing adds 10%, 6 months to 5 years</span></a>
+<a href="#test-6"><span class="toc-n">6</span><span>GCE Visit asks for no location</span></a>
+<a href="#test-7"><span class="toc-n">7</span><span>Bank Transfer downpayment at a meet-up</span></a>
+<a href="#test-8"><span class="toc-n">8</span><span>Photos and PDFs in chat</span></a>
+<a href="#test-9"><span class="toc-n">9</span><span>A bought car goes to posting</span></a>
+<a href="#test-10"><span class="toc-n">10</span><span>Interior photos in their own tab</span></a>
+<a href="#test-11"><span class="toc-n">11</span><span>3 Mechanic and 3 CI accounts</span></a>
+<a href="#test-12"><span class="toc-n">12</span><span>Create an employee account</span></a>
+<a href="#test-13"><span class="toc-n">13</span><span>Clock in and leave requests</span></a>
+<a href="#test-14"><span class="toc-n">14</span><span>Work schedules and Head Security</span></a>
+<a href="#test-15"><span class="toc-n">15</span><span>Payslips by hours, overtime and deductions</span></a>
+  </nav>
+  <main>
+    <div class="top">
+      <h1>GCE change requests batch 2: test sheet</h1>
+      <p>15 tests. Replies are saved in this browser as you type. Reply under the step it belongs to.</p>
+      <p>Client answers from Oct 30 are shown as a record and are not editable here.</p>
+      <div class="actions">
+        <button class="primary" id="export">Export replies (JSON)</button>
+        <button id="copy">Copy all replies</button>
+        <button id="clear">Clear my replies</button>
+        <span class="save-state" id="state">No replies yet</span>
+      </div>
+    </div>
+    
+    <section class="test" id="test-1">
+      <header>
+        <div class="testhead">
+          <span class="badge">Test 1 of 15 · Part 1. Visit and sign up</span>
+          <span class="signin">Sign in as: <strong>Signed out, then Buyer</strong></span>
+        </div>
+        <h2>1. Landing page with Log in and Register</h2>
+        <p class="client"><strong>Client answer:</strong> Needs fixing — “Di po namin ma-address yung landing page sir pwede po sir bigay niyo nalang po samin yung link kasi diba po tatanggalin po namin yung https://global-exchange-car.vercel.app/auth/v1/login 
+&quot;login&quot; sa last &quot;/&quot; pero napupunta pa rin po kami sa login sir” <span class="muted">(Saved Oct 30, 2026, 2:00 AM by Cesar Bonifacio)</span></p>
+      </header>
+      <div class="beforeafter">
+        <div><strong>Before</strong><p>Opening the GCE website went straight to the sign-in page. There was no page for visitors.</p></div>
+        <div><strong>Now</strong><p>Visitors see a landing page with cars from the Showroom, promotions, the three ways to get your car and a financing estimate. Log in and Register are at the top. Signed-in users still go straight to their own page.</p></div>
+      </div>
+      <table class="steps">
+        <thead><tr><th></th><th>Do this</th><th>You should see</th><th>Dev reply</th></tr></thead>
+        <tbody>
+        <tr>
+          <td class="num">1</td>
+          <td class="do">Open https://global-exchange-car.vercel.app/ and save the link.</td>
+          <td class="see">The landing page with Log in and Register at the top.</td>
+          <td class="reply"><textarea data-key="t1s1" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">2</td>
+          <td class="do">On the login page, press ← Home, or press the GCE logo.</td>
+          <td class="see">The same landing page.</td>
+          <td class="reply"><textarea data-key="t1s2" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">3</td>
+          <td class="do">Open /auth/v1 on its own (no /login after it).</td>
+          <td class="see">The login page. /auth/v1 is the sign-in area; the landing page is /.</td>
+          <td class="reply"><textarea data-key="t1s3" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">4</td>
+          <td class="do">Press Log in, then Register, without signing in.</td>
+          <td class="see">Both pages open and the two policy checkboxes are required on Register.</td>
+          <td class="reply"><textarea data-key="t1s4" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr></tbody>
+      </table>
+      <p class="note"><strong>Note:</strong> The landing page is /. /auth/v1 redirects to /auth/v1/login on purpose. Signing out now clears the leftover role cookie, so / shows the landing page again.</p>
+      <label class="overall">Dev note for this test
+        <textarea data-key="t1overall" rows="2" placeholder="Anything that spans the steps"></textarea>
+      </label>
+    </section>
+
+    <section class="test" id="test-2">
+      <header>
+        <div class="testhead">
+          <span class="badge">Test 2 of 15 · Part 1. Visit and sign up</span>
+          <span class="signin">Sign in as: <strong>Signed out</strong></span>
+        </div>
+        <h2>2. Show-password eye button</h2>
+        <p class="client"><strong>Client answer:</strong> Works <span class="muted">(Saved Oct 30, 2026, 2:01 AM by Cesar Bonifacio)</span></p>
+      </header>
+      <div class="beforeafter">
+        <div><strong>Before</strong><p>The eye button to show the password appeared only sometimes. It came from the browser, not from GCE.</p></div>
+        <div><strong>Now</strong><p>Every password field has its own eye button. It shows and hides the password every time and never sends the form.</p></div>
+      </div>
+      <table class="steps">
+        <thead><tr><th></th><th>Do this</th><th>You should see</th><th>Dev reply</th></tr></thead>
+        <tbody>
+        <tr>
+          <td class="num">1</td>
+          <td class="do">On the sign-in page, type any password. Press the eye button at the right of the field.</td>
+          <td class="see">The password shows as text.</td>
+          <td class="reply"><textarea data-key="t2s1" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">2</td>
+          <td class="do">Press it again. Repeat 5 times.</td>
+          <td class="see">It switches between shown and hidden every time. The form is not sent.</td>
+          <td class="reply"><textarea data-key="t2s2" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">3</td>
+          <td class="do">Open Register. Do the same on both password fields.</td>
+          <td class="see">Each field has its own eye button, and both work.</td>
+          <td class="reply"><textarea data-key="t2s3" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr></tbody>
+      </table>
+      
+      <label class="overall">Dev note for this test
+        <textarea data-key="t2overall" rows="2" placeholder="Anything that spans the steps"></textarea>
+      </label>
+    </section>
+
+    <section class="test" id="test-3">
+      <header>
+        <div class="testhead">
+          <span class="badge">Test 3 of 15 · Part 1. Visit and sign up</span>
+          <span class="signin">Sign in as: <strong>Your own new account</strong></span>
+        </div>
+        <h2>3. Register: policy checkboxes and email link</h2>
+        <p class="client"><strong>Client answer:</strong> Works <span class="muted">(Saved Oct 30, 2026, 2:01 AM by Cesar Bonifacio)</span></p>
+      </header>
+      <div class="beforeafter">
+        <div><strong>Before</strong><p>After registering you saw an empty Showroom, then you were sent back to sign in with no message. The email link opened an address that did not work. Continue with Google did not work. There were no policy checkboxes.</p></div>
+        <div><strong>Now</strong><p>After registering you see &quot;Check your email to verify your account.&quot; The email link signs you in. Continue with Google is removed, as you asked. You must agree to the Terms and Conditions and the Company Policy to register.</p></div>
+      </div>
+      <table class="steps">
+        <thead><tr><th></th><th>Do this</th><th>You should see</th><th>Dev reply</th></tr></thead>
+        <tbody>
+        <tr>
+          <td class="num">1</td>
+          <td class="do">Sign out and open Register.</td>
+          <td class="see">No Continue with Google button. Two checkboxes: I agree to the Terms and Conditions and I agree to the Company Policy.</td>
+          <td class="reply"><textarea data-key="t3s1" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">2</td>
+          <td class="do">Fill the form with your own email. Tick only the first checkbox and press Register.</td>
+          <td class="see">&quot;You must agree to the Company Policy.&quot; No account is made.</td>
+          <td class="reply"><textarea data-key="t3s2" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">3</td>
+          <td class="do">Tick both checkboxes and press Register.</td>
+          <td class="see">&quot;Check your email to verify your account.&quot;</td>
+          <td class="reply"><textarea data-key="t3s3" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">4</td>
+          <td class="do">Open the email in the same browser and click the link.</td>
+          <td class="see">You are signed in as a customer and see the Showroom.</td>
+          <td class="reply"><textarea data-key="t3s4" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">5</td>
+          <td class="do">Sign out and register again with the same email.</td>
+          <td class="see">&quot;This email is already registered. Please log in instead.&quot;</td>
+          <td class="reply"><textarea data-key="t3s5" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr></tbody>
+      </table>
+      <p class="note"><strong>Note:</strong> Use an email you can open. If you open the link in a different browser or phone, the email is still confirmed, but you must sign in yourself.</p>
+      <label class="overall">Dev note for this test
+        <textarea data-key="t3overall" rows="2" placeholder="Anything that spans the steps"></textarea>
+      </label>
+    </section>
+
+    <section class="test" id="test-4">
+      <header>
+        <div class="testhead">
+          <span class="badge">Test 4 of 15 · Part 2. Buy a car</span>
+          <span class="signin">Sign in as: <strong>Buyer</strong></span>
+        </div>
+        <h2>4. Payment Option and Payment Method</h2>
+        <p class="client"><strong>Client answer:</strong> Needs fixing — “sir bat kasama yung paymongo sa payment method ang tinutukoy po namin dun is yung bank transfer sa paymongo mag babayad sir” <span class="muted">(Saved Oct 30, 2026, 2:10 AM by Cesar Bonifacio)</span></p>
+      </header>
+      <div class="beforeafter">
+        <div><strong>Before</strong><p>The buy form had one list that mixed Cash, Cheque and Financing, and a Final Price box for the buyer.</p></div>
+        <div><strong>Now</strong><p>Payment Option: Full Payment or Financing. Payment Method (for Full Payment): Cash, Bank Transfer or PayMongo. Cheque is removed everywhere. The Final Price box is gone; the price is the Showroom price.</p></div>
+      </div>
+      <table class="steps">
+        <thead><tr><th></th><th>Do this</th><th>You should see</th><th>Dev reply</th></tr></thead>
+        <tbody>
+        <tr>
+          <td class="num">1</td>
+          <td class="do">Open Showroom, open an available car and press Buy Now.</td>
+          <td class="see">The transaction page with the buy form.</td>
+          <td class="reply"><textarea data-key="t4s1" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">2</td>
+          <td class="do">Look at the form.</td>
+          <td class="see">Payment Option and Payment Method. No Final Price box.</td>
+          <td class="reply"><textarea data-key="t4s2" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">3</td>
+          <td class="do">Open Payment Option.</td>
+          <td class="see">Full Payment, Financing.</td>
+          <td class="reply"><textarea data-key="t4s3" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">4</td>
+          <td class="do">Choose Full Payment and open Payment Method.</td>
+          <td class="see">Cash, Bank Transfer, PayMongo. No Cheque.</td>
+          <td class="reply"><textarea data-key="t4s4" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">5</td>
+          <td class="do">Choose Payment Option Financing.</td>
+          <td class="see">Payment Method is hidden.</td>
+          <td class="reply"><textarea data-key="t4s5" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">6</td>
+          <td class="do">Open Buying Guide in the side menu.</td>
+          <td class="see">Full Payment or Financing (the Showroom price plus 10%, over 6 to 60 months), paid by cash, bank transfer or PayMongo. No cheque.</td>
+          <td class="reply"><textarea data-key="t4s6" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr></tbody>
+      </table>
+      
+      <label class="overall">Dev note for this test
+        <textarea data-key="t4overall" rows="2" placeholder="Anything that spans the steps"></textarea>
+      </label>
+    </section>
+
+    <section class="test" id="test-5">
+      <header>
+        <div class="testhead">
+          <span class="badge">Test 5 of 15 · Part 2. Buy a car</span>
+          <span class="signin">Sign in as: <strong>Buyer, then Sales Manager</strong></span>
+        </div>
+        <h2>5. Financing adds 10%, 6 months to 5 years</h2>
+        <p class="client"><strong>Client answer:</strong> Not sure — “di pa po namin na-test kasi may sira nanaman po sa scheduling” <span class="muted">(Saved Oct 30, 2026, 2:25 AM by Cesar Bonifacio)</span></p>
+      </header>
+      <div class="beforeafter">
+        <div><strong>Before</strong><p>Financing did not add anything to the price. Payment periods were offered only for meet-ups.</p></div>
+        <div><strong>Now</strong><p>Financing adds 10% to the car's price. You choose 6 months, 1, 2, 3 or 5 years for every arrangement. Staff see the 10% total filled in for them.</p></div>
+      </div>
+      <table class="steps">
+        <thead><tr><th></th><th>Do this</th><th>You should see</th><th>Dev reply</th></tr></thead>
+        <tbody>
+        <tr>
+          <td class="num">1</td>
+          <td class="do">On a car's buy form, choose Payment Option Financing.</td>
+          <td class="see">Total with financing is the car's price plus 10%. Example: a ₱1,000,000 car shows ₱1,100,000.00.</td>
+          <td class="reply"><textarea data-key="t5s1" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">2</td>
+          <td class="do">Open Payment term.</td>
+          <td class="see">6 months, 1 year, 2 years, 3 years, 5 years.</td>
+          <td class="reply"><textarea data-key="t5s2" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">3</td>
+          <td class="do">Choose 6 months.</td>
+          <td class="see">A monthly estimate of about the total divided by 6.</td>
+          <td class="reply"><textarea data-key="t5s3" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">4</td>
+          <td class="do">Change Arrangement Type to each choice.</td>
+          <td class="see">Payment term stays for every arrangement.</td>
+          <td class="reply"><textarea data-key="t5s4" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">5</td>
+          <td class="do">Sign in as the Sales Manager. Open Transactions and open an approved financing request.</td>
+          <td class="see">Total with financing (₱) is already filled with the price plus 10%.</td>
+          <td class="reply"><textarea data-key="t5s5" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr></tbody>
+      </table>
+      <p class="note"><strong>Note:</strong> Financing adds a flat 10% for every period. Tell us if a longer period should cost more.</p>
+      <label class="overall">Dev note for this test
+        <textarea data-key="t5overall" rows="2" placeholder="Anything that spans the steps"></textarea>
+      </label>
+    </section>
+
+    <section class="test" id="test-6">
+      <header>
+        <div class="testhead">
+          <span class="badge">Test 6 of 15 · Part 2. Buy a car</span>
+          <span class="signin">Sign in as: <strong>Buyer</strong></span>
+        </div>
+        <h2>6. GCE Visit asks for no location</h2>
+        <p class="client"><strong>Client answer:</strong> Works <span class="muted">(Saved Oct 30, 2026, 2:27 AM by Cesar Bonifacio)</span></p>
+      </header>
+      <div class="beforeafter">
+        <div><strong>Before</strong><p>A GCE Visit still asked for a location and saved the buyer's home address.</p></div>
+        <div><strong>Now</strong><p>With GCE Visit, the Location box is hidden and no location is saved.</p></div>
+      </div>
+      <table class="steps">
+        <thead><tr><th></th><th>Do this</th><th>You should see</th><th>Dev reply</th></tr></thead>
+        <tbody>
+        <tr>
+          <td class="num">1</td>
+          <td class="do">On a car's buy form, choose Arrangement Type GCE Visit.</td>
+          <td class="see">No Location box.</td>
+          <td class="reply"><textarea data-key="t6s1" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">2</td>
+          <td class="do">Choose CALABARZON Meet-up.</td>
+          <td class="see">The Location box shows.</td>
+          <td class="reply"><textarea data-key="t6s2" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">3</td>
+          <td class="do">Choose GCE Visit again. Choose Full Payment and Cash, fill the rest and press Save Details.</td>
+          <td class="see">The details save. No location was asked.</td>
+          <td class="reply"><textarea data-key="t6s3" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr></tbody>
+      </table>
+      
+      <label class="overall">Dev note for this test
+        <textarea data-key="t6overall" rows="2" placeholder="Anything that spans the steps"></textarea>
+      </label>
+    </section>
+
+    <section class="test" id="test-7">
+      <header>
+        <div class="testhead">
+          <span class="badge">Test 7 of 15 · Part 2. Buy a car</span>
+          <span class="signin">Sign in as: <strong>Buyer, then Sales Manager, then Head Accountant</strong></span>
+        </div>
+        <h2>7. Bank Transfer downpayment at a meet-up</h2>
+        <p class="client"><strong>Client answer:</strong> Not sure — “di po namin matuloy yung process ng buying atm sir kasi may sira po sa scheduling/calendar” <span class="muted">(Saved Oct 30, 2026, 2:44 AM by Cesar Bonifacio)</span></p>
+      </header>
+      <div class="beforeafter">
+        <div><strong>Before</strong><p>Recording a Bank Transfer by hand is gone. The buyer had no downpayment to pay online, so the Pay button never appeared.</p></div>
+        <div><strong>Now</strong><p>For a Bank Transfer meet-up the Sales Manager sets the downpayment when approving. The buyer pays it through PayMongo before the meet-up, and the balance follows after the contract is signed.</p></div>
+      </div>
+      <table class="steps">
+        <thead><tr><th></th><th>Do this</th><th>You should see</th><th>Dev reply</th></tr></thead>
+        <tbody>
+        <tr>
+          <td class="num">1</td>
+          <td class="do">As the Buyer: open a car, Buy Now, choose Full Payment, Bank Transfer (via PayMongo) and CALABARZON Meet-up, pick a date and hour, tick the condition box, and Save Details.</td>
+          <td class="see">The slot is locked and the Send panel appears.</td>
+          <td class="reply"><textarea data-key="t7s1" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">2</td>
+          <td class="do">Upload two valid IDs and one proof of billing, then press Submit Request.</td>
+          <td class="see">The request goes Under review.</td>
+          <td class="reply"><textarea data-key="t7s2" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">3</td>
+          <td class="do">As the Sales Manager: verify the three documents, choose the Confidential Informant and the Mechanic, type 50000 in Downpayment required, then Approve.</td>
+          <td class="see">&quot;Transaction moved to approved.&quot; and the meet-up field case opens.</td>
+          <td class="reply"><textarea data-key="t7s3" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">4</td>
+          <td class="do">As the Buyer: open the request again.</td>
+          <td class="see">&quot;Pay by bank transfer (PayMongo)&quot; with the 50,000.00 downpayment.</td>
+          <td class="reply"><textarea data-key="t7s4" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">5</td>
+          <td class="do">Press Pay and finish the PayMongo test checkout.</td>
+          <td class="see">A payment row for the downpayment; the buyer page shows it as paid.</td>
+          <td class="reply"><textarea data-key="t7s5" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr></tbody>
+      </table>
+      <p class="note"><strong>Note:</strong> A cash meet-up pays in person and has no downpayment. The approval now refuses to go through without one for a Bank Transfer meet-up.</p>
+      <label class="overall">Dev note for this test
+        <textarea data-key="t7overall" rows="2" placeholder="Anything that spans the steps"></textarea>
+      </label>
+    </section>
+
+    <section class="test" id="test-8">
+      <header>
+        <div class="testhead">
+          <span class="badge">Test 8 of 15 · Part 2. Buy a car</span>
+          <span class="signin">Sign in as: <strong>Buyer, then Sales Manager</strong></span>
+        </div>
+        <h2>8. Photos and PDFs in chat</h2>
+        <p class="client"><strong>Client answer:</strong> Works <span class="muted">(Saved Oct 30, 2026, 2:49 AM by Cesar Bonifacio)</span></p>
+      </header>
+      <div class="beforeafter">
+        <div><strong>Before</strong><p>Some photos and files did not send from chat. Files with no file type were refused, and the file picker hid some of them.</p></div>
+        <div><strong>Now</strong><p>JPG, PNG and WebP photos and PDFs up to 10 MB send from both sides. iPhone HEIC photos show a clear message.</p></div>
+      </div>
+      <table class="steps">
+        <thead><tr><th></th><th>Do this</th><th>You should see</th><th>Dev reply</th></tr></thead>
+        <tbody>
+        <tr>
+          <td class="num">1</td>
+          <td class="do">Open My Inquiries, open a conversation, attach a JPG photo and send.</td>
+          <td class="see">The photo shows in the chat.</td>
+          <td class="reply"><textarea data-key="t8s1" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">2</td>
+          <td class="do">Attach a PDF and send.</td>
+          <td class="see">A link to the PDF. It opens in a new tab.</td>
+          <td class="reply"><textarea data-key="t8s2" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">3</td>
+          <td class="do">Attach an iPhone HEIC photo.</td>
+          <td class="see">&quot;HEIC is not supported, please send JPG or PNG.&quot; Nothing is sent.</td>
+          <td class="reply"><textarea data-key="t8s3" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">4</td>
+          <td class="do">Sign in as the Sales Manager. Open Inquiries and the same conversation. Press Assign to Me if you see it.</td>
+          <td class="see">The Buyer's photo and PDF.</td>
+          <td class="reply"><textarea data-key="t8s4" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">5</td>
+          <td class="do">Send a JPG and a PDF back. Sign in as the Buyer and reload the conversation.</td>
+          <td class="see">Both files are there.</td>
+          <td class="reply"><textarea data-key="t8s5" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr></tbody>
+      </table>
+      <p class="note"><strong>Note:</strong> New messages may need a page reload to show. Live updates are a separate problem we are checking.</p>
+      <label class="overall">Dev note for this test
+        <textarea data-key="t8overall" rows="2" placeholder="Anything that spans the steps"></textarea>
+      </label>
+    </section>
+
+    <section class="test" id="test-9">
+      <header>
+        <div class="testhead">
+          <span class="badge">Test 9 of 15 · Part 3. Sell a car to GCE</span>
+          <span class="signin">Sign in as: <strong>Account Manager, Head Accountant, Marketing Specialist, then CEO</strong></span>
+        </div>
+        <h2>9. A bought car goes to posting</h2>
+        <p class="client"><strong>Client answer:</strong> Not sure <span class="muted">(Saved Oct 30, 2026, 5:35 AM by Cesar Bonifacio)</span></p>
+      </header>
+      <div class="beforeafter">
+        <div><strong>Before</strong><p>After GCE paid the seller, the bought car stayed hidden as a draft. Nobody was told to post it.</p></div>
+        <div><strong>Now</strong><p>When the seller is paid, the car moves to Awaiting Approval and the Marketing Specialist gets the notification &quot;Bought car ready to post&quot;. They propose a price, the CEO approves it, and the car is posted.</p></div>
+      </div>
+      <table class="steps">
+        <thead><tr><th></th><th>Do this</th><th>You should see</th><th>Dev reply</th></tr></thead>
+        <tbody>
+        <tr>
+          <td class="num">1</td>
+          <td class="do">Sign in as the Account Manager. Open Finance and press Request Purchase Funds. In Transaction, pick a Seller payment, type its agreed price in Amount (₱) and submit.</td>
+          <td class="see">&quot;Purchase fund request created. Awaiting Head Accountant release.&quot;</td>
+          <td class="reply"><textarea data-key="t9s1" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">2</td>
+          <td class="do">Sign in as the Head Accountant. Open Finance, then Disbursements, and open the new Car purchase fund. Press Approve, then Release, then Receive, then Mark Paid.</td>
+          <td class="see">The status moves to Approved, Released, Received, then &quot;Disbursement marked paid.&quot;</td>
+          <td class="reply"><textarea data-key="t9s2" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">3</td>
+          <td class="do">Sign in as the Marketing Specialist and press the bell.</td>
+          <td class="see">&quot;Bought car ready to post&quot;. Clicking it opens the sell offer.</td>
+          <td class="reply"><textarea data-key="t9s3" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">4</td>
+          <td class="do">Open Vehicles and set the Status filter to Awaiting Approval.</td>
+          <td class="see">The bought car, with no price yet.</td>
+          <td class="reply"><textarea data-key="t9s4" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">5</td>
+          <td class="do">Press the menu button at the end of its row, then Propose Price. Type a price and submit.</td>
+          <td class="see">&quot;Price proposal submitted.&quot;</td>
+          <td class="reply"><textarea data-key="t9s5" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">6</td>
+          <td class="do">Sign in as the CEO, open Vehicles and approve the price.</td>
+          <td class="see">The car shows in the Showroom.</td>
+          <td class="reply"><textarea data-key="t9s6" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr></tbody>
+      </table>
+      <p class="note"><strong>Note:</strong> Pick a sell offer whose page says &quot;Cleared for payment. Request the purchase funds in Finance.&quot; and type exactly its agreed price; any other amount is refused. Choose a Seller payment, not a Buy.</p>
+      <label class="overall">Dev note for this test
+        <textarea data-key="t9overall" rows="2" placeholder="Anything that spans the steps"></textarea>
+      </label>
+    </section>
+
+    <section class="test" id="test-10">
+      <header>
+        <div class="testhead">
+          <span class="badge">Test 10 of 15 · Part 3. Sell a car to GCE</span>
+          <span class="signin">Sign in as: <strong>Buyer, Marketing Specialist, then Buyer</strong></span>
+        </div>
+        <h2>10. Interior photos in their own tab</h2>
+        <p class="client"><strong>Client answer:</strong> Needs fixing — “lumalabas lang sir &quot;page not found&quot;” <span class="muted">(Saved Oct 30, 2026, 3:03 AM by Cesar Bonifacio)</span></p>
+      </header>
+      <div class="beforeafter">
+        <div><strong>Before</strong><p>Interior photos were mixed with the other photos. There was no guide for taking them.</p></div>
+        <div><strong>Now</strong><p>The Marketing Specialist uploads photos with Kind &quot;Interior&quot;. The form lists the 6 shots to take. In the Showroom, a car with interior photos has Gallery and Interior tabs.</p></div>
+      </div>
+      <table class="steps">
+        <thead><tr><th></th><th>Do this</th><th>You should see</th><th>Dev reply</th></tr></thead>
+        <tbody>
+        <tr>
+          <td class="num">1</td>
+          <td class="do">As the Buyer, open Showroom and open a car. Copy the code at the end of the web address, after /showroom/.</td>
+          <td class="see">The car's photos with no tabs above them.</td>
+          <td class="reply"><textarea data-key="t10s1" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">2</td>
+          <td class="do">Sign in as the Marketing Specialist. In the address bar, type the GCE address, then /dashboard/vehicles/ and the code you copied.</td>
+          <td class="see">The car's staff page with a photos section.</td>
+          <td class="reply"><textarea data-key="t10s2" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">3</td>
+          <td class="do">Set Kind to Interior.</td>
+          <td class="see">A numbered list: Dashboard, Front seats, Rear seats, Odometer, Trunk, Roof lining, and a tip about phone landscape and panorama shots.</td>
+          <td class="reply"><textarea data-key="t10s3" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">4</td>
+          <td class="do">Upload 2 interior photos, one at a time.</td>
+          <td class="see">&quot;Interior photo uploaded.&quot; each time. The count shows 2 interior photos.</td>
+          <td class="reply"><textarea data-key="t10s4" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">5</td>
+          <td class="do">Sign in as the Buyer and open the same car.</td>
+          <td class="see">Tabs Gallery and Interior. Interior shows only the interior photos. Gallery has none of them.</td>
+          <td class="reply"><textarea data-key="t10s5" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">6</td>
+          <td class="do">As the Marketing Specialist, delete the test photos if they are not real.</td>
+          <td class="see">&quot;Media deleted.&quot; The other photos stay.</td>
+          <td class="reply"><textarea data-key="t10s6" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr></tbody>
+      </table>
+      <p class="note"><strong>Note:</strong> The Marketing Specialist's Vehicles list has no link to a car's page yet, so step 2 uses the address bar. Tell us if you want a link added.</p>
+      <label class="overall">Dev note for this test
+        <textarea data-key="t10overall" rows="2" placeholder="Anything that spans the steps"></textarea>
+      </label>
+    </section>
+
+    <section class="test" id="test-11">
+      <header>
+        <div class="testhead">
+          <span class="badge">Test 11 of 15 · Part 4. Staff and payroll</span>
+          <span class="signin">Sign in as: <strong>New Mechanic and CI accounts, then Account Manager</strong></span>
+        </div>
+        <h2>11. 3 Mechanic and 3 CI accounts</h2>
+        <p class="client"><strong>Client answer:</strong> Works — “working na siya sir pero pa add po ng tag isa pa po sa mechanic and confidential informant bali magiging 4 po yung total nila lahat” <span class="muted">(Saved Oct 30, 2026, 3:08 AM by Cesar Bonifacio)</span></p>
+      </header>
+      <div class="beforeafter">
+        <div><strong>Before</strong><p>There was 1 Mechanic account and 1 Confidential Informant account.</p></div>
+        <div><strong>Now</strong><p>There are 3 of each, each with its own account and name.</p></div>
+      </div>
+      <table class="steps">
+        <thead><tr><th></th><th>Do this</th><th>You should see</th><th>Dev reply</th></tr></thead>
+        <tbody>
+        <tr>
+          <td class="num">1</td>
+          <td class="do">Sign in as mechanic2@gce.local, then as mechanic3@gce.local.</td>
+          <td class="see">Each opens the Mechanic's Inspections page.</td>
+          <td class="reply"><textarea data-key="t11s1" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">2</td>
+          <td class="do">Sign in as confidential_informant2@gce.local, then as confidential_informant3@gce.local.</td>
+          <td class="see">Each opens the Confidential Informant's dashboard.</td>
+          <td class="reply"><textarea data-key="t11s2" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">3</td>
+          <td class="do">Sign in as the Account Manager, open Staff Records and search mechanic, then confidential.</td>
+          <td class="see">3 Mechanics: Eduardo Aquino, Noel Ramirez, Arnel Santiago. 3 Confidential Informants: Carlos Mendoza, Rodel Pascual, Liza Manalo.</td>
+          <td class="reply"><textarea data-key="t11s3" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr></tbody>
+      </table>
+      <p class="note"><strong>Note:</strong> The new accounts use the same test password as the others.</p>
+      <label class="overall">Dev note for this test
+        <textarea data-key="t11overall" rows="2" placeholder="Anything that spans the steps"></textarea>
+      </label>
+    </section>
+
+    <section class="test" id="test-12">
+      <header>
+        <div class="testhead">
+          <span class="badge">Test 12 of 15 · Part 4. Staff and payroll</span>
+          <span class="signin">Sign in as: <strong>Account Manager, then the new account</strong></span>
+        </div>
+        <h2>12. Create an employee account</h2>
+        <p class="client"><strong>Client answer:</strong> Works <span class="muted">(Saved Oct 30, 2026, 3:18 AM by Cesar Bonifacio)</span></p>
+      </header>
+      <div class="beforeafter">
+        <div><strong>Before</strong><p>A new employee could get an account only through the developer.</p></div>
+        <div><strong>Now</strong><p>The CEO and the Account Manager create employee accounts in Staff Records with a name, email, temporary password and role. Any staff role except CEO can be chosen.</p></div>
+      </div>
+      <table class="steps">
+        <thead><tr><th></th><th>Do this</th><th>You should see</th><th>Dev reply</th></tr></thead>
+        <tbody>
+        <tr>
+          <td class="num">1</td>
+          <td class="do">Open Staff Records and press Create Employee Account.</td>
+          <td class="see">A form with name, email, temporary password and role.</td>
+          <td class="reply"><textarea data-key="t12s1" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">2</td>
+          <td class="do">Open the role list.</td>
+          <td class="see">Staff roles only. No CEO and no Customer.</td>
+          <td class="reply"><textarea data-key="t12s2" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">3</td>
+          <td class="do">Type a made-up email such as test.mechanic4@gce.local, choose Mechanic, type a strong password and save.</td>
+          <td class="see">&quot;Mechanic account created.&quot;</td>
+          <td class="reply"><textarea data-key="t12s3" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">4</td>
+          <td class="do">Sign out and sign in with the new email and password.</td>
+          <td class="see">The Mechanic's Inspections page. No email check is needed.</td>
+          <td class="reply"><textarea data-key="t12s4" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">5</td>
+          <td class="do">Sign in as the Account Manager again. In Staff Records, edit the test account and set its state to archived.</td>
+          <td class="see">The test account is no longer active.</td>
+          <td class="reply"><textarea data-key="t12s5" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr></tbody>
+      </table>
+      
+      <label class="overall">Dev note for this test
+        <textarea data-key="t12overall" rows="2" placeholder="Anything that spans the steps"></textarea>
+      </label>
+    </section>
+
+    <section class="test" id="test-13">
+      <header>
+        <div class="testhead">
+          <span class="badge">Test 13 of 15 · Part 4. Staff and payroll</span>
+          <span class="signin">Sign in as: <strong>mechanic3, then Account Manager</strong></span>
+        </div>
+        <h2>13. Clock in and leave requests</h2>
+        <p class="client"><strong>Client answer:</strong> Needs fixing — “sir sa attendance po nila is pag di na po nila time bawal sila mag check in kasi nakapag check in po kami kahit 3am na po 
+
+tapos sir yung check in nila dapat po sa mismong location lang po ni GCE building bawal po outside eto po yung link ng exact location ni gce sa google maps https://maps.app.goo.gl/LFw6xLNQLyj85VDA7
+
+sa request tapos leave sir is dapat may reason tapos naka dropdown po yung reason for leave hindi siya typeable, pag nag others lang po mag kakaroon ng typeable 
+
+supporting images for proof of validity ng request 
+
+sa overtime sir mawawala po yung end date tapos yung sa &quot;Start Date&quot; magiging date nalang po sir 
+
+imbis na &quot;End date&quot; mangyayari nalang po dun is kung ilang oras po siya mag rerequest ng overtime para sa date po na sinet niya 
+
+sa overtime request sir wala na pong reason” <span class="muted">(Saved Oct 30, 2026, 3:51 AM by Cesar Bonifacio)</span></p>
+      </header>
+      <div class="beforeafter">
+        <div><strong>Before</strong><p>Several staff roles had no Attendance or Requests link in the side menu, so they could not clock in or ask for leave.</p></div>
+        <div><strong>Now</strong><p>Every staff role that tracks attendance has Attendance and Requests in the side menu. Employees clock in against their schedule and send leave requests to the Account Manager. Approved leave blocks clock-in for that day.</p></div>
+      </div>
+      <table class="steps">
+        <thead><tr><th></th><th>Do this</th><th>You should see</th><th>Dev reply</th></tr></thead>
+        <tbody>
+        <tr>
+          <td class="num">1</td>
+          <td class="do">Sign in as mechanic3@gce.local. Look at the side menu.</td>
+          <td class="see">Attendance and Requests.</td>
+          <td class="reply"><textarea data-key="t13s1" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">2</td>
+          <td class="do">Open Attendance.</td>
+          <td class="see">Your schedule and a Clock In button.</td>
+          <td class="reply"><textarea data-key="t13s2" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">3</td>
+          <td class="do">Open Requests, press New Request, choose Leave for today and send.</td>
+          <td class="see">&quot;Request submitted.&quot;</td>
+          <td class="reply"><textarea data-key="t13s3" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">4</td>
+          <td class="do">Sign in as the Account Manager. Open Requests, review that request and approve it.</td>
+          <td class="see">&quot;Request approved.&quot;</td>
+          <td class="reply"><textarea data-key="t13s4" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">5</td>
+          <td class="do">Sign in as mechanic3@gce.local again and open Attendance.</td>
+          <td class="see">Clock In cannot be pressed: &quot;Approved leave applies today.&quot;</td>
+          <td class="reply"><textarea data-key="t13s5" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">6</td>
+          <td class="do">Sign in as the Sales Manager, Marketing Specialist, Head Accountant and Confidential Informant in turn.</td>
+          <td class="see">Each has Attendance and Requests in the side menu.</td>
+          <td class="reply"><textarea data-key="t13s6" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr></tbody>
+      </table>
+      <p class="note"><strong>Note:</strong> Use mechanic3 for the leave request so no real employee is blocked from clocking in today.</p>
+      <label class="overall">Dev note for this test
+        <textarea data-key="t13overall" rows="2" placeholder="Anything that spans the steps"></textarea>
+      </label>
+    </section>
+
+    <section class="test" id="test-14">
+      <header>
+        <div class="testhead">
+          <span class="badge">Test 14 of 15 · Part 4. Staff and payroll</span>
+          <span class="signin">Sign in as: <strong>Account Manager, then Head Security</strong></span>
+        </div>
+        <h2>14. Work schedules and Head Security</h2>
+        <p class="client"><strong>Client answer:</strong> Works <span class="muted">(Saved Oct 30, 2026, 5:06 AM by Cesar Bonifacio)</span></p>
+      </header>
+      <div class="beforeafter">
+        <div><strong>Before</strong><p>Nothing warned when an employee had no work schedule; they just could not clock in. Head Security was expected to clock in like everyone else.</p></div>
+        <div><strong>Now</strong><p>Staff Records warns about employees with no schedule. The schedules you sent are set for the six roles. Head Security does not track attendance, as you asked.</p></div>
+      </div>
+      <table class="steps">
+        <thead><tr><th></th><th>Do this</th><th>You should see</th><th>Dev reply</th></tr></thead>
+        <tbody>
+        <tr>
+          <td class="num">1</td>
+          <td class="do">Sign in as the Account Manager and open Staff Records.</td>
+          <td class="see">A warning &quot;1 employee has no work schedule&quot; that names only the CEO.</td>
+          <td class="reply"><textarea data-key="t14s1" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">2</td>
+          <td class="do">Search Noel Ramirez (Mechanic).</td>
+          <td class="see">His schedule from your list, for example Monday to Saturday, 07:00 to 16:00.</td>
+          <td class="reply"><textarea data-key="t14s2" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">3</td>
+          <td class="do">Search Gregorio (Head Security) and press Edit.</td>
+          <td class="see">Attendance not required. No workday or time fields.</td>
+          <td class="reply"><textarea data-key="t14s3" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">4</td>
+          <td class="do">Sign in as Head Security.</td>
+          <td class="see">No Attendance link. Requests, Field Cases and Security Checks still open.</td>
+          <td class="reply"><textarea data-key="t14s4" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr></tbody>
+      </table>
+      <p class="note"><strong>Note:</strong> The CEO is waiting on your answer: should the CEO clock in, or only see the staff's attendance?</p>
+      <label class="overall">Dev note for this test
+        <textarea data-key="t14overall" rows="2" placeholder="Anything that spans the steps"></textarea>
+      </label>
+    </section>
+
+    <section class="test" id="test-15">
+      <header>
+        <div class="testhead">
+          <span class="badge">Test 15 of 15 · Part 4. Staff and payroll</span>
+          <span class="signin">Sign in as: <strong>Account Manager</strong></span>
+        </div>
+        <h2>15. Payslips by hours, overtime and deductions</h2>
+        <p class="client"><strong>Client answer:</strong> Works <span class="muted">(Saved Oct 30, 2026, 5:43 AM by Cesar Bonifacio)</span></p>
+      </header>
+      <div class="beforeafter">
+        <div><strong>Before</strong><p>Pay was counted by days present. Overtime and lateness were not shown.</p></div>
+        <div><strong>Now</strong><p>Pay is counted from hours worked. Approved overtime is paid at 125% on its own line. Minutes late or leaving early are one deduction line. SSS, PhilHealth and Pag-IBIG are still deducted, and you can add items such as a cash advance.</p></div>
+      </div>
+      <table class="steps">
+        <thead><tr><th></th><th>Do this</th><th>You should see</th><th>Dev reply</th></tr></thead>
+        <tbody>
+        <tr>
+          <td class="num">1</td>
+          <td class="do">Sign in as the Account Manager. Open Payroll, press Create Run and pick a period with checked attendance.</td>
+          <td class="see">&quot;Payroll run created from checked attendance.&quot; Draft payslips appear.</td>
+          <td class="reply"><textarea data-key="t15s1" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">2</td>
+          <td class="do">Open one payslip.</td>
+          <td class="see">Regular Hours and Overtime Hours at the top of the Summary.</td>
+          <td class="reply"><textarea data-key="t15s2" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">3</td>
+          <td class="do">Look at the lines.</td>
+          <td class="see">Regular hours, Overtime hours (only with an approved overtime request) and Late / undertime, each with a note such as &quot;90.00 h × ₱74.07/h&quot;. Each amount matches its note.</td>
+          <td class="reply"><textarea data-key="t15s3" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">4</td>
+          <td class="do">Open the payslip of someone who worked extra hours with no approved overtime request.</td>
+          <td class="see">No Overtime hours line.</td>
+          <td class="reply"><textarea data-key="t15s4" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr>
+        <tr>
+          <td class="num">5</td>
+          <td class="do">On a draft payslip, press Add Item and add a deduction, for example Cash advance ₱500.</td>
+          <td class="see">The new line shows and the net pay goes down by ₱500.</td>
+          <td class="reply"><textarea data-key="t15s5" rows="3" placeholder="Dev reply for this step"></textarea></td>
+        </tr></tbody>
+      </table>
+      <p class="note"><strong>Note:</strong> The 125% overtime rate and the deductions are for the demo. An accountant should confirm them before GCE pays real salaries.</p>
+      <label class="overall">Dev note for this test
+        <textarea data-key="t15overall" rows="2" placeholder="Anything that spans the steps"></textarea>
+      </label>
+    </section>
+  </main>
+</div>
+<script>
+  const KEY = "gce-sheet-dev-replies-v1";
+  const store = () => { try { return JSON.parse(localStorage.getItem(KEY) || "{}"); } catch { return {}; } };
+  let replies = store();
+  const fields = [...document.querySelectorAll("textarea[data-key]")];
+  const state = document.getElementById("state");
+  const count = () => Object.values(replies).filter((v) => v && v.trim()).length;
+  const paint = () => {
+    const n = count();
+    state.textContent = n ? n + " repl" + (n === 1 ? "y" : "ies") + " saved" : "No replies yet";
+  };
+  for (const el of fields) {
+    el.value = replies[el.dataset.key] || "";
+    el.addEventListener("input", () => {
+      replies[el.dataset.key] = el.value;
+      localStorage.setItem(KEY, JSON.stringify(replies));
+      paint();
+    });
+  }
+  paint();
+  document.getElementById("export").addEventListener("click", () => {
+    const blob = new Blob([JSON.stringify(replies, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "gce-batch2-dev-replies.json";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+  document.getElementById("copy").addEventListener("click", async () => {
+    const lines = [];
+    for (const t of [{"n":1,"title":"Landing page with Log in and Register","steps":[{"do":"Open https://global-exchange-car.vercel.app/ and save the link.","see":"The landing page with Log in and Register at the top."},{"do":"On the login page, press ← Home, or press the GCE logo.","see":"The same landing page."},{"do":"Open /auth/v1 on its own (no /login after it).","see":"The login page. /auth/v1 is the sign-in area; the landing page is /."},{"do":"Press Log in, then Register, without signing in.","see":"Both pages open and the two policy checkboxes are required on Register."}]},{"n":2,"title":"Show-password eye button","steps":[{"do":"On the sign-in page, type any password. Press the eye button at the right of the field.","see":"The password shows as text."},{"do":"Press it again. Repeat 5 times.","see":"It switches between shown and hidden every time. The form is not sent."},{"do":"Open Register. Do the same on both password fields.","see":"Each field has its own eye button, and both work."}]},{"n":3,"title":"Register: policy checkboxes and email link","steps":[{"do":"Sign out and open Register.","see":"No Continue with Google button. Two checkboxes: I agree to the Terms and Conditions and I agree to the Company Policy."},{"do":"Fill the form with your own email. Tick only the first checkbox and press Register.","see":"\"You must agree to the Company Policy.\" No account is made."},{"do":"Tick both checkboxes and press Register.","see":"\"Check your email to verify your account.\""},{"do":"Open the email in the same browser and click the link.","see":"You are signed in as a customer and see the Showroom."},{"do":"Sign out and register again with the same email.","see":"\"This email is already registered. Please log in instead.\""}]},{"n":4,"title":"Payment Option and Payment Method","steps":[{"do":"Open Showroom, open an available car and press Buy Now.","see":"The transaction page with the buy form."},{"do":"Look at the form.","see":"Payment Option and Payment Method. No Final Price box."},{"do":"Open Payment Option.","see":"Full Payment, Financing."},{"do":"Choose Full Payment and open Payment Method.","see":"Cash, Bank Transfer, PayMongo. No Cheque."},{"do":"Choose Payment Option Financing.","see":"Payment Method is hidden."},{"do":"Open Buying Guide in the side menu.","see":"Full Payment or Financing (the Showroom price plus 10%, over 6 to 60 months), paid by cash, bank transfer or PayMongo. No cheque."}]},{"n":5,"title":"Financing adds 10%, 6 months to 5 years","steps":[{"do":"On a car's buy form, choose Payment Option Financing.","see":"Total with financing is the car's price plus 10%. Example: a ₱1,000,000 car shows ₱1,100,000.00."},{"do":"Open Payment term.","see":"6 months, 1 year, 2 years, 3 years, 5 years."},{"do":"Choose 6 months.","see":"A monthly estimate of about the total divided by 6."},{"do":"Change Arrangement Type to each choice.","see":"Payment term stays for every arrangement."},{"do":"Sign in as the Sales Manager. Open Transactions and open an approved financing request.","see":"Total with financing (₱) is already filled with the price plus 10%."}]},{"n":6,"title":"GCE Visit asks for no location","steps":[{"do":"On a car's buy form, choose Arrangement Type GCE Visit.","see":"No Location box."},{"do":"Choose CALABARZON Meet-up.","see":"The Location box shows."},{"do":"Choose GCE Visit again. Choose Full Payment and Cash, fill the rest and press Save Details.","see":"The details save. No location was asked."}]},{"n":7,"title":"Bank Transfer downpayment at a meet-up","steps":[{"do":"As the Buyer: open a car, Buy Now, choose Full Payment, Bank Transfer (via PayMongo) and CALABARZON Meet-up, pick a date and hour, tick the condition box, and Save Details.","see":"The slot is locked and the Send panel appears."},{"do":"Upload two valid IDs and one proof of billing, then press Submit Request.","see":"The request goes Under review."},{"do":"As the Sales Manager: verify the three documents, choose the Confidential Informant and the Mechanic, type 50000 in Downpayment required, then Approve.","see":"\"Transaction moved to approved.\" and the meet-up field case opens."},{"do":"As the Buyer: open the request again.","see":"\"Pay by bank transfer (PayMongo)\" with the 50,000.00 downpayment."},{"do":"Press Pay and finish the PayMongo test checkout.","see":"A payment row for the downpayment; the buyer page shows it as paid."}]},{"n":8,"title":"Photos and PDFs in chat","steps":[{"do":"Open My Inquiries, open a conversation, attach a JPG photo and send.","see":"The photo shows in the chat."},{"do":"Attach a PDF and send.","see":"A link to the PDF. It opens in a new tab."},{"do":"Attach an iPhone HEIC photo.","see":"\"HEIC is not supported, please send JPG or PNG.\" Nothing is sent."},{"do":"Sign in as the Sales Manager. Open Inquiries and the same conversation. Press Assign to Me if you see it.","see":"The Buyer's photo and PDF."},{"do":"Send a JPG and a PDF back. Sign in as the Buyer and reload the conversation.","see":"Both files are there."}]},{"n":9,"title":"A bought car goes to posting","steps":[{"do":"Sign in as the Account Manager. Open Finance and press Request Purchase Funds. In Transaction, pick a Seller payment, type its agreed price in Amount (₱) and submit.","see":"\"Purchase fund request created. Awaiting Head Accountant release.\""},{"do":"Sign in as the Head Accountant. Open Finance, then Disbursements, and open the new Car purchase fund. Press Approve, then Release, then Receive, then Mark Paid.","see":"The status moves to Approved, Released, Received, then \"Disbursement marked paid.\""},{"do":"Sign in as the Marketing Specialist and press the bell.","see":"\"Bought car ready to post\". Clicking it opens the sell offer."},{"do":"Open Vehicles and set the Status filter to Awaiting Approval.","see":"The bought car, with no price yet."},{"do":"Press the menu button at the end of its row, then Propose Price. Type a price and submit.","see":"\"Price proposal submitted.\""},{"do":"Sign in as the CEO, open Vehicles and approve the price.","see":"The car shows in the Showroom."}]},{"n":10,"title":"Interior photos in their own tab","steps":[{"do":"As the Buyer, open Showroom and open a car. Copy the code at the end of the web address, after /showroom/.","see":"The car's photos with no tabs above them."},{"do":"Sign in as the Marketing Specialist. In the address bar, type the GCE address, then /dashboard/vehicles/ and the code you copied.","see":"The car's staff page with a photos section."},{"do":"Set Kind to Interior.","see":"A numbered list: Dashboard, Front seats, Rear seats, Odometer, Trunk, Roof lining, and a tip about phone landscape and panorama shots."},{"do":"Upload 2 interior photos, one at a time.","see":"\"Interior photo uploaded.\" each time. The count shows 2 interior photos."},{"do":"Sign in as the Buyer and open the same car.","see":"Tabs Gallery and Interior. Interior shows only the interior photos. Gallery has none of them."},{"do":"As the Marketing Specialist, delete the test photos if they are not real.","see":"\"Media deleted.\" The other photos stay."}]},{"n":11,"title":"3 Mechanic and 3 CI accounts","steps":[{"do":"Sign in as mechanic2@gce.local, then as mechanic3@gce.local.","see":"Each opens the Mechanic's Inspections page."},{"do":"Sign in as confidential_informant2@gce.local, then as confidential_informant3@gce.local.","see":"Each opens the Confidential Informant's dashboard."},{"do":"Sign in as the Account Manager, open Staff Records and search mechanic, then confidential.","see":"3 Mechanics: Eduardo Aquino, Noel Ramirez, Arnel Santiago. 3 Confidential Informants: Carlos Mendoza, Rodel Pascual, Liza Manalo."}]},{"n":12,"title":"Create an employee account","steps":[{"do":"Open Staff Records and press Create Employee Account.","see":"A form with name, email, temporary password and role."},{"do":"Open the role list.","see":"Staff roles only. No CEO and no Customer."},{"do":"Type a made-up email such as test.mechanic4@gce.local, choose Mechanic, type a strong password and save.","see":"\"Mechanic account created.\""},{"do":"Sign out and sign in with the new email and password.","see":"The Mechanic's Inspections page. No email check is needed."},{"do":"Sign in as the Account Manager again. In Staff Records, edit the test account and set its state to archived.","see":"The test account is no longer active."}]},{"n":13,"title":"Clock in and leave requests","steps":[{"do":"Sign in as mechanic3@gce.local. Look at the side menu.","see":"Attendance and Requests."},{"do":"Open Attendance.","see":"Your schedule and a Clock In button."},{"do":"Open Requests, press New Request, choose Leave for today and send.","see":"\"Request submitted.\""},{"do":"Sign in as the Account Manager. Open Requests, review that request and approve it.","see":"\"Request approved.\""},{"do":"Sign in as mechanic3@gce.local again and open Attendance.","see":"Clock In cannot be pressed: \"Approved leave applies today.\""},{"do":"Sign in as the Sales Manager, Marketing Specialist, Head Accountant and Confidential Informant in turn.","see":"Each has Attendance and Requests in the side menu."}]},{"n":14,"title":"Work schedules and Head Security","steps":[{"do":"Sign in as the Account Manager and open Staff Records.","see":"A warning \"1 employee has no work schedule\" that names only the CEO."},{"do":"Search Noel Ramirez (Mechanic).","see":"His schedule from your list, for example Monday to Saturday, 07:00 to 16:00."},{"do":"Search Gregorio (Head Security) and press Edit.","see":"Attendance not required. No workday or time fields."},{"do":"Sign in as Head Security.","see":"No Attendance link. Requests, Field Cases and Security Checks still open."}]},{"n":15,"title":"Payslips by hours, overtime and deductions","steps":[{"do":"Sign in as the Account Manager. Open Payroll, press Create Run and pick a period with checked attendance.","see":"\"Payroll run created from checked attendance.\" Draft payslips appear."},{"do":"Open one payslip.","see":"Regular Hours and Overtime Hours at the top of the Summary."},{"do":"Look at the lines.","see":"Regular hours, Overtime hours (only with an approved overtime request) and Late / undertime, each with a note such as \"90.00 h × ₱74.07/h\". Each amount matches its note."},{"do":"Open the payslip of someone who worked extra hours with no approved overtime request.","see":"No Overtime hours line."},{"do":"On a draft payslip, press Add Item and add a deduction, for example Cash advance ₱500.","see":"The new line shows and the net pay goes down by ₱500."}]}]) {
+      const rows = [];
+      t.steps.forEach((s, i) => {
+        const v = replies["t" + t.n + "s" + (i + 1)];
+        if (v && v.trim()) rows.push("  Step " + (i + 1) + ": " + v.trim());
+      });
+      const overall = replies["t" + t.n + "overall"];
+      if (overall && overall.trim()) rows.push("  Overall: " + overall.trim());
+      if (rows.length) lines.push(t.n + ". " + t.title + "\n" + rows.join("\n"));
+    }
+    await navigator.clipboard.writeText(lines.join("\n\n") || "No replies yet.");
+    state.textContent = "Copied to clipboard";
+  });
+  document.getElementById("clear").addEventListener("click", () => {
+    if (!confirm("Clear every reply in this browser?")) return;
+    replies = {};
+    localStorage.removeItem(KEY);
+    for (const el of fields) el.value = "";
+    paint();
+  });
+</script>
+</body>
+</html>
