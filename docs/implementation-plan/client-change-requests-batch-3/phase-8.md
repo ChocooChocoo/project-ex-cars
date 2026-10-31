@@ -1,6 +1,6 @@
 [← Previous: Phase 7](./phase-7.md) | [Next: Phase 9 →](./phase-9.md)
 
-**Status:** 🟡 In progress — code complete; request → release chain not exercised end to end (2026-10-31).
+**Status:** ✅ Done (2026-10-31, integration round).
 
 > 2026-10-29: In Progress only because pre-existing work is ticked. Nothing new is built yet.
 >
@@ -76,6 +76,21 @@ Integration verification (2026-10-31)
   actionable show "Mark Released". Both print entries navigate to the Phase 9 pages.
 - Still to verify: the full Sales Manager request → CI Mark Released → Sales Manager receive chain
   through the UI. The action handlers are covered by `handover-actions` tests.
+
+
+Integration verification (2026-10-31)
+
+- Merged into `batch3/integration` as `476cdfa`.
+- Full chain exercised in the browser with real clicks, across three roles on the Toyota Wigo `28284fe0`:
+  1. Head Accountant verified the pending payments ("Payment verified.").
+  2. Sales Manager clicked Request papers release ("Papers requested from the Confidential Informant.").
+  3. Confidential Informant opened Vehicle Papers, found the row "Papers Requested", used the 3-dot menu,
+     opened View papers — the sheet showed the OR/CR note "Original OR/CR — hand over the physical copy",
+     the "Physical OR/CR kept by CI" fallback, and Print links for the Deed of Sale and Policy & Warranty.
+  4. Mark Released produced "Papers released to the Sales Manager" and the row changed to "Released".
+  5. Sales Manager saw "Status Released", clicked Receive papers ("Papers received.") and the status became
+     "Papers Received"; Mark Sold then became available to the Sales Manager.
+- The nav entry, the role guard and the table (Vehicle, Buyer, Status) were also confirmed for the CI.
 
 ## Done when
 

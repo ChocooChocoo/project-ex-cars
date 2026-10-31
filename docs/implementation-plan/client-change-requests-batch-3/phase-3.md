@@ -1,6 +1,6 @@
 [← Previous: Phase 2](./phase-2.md) | [Next: Phase 4 →](./phase-4.md)
 
-**Status:** 🟡 In progress — code complete; browser pass partial (2026-10-31).
+**Status:** 🟡 In progress — one browser item left (2026-10-31).
 
 # Phase 3: Sales Manager buying-request cleanup and delivery without a Mechanic
 
@@ -79,6 +79,23 @@ Integration verification (2026-10-31)
 - Still to verify in a browser: Cancel absent on a *pre-approval* cash buy, Buyer Declined hidden after
   papers are requested, and the delivery team form showing only the Confidential Informant and Head
   Security. All three are covered by unit tests but were not exercised against the running app.
+- Assumption recorded: the three legacy `down_payment` buys keep the current Sales Manager actions.
+
+
+Integration verification (2026-10-31)
+
+- Merged into `batch3/integration` as `a542b94`.
+- Browser, signed in through the login form as the Sales Manager:
+  - Pending cash buy `1e317f77`: no Cancel, no decline outcomes, no document upload action.
+  - Approved cash delivery `e5499f32`: no Cancel and no Valid ID / Proof of Billing upload anywhere.
+  - Cash buy `754f6cc7` whose papers are already out (`released_to_ci`): Buyer declined, Declined - Legit
+    and Declined - Not Legit are all absent, and so is Cancel. A financing buy with papers requested still
+    shows the decline outcomes, which is the documented "financing keeps its actions" rule.
+- The word "Mechanic" does not appear on any delivery page in any state, and the delivery panel offers
+  only the fee, down payment and confirm step.
+- Remaining: open the approval-time team picker and confirm a delivery field case is created from it.
+  `delivery-team.test.ts` asserts the CI + Head Security pair, but the picker itself was not opened in the
+  browser.
 - Assumption recorded: the three legacy `down_payment` buys keep the current Sales Manager actions.
 
 ## Done when
