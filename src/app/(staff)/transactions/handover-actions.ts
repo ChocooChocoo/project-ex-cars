@@ -86,6 +86,7 @@ async function setHandover(
   });
   revalidatePath(`/dashboard/transactions/${sale.id}`);
   revalidatePath("/dashboard/field-cases");
+  revalidatePath("/vehicle-papers");
   revalidatePath(`/my-transactions/${sale.id}`);
   return null;
 }
@@ -127,7 +128,7 @@ export async function requestPapersRelease(formData: FormData): Promise<Handover
     {
       kind: "papers_release_requested",
       title: "Vehicle papers requested",
-      body: "The Sales Manager asks for a sold car's papers. Approve and hand them over from Field Cases.",
+      body: "The Sales Manager asks for a sold car's papers. Approve and hand them over from Vehicle Papers.",
       transactionId: sale.id,
     },
   );
@@ -204,7 +205,8 @@ async function assignedInformant(admin: Admin, sale: Sale, userId: string): Prom
   return team.informant === userId ? null : "Only the Confidential Informant assigned to this field case can do this.";
 }
 
-// The assigned Confidential Informant or Mechanic, whichever the user is.
+// The assigned Confidential Informant or, at a Meet Halfway only, the Mechanic. A delivery has no
+// Mechanic (T05).
 async function assignedMember(
   admin: Admin,
   sale: Sale,
@@ -213,7 +215,9 @@ async function assignedMember(
   const team = await fieldTeam(admin, sale);
   if ("error" in team) return team;
   if (who.role === "confidential_informant" && team.informant === who.userId) return "informant";
-  if (who.role === "mechanic" && team.mechanic === who.userId) return "mechanic";
+  if (who.role === "mechanic" && team.mechanic === who.userId && sale.details?.arrangement_kind === "meetup") {
+    return "mechanic";
+  }
   return { error: "Only the team assigned to this field case can do this." };
 }
 

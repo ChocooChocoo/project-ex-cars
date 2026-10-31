@@ -15,7 +15,13 @@ export async function loadOwnProfile(): Promise<OwnProfile> {
   if (!user) redirect("/auth/v1/login");
 
   const [{ data: profile }, role] = await Promise.all([
-    supabase.from("profiles").select("full_name, phone, address, avatar_url").eq("id", user.id).maybeSingle(),
+    supabase
+      .from("profiles")
+      .select(
+        "full_name, phone, address, address_line, region_code, province_code, city_code, barangay_code, avatar_url",
+      )
+      .eq("id", user.id)
+      .maybeSingle(),
     getCurrentRole(),
   ]);
 
@@ -24,6 +30,11 @@ export async function loadOwnProfile(): Promise<OwnProfile> {
     full_name: profile?.full_name ?? "",
     phone: profile?.phone ?? "",
     address: profile?.address ?? "",
+    address_line: profile?.address_line ?? "",
+    region_code: profile?.region_code ?? "",
+    province_code: profile?.province_code ?? "",
+    city_code: profile?.city_code ?? "",
+    barangay_code: profile?.barangay_code ?? "",
     avatar_url: profile?.avatar_url ?? null,
     role_label: role ? (ROLE_LABELS[role as GceRole] ?? null) : null,
     can_change_email: role === "customer",

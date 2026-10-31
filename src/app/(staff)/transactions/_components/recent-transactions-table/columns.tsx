@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { TRANSACTION_STATE_LABELS, transactionKindLabel } from "@/lib/transactions/labels";
-import { getAllowedTransitions, type TransactionState } from "@/lib/transactions/state-machine";
+import { canSalesManagerCancel, getAllowedTransitions, type TransactionState } from "@/lib/transactions/state-machine";
 
 import type { TransactionRow } from "./schema";
 
@@ -30,6 +30,19 @@ export const TRANSACTION_ACTION_LABELS: Record<TransactionState, string> = {
   completed: "Complete",
   cancelled: "Cancel",
 };
+
+// T05: the Sales Manager loses Cancel on a CASH buy; the buyer or the CEO still closes it.
+export function transactionActionsFor(row: TransactionRow, userRole: string): TransactionState[] {
+  return getAllowedTransitions(row.state as TransactionState, userRole).filter(
+    (to) =>
+      to !== "cancelled" ||
+      userRole !== "sales_manager" ||
+      canSalesManagerCancel({
+        transaction_kind: row.kind,
+        purchase_details: { payment_method: row.paymentMethod },
+      }),
+  );
+}
 
 function kindIcon(kind: string) {
   switch (kind) {
@@ -162,8 +175,7 @@ export function createTransactionColumns(
       enableHiding: false,
       cell: ({ row }) => {
         const id = row.original.id;
-        const state = row.original.state as TransactionState;
-        const allowed = getAllowedTransitions(state, userRole);
+        const allowed = transactionActionsFor(row.original, userRole);
 
         return (
           <DropdownMenu>

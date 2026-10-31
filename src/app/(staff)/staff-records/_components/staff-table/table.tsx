@@ -47,6 +47,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ROLE_WORK_SCHEDULES } from "@/lib/attendance/role-schedules";
 
 import { isAttendanceTrackedAccount, isMissingSchedule, staffTableColumns, WORKDAYS } from "./columns";
 import type { StaffTableRow } from "./schema";
@@ -125,10 +126,11 @@ export function StaffRecordsTable({ data }: { data: StaffTableRow[] }) {
     setFullName(account.fullName ?? "");
     setPhone(account.phone ?? "");
     setAddress(account.address ?? "");
-    setWorkdays(account.workdays ?? []);
-    setStartTime(account.startTime ?? "");
-    setEndTime(account.endTime ?? "");
-    setGraceMinutes(`${Math.min(10, Math.max(5, account.graceMinutes ?? 10))}`);
+    const defaults = isMissingSchedule(account) ? ROLE_WORK_SCHEDULES[account.role ?? ""] : undefined;
+    setWorkdays(account.workdays ?? defaults?.workdays ?? []);
+    setStartTime(account.startTime ?? defaults?.start_time ?? "");
+    setEndTime(account.endTime ?? defaults?.end_time ?? "");
+    setGraceMinutes(`${Math.min(10, Math.max(5, account.graceMinutes ?? defaults?.grace_minutes ?? 10))}`);
     setState(account.accountState === "active" ? "suspended" : "active");
   }, []);
 

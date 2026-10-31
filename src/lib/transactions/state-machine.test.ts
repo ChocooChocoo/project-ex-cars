@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { canCancelScheduled, isOverdue, nextQueueState } from "./state-machine";
+import { canCancelScheduled, canSalesManagerCancel, canTransition, isOverdue, nextQueueState } from "./state-machine";
 
 const now = new Date("2026-09-30T12:00:00Z");
 
@@ -34,9 +34,44 @@ describe("canCancelScheduled", () => {
   });
 });
 
+describe("canSalesManagerCancel", () => {
+  const buy = (paymentMethod: string) => ({
+    transaction_kind: "buy",
+    purchase_details: { payment_method: paymentMethod },
+  });
+
+  it("refuses every direct-payment buy", () => {
+    expect(canSalesManagerCancel(buy("cash"))).toBe(false);
+    expect(canSalesManagerCancel(buy("bank_transfer"))).toBe(false);
+  });
+
+  it("keeps the Sales Manager's Cancel on a financing buy", () => {
+    expect(canSalesManagerCancel(buy("financing"))).toBe(true);
+  });
+
+  it("is not about sell offers or a missing request", () => {
+    expect(canSalesManagerCancel({ transaction_kind: "sell", purchase_details: null })).toBe(true);
+  });
+
+  it("reads purchase_details whether it comes as a row or an array", () => {
+    expect(canSalesManagerCancel({ transaction_kind: "buy", purchase_details: [{ payment_method: "cash" }] })).toBe(
+      false,
+    );
+  });
+});
+
 describe("nextQueueState", () => {
   it("queues behind an existing active request", () => {
     expect(nextQueueState(false)).toBe("active");
     expect(nextQueueState(true)).toBe("on_hold");
+  });
+});
+
+describe("Mark Sold (T05)", () => {
+  it("leaves Mark Sold to the Sales Manager and the CEO, not the Head Accountant", () => {
+    expect(canTransition("approved", "completed", "sales_manager")).toBe(true);
+    expect(canTransition("approved", "completed", "ceo")).toBe(true);
+    expect(canTransition("approved", "completed", "head_accountant")).toBe(false);
+    expect(canTransition("approved", "completed", "account_manager")).toBe(false);
   });
 });

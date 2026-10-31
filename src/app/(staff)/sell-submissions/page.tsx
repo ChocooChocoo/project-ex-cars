@@ -5,7 +5,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { withSignedTransactionDocumentUrls } from "@/lib/transactions/document-media";
 import { getConditionItemIds, resolveConditionItemLabels } from "@/lib/transactions/sell-condition-items";
 
-import { SellSubmissionsList, type SellSubmissionListing } from "./_components/sell-submissions-list";
+import { type SellSubmissionListing, SellSubmissionsList } from "./_components/sell-submissions-list";
 
 type SubmissionRow = {
   transaction_id: string;
@@ -67,7 +67,10 @@ export default async function SellSubmissionsPage() {
   const allConditionIds = [...new Set(submissions.flatMap((row) => getConditionItemIds(row.condition_items)))];
   let nodeNames: Record<string, string> = {};
   if (allConditionIds.length > 0) {
-    const { data: nodes } = await supabase.from("inspection_checklist_nodes").select("id, name").in("id", allConditionIds);
+    const { data: nodes } = await supabase
+      .from("inspection_checklist_nodes")
+      .select("id, name")
+      .in("id", allConditionIds);
     nodeNames = Object.fromEntries(
       ((nodes as { id: string; name: string }[] | null) ?? []).map((node) => [node.id, node.name]),
     );

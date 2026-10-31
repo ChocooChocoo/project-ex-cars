@@ -13,9 +13,11 @@ import { createCheckoutSession, retrieveCheckoutSession } from "@/lib/payments/p
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
-  activeBuyerIdCount,
-  BUYER_ID_COUNT,
+  activeBuyerIds,
+  BUYER_ID_IMAGES,
+  buyerIdsComplete,
   DELIVERY_LEAD_MESSAGE,
+  ID_SIDES,
   isBusinessSlot,
   isDeliveryDate,
   isFinancingRequest,
@@ -44,6 +46,7 @@ const uploadPurchaseDocumentSchema = z.object({
   transaction_id: z.string().uuid(),
   document_kind: z.enum(["valid_id", "proof_of_billing"]),
   id_type: z.enum(ACCEPTED_ID_TYPES).optional().or(z.literal("")),
+  id_side: z.enum(ID_SIDES).optional().or(z.literal("")),
 });
 
 export async function uploadPurchaseDocument(formData: FormData) {
@@ -55,7 +58,7 @@ export async function uploadPurchaseDocument(formData: FormData) {
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid document upload." };
   }
-  const { transaction_id: transactionId, document_kind: documentKind, id_type: idType } = parsed.data;
+  const { transaction_id: transactionId, document_kind: documentKind, id_type: idType, id_side: idSide } = parsed.data;
 
   // The browser uploads the file to storage first; only its path comes through here.
   const storagePath = formData.get("storage_path");
@@ -63,6 +66,7 @@ export async function uploadPurchaseDocument(formData: FormData) {
     return { error: "Select a file to upload." };
   }
   if (documentKind === "valid_id" && !idType) return { error: "Select the ID type." };
+  if (documentKind === "valid_id" && !idSide) return { error: "Select front or back of the ID." };
 
   const { data: tx } = await supabase
     .from("transactions")
@@ -72,22 +76,28 @@ export async function uploadPurchaseDocument(formData: FormData) {
   if (!tx || tx.customer_id !== user.user.id) return { error: "Transaction not found." };
   if (tx.transaction_kind !== "buy") return { error: "Documents can only be uploaded for purchases." };
 
-  // Buyer identification is exactly two valid IDs; a rejected one can be replaced.
+  // Buyer identification is two valid IDs, each sent as a front and a back; a rejected image frees its
+  // place so the buyer can upload a replacement.
   if (documentKind === "valid_id") {
     const { data: existing } = await supabase
       .from("transaction_documents")
-      .select("document_kind, verification_state")
+      .select("document_kind, verification_state, id_type, id_side")
       .eq("transaction_id", transactionId);
-    if (activeBuyerIdCount(existing ?? []) >= BUYER_ID_COUNT) {
-      return { error: "You have already uploaded two valid IDs." };
+    const ids = activeBuyerIds(existing ?? []);
+    if (ids.length >= BUYER_ID_IMAGES) {
+      return { error: "You can upload four ID images: the front and back of two IDs." };
+    }
+    if (ids.some((doc) => doc.id_type === idType && doc.id_side === idSide)) {
+      return { error: "That side of this ID is already uploaded." };
     }
   }
 
   const { error: dbError } = await supabase.from("transaction_documents").insert({
     transaction_id: transactionId,
     document_kind: documentKind,
-    // Only a valid ID carries an ID type; the form can still hold the last one picked.
+    // Only a valid ID carries an ID type and a side; the form can still hold the last ones picked.
     id_type: documentKind === "valid_id" ? idType || null : null,
+    id_side: documentKind === "valid_id" ? idSide || null : null,
     storage_path: storagePath,
     uploader_id: user.user.id,
     verification_state: "pending",
@@ -95,10 +105,57 @@ export async function uploadPurchaseDocument(formData: FormData) {
   if (dbError) return { error: dbError.message };
 
   // T03 SM2: advisory auto-check after the response is sent, so the upload never waits or fails on it.
-  if (documentKind === "valid_id") after(() => autoCheckDocument(transactionId, storagePath, "valid_id", idType));
+  // The front of an ID carries the details the check reads; the back is just the other side.
+  if (documentKind === "valid_id" && idSide === "front") {
+    after(() => autoCheckDocument(transactionId, storagePath, "valid_id", idType));
+  }
 
   revalidatePath(`/my-transactions/${transactionId}`);
   revalidatePath(`/dashboard/transactions/${transactionId}`);
+  return { success: true };
+}
+
+// A buyer can take back an image uploaded by mistake while the request is still a draft. Once it is sent,
+// GCE may already be reviewing it, so the documents stay.
+export async function removePurchaseDocument(documentId: string) {
+  const supabase = await createServerSupabaseClient();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+
+  const parsed = z.string().uuid().safeParse(documentId);
+  if (!parsed.success) return { error: "Invalid document." };
+
+  const { data: document } = await supabase
+    .from("transaction_documents")
+    .select("id, transaction_id, storage_path, verification_state")
+    .eq("id", parsed.data)
+    .maybeSingle();
+  if (!document) return { error: "Document not found." };
+
+  const { data: tx } = await supabase
+    .from("transactions")
+    .select("id, customer_id, current_state")
+    .eq("id", document.transaction_id)
+    .maybeSingle();
+  if (!tx || tx.customer_id !== user.user.id) return { error: "Document not found." };
+  if (tx.current_state !== "pending") {
+    return { error: "This request has already been sent, so its documents can no longer be removed." };
+  }
+  if (document.verification_state !== "pending") {
+    return { error: "Only a document still waiting for verification can be removed." };
+  }
+
+  // Customers have no DELETE policy on the bucket or the table, so the service role does both.
+  const admin = createAdminClient();
+  if (typeof document.storage_path === "string") {
+    const { error: storageError } = await admin.storage.from("transaction-documents").remove([document.storage_path]);
+    if (storageError) return { error: storageError.message };
+  }
+  const { error: dbError } = await admin.from("transaction_documents").delete().eq("id", document.id);
+  if (dbError) return { error: dbError.message };
+
+  revalidatePath(`/my-transactions/${document.transaction_id}`);
+  revalidatePath(`/dashboard/transactions/${document.transaction_id}`);
   return { success: true };
 }
 
@@ -335,7 +392,10 @@ export async function submitBuyRequest(formData: FormData) {
   if (delivery && !details?.delivery_terms_agreed_at) return { error: "Agree to the delivery terms first." };
 
   const [{ data: documents }, { data: slot }, { data: standing }] = await Promise.all([
-    supabase.from("transaction_documents").select("document_kind, verification_state").eq("transaction_id", tx.id),
+    supabase
+      .from("transaction_documents")
+      .select("document_kind, verification_state, id_type, id_side")
+      .eq("transaction_id", tx.id),
     supabase
       .from("viewing_arrangements")
       .select("schedule, arrangement_kind")
@@ -344,7 +404,13 @@ export async function submitBuyRequest(formData: FormData) {
       .maybeSingle(),
     supabase.from("customer_standing").select("gce_visit_only").eq("account_id", user.user.id).maybeSingle(),
   ]);
-  if (activeBuyerIdCount(documents ?? []) !== BUYER_ID_COUNT) return { error: "Upload two valid IDs first." };
+  const buyerDocuments = documents ?? [];
+  if (!buyerIdsComplete(buyerDocuments)) return { error: "Upload the front and back of two valid IDs first." };
+  if (
+    !buyerDocuments.some((doc) => doc.document_kind === "proof_of_billing" && doc.verification_state !== "rejected")
+  ) {
+    return { error: "Upload a proof of billing before sending the request." };
+  }
   if (queued && standing?.gce_visit_only) return { error: "Your account is limited to GCE visits." };
   const scheduledAt = slot ? new Date(slot.schedule) : null;
   if (bookedAtRequest) {

@@ -210,6 +210,7 @@ describe("submitBuyRequest", () => {
     db.rows.transaction_documents = [
       { document_kind: "valid_id", verification_state: "pending" },
       { document_kind: "valid_id", verification_state: "pending" },
+      { document_kind: "proof_of_billing", verification_state: "pending" },
     ];
   };
   const form = () => {
@@ -217,6 +218,19 @@ describe("submitBuyRequest", () => {
     fd.set("transaction_id", transactionId);
     return fd;
   };
+
+  it("refuses a request without proof of billing", async () => {
+    request("gce_visit");
+    db.rows.transaction_documents = [
+      { document_kind: "valid_id", verification_state: "pending" },
+      { document_kind: "valid_id", verification_state: "pending" },
+    ];
+
+    await expect(submitBuyRequest(form())).resolves.toEqual({
+      error: "Upload a proof of billing before sending the request.",
+    });
+    expect(db.writes.some((write) => write.table === "transactions")).toBe(false);
+  });
 
   it("needs the delivery date of a financed delivery at request", async () => {
     request("delivery", { delivery_terms_agreed_at: "2033-01-01T00:00:00.000Z" });
@@ -261,6 +275,8 @@ describe("submitBuyRequest", () => {
     db.rows.transaction_documents = [
       { document_kind: "valid_id", verification_state: "pending" },
       { document_kind: "valid_id", verification_state: "pending" },
+      // T05 P2: a request cannot be sent without a proof of billing.
+      { document_kind: "proof_of_billing", verification_state: "pending" },
     ];
     db.rows.viewing_arrangements = { schedule: "2033-03-08T02:00:00.000Z", arrangement_kind: "gce_visit" };
 

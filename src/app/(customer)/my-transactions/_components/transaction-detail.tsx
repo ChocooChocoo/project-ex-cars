@@ -12,6 +12,7 @@ import { toast } from "sonner";
 
 import {
   cancelTransaction,
+  removePurchaseDocument,
   respondToFinancingOffer,
   saveBuyDetails,
   submitBuyRequest,
@@ -46,7 +47,9 @@ import { Textarea } from "@/components/ui/textarea";
 import type { ProfileAutoFill } from "@/lib/autofill";
 import { createClient } from "@/lib/supabase/client";
 import {
-  activeBuyerIdCount,
+  activeBuyerIds,
+  BUYER_ID_IMAGES,
+  buyerIdsComplete,
   DELIVERY_LEAD_DAYS,
   DELIVERY_STATUS_LABELS,
   DELIVERY_STATUSES,
@@ -62,6 +65,7 @@ import {
   paidTowardPrice,
   signsInApp,
 } from "@/lib/transactions/buy-flow";
+import { deliveryArea, deliveryFeeRangeLabel } from "@/lib/transactions/delivery-fee";
 import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_SIZE, transactionDocumentLabel } from "@/lib/transactions/document-media";
 import {
   arrangementKindLabel,
@@ -152,6 +156,7 @@ export function TransactionDetail({
   gceVisitOnly = false,
   delivery = null,
   counterOffer = null,
+  buyerRegionCode = null,
 }: {
   readonly transaction: Record<string, unknown>;
   readonly history: Record<string, unknown>[];
@@ -164,6 +169,8 @@ export function TransactionDetail({
   readonly negotiationThreadId?: string | null;
   readonly takenSlots?: string[];
   readonly gceVisitOnly?: boolean;
+  /** T05 P7: the buyer's `profiles.region_code`, which sets the delivery fee range. */
+  readonly buyerRegionCode?: string | null;
   readonly delivery?: {
     status: string | null;
     delay_note: string | null;
@@ -185,6 +192,9 @@ export function TransactionDetail({
   const kind = transaction.transaction_kind as string;
   const vehicles = transaction.vehicles as Record<string, unknown> | undefined;
   const purchaseDetails = transaction.purchase_details as Record<string, unknown> | undefined;
+  // T05 P7: the buyer's region sets the delivery fee range they read before the Sales Manager sets the fee.
+  const buyerArea = deliveryArea(buyerRegionCode);
+  const deliveryFeeRange = buyerArea ? deliveryFeeRangeLabel(buyerArea) : null;
   const sellDetails = transaction.sell_details as Record<string, unknown> | undefined;
   const vehicleRequests = transaction.vehicle_requests as Record<string, unknown> | undefined;
   const openedAt = transaction.opened_at as string;
@@ -229,15 +239,34 @@ export function TransactionDetail({
   // Purchase document upload state
   const [docKind, setDocKind] = useState("valid_id");
   const [docIdType, setDocIdType] = useState("");
+  const [docIdSide, setDocIdSide] = useState("front");
   const [uploading, setUploading] = useState(false);
+  const [removingDocumentId, setRemovingDocumentId] = useState<string | null>(null);
   const docFileRef = useRef<HTMLInputElement>(null);
 
-  const verifiedIdCount = documents.filter(
-    (d) => d.document_kind === "valid_id" && d.verification_state === "verified",
-  ).length;
-  const hasVerifiedBilling = documents.some(
-    (d) => d.document_kind === "proof_of_billing" && d.verification_state === "verified",
+  const buyerDocuments = documents as {
+    document_kind: unknown;
+    verification_state: unknown;
+    id_type?: unknown;
+    id_side?: unknown;
+  }[];
+  const activeIdImages = activeBuyerIds(buyerDocuments).length;
+  const idsComplete = buyerIdsComplete(buyerDocuments);
+  const hasBilling = documents.some(
+    (d) => d.document_kind === "proof_of_billing" && d.verification_state !== "rejected",
   );
+
+  async function handleRemoveDocument(documentId: string) {
+    setRemovingDocumentId(documentId);
+    const result = await removePurchaseDocument(documentId);
+    setRemovingDocumentId(null);
+    if (result.error) {
+      toast.error(result.error);
+    } else {
+      toast.success("Document removed.");
+      router.refresh();
+    }
+  }
 
   async function handleUploadDocument() {
     const file = docFileRef.current?.files?.[0];
@@ -247,6 +276,10 @@ export function TransactionDetail({
     }
     if (docKind === "valid_id" && !docIdType) {
       toast.error("Select the ID type.");
+      return;
+    }
+    if (docKind === "valid_id" && !docIdSide) {
+      toast.error("Select front or back of the ID.");
       return;
     }
     const ext = DOCUMENT_EXTENSIONS[file.type];
@@ -273,6 +306,7 @@ export function TransactionDetail({
       fd.set("transaction_id", id);
       fd.set("document_kind", docKind);
       fd.set("id_type", docKind === "valid_id" ? docIdType : "");
+      fd.set("id_side", docKind === "valid_id" ? docIdSide : "");
       fd.set("storage_path", storagePath);
       const result = await uploadPurchaseDocument(fd);
       if (result.error) {
@@ -327,8 +361,7 @@ export function TransactionDetail({
     }
   }
 
-  // §2 steps 2–4: two IDs and a locked Cash visit slot, then the request goes to the Sales Manager.
-  const activeIds = activeBuyerIdCount(documents as { document_kind: unknown; verification_state: unknown }[]);
+  // §2 steps 2–4: two IDs (front and back) and a locked Cash visit slot, then the request goes to the Sales Manager.
   const onsiteCashSaved = isOnsiteCashRequest(purchaseDetails ?? null);
   const queuedCashSaved = isQueuedRequest(purchaseDetails ?? null);
   // §6: a financing buyer books the inspection visit only after the financing is approved.
@@ -686,24 +719,31 @@ export function TransactionDetail({
                   </div>
                 ) : null}
                 {arrangementKind === "delivery" && !deliveryTermsAgreedAt ? (
-                  <div className="flex items-start gap-2 rounded-md border p-3 text-sm">
-                    <Checkbox
-                      id="agree-delivery-terms"
-                      checked={agreeDeliveryTerms}
-                      onCheckedChange={(checked) => setAgreeDeliveryTerms(checked === true)}
-                    />
-                    <label htmlFor="agree-delivery-terms" className="flex flex-col gap-1">
-                      <span>
-                        Delivery has a delivery fee and a downpayment. The downpayment and fee are paid first through
-                        PayMongo.{" "}
-                        {financingPicked
-                          ? "The rest is paid in monthly instalments."
-                          : paymentMethod === "bank_transfer"
-                            ? "The rest is paid by bank transfer through PayMongo when the car arrives."
-                            : "The rest is paid in cash when the car arrives."}
-                      </span>
-                      <span className="font-medium">I agree</span>
-                    </label>
+                  <div className="flex flex-col gap-2">
+                    <p className="text-muted-foreground text-xs">
+                      {deliveryFeeRange
+                        ? `Delivery fee for your area: ${deliveryFeeRange}. The Sales Manager confirms the exact fee.`
+                        : "Add your region in your profile to see the delivery fee for your area."}
+                    </p>
+                    <div className="flex items-start gap-2 rounded-md border p-3 text-sm">
+                      <Checkbox
+                        id="agree-delivery-terms"
+                        checked={agreeDeliveryTerms}
+                        onCheckedChange={(checked) => setAgreeDeliveryTerms(checked === true)}
+                      />
+                      <label htmlFor="agree-delivery-terms" className="flex flex-col gap-1">
+                        <span>
+                          Delivery has a delivery fee and a downpayment. The downpayment and fee are paid first through
+                          PayMongo.{" "}
+                          {financingPicked
+                            ? "The rest is paid in monthly instalments."
+                            : paymentMethod === "bank_transfer"
+                              ? "The rest is paid by bank transfer through PayMongo when the car arrives."
+                              : "The rest is paid in cash when the car arrives."}
+                        </span>
+                        <span className="font-medium">I agree</span>
+                      </label>
+                    </div>
                   </div>
                 ) : null}
                 {arrangementKind === "gce_visit" ? (
@@ -750,7 +790,7 @@ export function TransactionDetail({
                   <div className="flex flex-col gap-2 rounded-md border p-3 text-sm">
                     <p className="font-medium">Send your request</p>
                     <p className="text-muted-foreground text-xs">
-                      Valid IDs: {activeIds}/2 ·{" "}
+                      ID images: {activeIdImages}/{BUYER_ID_IMAGES} ·{" "}
                       {booksAfterApproval
                         ? "Time booked after the financing is approved"
                         : bookedSlot
@@ -758,6 +798,7 @@ export function TransactionDetail({
                           : "No time booked yet"}
                       {queuedCashSaved ? ` · Condition ${acknowledgedAt ? "acknowledged" : "not acknowledged"}` : ""}
                       {savedDelivery ? ` · Delivery terms ${deliveryTermsAgreedAt ? "agreed" : "not agreed"}` : ""}
+                      {hasBilling ? " · Proof of billing uploaded" : " · Proof of billing pending"}
                     </p>
                     {queuedCashSaved ? (
                       <p className="text-muted-foreground text-xs">
@@ -769,7 +810,8 @@ export function TransactionDetail({
                       onClick={handleSubmitRequest}
                       disabled={
                         submitting ||
-                        activeIds !== 2 ||
+                        !idsComplete ||
+                        !hasBilling ||
                         (!bookedSlot && !booksAfterApproval) ||
                         (queuedCashSaved && !acknowledgedAt) ||
                         (savedDelivery && !deliveryTermsAgreedAt)
@@ -879,10 +921,16 @@ export function TransactionDetail({
                 <h2 className="font-medium tracking-tight">Delivery</h2>
                 <p className="text-sm">
                   Delivery fee {formatCurrency(Number(purchaseDetails.delivery_fee ?? 0))} and downpayment{" "}
-                  {formatCurrency(Number(purchaseDetails.downpayment_amount ?? 0))} are paid online through PayMongo
-                  before {format(new Date(purchaseDetails.downpayment_due_at as string), "MMM d, yyyy")}.{" "}
+                  {formatCurrency(Number(purchaseDetails.downpayment_amount ?? 0))} (10% of the vehicle price) are paid
+                  online through PayMongo before{" "}
+                  {format(new Date(purchaseDetails.downpayment_due_at as string), "MMM d, yyyy")}.{" "}
                   {deliveryBalanceNote(purchaseDetails.payment_method, "buyer")}
                 </p>
+                {deliveryFeeRange ? (
+                  <p className="text-muted-foreground text-xs">
+                    Delivery fee range for your area: <span className="tabular-nums">{deliveryFeeRange}</span>.
+                  </p>
+                ) : null}
                 {purchaseDetails.downpayment_forfeited_at ? (
                   <p className="text-destructive text-sm">Your downpayment was forfeited.</p>
                 ) : null}
@@ -1041,12 +1089,14 @@ export function TransactionDetail({
                 <div className="flex flex-wrap items-center gap-2 rounded-lg border p-3">
                   <ShieldCheck className="size-4 text-muted-foreground" />
                   <p className="text-muted-foreground text-xs">
-                    GCE requires two valid IDs and one proof of billing to complete your purchase.
+                    GCE requires the front and back of two valid IDs and one proof of billing to complete your purchase.
                   </p>
                 </div>
                 <p className="text-xs">
-                  <span className="font-medium">{Math.min(verifiedIdCount, 2)}/2</span> valid IDs verified
-                  {hasVerifiedBilling ? " · proof of billing verified" : " · proof of billing pending"}
+                  <span className="font-medium">
+                    {activeIdImages}/{BUYER_ID_IMAGES}
+                  </span>{" "}
+                  ID images · proof of billing {hasBilling ? "uploaded" : "pending"}
                 </p>
                 <div className="flex flex-wrap items-end gap-2">
                   <div className="flex flex-col gap-1">
@@ -1091,6 +1141,24 @@ export function TransactionDetail({
                       </Select>
                     </div>
                   ) : null}
+                  {docKind === "valid_id" ? (
+                    <div className="flex flex-col gap-1">
+                      <Label htmlFor="cust-doc-id-side" className="text-xs">
+                        Side
+                      </Label>
+                      <Select value={docIdSide} onValueChange={setDocIdSide}>
+                        <SelectTrigger id="cust-doc-id-side" className="w-28">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            <SelectItem value="front">Front</SelectItem>
+                            <SelectItem value="back">Back</SelectItem>
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : null}
                   <Input
                     ref={docFileRef}
                     type="file"
@@ -1120,9 +1188,24 @@ export function TransactionDetail({
                             {(doc.id_type as string).replace(/_/g, " ")}
                           </span>
                         ) : null}
+                        {doc.id_side ? (
+                          <span className="text-muted-foreground text-xs capitalize">{doc.id_side as string}</span>
+                        ) : null}
                         <Badge variant="secondary" className="ml-auto text-xs">
                           {doc.verification_state as string}
                         </Badge>
+                        {state === "pending" && doc.verification_state === "pending" ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            aria-label={`Remove ${label}${doc.id_side ? ` (${doc.id_side as string})` : ""}`}
+                            disabled={removingDocumentId === (doc.id as string)}
+                            onClick={() => handleRemoveDocument(doc.id as string)}
+                          >
+                            {removingDocumentId === (doc.id as string) ? "Removing..." : "Remove"}
+                          </Button>
+                        ) : null}
                       </div>
                       {doc.verification_state === "rejected" ? (
                         <p className="text-destructive text-xs">

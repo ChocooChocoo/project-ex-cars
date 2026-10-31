@@ -57,9 +57,10 @@ export async function pickByLabel(page: Page, label: string, option?: string) {
   await (option ? page.getByRole("option", { name: option }) : page.getByRole("option").first()).click();
 }
 
-async function upload(page: Page, kind: "Valid ID" | "Proof of Billing", idType?: string) {
+async function upload(page: Page, kind: "Valid ID" | "Proof of Billing", idType?: string, side?: "Front" | "Back") {
   await pick(page, "cust-doc-kind", kind);
   if (idType) await pick(page, "cust-doc-id-type", idType);
+  if (side) await pick(page, "cust-doc-id-side", side);
   await page
     .locator('input[type="file"]')
     .last()
@@ -70,7 +71,8 @@ async function upload(page: Page, kind: "Valid ID" | "Proof of Billing", idType?
   await page.waitForLoadState("networkidle");
 }
 
-// The buyer's side up to Submit Request: Buy Now, 2 IDs + proof of billing, method, arrangement.
+// The buyer's side up to Submit Request: Buy Now, 2 IDs (front and back each) + proof of billing, method,
+// arrangement.
 export async function buyerRequest(
   page: Page,
   vehicleId: string,
@@ -88,8 +90,10 @@ export async function buyerRequest(
   await page.waitForLoadState("networkidle");
   const id = page.url().match(/[0-9a-f-]{36}/)?.[0] ?? "";
 
-  await upload(page, "Valid ID", "Passport");
-  await upload(page, "Valid ID", "Driver's License");
+  await upload(page, "Valid ID", "Passport", "Front");
+  await upload(page, "Valid ID", "Passport", "Back");
+  await upload(page, "Valid ID", "Driver's License", "Front");
+  await upload(page, "Valid ID", "Driver's License", "Back");
   await upload(page, "Proof of Billing");
   // T04: Financing is a Payment Option. T06: Full Payment is Cash or Bank Transfer (via PayMongo); PayMongo is
   // the channel, so it is never an option of its own.
@@ -126,7 +130,7 @@ export async function verifyAll(page: Page, expected: number) {
 export async function approveAsSalesManager(page: Page, transactionId: string) {
   await signInAs(page, "sales_manager@gce.local");
   await open(page, `/sales_manager/transactions/${transactionId}`);
-  await verifyAll(page, 3);
+  await verifyAll(page, 5);
   // The last verification must have landed before the approval counts the verified papers.
   await page.waitForLoadState("networkidle");
   // A cash Meet Halfway is approved together with its team.
@@ -209,18 +213,19 @@ export async function verifyPayments(page: Page, id: string) {
   await verifyAll(page, await page.getByRole("button", { name: "Verify", exact: true }).count());
 }
 
-// Phase 2 papers chain at GCE: the Sales Manager requests the papers, the CI hands them over from Field
-// Cases, the Sales Manager receives them and marks the car sold. The payment must already be checked.
+// Phase 2 papers chain at GCE: the Sales Manager requests the papers, the CI hands them over from
+// Vehicle Papers, the Sales Manager receives them and marks the car sold. The payment must already be checked.
 export async function papersThenSold(page: Page, id: string, vehicleLabel: string) {
   await signInAs(page, "sales_manager@gce.local");
   await open(page, `/sales_manager/transactions/${id}`);
   await page.getByRole("button", { name: "Request papers release" }).click();
   await expect(page.getByText("Papers requested from the Confidential Informant.")).toBeVisible();
   await signInAs(page, "confidential_informant@gce.local");
-  await open(page, "/confidential_informant/field-cases");
-  const request = page.getByRole("listitem").filter({ hasText: vehicleLabel });
-  await request.getByRole("button", { name: "Approve and hand over" }).click();
-  await expect(page.getByText("Papers handed over to the Sales Manager.")).toBeVisible();
+  await open(page, "/confidential_informant/vehicle-papers");
+  const request = page.getByRole("row").filter({ hasText: vehicleLabel });
+  await request.getByRole("button", { name: /Actions for/ }).click();
+  await page.getByRole("menuitem", { name: "Mark Released" }).click();
+  await expect(page.getByText("Papers released to the Sales Manager.")).toBeVisible();
   await signInAs(page, "sales_manager@gce.local");
   await open(page, `/sales_manager/transactions/${id}`);
   await page.getByRole("button", { name: "Receive papers" }).click();

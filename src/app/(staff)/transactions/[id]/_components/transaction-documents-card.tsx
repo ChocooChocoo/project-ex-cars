@@ -83,7 +83,8 @@ export function TransactionDocumentsCard({
         </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        {kind === "buy" && !isCeo && (
+        {/* T05: the buyer sends their own IDs and proof of billing; the Sales Manager only verifies them. */}
+        {kind === "buy" && !isCeo && userRole !== "sales_manager" && (
           <div className="flex flex-wrap items-end gap-2 rounded-md border bg-muted/20 p-3">
             <div className="flex min-w-40 flex-col gap-1.5">
               <Label htmlFor="doc-kind" className="text-xs">
@@ -162,6 +163,11 @@ export function TransactionDocumentsCard({
                     <p className="text-muted-foreground text-xs capitalize">
                       {(doc.id_type as string).replace(/_/g, " ")}
                     </p>
+                  ) : null}
+                  {doc.id_side ? (
+                    <Badge variant="outline" className="h-5 w-fit px-2 text-[11px] capitalize">
+                      {doc.id_side as string}
+                    </Badge>
                   ) : null}
                   {signedUrl ? (
                     doc.is_image === true ? (

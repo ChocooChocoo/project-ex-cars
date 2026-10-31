@@ -1,0 +1,44 @@
+{
+  "head_accountant": {
+    "workdays": [1, 2, 3, 4, 5, 6],
+    "start_time": "09:00",
+    "end_time": "18:00",
+    "grace_minutes": 10,
+    "timezone": "Asia/Manila"
+  },
+  "sales_manager": {
+    "workdays": [1, 2, 3, 4, 5, 6],
+    "start_time": "08:00",
+    "end_time": "17:00",
+    "grace_minutes": 10,
+    "timezone": "Asia/Manila"
+  },
+  "account_manager": {
+    "workdays": [1, 2, 3, 4, 5, 6],
+    "start_time": "08:00",
+    "end_time": "17:00",
+    "grace_minutes": 10,
+    "timezone": "Asia/Manila"
+  },
+  "marketing_specialist": {
+    "workdays": [1, 2, 3, 4, 5, 6],
+    "start_time": "08:00",
+    "end_time": "17:00",
+    "grace_minutes": 10,
+    "timezone": "Asia/Manila"
+  },
+  "confidential_informant": {
+    "workdays": [1, 2, 3, 4, 5, 6],
+    "start_time": "07:00",
+    "end_time": "16:00",
+    "grace_minutes": 10,
+    "timezone": "Asia/Manila"
+  },
+  "mechanic": {
+    "workdays": [1, 2, 3, 4, 5, 6],
+    "start_time": "07:00",
+    "end_time": "16:00",
+    "grace_minutes": 10,
+    "timezone": "Asia/Manila"
+  }
+}

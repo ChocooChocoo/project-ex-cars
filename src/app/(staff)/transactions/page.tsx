@@ -36,6 +36,7 @@ export default async function TransactionsPage({
   const rows: TransactionRow[] = all.map((t) => {
     const vehicles = t.vehicles as Record<string, unknown> | null;
     const profile = t.profiles as Record<string, unknown> | null;
+    const purchase = Array.isArray(t.purchase_details) ? t.purchase_details[0] : t.purchase_details;
 
     return {
       id: t.id as string,
@@ -43,6 +44,7 @@ export default async function TransactionsPage({
       customerEmail: "",
       kind: t.transaction_kind as string,
       state: (t.current_state as string | undefined) ?? "pending",
+      paymentMethod: ((purchase as Record<string, unknown> | null)?.payment_method as string | undefined) ?? "",
       vehicleMake: (vehicles?.make as string | undefined) ?? "",
       vehicleModel: (vehicles?.model as string | undefined) ?? "",
       vehicleYear: (vehicles?.year as string | undefined) ?? "",

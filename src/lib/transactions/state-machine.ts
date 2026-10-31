@@ -1,6 +1,8 @@
 // Pure state machine for Phase 5 transaction states (R-18).
 // No I/O, no server imports — usable from both server actions and client UI.
 
+import { isDirectPayment } from "./buy-flow";
+
 export const TRANSACTION_STATES = [
   "pending",
   "under_review",
@@ -84,15 +86,14 @@ type TransitionRole = "ceo" | "sales_manager" | "account_manager" | "head_accoun
 const S = ["sales_manager"] as TransitionRole[];
 const C = ["ceo"] as TransitionRole[];
 const A = ["account_manager"] as TransitionRole[];
-const H = ["head_accountant"] as TransitionRole[];
 
 const SCA = [...S, ...C, ...A];
 const SC = [...S, ...C];
-const SCH = [...S, ...C, ...H];
 
 // GCE Process Flows §2–4 (T01 Q0a): the Sales Manager reviews and approves or rejects buyer
 // requests; the CEO keeps an override. Documents are still verified before approval (see
 // transitionTransaction). Sell offers do not use these rules; they move through sell-actions.ts.
+// T05: Mark Sold is the Sales Manager's, with the CEO as override; the Head Accountant verifies payments.
 export const TRANSITION_RULES: Record<
   TransactionState,
   Partial<Record<TransactionState, readonly TransitionRole[]>>
@@ -107,7 +108,7 @@ export const TRANSITION_RULES: Record<
     cancelled: SC,
   },
   approved: {
-    completed: SCH,
+    completed: SC,
     cancelled: SC,
   },
   rejected: {},
@@ -131,6 +132,18 @@ export function getAllowedTransitions(from: TransactionState, role: string): Tra
 
 export function isTerminal(state: TransactionState): boolean {
   return state === "rejected" || state === "completed" || state === "cancelled";
+}
+
+type CancellableBuy = {
+  transaction_kind?: unknown;
+  purchase_details?: { payment_method?: unknown } | { payment_method?: unknown }[] | null;
+};
+
+// T05: a buy paid in cash or by bank transfer is cancelled by the buyer or the CEO; the Sales Manager
+// loses Cancel before and after approval. A financing buy keeps its current actions.
+export function canSalesManagerCancel(tx: CancellableBuy): boolean {
+  const details = Array.isArray(tx.purchase_details) ? tx.purchase_details[0] : tx.purchase_details;
+  return !(tx.transaction_kind === "buy" && isDirectPayment(details ?? null));
 }
 
 // Review window lapsed without a decision. Decisions clear review_due_at; nothing auto-cancels.

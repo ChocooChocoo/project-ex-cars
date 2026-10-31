@@ -38,6 +38,9 @@ export async function createVehicle(formData: FormData) {
     .insert({
       stock_code: data.stock_code,
       vin: data.vin || null,
+      plate_number: data.plate_number || null,
+      engine_number: data.engine_number || null,
+      chassis_number: data.chassis_number || null,
       make: data.make,
       model: data.model,
       year: data.year,
@@ -88,6 +91,9 @@ export async function updateVehicle(formData: FormData) {
     .update({
       stock_code: data.stock_code,
       vin: data.vin || null,
+      plate_number: data.plate_number || null,
+      engine_number: data.engine_number || null,
+      chassis_number: data.chassis_number || null,
       make: data.make,
       model: data.model,
       year: data.year,

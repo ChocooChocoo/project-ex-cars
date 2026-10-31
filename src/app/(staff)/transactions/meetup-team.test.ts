@@ -94,7 +94,13 @@ describe("approving a cash Meet Halfway request", () => {
       flow_status: "pending_sm_approval",
       purchase_details: { payment_method: "cash", arrangement_kind: "meetup" },
     };
-    db.counts.transaction_documents = 2;
+    db.rows.transaction_documents = [
+      { document_kind: "valid_id", verification_state: "verified", id_type: "passport", id_side: "front" },
+      { document_kind: "valid_id", verification_state: "verified", id_type: "passport", id_side: "back" },
+      { document_kind: "valid_id", verification_state: "verified", id_type: "drivers_license", id_side: "front" },
+      { document_kind: "valid_id", verification_state: "verified", id_type: "drivers_license", id_side: "back" },
+    ];
+    db.counts.transaction_documents = 1;
   });
 
   it.each<Record<string, string>>([
@@ -156,7 +162,15 @@ describe("approving a Bank Transfer Meet Halfway request", () => {
       flow_status: "pending_sm_approval",
       purchase_details: { payment_method: "bank_transfer", arrangement_kind: "meetup" },
     };
-    db.counts.transaction_documents = 2;
+    // T05 P2: approval checks the verified papers first, so the downpayment rule is reachable.
+    db.rows.transaction_documents = [
+      { document_kind: "valid_id", verification_state: "verified", id_type: "passport", id_side: "front" },
+      { document_kind: "valid_id", verification_state: "verified", id_type: "passport", id_side: "back" },
+      { document_kind: "valid_id", verification_state: "verified", id_type: "drivers_license", id_side: "front" },
+      { document_kind: "valid_id", verification_state: "verified", id_type: "drivers_license", id_side: "back" },
+      { document_kind: "proof_of_billing", verification_state: "verified" },
+    ];
+    db.counts.transaction_documents = 1;
   });
 
   // Test 7: the buyer pays a downpayment online before a meet-up, so the approval must set it.
@@ -246,7 +260,13 @@ describe("Mark as Sold on a financed meet-up", () => {
       flow_status: "financing_active",
       purchase_details: { payment_method: "financing", arrangement_kind: "meetup" },
     };
-    db.counts.transaction_documents = 2;
+    db.rows.transaction_documents = [
+      { document_kind: "valid_id", verification_state: "verified", id_type: "passport", id_side: "front" },
+      { document_kind: "valid_id", verification_state: "verified", id_type: "passport", id_side: "back" },
+      { document_kind: "valid_id", verification_state: "verified", id_type: "drivers_license", id_side: "front" },
+      { document_kind: "valid_id", verification_state: "verified", id_type: "drivers_license", id_side: "back" },
+    ];
+    db.counts.transaction_documents = 1;
     db.counts.payment_records = 0;
     db.rows.sale_handovers = {
       papers_status: "handed_over",

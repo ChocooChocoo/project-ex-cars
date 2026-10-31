@@ -75,6 +75,13 @@ export default async function MyTransactionDetailPage({ params }: { readonly par
 
   const autofill = await getProfileAutoFill();
 
+  // T05 P7: the buyer's own region sets the delivery fee range shown on the transaction.
+  const { data: buyerProfile } = await supabase
+    .from("profiles")
+    .select("region_code")
+    .eq("id", user.user.id)
+    .maybeSingle();
+
   // §2 step 3: times already locked by other buyers for this car (no buyer details exposed).
   const vehicleId = (transaction as Record<string, unknown>).vehicle_id as string | null;
   const { data: takenSlots } =
@@ -160,6 +167,7 @@ export default async function MyTransactionDetailPage({ params }: { readonly par
             : null
         }
         takenSlots={((takenSlots as { schedule: string }[] | null) ?? []).map((slot) => slot.schedule)}
+        buyerRegionCode={(buyerProfile as { region_code: string | null } | null)?.region_code ?? null}
       />
     </div>
   );
