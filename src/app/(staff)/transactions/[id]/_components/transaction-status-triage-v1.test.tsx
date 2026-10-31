@@ -89,3 +89,18 @@ describe("TransactionStatusTriageV1 cash-buy rules (T05)", () => {
     expect(screen.getByText("Buyer declined")).toBeInTheDocument();
   });
 });
+
+describe("TransactionStatusTriageV1 Head Accountant (T05)", () => {
+  it("no longer offers Mark Sold", () => {
+    renderTriage({ state: "approved", paymentMethod: "cash", userRole: "head_accountant" });
+
+    expect(screen.queryByText("Mark Sold to This Buyer")).not.toBeInTheDocument();
+    expect(screen.getByText(/another role takes the next step/)).toBeInTheDocument();
+  });
+
+  it("still says a completed transaction is terminal", () => {
+    renderTriage({ state: "completed", userRole: "head_accountant" });
+
+    expect(screen.getByText(/this transaction is in a terminal state/)).toBeInTheDocument();
+  });
+});

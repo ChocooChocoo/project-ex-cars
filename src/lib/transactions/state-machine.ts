@@ -86,15 +86,14 @@ type TransitionRole = "ceo" | "sales_manager" | "account_manager" | "head_accoun
 const S = ["sales_manager"] as TransitionRole[];
 const C = ["ceo"] as TransitionRole[];
 const A = ["account_manager"] as TransitionRole[];
-const H = ["head_accountant"] as TransitionRole[];
 
 const SCA = [...S, ...C, ...A];
 const SC = [...S, ...C];
-const SCH = [...S, ...C, ...H];
 
 // GCE Process Flows §2–4 (T01 Q0a): the Sales Manager reviews and approves or rejects buyer
 // requests; the CEO keeps an override. Documents are still verified before approval (see
 // transitionTransaction). Sell offers do not use these rules; they move through sell-actions.ts.
+// T05: Mark Sold is the Sales Manager's, with the CEO as override; the Head Accountant verifies payments.
 export const TRANSITION_RULES: Record<
   TransactionState,
   Partial<Record<TransactionState, readonly TransitionRole[]>>
@@ -109,7 +108,7 @@ export const TRANSITION_RULES: Record<
     cancelled: SC,
   },
   approved: {
-    completed: SCH,
+    completed: SC,
     cancelled: SC,
   },
   rejected: {},

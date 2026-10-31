@@ -21,6 +21,7 @@ import {
   missedInstallments,
   missingContractCopies,
   needsContract,
+  nextDuePayment,
   papersReadyForSale,
   paymentAllowedBeforeSigning,
   verifiedPaid,
@@ -633,20 +634,41 @@ export async function recordPayment(formData: FormData) {
   const transactionId = parsed.data.transaction_id;
   const installmentId = parsed.data.installment_id || null;
 
+  // T05: the Head Accountant verifies the payment. The only row they still record is an installment,
+  // written by the financing "Record paid" button.
+  if (role === "head_accountant" && !installmentId) {
+    return { error: "The Sales Manager records the payment. The Head Accountant verifies it." };
+  }
+
+  let amount = parsed.data.amount;
+  let method = parsed.data.method;
+  let paymentKind: string | null = parsed.data.payment_kind || null;
+
   // Contract first: no money is recorded on a sale that needs a contract until the buyer has signed.
   // A delivery's fee and downpayment come before the day, and an installment only exists after signing.
   if (!installmentId) {
     const { data: sale } = await createAdminClient()
       .from("transactions")
-      .select("purchase_details(payment_method, arrangement_kind), sale_handovers(contract_state)")
+      .select(
+        "flow_status, purchase_details(payment_method, arrangement_kind, final_price, delivery_fee, downpayment_amount, downpayment_due_at), payment_records(payment_kind, amount, verified_by, rejected_at), sale_handovers(contract_state)",
+      )
       .eq("id", transactionId)
       .maybeSingle();
     const details = (Array.isArray(sale?.purchase_details) ? sale.purchase_details[0] : sale?.purchase_details) ?? null;
     const handover = Array.isArray(sale?.sale_handovers) ? sale.sale_handovers[0] : sale?.sale_handovers;
+    // T05: a CASH buy has one payment due at a time. The server works it out, so a typed amount or kind
+    // cannot be spammed in, and a second submission of the same kind finds nothing left to record.
+    if (details?.payment_method === "cash") {
+      const due = nextDuePayment(details, sale?.payment_records ?? [], sale?.flow_status ?? null);
+      if (!due) return { error: "Nothing is due on this purchase." };
+      amount = due.amount;
+      method = due.method;
+      paymentKind = due.kind;
+    }
     if (
       needsContract(details) &&
       handover?.contract_state !== "signed" &&
-      !paymentAllowedBeforeSigning(details, parsed.data.payment_kind)
+      !paymentAllowedBeforeSigning(details, paymentKind)
     ) {
       return { error: "The buyer must sign the contract before a payment is recorded." };
     }
@@ -666,17 +688,19 @@ export async function recordPayment(formData: FormData) {
   const { error } = await supabase.from("payment_records").insert({
     transaction_id: transactionId,
     installment_id: installmentId ?? null,
-    amount: parsed.data.amount,
-    method: parsed.data.method,
+    amount,
+    method,
     external_reference: parsed.data.external_reference || null,
     recorded_by: user.user.id,
     settlement_date: parsed.data.settlement_date,
-    payment_kind: parsed.data.payment_kind || null,
+    payment_kind: paymentKind,
     proof_path: proofPath,
   });
 
   if (error) {
     if (proofPath) await supabase.storage.from("transaction-documents").remove([proofPath]);
+    // T05: the partial unique index refuses a second live row of the same payment kind.
+    if (error.code === "23505") return { error: "This payment is already recorded." };
     return { error: error.message };
   }
 
@@ -690,7 +714,7 @@ export async function recordPayment(formData: FormData) {
   }
 
   // §6 step 17: the Initial Downpayment of a claimed car now waits for the Head Accountant.
-  if (parsed.data.payment_kind === "downpayment") {
+  if (paymentKind === "downpayment") {
     await createAdminClient()
       .from("transactions")
       .update({ flow_status: "initial_dp_awaiting_verification" })
@@ -703,7 +727,7 @@ export async function recordPayment(formData: FormData) {
     action: "payment_recorded",
     recordKind: "payment_records",
     recordId: transactionId,
-    summary: `Payment of PHP ${parsed.data.amount} recorded for transaction ${transactionId}`,
+    summary: `Payment of PHP ${amount} recorded for transaction ${transactionId}`,
   });
 
   revalidatePath(`/dashboard/transactions/${transactionId}`);
