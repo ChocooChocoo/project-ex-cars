@@ -173,11 +173,27 @@ describe("a payment waits for the signed contract", () => {
     return recordPayment(fd);
   }
 
-  const request = (method: string, arrangement: string, contractState: string | null) => {
+  const request = (
+    method: string,
+    arrangement: string,
+    contractState: string | null,
+    details: Record<string, unknown> = {},
+  ) => {
     db.rows.transactions = {
-      purchase_details: { payment_method: method, arrangement_kind: arrangement },
+      flow_status: null,
+      purchase_details: { payment_method: method, arrangement_kind: arrangement, ...details },
+      payment_records: [],
       sale_handovers: contractState ? { contract_state: contractState } : null,
     };
+  };
+
+  // T05: the server works out the payment due, so each recorded row changes the next one.
+  const record = (kind: string, amount: number) => {
+    const current = db.rows.transactions as { payment_records?: unknown[] } | undefined;
+    current.payment_records = [
+      ...(current.payment_records ?? []),
+      { payment_kind: kind, amount, verified_by: null, rejected_at: null },
+    ];
   };
 
   const paid = () => db.writes.some((write) => write.table === "payment_records");
@@ -191,7 +207,7 @@ describe("a payment waits for the signed contract", () => {
   });
 
   it("refuses the cash at a meet-up before the buyer signs", async () => {
-    request("cash", "meetup", null);
+    request("cash", "meetup", null, { final_price: 600_000 });
 
     await expect(pay("full")).resolves.toEqual(REFUSED);
   });
@@ -204,15 +220,22 @@ describe("a payment waits for the signed contract", () => {
   });
 
   it("takes a delivery's fee and downpayment before signing, but not its balance", async () => {
-    request("cash", "delivery", null);
+    request("cash", "delivery", null, {
+      final_price: 600_000,
+      delivery_fee: 2500,
+      downpayment_amount: 60_000,
+      downpayment_due_at: "2033-03-01T00:00:00.000Z",
+    });
 
     await expect(pay("delivery_fee")).resolves.toEqual({ success: true });
+    record("delivery_fee", 2500);
     await expect(pay("downpayment")).resolves.toEqual({ success: true });
+    record("downpayment", 60_000);
     await expect(pay("balance")).resolves.toEqual(REFUSED);
   });
 
   it("asks for no contract on cash at a GCE visit, or on a monthly installment", async () => {
-    request("cash", "gce_visit", null);
+    request("cash", "gce_visit", null, { final_price: 600_000 });
     await expect(pay("full")).resolves.toEqual({ success: true });
 
     request("financing", "gce_visit", null);

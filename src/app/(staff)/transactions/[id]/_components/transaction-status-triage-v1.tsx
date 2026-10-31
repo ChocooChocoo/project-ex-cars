@@ -7,7 +7,12 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { canRecordNoShow, isDirectPayment } from "@/lib/transactions/buy-flow";
 import { TRANSACTION_STATE_LABELS, transactionKindLabel } from "@/lib/transactions/labels";
-import { canSalesManagerCancel, getAllowedTransitions, type TransactionState } from "@/lib/transactions/state-machine";
+import {
+  canSalesManagerCancel,
+  getAllowedTransitions,
+  isTerminal,
+  type TransactionState,
+} from "@/lib/transactions/state-machine";
 import { cn } from "@/lib/utils";
 
 const stateTone: Record<TransactionState, string> = {
@@ -181,7 +186,11 @@ export function TransactionStatusTriageV1({
           <div className="space-y-1 rounded-md border border-dashed bg-muted/10 px-3 py-2.5">
             <p className="text-muted-foreground text-xs">
               No transitions:{" "}
-              <span className="font-medium text-foreground">this transaction is in a terminal state.</span>
+              <span className="font-medium text-foreground">
+                {isTerminal(state)
+                  ? "this transaction is in a terminal state."
+                  : "another role takes the next step on this transaction."}
+              </span>
             </p>
           </div>
         )}

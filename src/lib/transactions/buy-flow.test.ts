@@ -27,6 +27,7 @@ import {
   missingContractCopies,
   needsContract,
   nextDeliveryStatus,
+  nextDuePayment,
   nextStanding,
   onlinePaymentsDue,
   paidTowardPrice,
@@ -358,6 +359,100 @@ describe("onlinePaymentsDue for a Bank Transfer", () => {
         payments: [],
       }),
     ).toEqual([]);
+  });
+});
+
+describe("nextDuePayment for a CASH buy (T05)", () => {
+  const price = 600_000;
+  const downpayment = 60_000;
+  const paid = (payment_kind: string, amount: number, rejected = false) => ({
+    payment_kind,
+    amount,
+    verified_by: null,
+    rejected_at: rejected ? "2033-03-01T00:00:00.000Z" : null,
+  });
+
+  const visit = { payment_method: "cash", arrangement_kind: "gce_visit", final_price: price };
+  const meetup = { payment_method: "cash", arrangement_kind: "meetup", final_price: price };
+  const delivery = {
+    payment_method: "cash",
+    arrangement_kind: "delivery",
+    final_price: price,
+    delivery_fee: 2500,
+    downpayment_amount: downpayment,
+    downpayment_due_at: "2033-03-01T00:00:00.000Z",
+  };
+
+  it("prefills the whole price at a GCE visit", () => {
+    expect(nextDuePayment(visit, [], null)).toEqual({ kind: "full", amount: price, method: "cash" });
+  });
+
+  it("prefills only what is left once part of the price is recorded", () => {
+    expect(nextDuePayment(visit, [paid("full", price - 100_000)], null)).toEqual({
+      kind: "balance",
+      amount: 100_000,
+      method: "cash",
+    });
+  });
+
+  it("refuses a second Full Payment once the price is covered", () => {
+    expect(nextDuePayment(visit, [paid("full", price)], null)).toBeNull();
+    // A rejected payment frees its kind, so the Sales Manager records it again.
+    expect(nextDuePayment(visit, [paid("full", price, true)], null)).toEqual({
+      kind: "full",
+      amount: price,
+      method: "cash",
+    });
+  });
+
+  it("takes a delivery's fee, then the downpayment, then the balance", () => {
+    expect(nextDuePayment(delivery, [], null)).toEqual({ kind: "delivery_fee", amount: 2500, method: "cash" });
+    expect(nextDuePayment(delivery, [paid("delivery_fee", 2500)], null)).toEqual({
+      kind: "downpayment",
+      amount: downpayment,
+      method: "cash",
+    });
+    expect(nextDuePayment(delivery, [paid("delivery_fee", 2500), paid("downpayment", downpayment)], null)).toEqual({
+      kind: "balance",
+      amount: price - downpayment,
+      method: "cash",
+    });
+  });
+
+  it("never offers a kind the transaction already recorded", () => {
+    const kinds = new Set(["downpayment"]);
+    const next = nextDuePayment(delivery, [paid("downpayment", downpayment)], null);
+    expect(next).not.toBeNull();
+    expect(kinds.has(next?.kind ?? "")).toBe(false);
+  });
+
+  it("skips a delivery fee that is free in CALABARZON", () => {
+    expect(nextDuePayment({ ...delivery, delivery_fee: 0 }, [], null)).toEqual({
+      kind: "downpayment",
+      amount: downpayment,
+      method: "cash",
+    });
+  });
+
+  it("waits for the delivery terms before prefilling anything", () => {
+    expect(nextDuePayment({ ...delivery, downpayment_due_at: null }, [], null)).toBeNull();
+    expect(nextDuePayment({ ...delivery, downpayment_due_at: null }, [paid("delivery_fee", 2500)], null)).toBeNull();
+  });
+
+  it("prefills a cash meet-up's whole price, then nothing", () => {
+    expect(nextDuePayment(meetup, [], null)).toEqual({ kind: "full", amount: price, method: "cash" });
+    expect(nextDuePayment(meetup, [paid("full", price)], null)).toBeNull();
+  });
+
+  it("leaves a bank transfer to PayMongo and a financing buy to its installments", () => {
+    expect(nextDuePayment({ ...visit, payment_method: "bank_transfer" }, [], null)).toBeNull();
+    expect(nextDuePayment({ ...visit, payment_method: "financing" }, [], null)).toBeNull();
+    expect(nextDuePayment(null, [], null)).toBeNull();
+  });
+
+  it("owes nothing without a price", () => {
+    expect(nextDuePayment({ ...visit, final_price: 0 }, [], null)).toBeNull();
+    expect(nextDuePayment({ ...visit, final_price: null }, [], null)).toBeNull();
   });
 });
 

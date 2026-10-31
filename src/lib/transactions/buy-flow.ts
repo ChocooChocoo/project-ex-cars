@@ -459,3 +459,43 @@ export function onlinePaymentsDue(
   }
   return [];
 }
+
+export type DuePaymentKind = OnlinePayment["kind"] | "full";
+
+export type DuePayment = { kind: DuePaymentKind; amount: number; method: "cash" };
+
+type DuePaymentRecord = { payment_kind?: unknown; amount?: unknown; verified_by?: unknown; rejected_at?: unknown };
+
+// T05: the one payment the Sales Manager records next on a CASH buy, so Record Payment fills itself in.
+// A GCE visit and a cash meet-up are paid in full; a delivery takes its fee and downpayment first, then
+// the balance. A bank transfer is confirmed by PayMongo and a financing buy pays in installments, so
+// neither is recorded here. Returns null when nothing is left or the delivery terms are not set yet.
+export function nextDuePayment(
+  details: OnlinePaymentDetail | null,
+  payments: DuePaymentRecord[],
+  flowStatus: unknown,
+): DuePayment | null {
+  if (details?.payment_method !== "cash") return null;
+  // A cash delivery has no figures to show until the Sales Manager sets its fee and downpayment.
+  if (details.arrangement_kind === "delivery" && !details.downpayment_due_at) return null;
+
+  const recordedKind = (kind: string) =>
+    payments.some((payment) => payment.payment_kind === kind && !payment.rejected_at);
+  const price = Number(details.final_price ?? 0);
+
+  // What the arrangement collects before the buyer signs (a delivery's fee and downpayment, a meet-up's
+  // downpayment), in the order onlinePaymentsDue already lists them.
+  const beforeSigning =
+    paymentAllowedBeforeSigning(details, "delivery_fee") || paymentAllowedBeforeSigning(details, "downpayment");
+  if (beforeSigning) {
+    const due = onlinePaymentsDue(details, null, flowStatus, { final_price: price, payments }).find(
+      (payment) => !recordedKind(payment.kind),
+    );
+    if (due) return { kind: due.kind, amount: due.amount, method: "cash" };
+  }
+
+  const remaining = price - paidTowardPrice(payments);
+  if (!(remaining > 0)) return null;
+  // The first money for the car is the full price; after a downpayment it is the balance.
+  return { kind: remaining === price ? "full" : "balance", amount: remaining, method: "cash" };
+}

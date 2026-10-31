@@ -165,7 +165,13 @@ export function StaffTransactionDetail({
     }
   }
 
-  async function onRecordPayment(amount: string, method: string, date: string, paymentKind: string, proof?: File) {
+  async function onRecordPayment(
+    amount: string,
+    method: string,
+    date: string,
+    paymentKind: string,
+    proof?: File,
+  ): Promise<boolean> {
     const fd = new FormData();
     fd.set("transaction_id", id);
     fd.set("amount", amount);
@@ -174,11 +180,13 @@ export function StaffTransactionDetail({
     if (paymentKind) fd.set("payment_kind", paymentKind);
     if (proof) fd.set("proof", proof);
     const result = await recordPayment(fd);
-    if (result.error) toast.error(result.error);
-    else {
-      toast.success("Payment recorded.");
-      router.refresh();
+    if (result.error) {
+      toast.error(result.error);
+      return false;
     }
+    toast.success("Payment recorded.");
+    router.refresh();
+    return true;
   }
 
   async function onUploadDocument(documentKind: string, idType: string, file: File) {
@@ -362,6 +370,9 @@ export function StaffTransactionDetail({
           state={state}
           userRole={userRole}
           paymentMethod={(purchaseDetails?.payment_method as string | undefined) ?? undefined}
+          purchaseDetails={purchaseDetails ?? null}
+          paymentTerms={paymentTerms}
+          flowStatus={(transaction.flow_status as string | null) ?? null}
           payments={countedPayments}
           documents={documents}
           history={history}
