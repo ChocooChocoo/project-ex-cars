@@ -24,6 +24,7 @@ import {
   Milestone,
   ReceiptText,
   ScanFace,
+  ScrollText,
   Search,
   Server,
   Shield,
@@ -250,6 +251,12 @@ export const sidebarItems: NavGroup[] = [
         title: "Field Cases",
         url: "/field-cases",
         icon: Forklift,
+      },
+      {
+        id: "vehicle-papers",
+        title: "Vehicle Papers",
+        url: "/vehicle-papers",
+        icon: ScrollText,
       },
       {
         id: "security-duty-checks",
