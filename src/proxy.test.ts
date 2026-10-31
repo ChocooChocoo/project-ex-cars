@@ -125,3 +125,19 @@ describe("proxy refreshes the session for the render it is about to make", () =>
     }
   });
 });
+
+// Phase 6: every "showroom..." segment used to rewrite to /staff-showroom, which has no [id]
+// page, so a staff role opening a car from a shared link got a 404.
+describe("staff showroom routing", () => {
+  it("sends the showroom list to the staff showroom", async () => {
+    const response = await proxy(renderRequest("/marketing_specialist/showroom", "marketing_specialist"));
+
+    expect(response.headers.get("x-middleware-rewrite")).toBe("https://app.test/staff-showroom");
+  });
+
+  it("sends a single car to the customer showroom page", async () => {
+    const response = await proxy(renderRequest("/marketing_specialist/showroom/v-1", "marketing_specialist"));
+
+    expect(response.headers.get("x-middleware-rewrite")).toBe("https://app.test/showroom/v-1");
+  });
+});

@@ -1,6 +1,6 @@
 BEGIN;
 
-SELECT plan(47);
+SELECT plan(62);
 
 -- These identities are inserted while the test runs as postgres.  The migration
 -- must never give their browser role a direct attendance write path.
@@ -21,19 +21,24 @@ UPDATE private.user_roles SET role = 'supplier', active = true WHERE account_id 
 SELECT has_table('public', 'employee_work_schedules', 'employee schedules are stored in public');
 SELECT has_column('public', 'attendance_entries', 'scheduled_start_at', 'attendance snapshots scheduled start');
 SELECT has_column('public', 'attendance_entries', 'late_minutes', 'attendance snapshots late minutes');
+SELECT has_column('public', 'attendance_entries', 'clock_in_lat', 'attendance snapshots the clock-in latitude');
+SELECT has_column('public', 'attendance_entries', 'clock_in_lng', 'attendance snapshots the clock-in longitude');
+SELECT has_column('public', 'attendance_entries', 'clock_in_distance_m', 'attendance snapshots the clock-in distance');
 SELECT has_index('public', 'employee_requests', 'idx_employee_requests_approved_leave_lookup', 'approved leave lookup is indexed');
 SELECT has_function('public', 'get_my_attendance_state', ARRAY[]::text[], 'attendance state RPC exists');
-SELECT has_function('public', 'clock_in_attendance', ARRAY[]::text[], 'clock-in RPC exists');
+SELECT has_function('public', 'clock_in_attendance', ARRAY['double precision', 'double precision', 'double precision'], 'clock-in RPC exists');
+SELECT has_function('private', 'gce_distance_m', ARRAY['double precision', 'double precision'], 'GCE distance helper exists');
+SELECT has_function('private', 'clock_in_window_reason', ARRAY['timestamp with time zone', 'timestamp with time zone', 'timestamp with time zone'], 'clock-in window helper exists');
 SELECT has_function('public', 'clock_out_attendance', ARRAY[]::text[], 'clock-out RPC exists');
 SELECT has_function('public', 'review_attendance', ARRAY['uuid', 'text', 'text'], 'review RPC exists');
 SELECT has_function('public', 'save_staff_record', ARRAY['uuid', 'text', 'text', 'text', 'smallint[]', 'time without time zone', 'time without time zone', 'integer'], 'staff record and schedule RPC exists');
 SELECT has_function('public', 'set_account_state', ARRAY['uuid', 'text'], 'account state RPC exists');
-SELECT ok(has_function_privilege('authenticated', 'public.clock_in_attendance()', 'EXECUTE'), 'authenticated can execute clock-in RPC');
-SELECT ok(NOT has_function_privilege('anon', 'public.clock_in_attendance()', 'EXECUTE'), 'anon cannot execute clock-in RPC');
+SELECT ok(has_function_privilege('authenticated', 'public.clock_in_attendance(double precision, double precision, double precision)', 'EXECUTE'), 'authenticated can execute clock-in RPC');
+SELECT ok(NOT has_function_privilege('anon', 'public.clock_in_attendance(double precision, double precision, double precision)', 'EXECUTE'), 'anon cannot execute clock-in RPC');
 SELECT ok(NOT has_table_privilege('authenticated', 'public.attendance_entries', 'INSERT'), 'authenticated cannot directly insert attendance');
 SELECT ok(NOT has_table_privilege('authenticated', 'public.attendance_entries', 'UPDATE'), 'authenticated cannot directly update attendance');
 SELECT ok(
-  POSITION('pg_advisory_xact_lock' IN pg_get_functiondef('public.clock_in_attendance()'::regprocedure)) > 0,
+  POSITION('pg_advisory_xact_lock' IN pg_get_functiondef('public.clock_in_attendance(double precision, double precision, double precision)'::regprocedure)) > 0,
   'clock-in serializes concurrent requests with an advisory transaction lock'
 );
 SELECT is(
@@ -45,6 +50,56 @@ SELECT is(
   private.philippine_local_date_at(TIMESTAMPTZ '2026-08-08 16:00:00+00')::TEXT,
   '2026-08-09',
   'Philippine date advances at its midnight boundary'
+);
+
+SELECT is(
+  private.clock_in_window_reason(
+    TIMESTAMPTZ '2026-08-09 06:00:00+08',
+    TIMESTAMPTZ '2026-08-09 07:00:00+08',
+    TIMESTAMPTZ '2026-08-09 16:00:00+08'
+  ),
+  'Clock In opens at 6:30 AM.',
+  'clock-in before the window opens reports the 6:30 AM opening'
+);
+SELECT is(
+  private.clock_in_window_reason(
+    TIMESTAMPTZ '2026-08-09 06:30:00+08',
+    TIMESTAMPTZ '2026-08-09 07:00:00+08',
+    TIMESTAMPTZ '2026-08-09 16:00:00+08'
+  ),
+  NULL,
+  'clock-in is open at exactly 30 minutes before the schedule start'
+);
+SELECT is(
+  private.clock_in_window_reason(
+    TIMESTAMPTZ '2026-08-09 12:00:00+08',
+    TIMESTAMPTZ '2026-08-09 07:00:00+08',
+    TIMESTAMPTZ '2026-08-09 16:00:00+08'
+  ),
+  NULL,
+  'clock-in is open inside the schedule window'
+);
+SELECT is(
+  private.clock_in_window_reason(
+    TIMESTAMPTZ '2026-08-09 16:30:00+08',
+    TIMESTAMPTZ '2026-08-09 07:00:00+08',
+    TIMESTAMPTZ '2026-08-09 16:00:00+08'
+  ),
+  'Clock In closed at 4:00 PM.',
+  'clock-in after the schedule end reports the 4:00 PM closing'
+);
+
+SELECT ok(
+  private.gce_distance_m(14.3274076, 120.9535899) < 1,
+  'the GCE pin is the distance origin'
+);
+SELECT ok(
+  private.gce_distance_m(14.3276, 120.9536) < 100,
+  'a point beside the GCE building is inside the 100 m radius'
+);
+SELECT ok(
+  private.gce_distance_m(14.3364, 120.9536) > 100,
+  'a point a kilometre away is outside the 100 m radius'
 );
 
 SELECT throws_matching(
@@ -74,18 +129,18 @@ SELECT throws_matching(
 
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', '11111111-1111-1111-1111-111111111111', true);
-SELECT throws_matching($$SELECT public.clock_in_attendance()$$, 'No work schedule is assigned\.', 'missing schedule blocks clock-in');
+SELECT throws_matching($$SELECT public.clock_in_attendance(14.3274076, 120.9535899, 5)$$, 'No work schedule is assigned\.', 'missing schedule blocks clock-in');
 RESET ROLE;
 
--- A fixed daytime schedule keeps this integration fixture independent of the
--- test runner wall clock. Exact grace boundaries are tested by the pure helper
--- used by clock-in below.
+-- A fixed all-day schedule keeps this integration fixture independent of the
+-- test runner wall clock and always inside the 30-minute pre-shift window.
+-- Exact window and grace boundaries are tested by the pure helpers above.
 INSERT INTO public.employee_work_schedules (employee_id, workdays, start_time, end_time, grace_minutes, created_by, updated_by)
 VALUES (
   '11111111-1111-1111-1111-111111111111',
   ARRAY[EXTRACT(ISODOW FROM (now() AT TIME ZONE 'Asia/Manila'))::smallint],
-  '08:00',
-  '23:00', 10,
+  '00:00',
+  '24:00', 10,
   '22222222-2222-2222-2222-222222222222', '22222222-2222-2222-2222-222222222222'
 );
 
@@ -94,7 +149,7 @@ SET workdays = ARRAY[((EXTRACT(ISODOW FROM (now() AT TIME ZONE 'Asia/Manila'))::
 WHERE employee_id = '11111111-1111-1111-1111-111111111111';
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', '11111111-1111-1111-1111-111111111111', true);
-SELECT throws_matching($$SELECT public.clock_in_attendance()$$, 'Today is not a scheduled workday\.', 'off-day blocks clock-in');
+SELECT throws_matching($$SELECT public.clock_in_attendance(14.3274076, 120.9535899, 5)$$, 'Today is not a scheduled workday\.', 'off-day blocks clock-in');
 RESET ROLE;
 UPDATE public.employee_work_schedules
 SET workdays = ARRAY[EXTRACT(ISODOW FROM (now() AT TIME ZONE 'Asia/Manila'))::SMALLINT]
@@ -103,16 +158,30 @@ WHERE employee_id = '11111111-1111-1111-1111-111111111111';
 UPDATE private.user_roles SET active = false WHERE account_id = '11111111-1111-1111-1111-111111111111';
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', '11111111-1111-1111-1111-111111111111', true);
-SELECT throws_matching($$SELECT public.clock_in_attendance()$$, 'Permission denied.*', 'inactive staff role cannot clock in');
+SELECT throws_matching($$SELECT public.clock_in_attendance(14.3274076, 120.9535899, 5)$$, 'Permission denied.*', 'inactive staff role cannot clock in');
 RESET ROLE;
 UPDATE private.user_roles SET active = true WHERE account_id = '11111111-1111-1111-1111-111111111111';
 
 UPDATE public.profiles SET account_state = 'suspended' WHERE id = '11111111-1111-1111-1111-111111111111';
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', '11111111-1111-1111-1111-111111111111', true);
-SELECT throws_matching($$SELECT public.clock_in_attendance()$$, 'Permission denied.*', 'inactive profile cannot clock in');
+SELECT throws_matching($$SELECT public.clock_in_attendance(14.3274076, 120.9535899, 5)$$, 'Permission denied.*', 'inactive profile cannot clock in');
 RESET ROLE;
 UPDATE public.profiles SET account_state = 'active' WHERE id = '11111111-1111-1111-1111-111111111111';
+
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub', '11111111-1111-1111-1111-111111111111', true);
+SELECT throws_matching(
+  $$SELECT public.clock_in_attendance(14.3274076, 120.9535899, 500)$$,
+  'Location is too imprecise\. Try near a window\.',
+  'an imprecise browser location blocks clock-in'
+);
+SELECT throws_matching(
+  $$SELECT public.clock_in_attendance(14.3364, 120.9536, 5)$$,
+  'You must be at the GCE building to clock in\.',
+  'clock-in one kilometre from the GCE building is refused'
+);
+RESET ROLE;
 
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', '11111111-1111-1111-1111-111111111111', true);
@@ -128,13 +197,17 @@ SELECT throws_matching(
   '.*(row-level security|permission denied).*',
   'employees cannot update attendance directly'
 );
-SELECT matches((SELECT (public.clock_in_attendance()).status), '^(present|late)$', 'clock-in classifies the fixed daytime schedule');
+SELECT matches((SELECT (public.clock_in_attendance(14.3274076, 120.9535899, 5)).status), '^(present|late)$', 'clock-in classifies the fixed all-day schedule');
 SELECT is(
   (SELECT attendance_date FROM public.attendance_entries WHERE employee_id = auth.uid() ORDER BY time_in DESC LIMIT 1),
   ((now() AT TIME ZONE 'Asia/Manila')::date),
   'clock-in records the Philippine local date'
 );
-SELECT throws_matching($$SELECT public.clock_in_attendance()$$, 'Already clocked in\.', 'duplicate clock-in has a stable error');
+SELECT ok(
+  (SELECT clock_in_distance_m < 100 FROM public.attendance_entries WHERE employee_id = auth.uid() ORDER BY time_in DESC LIMIT 1),
+  'clock-in stores the measured distance to the GCE building for audit'
+);
+SELECT throws_matching($$SELECT public.clock_in_attendance(14.3274076, 120.9535899, 5)$$, 'Already clocked in\.', 'duplicate clock-in has a stable error');
 
 RESET ROLE;
 SELECT is(
@@ -155,7 +228,7 @@ VALUES ('11111111-1111-1111-1111-111111111111', 'leave', 'approved', (now() AT T
 
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', '11111111-1111-1111-1111-111111111111', true);
-SELECT throws_matching($$SELECT public.clock_in_attendance()$$, 'Approved leave.*', 'a null leave end date blocks its inclusive start day');
+SELECT throws_matching($$SELECT public.clock_in_attendance(14.3274076, 120.9535899, 5)$$, 'Approved leave.*', 'a null leave end date blocks its inclusive start day');
 
 RESET ROLE;
 DELETE FROM public.employee_requests WHERE employee_id = '11111111-1111-1111-1111-111111111111';
@@ -164,7 +237,7 @@ VALUES ('11111111-1111-1111-1111-111111111111', 'leave', 'approved', (now() AT T
 
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', '11111111-1111-1111-1111-111111111111', true);
-SELECT throws_matching($$SELECT public.clock_in_attendance()$$, 'Approved leave.*', 'the inclusive leave end date blocks clock-in');
+SELECT throws_matching($$SELECT public.clock_in_attendance(14.3274076, 120.9535899, 5)$$, 'Approved leave.*', 'the inclusive leave end date blocks clock-in');
 
 RESET ROLE;
 DELETE FROM public.employee_requests WHERE employee_id = '11111111-1111-1111-1111-111111111111';
@@ -175,7 +248,7 @@ VALUES
 
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', '11111111-1111-1111-1111-111111111111', true);
-SELECT throws_matching($$SELECT public.clock_in_attendance()$$, 'Already clocked in\.', 'clock-in blocks a historical open row');
+SELECT throws_matching($$SELECT public.clock_in_attendance(14.3274076, 120.9535899, 5)$$, 'Already clocked in\.', 'clock-in blocks a historical open row');
 SELECT is(
   public.get_my_attendance_state() ->> 'clock_in_allowed',
   'false',
@@ -210,7 +283,7 @@ SELECT throws_matching(
 SELECT set_config('request.jwt.claim.sub', '33333333-3333-3333-3333-333333333333', true);
 SELECT throws_matching($$SELECT public.get_my_attendance_state()$$, 'Permission denied.*', 'customer cannot access staff attendance state');
 SELECT set_config('request.jwt.claim.sub', '44444444-4444-4444-4444-444444444444', true);
-SELECT throws_matching($$SELECT public.clock_in_attendance()$$, 'Permission denied.*', 'supplier cannot clock in');
+SELECT throws_matching($$SELECT public.clock_in_attendance(14.3274076, 120.9535899, 5)$$, 'Permission denied.*', 'supplier cannot clock in');
 
 RESET ROLE;
 UPDATE public.profiles SET account_state = 'suspended' WHERE id = '11111111-1111-1111-1111-111111111111';

@@ -207,23 +207,23 @@ describe("notification client wiring", () => {
     return rest.slice(0, next === -1 ? undefined : next);
   }
 
-  it.each(["getNotifications", "getUnreadNotificationCount"])(
-    "%s reads through the read-only client, since layouts await it during a render",
-    (name) => {
-      const body = bodyOf(notifications(), name);
+  it.each([
+    "getNotifications",
+    "getUnreadNotificationCount",
+  ])("%s reads through the read-only client, since layouts await it during a render", (name) => {
+    const body = bodyOf(notifications(), name);
 
-      expect(body).toContain("await createServerSupabase()");
-      expect(body).not.toContain("createServerSupabaseClient");
-      expect(body).not.toContain("createAdminClient");
-    },
-  );
+    expect(body).toContain("await createServerSupabase()");
+    expect(body).not.toContain("createServerSupabaseClient");
+    expect(body).not.toContain("createAdminClient");
+  });
 
-  it.each(["markNotificationRead", "markAllNotificationsRead"])(
-    "%s keeps the read-write client, since it runs as a Server Action",
-    (name) => {
-      expect(bodyOf(notifications(), name)).toContain("await createServerSupabaseClient()");
-    },
-  );
+  it.each([
+    "markNotificationRead",
+    "markAllNotificationsRead",
+  ])("%s keeps the read-write client, since it runs as a Server Action", (name) => {
+    expect(bodyOf(notifications(), name)).toContain("await createServerSupabaseClient()");
+  });
 
   it("checkAndNotifyDueInstallments keeps the admin client for its cross-role writes", () => {
     expect(bodyOf(notifications(), "checkAndNotifyDueInstallments")).toContain("createAdminClient()");

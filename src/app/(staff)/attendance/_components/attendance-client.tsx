@@ -185,6 +185,32 @@ function isAttendanceStatus(value: string): value is AttendanceStatus {
   return ATTENDANCE_STATUSES.some((status) => status === value);
 }
 
+const CLOCK_IN_POSITION_OPTIONS: PositionOptions = {
+  enableHighAccuracy: true,
+  maximumAge: 0,
+  timeout: 20_000,
+};
+
+const LOCATION_DENIED_MESSAGE =
+  "Location access is blocked. Allow location for this site in your browser settings, then try again.";
+const LOCATION_UNAVAILABLE_MESSAGE = "Your location is not available right now. Try again.";
+const LOCATION_UNSUPPORTED_MESSAGE = "This browser cannot read your location, so clock-in is unavailable.";
+
+function isGeolocationError(error: unknown): error is GeolocationPositionError {
+  return typeof error === "object" && error !== null && "code" in error && "PERMISSION_DENIED" in error;
+}
+
+function clockInLocationError(error: unknown) {
+  if (!isGeolocationError(error)) return LOCATION_UNAVAILABLE_MESSAGE;
+  return error.code === error.PERMISSION_DENIED ? LOCATION_DENIED_MESSAGE : LOCATION_UNAVAILABLE_MESSAGE;
+}
+
+function readCurrentPosition() {
+  return new Promise<GeolocationPosition>((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(resolve, reject, CLOCK_IN_POSITION_OPTIONS);
+  });
+}
+
 function statusBadge(status: AttendanceStatus) {
   const style = STATUS_STYLES[status];
   return (
@@ -301,6 +327,30 @@ export function AttendanceClient({
     }
     toast.success(successMessage);
     router.refresh();
+  }
+
+  async function clockInFromCurrentLocation() {
+    if (!("geolocation" in navigator)) {
+      toast.error(LOCATION_UNSUPPORTED_MESSAGE);
+      return;
+    }
+
+    setLoading("clock-in");
+    let position: GeolocationPosition;
+    try {
+      position = await readCurrentPosition();
+    } catch (error) {
+      setLoading(null);
+      toast.error(clockInLocationError(error));
+      return;
+    }
+    setLoading(null);
+
+    await runAction(
+      () => clockIn(position.coords.latitude, position.coords.longitude, position.coords.accuracy),
+      "clock-in",
+      "Clocked in.",
+    );
   }
 
   async function submitCheck() {
@@ -558,7 +608,7 @@ export function AttendanceClient({
             <Button
               disabled={!attendanceState.clockIn.allowed || loading !== null}
               title={attendanceState.clockIn.reason ?? undefined}
-              onClick={() => runAction(clockIn, "clock-in", "Clocked in.")}
+              onClick={() => void clockInFromCurrentLocation()}
             >
               <LogIn data-icon="inline-start" />
               {loading === "clock-in" ? "Clocking in..." : "Clock In"}

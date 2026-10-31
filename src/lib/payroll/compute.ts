@@ -13,6 +13,8 @@ export interface PayslipAttendance {
 export interface OvertimeRange {
   start_date: string;
   end_date: string | null;
+  /** Approved hours for the date. Null on legacy rows, which stay uncapped. */
+  overtime_hours: number | null;
 }
 
 export interface PayslipInput {
@@ -54,8 +56,19 @@ export function computePayslip({
 }: PayslipInput): PayslipComputation {
   const hourlyRateCents = Math.round(baseSalaryCents / DAYS_PER_MONTH / scheduledHoursPerDay);
   const scheduledMinutes = Math.round(scheduledHoursPerDay * 60);
-  const isOvertimeDay = (date: string) =>
-    overtimeRanges.some((range) => range.start_date <= date && date <= (range.end_date ?? range.start_date));
+  // Undefined means the date has no approval. Null means a legacy request with no hours, which keeps
+  // the old uncapped rule; a number caps the day at the approved minutes.
+  const approvedMinutes = (date: string): number | null | undefined => {
+    let approved = 0;
+    let covered = false;
+    for (const range of overtimeRanges) {
+      if (date < range.start_date || date > (range.end_date ?? range.start_date)) continue;
+      covered = true;
+      if (range.overtime_hours == null) return null;
+      approved += Math.round(Number(range.overtime_hours) * 60);
+    }
+    return covered ? approved : undefined;
+  };
 
   let regularMinutes = 0;
   let overtimeMinutes = 0;
@@ -65,7 +78,11 @@ export function computePayslip({
     if (workedMinutes <= 0) continue;
     regularMinutes += scheduledMinutes;
     shortMinutes += Math.max(0, scheduledMinutes - workedMinutes);
-    if (isOvertimeDay(entry.attendance_date)) overtimeMinutes += Math.max(0, workedMinutes - scheduledMinutes);
+    const approved = approvedMinutes(entry.attendance_date);
+    if (approved !== undefined) {
+      const extraMinutes = Math.max(0, workedMinutes - scheduledMinutes);
+      overtimeMinutes += approved === null ? extraMinutes : Math.min(extraMinutes, approved);
+    }
   }
 
   const regularHours = regularMinutes / 60;

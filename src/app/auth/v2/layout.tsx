@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import Link from "next/link";
+
 import { GceLogo } from "@/components/gce-logo";
 import { Separator } from "@/components/ui/separator";
 import { APP_CONFIG } from "@/config/app-config";
@@ -10,7 +12,9 @@ export default function Layout({ children }: Readonly<{ children: ReactNode }>) 
       <div className="grid h-dvh justify-center p-2 lg:grid-cols-2">
         <div className="relative order-2 hidden h-full rounded-3xl bg-primary lg:flex">
           <div className="absolute top-10 space-y-1 px-10 text-primary-foreground">
-            <GceLogo className="size-10" letterColor="var(--primary)" />
+            <Link href="/" aria-label="GCE home" className="block w-fit">
+              <GceLogo className="size-10" letterColor="var(--primary)" />
+            </Link>
             <h1 className="font-medium text-2xl">{APP_CONFIG.name}</h1>
             <p className="text-sm">Design. Build. Launch. Repeat.</p>
           </div>

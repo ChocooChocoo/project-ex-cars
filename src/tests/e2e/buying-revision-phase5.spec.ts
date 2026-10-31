@@ -58,7 +58,7 @@ async function paymentRows(id: string) {
 }
 
 async function payOnline(page: Page) {
-  await page.getByRole("button", { name: /^Pay ₱.* with PayMongo$/ }).click();
+  await page.getByRole("button", { name: "Pay by bank transfer (PayMongo)" }).click();
   await page.waitForURL((url) => url.hostname.endsWith("paymongo.com"), { timeout: 30_000 });
 }
 
@@ -152,7 +152,7 @@ test.describe
       // Not signed yet: Pay is refused and nothing is recorded.
       await signInAs(page, "customer@gce.local");
       await open(page, `/my-transactions/${id}`);
-      await page.getByRole("button", { name: "Pay ₱100,000.00 with PayMongo" }).click();
+      await page.getByRole("button", { name: "Pay by bank transfer (PayMongo)" }).click();
       await expect(page.getByText("Sign the contract before paying.")).toBeVisible();
       expect(await paymentRows(id)).toEqual([]);
 

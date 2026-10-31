@@ -259,6 +259,19 @@ describe("StaffRecordsTable", () => {
     expect(graceInput).toHaveAttribute("max", "10");
   });
 
+  it("prefills an unscheduled mechanic with editable role defaults", async () => {
+    renderTable([{ ...staffAccount, workdays: null, startTime: null, endTime: null, graceMinutes: null }]);
+    openActions("Ada Staff");
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Edit" }));
+    expect(await screen.findByLabelText("Start time")).toHaveValue("07:00");
+    expect(screen.getByLabelText("End time")).toHaveValue("16:00");
+    expect(screen.getByRole("checkbox", { name: "Saturday" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Sunday" })).not.toBeChecked();
+    fireEvent.change(screen.getByLabelText("Start time"), { target: { value: "08:00" } });
+    expect(screen.getByLabelText("Start time")).toHaveValue("08:00");
+    expect(saveStaffRecordMock).not.toHaveBeenCalled();
+  });
+
   it("exempts Head Security without hiding the CEO missing-schedule warning", () => {
     renderTable([
       { ...staffAccount, role: "head_security", workdays: null, startTime: null, endTime: null },

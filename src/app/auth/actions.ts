@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
+import { ROLE_WORK_SCHEDULES } from "@/lib/attendance/role-schedules";
 import { authorizeAction } from "@/lib/auth/action-guard";
 import { ACCEPTED_ID_TYPES, EMPLOYEE_ROLES, ROLE_LABELS } from "@/lib/auth/roles";
 import { landingPath } from "@/lib/routing/paths";
@@ -312,6 +313,17 @@ export async function createEmployeeAccount(params: z.input<typeof createEmploye
     })
     .eq("id", createdUserId);
   if (profileResult.error) return undo(profileResult.error.message);
+
+  const schedule = ROLE_WORK_SCHEDULES[parsed.data.role];
+  if (schedule) {
+    const scheduleResult = await admin.from("employee_work_schedules").insert({
+      employee_id: createdUserId,
+      ...schedule,
+      created_by: actorId,
+      updated_by: actorId,
+    });
+    if (scheduleResult.error) return undo(scheduleResult.error.message);
+  }
 
   const roleLabel = ROLE_LABELS[parsed.data.role as keyof typeof ROLE_LABELS];
   const auditResult = await admin.from("audit_events").insert({

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { PAYMENT_METHODS } from "@/lib/transactions/state-machine";
+import { BUYER_PAYMENT_METHODS, PAYMENT_METHODS, PURCHASE_PAYMENT_METHODS } from "@/lib/transactions/state-machine";
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -35,9 +35,12 @@ describe("T04 payment option migration", () => {
     expect(migration).not.toMatch(/IN \([^)]*'cheque'/);
   });
 
-  it("matches the methods the app accepts", () => {
+  it("matches the methods the app accepted before T06 split them", () => {
     const methods = migration.match(/CHECK \(payment_method IN \(([^)]*)\)\)/)?.[1] ?? "";
-    expect([...methods.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]).sort()).toEqual([...PAYMENT_METHODS].sort());
+    const listed = [...methods.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
+    // T04 predates T06: purchases still carried PayMongo, and Financing plus legacy down_payment stayed.
+    expect(listed.sort()).toEqual([...BUYER_PAYMENT_METHODS, "financing", "down_payment", "paymongo"].sort());
+    expect([...PURCHASE_PAYMENT_METHODS, "paymongo"].sort()).toEqual([...PAYMENT_METHODS].sort());
   });
 
   it("offers every financing term", () => {

@@ -65,9 +65,22 @@ export async function getMyAttendanceState(): Promise<AttendanceStateResult> {
   return { success: true, state: parsed.data };
 }
 
-export async function clockIn(): Promise<Phase6ActionResult> {
+const clockInLocationSchema = z.object({
+  lat: z.number().finite().min(-90).max(90),
+  lng: z.number().finite().min(-180).max(180),
+  accuracy: z.number().finite().nonnegative(),
+});
+
+export async function clockIn(lat: number, lng: number, accuracy: number): Promise<Phase6ActionResult> {
+  const parsed = clockInLocationSchema.safeParse({ lat, lng, accuracy });
+  if (!parsed.success) return { error: "Invalid location." };
+
   const supabase = await createServerSupabaseClient();
-  const { data, error } = await supabase.rpc("clock_in_attendance");
+  const { data, error } = await supabase.rpc("clock_in_attendance", {
+    p_lat: parsed.data.lat,
+    p_lng: parsed.data.lng,
+    p_accuracy: parsed.data.accuracy,
+  });
   if (error) return { error: error.message };
 
   const row = rpcRow(data);

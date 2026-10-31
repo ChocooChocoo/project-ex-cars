@@ -1,6 +1,6 @@
+import { TransactionImagePreview } from "@/components/transaction-image-preview";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TransactionImagePreview } from "@/components/transaction-image-preview";
 import { TRANSACTION_STATE_LABELS, type TransactionState } from "@/lib/transactions/state-machine";
 
 export type SellSubmissionListing = {
@@ -40,8 +40,8 @@ export function SellSubmissionsList({ submissions }: { readonly submissions: Sel
             <div className="flex flex-col gap-1">
               <CardTitle className="text-lg">{submission.vehicleLabel ?? "Car not recorded"}</CardTitle>
               <p className="text-muted-foreground text-xs tabular-nums">
-                #{submission.transactionId.slice(0, 8)} · Sent{" "}
-                {new Date(submission.openedAt).toLocaleDateString()} · {stateLabel(submission.state)}
+                #{submission.transactionId.slice(0, 8)} · Sent {new Date(submission.openedAt).toLocaleDateString()} ·{" "}
+                {stateLabel(submission.state)}
               </p>
             </div>
             <Badge variant="secondary">
