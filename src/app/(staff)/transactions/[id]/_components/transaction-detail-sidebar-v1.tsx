@@ -1,7 +1,7 @@
 "use client";
 "use no memo";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useTransition } from "react";
 
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -14,7 +14,13 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { arrangementKindLabel, TRANSACTION_STATE_LABELS } from "@/lib/transactions/labels";
+import { nextDuePayment } from "@/lib/transactions/buy-flow";
+import {
+  arrangementKindLabel,
+  paymentKindLabel,
+  paymentMethodLabel,
+  TRANSACTION_STATE_LABELS,
+} from "@/lib/transactions/labels";
 import type { TransactionState } from "@/lib/transactions/state-machine";
 import { formatCurrency } from "@/lib/utils";
 
@@ -37,6 +43,9 @@ export function TransactionDetailSidebarV1({
   state,
   userRole,
   paymentMethod,
+  purchaseDetails,
+  paymentTerms,
+  flowStatus,
   payments,
   documents,
   history,
@@ -59,6 +68,10 @@ export function TransactionDetailSidebarV1({
   readonly userRole: string;
   // The purchase method. A Bank Transfer buy is paid online through PayMongo, so staff do not record it by hand.
   readonly paymentMethod?: string;
+  // T05: Record Payment reads the price and the terms to work out the one payment now due.
+  readonly purchaseDetails?: Record<string, unknown> | null;
+  readonly paymentTerms?: Record<string, unknown> | null;
+  readonly flowStatus?: string | null;
   readonly payments: Record<string, unknown>[];
   readonly documents: Record<string, unknown>[];
   readonly history: Record<string, unknown>[];
@@ -74,24 +87,26 @@ export function TransactionDetailSidebarV1({
   readonly conditionItems?: unknown;
   // Optional id → display-name map for inspection_checklist_nodes.
   readonly checklistNameMap?: Record<string, string>;
+  // Resolves true once the payment is on record, so the form can show the wait-for-check note.
   readonly onRecordPayment: (
     amount: string,
     method: string,
     date: string,
     paymentKind: string,
     proof?: File,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   readonly onRecordPaperwork: (documentKind: string) => Promise<void>;
   readonly onWaiveInstallment: (installmentId: string) => Promise<void>;
   readonly onRecordInstallmentPaid?: (installmentId: string, amount: string) => Promise<void>;
   readonly onInstructRepossession: (informantId: string, reason: string, headSecurityId: string) => Promise<void>;
 }) {
-  const [payAmount, setPayAmount] = useState("");
-  const [payMethod, setPayMethod] = useState("cash");
-  // §4: a delivery's fee, downpayment, balance and reschedule fee are told apart for the records.
-  const [payKind, setPayKind] = useState("full");
   const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10));
   const proofFileRef = useRef<HTMLInputElement>(null);
+  // T05: the button is disabled while the submit runs, and the form is replaced by the wait-for-check
+  // note. The ref also stops a fast double click that lands before React renders the disabled state.
+  const [submittingPayment, startPayment] = useTransition();
+  const submittingRef = useRef(false);
+  const [paymentRecorded, setPaymentRecorded] = useState(false);
   const [repoOpen, setRepoOpen] = useState(false);
   const [repoInformant, setRepoInformant] = useState("");
   const [repoHeadSecurity, setRepoHeadSecurity] = useState("");
@@ -108,8 +123,6 @@ export function TransactionDetailSidebarV1({
   // Processing actions (upload / record payment / record paperwork) are hidden for CEO;
   // docs and payments stay visible read-only. Head Accountant verifies documents.
   const isCeo = userRole === "ceo";
-  // T06: a Bank Transfer buy is paid online through PayMongo, so it never enters the records by hand.
-  const manualBankTransfer = !(kind === "buy" && paymentMethod === "bank_transfer");
   // Only the Head Accountant may verify purchase documents, so the buttons match
   // the server-side guard in verifyTransactionDocument.
   const isHeadAccountant = userRole === "head_accountant";
@@ -127,6 +140,50 @@ export function TransactionDetailSidebarV1({
   const conditionList = normalizeConditionItems(rawConditionItems).map((item) => checklistNameMap?.[item] ?? item);
 
   const showSellExtras = kind === "sell" && (photos.length > 0 || conditionList.length > 0);
+
+  // T05: Record Payment fills itself in. Only a CASH buy has one payment due at a time; a Bank Transfer
+  // is confirmed by PayMongo, and a financing buy pays through its installments.
+  const cashBuy = kind === "buy" && purchaseDetails?.payment_method === "cash";
+  const bankTransferBuy = kind === "buy" && paymentMethod === "bank_transfer";
+  // The agreed price: purchase_details carries it, with the approved terms as the fallback.
+  const agreedPrice = Number(purchaseDetails?.final_price ?? paymentTerms?.total_amount ?? 0);
+  const duePayment =
+    kind === "buy"
+      ? nextDuePayment(
+          purchaseDetails ? { ...purchaseDetails, final_price: purchaseDetails.final_price ?? agreedPrice } : null,
+          payments,
+          flowStatus ?? null,
+        )
+      : null;
+  // A payment on record but not yet checked keeps the form away, so the record cannot be spammed.
+  const awaitingCheck = payments.some((payment) => !payment.rejected_at && !payment.verified_by);
+  const canRecordPayment =
+    userRole === "sales_manager" &&
+    ["approved", "completed"].includes(tState) &&
+    (bankTransferBuy || (cashBuy && (paymentRecorded || awaitingCheck || duePayment !== null)));
+
+  function submitPayment() {
+    if (!duePayment || submittingRef.current) return;
+    submittingRef.current = true;
+    const proof = proofFileRef.current?.files?.[0];
+    startPayment(async () => {
+      try {
+        const recorded = await onRecordPayment(
+          String(duePayment.amount),
+          duePayment.method,
+          payDate,
+          duePayment.kind,
+          proof,
+        );
+        if (recorded) {
+          setPaymentRecorded(true);
+          if (proofFileRef.current) proofFileRef.current.value = "";
+        }
+      } finally {
+        submittingRef.current = false;
+      }
+    });
+  }
 
   async function handleInstruct() {
     if (!repoInformant) {
@@ -300,100 +357,76 @@ export function TransactionDetailSidebarV1({
             </div>
           )}
 
-          {["approved", "completed"].includes(tState) && !isCeo && kind !== "sell" && (
+          {canRecordPayment && (
             <div className="space-y-2 rounded-md border bg-muted/20 px-3 py-2">
               <p className="text-muted-foreground text-xs">Record payment</p>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="pay_amount" className="text-xs">
-                  Amount (₱)
-                </Label>
-                <Input
-                  id="pay_amount"
-                  type="number"
-                  className="h-7 text-xs"
-                  value={payAmount}
-                  onChange={(e) => setPayAmount(e.target.value)}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="pay_method" className="text-xs">
-                  Method
-                </Label>
-                <Select value={manualBankTransfer ? payMethod : "cash"} onValueChange={setPayMethod}>
-                  <SelectTrigger id="pay_method" className="h-7 w-full text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="cash">Cash</SelectItem>
-                    {/* A Bank Transfer buy is confirmed by PayMongo, not recorded by hand. */}
-                    {manualBankTransfer ? <SelectItem value="bank_transfer">Bank Transfer</SelectItem> : null}
-                  </SelectContent>
-                </Select>
-                {manualBankTransfer ? null : (
-                  <p className="text-muted-foreground text-xs">
-                    Bank Transfer is paid online through PayMongo and confirmed automatically.
-                  </p>
-                )}
-              </div>
-              {kind === "buy" ? (
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="pay_kind" className="text-xs">
-                    Payment for
-                  </Label>
-                  <Select value={payKind} onValueChange={setPayKind}>
-                    <SelectTrigger id="pay_kind" className="h-7 w-full text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="full">Full payment</SelectItem>
-                      <SelectItem value="delivery_fee">Delivery fee</SelectItem>
-                      <SelectItem value="downpayment">Downpayment</SelectItem>
-                      <SelectItem value="balance">Balance on delivery</SelectItem>
-                      <SelectItem value="reschedule_fee">Reschedule / redirect fee</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              {bankTransferBuy ? (
+                <p className="text-muted-foreground text-xs">
+                  Bank Transfer is paid online through PayMongo and confirmed automatically.
+                </p>
+              ) : paymentRecorded || awaitingCheck ? (
+                <p className="text-xs">Recorded, waiting for the Head Accountant&apos;s check.</p>
+              ) : duePayment ? (
+                <>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="pay_amount" className="text-xs">
+                      Amount (₱)
+                    </Label>
+                    <Input
+                      id="pay_amount"
+                      readOnly
+                      className="h-7 text-xs tabular-nums"
+                      value={formatCurrency(duePayment.amount)}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="pay_kind" className="text-xs">
+                        Payment for
+                      </Label>
+                      <Input id="pay_kind" readOnly className="h-7 text-xs" value={paymentKindLabel(duePayment.kind)} />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="pay_method" className="text-xs">
+                        Method
+                      </Label>
+                      <Input
+                        id="pay_method"
+                        readOnly
+                        className="h-7 text-xs"
+                        value={paymentMethodLabel(duePayment.method)}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="pay_date" className="text-xs">
+                      Date
+                    </Label>
+                    <Input
+                      id="pay_date"
+                      type="date"
+                      className="h-7 text-xs"
+                      value={payDate}
+                      onChange={(e) => setPayDate(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="pay_proof" className="text-xs">
+                      Photo of deposit slip / receipt (optional)
+                    </Label>
+                    <Input
+                      id="pay_proof"
+                      ref={proofFileRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="h-7 w-full text-xs"
+                    />
+                  </div>
+                  <Button size="sm" className="h-7 w-full text-xs" disabled={submittingPayment} onClick={submitPayment}>
+                    {submittingPayment ? "Recording…" : "Record Payment"}
+                  </Button>
+                </>
               ) : null}
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="pay_date" className="text-xs">
-                  Date
-                </Label>
-                <Input
-                  id="pay_date"
-                  type="date"
-                  className="h-7 text-xs"
-                  value={payDate}
-                  onChange={(e) => setPayDate(e.target.value)}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="pay_proof" className="text-xs">
-                  Photo of deposit slip / receipt (optional)
-                </Label>
-                <Input
-                  id="pay_proof"
-                  ref={proofFileRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  className="h-7 w-full text-xs"
-                />
-              </div>
-              <Button
-                size="sm"
-                className="h-7 w-full text-xs"
-                onClick={async () => {
-                  await onRecordPayment(
-                    payAmount,
-                    payMethod,
-                    payDate,
-                    kind === "buy" ? payKind : "",
-                    proofFileRef.current?.files?.[0],
-                  );
-                  if (proofFileRef.current) proofFileRef.current.value = "";
-                }}
-              >
-                Record Payment
-              </Button>
             </div>
           )}
 
