@@ -10,6 +10,7 @@ import { z } from "zod";
 import { ROLE_WORK_SCHEDULES } from "@/lib/attendance/role-schedules";
 import { authorizeAction } from "@/lib/auth/action-guard";
 import { ACCEPTED_ID_TYPES, EMPLOYEE_ROLES, ROLE_LABELS } from "@/lib/auth/roles";
+import { composeAddress, provinceNameFor } from "@/lib/psgc/address";
 import { landingPath } from "@/lib/routing/paths";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase, createServerSupabaseClient } from "@/lib/supabase/server";
@@ -625,8 +626,9 @@ export async function uploadCustomerDocument(formData: FormData) {
   return { success: true };
 }
 
-// T03 C15: the signed-in user's own name, phone and address. Only these columns are written, on their own
-// row (RLS "Users can update own profile"); the auth display name follows the full name.
+// T03 C15 / T05: the signed-in user's own name, phone and PSGC address. Only these columns are written,
+// on their own row (RLS "Users can update own profile"); the auth display name follows the full name.
+// `profiles.address` is composed from the parts so autofill and delivery keep reading one string.
 export async function updateOwnProfile(formData: FormData): Promise<{ error: string } | { success: true }> {
   const parsed = ownProfileSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid profile details." };
@@ -640,7 +642,18 @@ export async function updateOwnProfile(formData: FormData): Promise<{ error: str
     .update({
       full_name: parsed.data.full_name,
       phone: parsed.data.phone || null,
-      address: parsed.data.address || null,
+      address: composeAddress({
+        address_line: parsed.data.address_line,
+        barangay_name: parsed.data.barangay_name,
+        city_name: parsed.data.city_name,
+        province_name: provinceNameFor(parsed.data),
+        region_name: parsed.data.region_name,
+      }),
+      address_line: parsed.data.address_line || null,
+      region_code: parsed.data.region_code,
+      province_code: parsed.data.province_code || null,
+      city_code: parsed.data.city_code,
+      barangay_code: parsed.data.barangay_code,
     })
     .eq("id", user.user.id);
   if (error) return { error: error.message };
