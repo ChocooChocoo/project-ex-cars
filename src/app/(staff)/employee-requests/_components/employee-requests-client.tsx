@@ -1,7 +1,7 @@
 "use client";
 "use no memo";
 
-import { useCallback, useMemo, useState } from "react";
+import { type ChangeEvent, useCallback, useMemo, useState } from "react";
 
 import { useRouter } from "next/navigation";
 
@@ -27,11 +27,13 @@ import {
   Plus,
   Search,
   UsersRound,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
   cancelEmployeeRequest,
+  prepareRequestUploads,
   reviewEmployeeRequest,
   submitEmployeeRequest,
 } from "@/app/(staff)/employee-requests/actions";
@@ -45,15 +47,28 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { REQUEST_KINDS, type RequestKind } from "@/lib/validation/phase6";
+import {
+  attachmentError,
+  attachmentMimeType,
+  MESSAGE_ATTACHMENT_ACCEPT,
+  REQUEST_ATTACHMENT_MAX_COUNT,
+  REQUEST_ATTACHMENTS_BUCKET,
+} from "@/lib/inquiries/attachments";
+import { createClient } from "@/lib/supabase/client";
+import { LEAVE_REASONS, type LeaveReason, REQUEST_KINDS, type RequestKind } from "@/lib/validation/phase6";
 
-import { createEmployeeRequestColumns, type EmployeeRequestRow, KIND_LABELS } from "./employee-requests-columns";
+import {
+  createEmployeeRequestColumns,
+  type EmployeeRequestRow,
+  KIND_LABELS,
+  LEAVE_REASON_LABELS,
+} from "./employee-requests-columns";
 
 export type { EmployeeRequestRow } from "./employee-requests-columns";
 
@@ -69,7 +84,11 @@ export function EmployeeRequestsClient({ requests, canReview, canSubmit }: Emplo
   const [kind, setKind] = useState<RequestKind>("leave");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [overtimeHours, setOvertimeHours] = useState("");
+  const [leaveReason, setLeaveReason] = useState<LeaveReason | "">("");
   const [reason, setReason] = useState("");
+  const [proofFiles, setProofFiles] = useState<File[]>([]);
+  const [proofError, setProofError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [reviewTarget, setReviewTarget] = useState<EmployeeRequestRow | null>(null);
   const [reviewNotes, setReviewNotes] = useState("");
@@ -82,24 +101,106 @@ export function EmployeeRequestsClient({ requests, canReview, canSubmit }: Emplo
   const [columnVisibility] = useState<VisibilityState>({ search: false, startWindow: false });
 
   async function submitForm() {
-    setLoading(true);
     setFormError(null);
-    const fd = new FormData();
-    fd.set("request_kind", kind);
-    fd.set("start_date", startDate);
-    fd.set("end_date", endDate);
-    fd.set("reason", reason);
-    const result = await submitEmployeeRequest(fd);
-    setLoading(false);
-    if ("error" in result && result.error) {
-      setFormError(result.error);
+    const isLeave = kind === "leave";
+    const isOvertime = kind === "overtime";
+    if (isOvertime) {
+      const hours = Number(overtimeHours);
+      if (!overtimeHours.trim() || !Number.isFinite(hours)) {
+        setFormError("Enter the overtime hours.");
+        return;
+      }
+      if (hours < 0.5 || hours > 12) {
+        setFormError("Enter between 0.5 and 12 hours.");
+        return;
+      }
+    }
+    if (isLeave && !leaveReason) {
+      setFormError("Choose a leave reason.");
       return;
     }
-    toast.success("Request submitted.");
-    setFormOpen(false);
-    setReason("");
-    setEndDate("");
-    router.refresh();
+    if (isLeave && leaveReason === "others" && !reason.trim()) {
+      setFormError("Describe the reason for the leave.");
+      return;
+    }
+    const fileError = proofFiles.map(attachmentError).find((error) => error !== null) ?? null;
+    if (fileError) {
+      setProofError(fileError);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // The files go straight to storage: a Server Action body is capped at 4 MB.
+      const prepared = await prepareRequestUploads(
+        proofFiles.map((file) => ({ name: file.name, type: file.type, size: file.size })),
+      );
+      if ("error" in prepared) {
+        setFormError(prepared.error);
+        return;
+      }
+
+      const bucket = createClient().storage.from(REQUEST_ATTACHMENTS_BUCKET);
+      const proofs: { path: string; name: string; type: string; size: number }[] = [];
+      for (const [index, file] of proofFiles.entries()) {
+        const { path, token } = prepared.uploads[index];
+        const type = attachmentMimeType(file);
+        const { error } = await bucket.uploadToSignedUrl(path, token, file, { contentType: type });
+        if (error) {
+          setFormError(`${error.message} Your request was not saved — please try again.`);
+          return;
+        }
+        proofs.push({ path, name: file.name, type, size: file.size });
+      }
+
+      const fd = new FormData();
+      fd.set("request_kind", kind);
+      fd.set("start_date", startDate);
+      if (isOvertime) {
+        fd.set("overtime_hours", overtimeHours);
+      } else {
+        fd.set("end_date", endDate);
+      }
+      if (isLeave) {
+        fd.set("leave_reason", leaveReason);
+        if (leaveReason === "others") fd.set("reason", reason);
+      } else if (!isOvertime) {
+        fd.set("reason", reason);
+      }
+      if (proofs.length > 0) fd.set("proofs", JSON.stringify(proofs));
+
+      const result = await submitEmployeeRequest(fd);
+      if ("error" in result && result.error) {
+        setFormError(result.error);
+        return;
+      }
+      toast.success("Request submitted.");
+      setFormOpen(false);
+      setReason("");
+      setLeaveReason("");
+      setEndDate("");
+      setOvertimeHours("");
+      setProofFiles([]);
+      setProofError(null);
+      router.refresh();
+    } catch {
+      setFormError("Upload failed. Check your connection and try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleProofChange(event: ChangeEvent<HTMLInputElement>) {
+    const picked = [...proofFiles, ...Array.from(event.target.files ?? [])];
+    const next = picked.slice(0, REQUEST_ATTACHMENT_MAX_COUNT);
+    const overLimit = picked.length > REQUEST_ATTACHMENT_MAX_COUNT;
+    setProofFiles(next);
+    setProofError(
+      overLimit
+        ? `Attach at most ${REQUEST_ATTACHMENT_MAX_COUNT} files.`
+        : (next.map(attachmentError).find((error) => error !== null) ?? null),
+    );
+    event.target.value = "";
   }
 
   async function submitReview(decision: "approved" | "rejected") {
@@ -462,15 +563,23 @@ export function EmployeeRequestsClient({ requests, canReview, canSubmit }: Emplo
       </Card>
 
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>New Request</DialogTitle>
           </DialogHeader>
           <FieldGroup className="gap-4">
             <Field>
-              <FieldLabel>Request Type</FieldLabel>
-              <Select value={kind} onValueChange={(value) => setKind(value as RequestKind)}>
-                <SelectTrigger>
+              <FieldLabel htmlFor="request-kind">Request Type</FieldLabel>
+              <Select
+                value={kind}
+                onValueChange={(value) => {
+                  const nextKind = value as RequestKind;
+                  setKind(nextKind);
+                  if (nextKind !== "leave") setLeaveReason("");
+                  setFormError(null);
+                }}
+              >
+                <SelectTrigger id="request-kind" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -484,24 +593,117 @@ export function EmployeeRequestsClient({ requests, canReview, canSubmit }: Emplo
                 </SelectContent>
               </Select>
             </Field>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Field>
-                <FieldLabel>Start Date</FieldLabel>
-                <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+                <FieldLabel htmlFor="request-start-date">{kind === "overtime" ? "Date" : "Start Date"}</FieldLabel>
+                <Input
+                  id="request-start-date"
+                  type="date"
+                  value={startDate}
+                  onChange={(event) => setStartDate(event.target.value)}
+                />
               </Field>
-              <Field>
-                <FieldLabel>End Date</FieldLabel>
-                <Input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
-              </Field>
+              {kind === "overtime" ? (
+                <Field>
+                  <FieldLabel htmlFor="request-overtime-hours">Hours</FieldLabel>
+                  <Input
+                    id="request-overtime-hours"
+                    type="number"
+                    inputMode="decimal"
+                    step={0.5}
+                    min={0.5}
+                    max={12}
+                    value={overtimeHours}
+                    onChange={(event) => setOvertimeHours(event.target.value)}
+                    aria-describedby="request-overtime-help"
+                  />
+                  <FieldDescription id="request-overtime-help">
+                    Between 0.5 and 12 hours, in 0.5 steps.
+                  </FieldDescription>
+                </Field>
+              ) : (
+                <Field>
+                  <FieldLabel htmlFor="request-end-date">End Date</FieldLabel>
+                  <Input
+                    id="request-end-date"
+                    type="date"
+                    value={endDate}
+                    onChange={(event) => setEndDate(event.target.value)}
+                  />
+                </Field>
+              )}
             </div>
-            <Field>
-              <FieldLabel>Reason</FieldLabel>
-              <Textarea
-                value={reason}
-                onChange={(event) => setReason(event.target.value)}
-                rows={3}
-                placeholder="Why are you requesting this?"
+            {kind === "leave" ? (
+              <Field>
+                <FieldLabel htmlFor="request-leave-reason">Leave reason</FieldLabel>
+                <Select value={leaveReason} onValueChange={(value) => setLeaveReason(value as LeaveReason)}>
+                  <SelectTrigger id="request-leave-reason" className="w-full">
+                    <SelectValue placeholder="Choose a leave reason" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {LEAVE_REASONS.map((value) => (
+                        <SelectItem key={value} value={value}>
+                          {LEAVE_REASON_LABELS[value]}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </Field>
+            ) : null}
+            {kind !== "overtime" && (kind !== "leave" || leaveReason === "others") ? (
+              <Field>
+                <FieldLabel htmlFor="request-reason">{kind === "leave" ? "Describe the reason" : "Reason"}</FieldLabel>
+                <Textarea
+                  id="request-reason"
+                  value={reason}
+                  onChange={(event) => setReason(event.target.value)}
+                  rows={3}
+                  placeholder="Add the details the Account Manager needs."
+                />
+              </Field>
+            ) : null}
+            <Field data-invalid={!!proofError}>
+              <FieldLabel htmlFor="request-proof-files">
+                Proof files (optional, up to {REQUEST_ATTACHMENT_MAX_COUNT})
+              </FieldLabel>
+              <Input
+                id="request-proof-files"
+                type="file"
+                multiple
+                accept={MESSAGE_ATTACHMENT_ACCEPT}
+                onChange={handleProofChange}
+                aria-invalid={!!proofError}
               />
+              <FieldDescription>JPG, PNG, WebP or PDF, 10 MB each.</FieldDescription>
+              {proofError ? <FieldError errors={[{ message: proofError }]} /> : null}
+              {proofFiles.length > 0 ? (
+                <ul className="flex flex-wrap gap-2" aria-label="Proof files to upload">
+                  {proofFiles.map((file, index) => (
+                    <li
+                      key={`${file.name}-${file.size}-${file.lastModified}`}
+                      className="flex max-w-full items-center gap-1 rounded-md border bg-muted/30 py-1 pr-1 pl-2 text-xs"
+                    >
+                      <span className="max-w-48 truncate">{file.name}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-6"
+                        aria-label={`Remove ${file.name}`}
+                        onClick={() => {
+                          const next = proofFiles.filter((_, fileIndex) => fileIndex !== index);
+                          setProofFiles(next);
+                          setProofError(next.map(attachmentError).find((error) => error !== null) ?? null);
+                        }}
+                      >
+                        <X className="size-3" />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </Field>
             {formError ? <p className="text-destructive text-sm">{formError}</p> : null}
           </FieldGroup>
@@ -522,7 +724,7 @@ export function EmployeeRequestsClient({ requests, canReview, canSubmit }: Emplo
           if (!open) setReviewTarget(null);
         }}
       >
-        <DialogContent>
+        <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Review request</DialogTitle>
           </DialogHeader>
@@ -530,11 +732,60 @@ export function EmployeeRequestsClient({ requests, canReview, canSubmit }: Emplo
             <FieldGroup className="gap-4">
               <div className="rounded-lg border p-3 text-sm">
                 <p className="font-medium">{KIND_LABELS[reviewTarget.request_kind]}</p>
-                <p className="text-muted-foreground">
-                  {new Date(reviewTarget.start_date).toLocaleDateString()}
-                  {reviewTarget.end_date ? ` – ${new Date(reviewTarget.end_date).toLocaleDateString()}` : ""}
-                </p>
-                <p className="mt-1 text-muted-foreground">{reviewTarget.reason}</p>
+                <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+                  <dt className="text-muted-foreground">Employee</dt>
+                  <dd className="font-medium">{reviewTarget.employee_name ?? "Unknown employee"}</dd>
+                  <dt className="text-muted-foreground">
+                    {reviewTarget.request_kind === "overtime" ? "Date" : "Dates"}
+                  </dt>
+                  <dd>
+                    {new Date(reviewTarget.start_date).toLocaleDateString()}
+                    {reviewTarget.end_date ? ` – ${new Date(reviewTarget.end_date).toLocaleDateString()}` : ""}
+                  </dd>
+                  {reviewTarget.request_kind === "overtime" && reviewTarget.overtime_hours != null ? (
+                    <>
+                      <dt className="text-muted-foreground">Hours</dt>
+                      <dd>{Number(reviewTarget.overtime_hours)} h</dd>
+                    </>
+                  ) : null}
+                  {reviewTarget.leave_reason ? (
+                    <>
+                      <dt className="text-muted-foreground">Leave reason</dt>
+                      <dd>{LEAVE_REASON_LABELS[reviewTarget.leave_reason]}</dd>
+                    </>
+                  ) : null}
+                  {reviewTarget.reason ? (
+                    <>
+                      <dt className="text-muted-foreground">Reason</dt>
+                      <dd className="break-words">{reviewTarget.reason}</dd>
+                    </>
+                  ) : null}
+                </dl>
+                <div className="mt-3">
+                  <p className="text-muted-foreground">Proof files</p>
+                  {reviewTarget.employee_request_attachments.length > 0 ? (
+                    <ul className="mt-1 flex flex-col gap-1" aria-label="Proof files">
+                      {reviewTarget.employee_request_attachments.map((attachment) => (
+                        <li key={attachment.id}>
+                          {attachment.signed_url ? (
+                            <a
+                              className="font-medium underline underline-offset-3 hover:no-underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                              href={attachment.signed_url}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              {attachment.original_name}
+                            </a>
+                          ) : (
+                            <span className="text-muted-foreground">{attachment.original_name}</span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-1 text-muted-foreground">No proof files.</p>
+                  )}
+                </div>
               </div>
               <Field>
                 <FieldLabel>Review Notes</FieldLabel>

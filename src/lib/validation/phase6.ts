@@ -12,20 +12,55 @@ export const attendanceSchema = z.object({
 export const REQUEST_KINDS = ["leave", "overtime", "schedule_change", "other"] as const;
 export type RequestKind = (typeof REQUEST_KINDS)[number];
 
+export const LEAVE_REASONS = ["sick", "vacation", "emergency", "bereavement", "maternity_paternity", "others"] as const;
+export type LeaveReason = (typeof LEAVE_REASONS)[number];
+
+// Leave takes its reason from the dropdown; only Others asks for typed text. Schedule changes and
+// other requests keep the free-text reason. Overtime takes a date and hours instead.
+const requestDateShape = {
+  start_date: z.string().min(1, "Start date is required."),
+  end_date: z.string().optional().or(z.literal("")),
+};
+
 export const employeeRequestSchema = z
-  .object({
-    request_kind: z.enum(REQUEST_KINDS),
-    start_date: z.string().min(1, "Start date is required."),
-    end_date: z.string().optional().or(z.literal("")),
-    reason: z.string().min(1, "Reason is required.").max(1000),
-  })
-  .refine(
-    (data) => {
-      if (!data.end_date) return true;
-      return new Date(data.end_date) >= new Date(data.start_date);
-    },
-    { path: ["end_date"], message: "End date must be on or after the start date." },
-  );
+  .discriminatedUnion("request_kind", [
+    z.object({
+      request_kind: z.literal("leave"),
+      ...requestDateShape,
+      leave_reason: z.enum(LEAVE_REASONS, { message: "Choose a leave reason." }),
+      reason: z.string().max(1000).optional().or(z.literal("")),
+    }),
+    z.object({
+      request_kind: z.literal("overtime"),
+      start_date: z.string().min(1, "Date is required."),
+      overtime_hours: z.coerce
+        .number({ message: "Enter the overtime hours." })
+        .min(0.5, "Enter at least 0.5 hours.")
+        .max(12, "Enter at most 12 hours."),
+    }),
+    z.object({
+      request_kind: z.literal("schedule_change"),
+      ...requestDateShape,
+      reason: z.string().min(1, "Reason is required.").max(1000),
+    }),
+    z.object({
+      request_kind: z.literal("other"),
+      ...requestDateShape,
+      reason: z.string().min(1, "Reason is required.").max(1000),
+    }),
+  ])
+  .superRefine((data, ctx) => {
+    if (data.request_kind === "leave" && data.leave_reason === "others" && !data.reason?.trim()) {
+      ctx.addIssue({ code: "custom", path: ["reason"], message: "Describe the reason for the leave." });
+    }
+    if (data.request_kind !== "overtime" && data.end_date && new Date(data.end_date) < new Date(data.start_date)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["end_date"],
+        message: "End date must be on or after the start date.",
+      });
+    }
+  });
 
 export const requestReviewSchema = z.object({
   request_id: z.string().uuid(),

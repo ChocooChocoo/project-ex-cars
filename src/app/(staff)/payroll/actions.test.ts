@@ -7,7 +7,12 @@ const inserts: { table: string; row: Record<string, unknown> }[] = [];
 const updates: { table: string; row: Record<string, unknown> }[] = [];
 let attendance: { employee_id: string; attendance_date: string; status: string; hours_worked: number | null }[] = [];
 let schedules: { employee_id: string; start_time: string; end_time: string }[] = [];
-let overtimeRequests: { employee_id: string; start_date: string; end_date: string | null }[] = [];
+let overtimeRequests: {
+  employee_id: string;
+  start_date: string;
+  end_date: string | null;
+  overtime_hours: number | null;
+}[] = [];
 let runInsert: Result = { data: { id: "run-1" }, error: null };
 
 const rpc = vi.fn();
@@ -157,7 +162,7 @@ describe("createPayrollRun", () => {
 
   it("pays overtime only on days with an approved overtime request", async () => {
     attendance = [day("2026-10-01", "present", 12), day("2026-10-02", "present", 12)];
-    overtimeRequests = [{ employee_id: employeeId, start_date: "2026-10-01", end_date: null }];
+    overtimeRequests = [{ employee_id: employeeId, start_date: "2026-10-01", end_date: null, overtime_hours: null }];
 
     await createPayrollRun(runForm());
 
