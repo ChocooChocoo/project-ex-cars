@@ -118,7 +118,9 @@ describe("saveBuyDetails ownership guard", () => {
     form.set("storage_path", `${transactionId}/proof_of_billing-1.png`);
 
     await expect(uploadPurchaseDocument(form)).resolves.toEqual({ success: true });
-    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ document_kind: "proof_of_billing", id_type: null }));
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({ document_kind: "proof_of_billing", id_type: null, id_side: null }),
+    );
   });
 
   it("saves a valid ID even when the auto-check fails, and runs the check after the response", async () => {
@@ -139,6 +141,7 @@ describe("saveBuyDetails ownership guard", () => {
     form.set("transaction_id", transactionId);
     form.set("document_kind", "valid_id");
     form.set("id_type", "drivers_license");
+    form.set("id_side", "front");
     form.set("storage_path", path);
 
     await expect(uploadPurchaseDocument(form)).resolves.toEqual({ success: true });
