@@ -12,6 +12,7 @@ import { toast } from "sonner";
 
 import {
   cancelTransaction,
+  removePurchaseDocument,
   respondToFinancingOffer,
   saveBuyDetails,
   submitBuyRequest,
@@ -46,7 +47,9 @@ import { Textarea } from "@/components/ui/textarea";
 import type { ProfileAutoFill } from "@/lib/autofill";
 import { createClient } from "@/lib/supabase/client";
 import {
-  activeBuyerIdCount,
+  activeBuyerIds,
+  BUYER_ID_IMAGES,
+  buyerIdsComplete,
   DELIVERY_LEAD_DAYS,
   DELIVERY_STATUS_LABELS,
   DELIVERY_STATUSES,
@@ -229,15 +232,34 @@ export function TransactionDetail({
   // Purchase document upload state
   const [docKind, setDocKind] = useState("valid_id");
   const [docIdType, setDocIdType] = useState("");
+  const [docIdSide, setDocIdSide] = useState("front");
   const [uploading, setUploading] = useState(false);
+  const [removingDocumentId, setRemovingDocumentId] = useState<string | null>(null);
   const docFileRef = useRef<HTMLInputElement>(null);
 
-  const verifiedIdCount = documents.filter(
-    (d) => d.document_kind === "valid_id" && d.verification_state === "verified",
-  ).length;
-  const hasVerifiedBilling = documents.some(
-    (d) => d.document_kind === "proof_of_billing" && d.verification_state === "verified",
+  const buyerDocuments = documents as {
+    document_kind: unknown;
+    verification_state: unknown;
+    id_type?: unknown;
+    id_side?: unknown;
+  }[];
+  const activeIdImages = activeBuyerIds(buyerDocuments).length;
+  const idsComplete = buyerIdsComplete(buyerDocuments);
+  const hasBilling = documents.some(
+    (d) => d.document_kind === "proof_of_billing" && d.verification_state !== "rejected",
   );
+
+  async function handleRemoveDocument(documentId: string) {
+    setRemovingDocumentId(documentId);
+    const result = await removePurchaseDocument(documentId);
+    setRemovingDocumentId(null);
+    if (result.error) {
+      toast.error(result.error);
+    } else {
+      toast.success("Document removed.");
+      router.refresh();
+    }
+  }
 
   async function handleUploadDocument() {
     const file = docFileRef.current?.files?.[0];
@@ -247,6 +269,10 @@ export function TransactionDetail({
     }
     if (docKind === "valid_id" && !docIdType) {
       toast.error("Select the ID type.");
+      return;
+    }
+    if (docKind === "valid_id" && !docIdSide) {
+      toast.error("Select front or back of the ID.");
       return;
     }
     const ext = DOCUMENT_EXTENSIONS[file.type];
@@ -273,6 +299,7 @@ export function TransactionDetail({
       fd.set("transaction_id", id);
       fd.set("document_kind", docKind);
       fd.set("id_type", docKind === "valid_id" ? docIdType : "");
+      fd.set("id_side", docKind === "valid_id" ? docIdSide : "");
       fd.set("storage_path", storagePath);
       const result = await uploadPurchaseDocument(fd);
       if (result.error) {
@@ -327,8 +354,7 @@ export function TransactionDetail({
     }
   }
 
-  // §2 steps 2–4: two IDs and a locked Cash visit slot, then the request goes to the Sales Manager.
-  const activeIds = activeBuyerIdCount(documents as { document_kind: unknown; verification_state: unknown }[]);
+  // §2 steps 2–4: two IDs (front and back) and a locked Cash visit slot, then the request goes to the Sales Manager.
   const onsiteCashSaved = isOnsiteCashRequest(purchaseDetails ?? null);
   const queuedCashSaved = isQueuedRequest(purchaseDetails ?? null);
   // §6: a financing buyer books the inspection visit only after the financing is approved.
@@ -750,7 +776,7 @@ export function TransactionDetail({
                   <div className="flex flex-col gap-2 rounded-md border p-3 text-sm">
                     <p className="font-medium">Send your request</p>
                     <p className="text-muted-foreground text-xs">
-                      Valid IDs: {activeIds}/2 ·{" "}
+                      ID images: {activeIdImages}/{BUYER_ID_IMAGES} ·{" "}
                       {booksAfterApproval
                         ? "Time booked after the financing is approved"
                         : bookedSlot
@@ -758,6 +784,7 @@ export function TransactionDetail({
                           : "No time booked yet"}
                       {queuedCashSaved ? ` · Condition ${acknowledgedAt ? "acknowledged" : "not acknowledged"}` : ""}
                       {savedDelivery ? ` · Delivery terms ${deliveryTermsAgreedAt ? "agreed" : "not agreed"}` : ""}
+                      {hasBilling ? " · Proof of billing uploaded" : " · Proof of billing pending"}
                     </p>
                     {queuedCashSaved ? (
                       <p className="text-muted-foreground text-xs">
@@ -769,7 +796,8 @@ export function TransactionDetail({
                       onClick={handleSubmitRequest}
                       disabled={
                         submitting ||
-                        activeIds !== 2 ||
+                        !idsComplete ||
+                        !hasBilling ||
                         (!bookedSlot && !booksAfterApproval) ||
                         (queuedCashSaved && !acknowledgedAt) ||
                         (savedDelivery && !deliveryTermsAgreedAt)
@@ -1041,12 +1069,14 @@ export function TransactionDetail({
                 <div className="flex flex-wrap items-center gap-2 rounded-lg border p-3">
                   <ShieldCheck className="size-4 text-muted-foreground" />
                   <p className="text-muted-foreground text-xs">
-                    GCE requires two valid IDs and one proof of billing to complete your purchase.
+                    GCE requires the front and back of two valid IDs and one proof of billing to complete your purchase.
                   </p>
                 </div>
                 <p className="text-xs">
-                  <span className="font-medium">{Math.min(verifiedIdCount, 2)}/2</span> valid IDs verified
-                  {hasVerifiedBilling ? " · proof of billing verified" : " · proof of billing pending"}
+                  <span className="font-medium">
+                    {activeIdImages}/{BUYER_ID_IMAGES}
+                  </span>{" "}
+                  ID images · proof of billing {hasBilling ? "uploaded" : "pending"}
                 </p>
                 <div className="flex flex-wrap items-end gap-2">
                   <div className="flex flex-col gap-1">
@@ -1091,6 +1121,24 @@ export function TransactionDetail({
                       </Select>
                     </div>
                   ) : null}
+                  {docKind === "valid_id" ? (
+                    <div className="flex flex-col gap-1">
+                      <Label htmlFor="cust-doc-id-side" className="text-xs">
+                        Side
+                      </Label>
+                      <Select value={docIdSide} onValueChange={setDocIdSide}>
+                        <SelectTrigger id="cust-doc-id-side" className="w-28">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            <SelectItem value="front">Front</SelectItem>
+                            <SelectItem value="back">Back</SelectItem>
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : null}
                   <Input
                     ref={docFileRef}
                     type="file"
@@ -1120,9 +1168,24 @@ export function TransactionDetail({
                             {(doc.id_type as string).replace(/_/g, " ")}
                           </span>
                         ) : null}
+                        {doc.id_side ? (
+                          <span className="text-muted-foreground text-xs capitalize">{doc.id_side as string}</span>
+                        ) : null}
                         <Badge variant="secondary" className="ml-auto text-xs">
                           {doc.verification_state as string}
                         </Badge>
+                        {state === "pending" && doc.verification_state === "pending" ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            aria-label={`Remove ${label}${doc.id_side ? ` (${doc.id_side as string})` : ""}`}
+                            disabled={removingDocumentId === (doc.id as string)}
+                            onClick={() => handleRemoveDocument(doc.id as string)}
+                          >
+                            {removingDocumentId === (doc.id as string) ? "Removing..." : "Remove"}
+                          </Button>
+                        ) : null}
                       </div>
                       {doc.verification_state === "rejected" ? (
                         <p className="text-destructive text-xs">

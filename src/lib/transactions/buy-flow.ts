@@ -1,12 +1,38 @@
 // Pure rules for the buying flows (GCE Process Flows §2 onward). No I/O.
 
-export const BUYER_ID_COUNT = 2;
+const BUYER_ID_COUNT = 2;
+export const ID_SIDES = ["front", "back"] as const;
+export type IdSide = (typeof ID_SIDES)[number];
+// Each of the two IDs is sent as a front and a back.
+export const BUYER_ID_IMAGES = BUYER_ID_COUNT * ID_SIDES.length;
 
-type DocumentLike = { document_kind: unknown; verification_state: unknown };
+type DocumentLike = {
+  document_kind: unknown;
+  verification_state: unknown;
+  id_type?: unknown;
+  id_side?: unknown;
+};
 
 // IDs still in play: a rejected ID frees its place so the buyer can upload a replacement.
-export function activeBuyerIdCount(documents: DocumentLike[]): number {
-  return documents.filter((doc) => doc.document_kind === "valid_id" && doc.verification_state !== "rejected").length;
+export function activeBuyerIds(documents: DocumentLike[]): DocumentLike[] {
+  return documents.filter((doc) => doc.document_kind === "valid_id" && doc.verification_state !== "rejected");
+}
+
+// Two different IDs, each with an active front and back. Rows uploaded before IDs had a side keep the
+// old two-ID rule, so a request sent under the old rule still passes the staff checks.
+export function buyerIdsComplete(documents: DocumentLike[]): boolean {
+  const ids = activeBuyerIds(documents);
+  if (ids.every((doc) => doc.id_side == null)) return ids.length >= BUYER_ID_COUNT;
+  const sidesByIdType = new Map<string, Set<unknown>>();
+  for (const doc of ids) {
+    if (!doc.id_type || !doc.id_side) continue;
+    const sides = sidesByIdType.get(String(doc.id_type)) ?? new Set<unknown>();
+    sides.add(doc.id_side);
+    sidesByIdType.set(String(doc.id_type), sides);
+  }
+  return (
+    [...sidesByIdType.values()].filter((sides) => sides.has("front") && sides.has("back")).length >= BUYER_ID_COUNT
+  );
 }
 
 // §7–9 (Phase 6 default, not yet in the source): a bank-transfer purchase follows the same steps as its

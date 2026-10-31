@@ -163,6 +163,11 @@ export function TransactionDocumentsCard({
                       {(doc.id_type as string).replace(/_/g, " ")}
                     </p>
                   ) : null}
+                  {doc.id_side ? (
+                    <Badge variant="outline" className="h-5 w-fit px-2 text-[11px] capitalize">
+                      {doc.id_side as string}
+                    </Badge>
+                  ) : null}
                   {signedUrl ? (
                     doc.is_image === true ? (
                       <TransactionImagePreview src={signedUrl} alt={`${label} document preview`} />
