@@ -244,6 +244,17 @@ describe("Mark Dispatched waits for the vehicle papers", () => {
     });
   });
 
+  it("still refuses a Confidential Informant who is not assigned to the case", async () => {
+    getCurrentRole.mockResolvedValue("confidential_informant");
+    db.rows.field_cases = { ...(db.rows.field_cases as Record<string, unknown>), head_security_id: "someone-else" };
+    papers("released_to_ci");
+
+    await expect(dispatch()).resolves.toEqual({
+      error: "Only the assigned delivery team can update this delivery.",
+    });
+    expect(db.writes).toHaveLength(0);
+  });
+
   it("dispatches once the papers are released to the Confidential Informant", async () => {
     papers("released_to_ci");
 
