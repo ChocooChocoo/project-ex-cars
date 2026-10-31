@@ -158,7 +158,7 @@ export async function createPayrollRun(formData: FormData): Promise<Phase6Action
   // Requests ending before the period are filtered out by computePayslip's date check.
   const { data: overtimeRequests } = await supabase
     .from("employee_requests")
-    .select("employee_id, start_date, end_date")
+    .select("employee_id, start_date, end_date, overtime_hours")
     .eq("request_kind", "overtime")
     .eq("status", "approved")
     .lte("start_date", parsed.data.period_end);

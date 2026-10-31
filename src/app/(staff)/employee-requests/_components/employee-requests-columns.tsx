@@ -13,13 +13,22 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { REQUEST_KINDS, type RequestKind } from "@/lib/validation/phase6";
+import { type LeaveReason, REQUEST_KINDS, type RequestKind } from "@/lib/validation/phase6";
 
 const KIND_LABELS: Record<RequestKind, string> = {
   leave: "Leave",
   overtime: "Overtime",
   schedule_change: "Schedule Change",
   other: "Other",
+};
+
+const LEAVE_REASON_LABELS: Record<LeaveReason, string> = {
+  sick: "Sick",
+  vacation: "Vacation",
+  emergency: "Emergency",
+  bereavement: "Bereavement",
+  maternity_paternity: "Maternity/Paternity",
+  others: "Others",
 };
 
 const STATUS_STYLES: Record<
@@ -44,16 +53,29 @@ const STATUS_STYLES: Record<
   },
 };
 
+export interface EmployeeRequestAttachment {
+  id: string;
+  request_id: string;
+  original_name: string;
+  file_kind: "image" | "file";
+  file_size: number | null;
+  signed_url: string | null;
+}
+
 export interface EmployeeRequestRow {
   id: string;
   employee_id: string;
+  employee_name: string | null;
   request_kind: RequestKind;
   status: "pending" | "approved" | "rejected" | "cancelled";
   start_date: string;
   end_date: string | null;
-  reason: string;
+  overtime_hours: number | null;
+  leave_reason: LeaveReason | null;
+  reason: string | null;
   review_notes: string | null;
   reviewed_at: string | null;
+  employee_request_attachments: EmployeeRequestAttachment[];
 }
 
 interface EmployeeRequestColumnOptions {
@@ -106,7 +128,18 @@ export function createEmployeeRequestColumns({
     {
       id: "search",
       accessorFn: (row) =>
-        `${row.id} ${row.request_kind} ${row.status} ${row.reason} ${row.start_date} ${row.end_date ?? ""}`,
+        [
+          row.id,
+          row.employee_name ?? "",
+          row.request_kind,
+          KIND_LABELS[row.request_kind],
+          row.leave_reason ? LEAVE_REASON_LABELS[row.leave_reason] : "",
+          row.status,
+          row.reason ?? "",
+          row.start_date,
+          row.end_date ?? "",
+          row.overtime_hours ?? "",
+        ].join(" "),
       filterFn: "includesString",
       enableHiding: true,
     },
@@ -125,6 +158,13 @@ export function createEmployeeRequestColumns({
       enableHiding: true,
     },
     {
+      accessorKey: "employee_name",
+      header: "Employee",
+      cell: ({ row }) => (
+        <span className="block max-w-40 truncate font-medium">{row.original.employee_name ?? "Unknown employee"}</span>
+      ),
+    },
+    {
       accessorKey: "request_kind",
       header: "Type",
       cell: ({ row }) => (
@@ -141,13 +181,22 @@ export function createEmployeeRequestColumns({
     },
     {
       accessorKey: "end_date",
-      header: "End",
-      cell: ({ row }) => (row.original.end_date ? formatDate(row.original.end_date) : "—"),
+      header: "End / Hours",
+      cell: ({ row }) => {
+        if (row.original.request_kind === "overtime") {
+          return row.original.overtime_hours == null ? "—" : `${Number(row.original.overtime_hours)} h`;
+        }
+        return row.original.end_date ? formatDate(row.original.end_date) : "—";
+      },
     },
     {
       accessorKey: "reason",
       header: "Reason",
-      cell: ({ row }) => <span className="block max-w-64 truncate text-muted-foreground">{row.original.reason}</span>,
+      cell: ({ row }) => {
+        const leaveReason = row.original.leave_reason ? LEAVE_REASON_LABELS[row.original.leave_reason] : null;
+        const text = [leaveReason, row.original.reason].filter(Boolean).join(": ");
+        return <span className="block max-w-64 truncate text-muted-foreground">{text || "—"}</span>;
+      },
     },
     {
       accessorKey: "status",
@@ -198,4 +247,4 @@ export function createEmployeeRequestColumns({
   ];
 }
 
-export { KIND_LABELS, REQUEST_KINDS, STATUS_STYLES };
+export { KIND_LABELS, LEAVE_REASON_LABELS, REQUEST_KINDS, STATUS_STYLES };
