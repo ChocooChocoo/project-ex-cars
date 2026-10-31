@@ -14,6 +14,7 @@ import {
   updateOwnProfile,
 } from "@/app/auth/actions";
 import { PasswordRules } from "@/components/password-rules";
+import { AddressFields } from "@/components/profile/address-fields";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,16 +28,22 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldError, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { type AddressValue, emptyAddressValue, sameAddress } from "@/lib/psgc/address";
 import { getInitials } from "@/lib/utils";
 
 export interface OwnProfile {
   readonly email: string;
   readonly full_name: string;
   readonly phone: string;
+  /** The composed one-line address kept for autofill and delivery. */
   readonly address: string;
+  readonly address_line: string;
+  readonly region_code: string;
+  readonly province_code: string;
+  readonly city_code: string;
+  readonly barangay_code: string;
   readonly avatar_url: string | null;
   readonly role_label: string | null;
   readonly can_change_email: boolean;
@@ -231,14 +238,26 @@ function ProfileHeader({ profile }: { readonly profile: OwnProfile }) {
   );
 }
 
+function addressFromProfile(profile: OwnProfile): AddressValue {
+  return {
+    ...emptyAddressValue(),
+    address_line: profile.address_line,
+    region_code: profile.region_code,
+    province_code: profile.province_code,
+    city_code: profile.city_code,
+    barangay_code: profile.barangay_code,
+  };
+}
+
 function DetailsCard({ profile }: { readonly profile: OwnProfile }) {
   const router = useRouter();
   const [fullName, setFullName] = useState(profile.full_name);
   const [phone, setPhone] = useState(profile.phone);
-  const [address, setAddress] = useState(profile.address);
+  const [address, setAddress] = useState<AddressValue>(() => addressFromProfile(profile));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const changed = fullName !== profile.full_name || phone !== profile.phone || address !== profile.address;
+  const changed =
+    fullName !== profile.full_name || phone !== profile.phone || !sameAddress(address, addressFromProfile(profile));
 
   async function save(event: React.FormEvent) {
     event.preventDefault();
@@ -247,7 +266,7 @@ function DetailsCard({ profile }: { readonly profile: OwnProfile }) {
     const fd = new FormData();
     fd.set("full_name", fullName);
     fd.set("phone", phone);
-    fd.set("address", address);
+    for (const [key, part] of Object.entries(address)) fd.set(key, part);
     const result = await updateOwnProfile(fd);
     setSaving(false);
     if ("error" in result) {
@@ -298,17 +317,10 @@ function DetailsCard({ profile }: { readonly profile: OwnProfile }) {
               placeholder="09171234567"
             />
           </Field>
-          <Field>
-            <FieldLabel htmlFor="profile-address">Address</FieldLabel>
-            <Textarea
-              id="profile-address"
-              value={address}
-              onChange={(event) => setAddress(event.target.value)}
-              autoComplete="street-address"
-              rows={3}
-              maxLength={500}
-            />
-          </Field>
+          <FieldSet className="gap-4">
+            <FieldLegend variant="label">Address</FieldLegend>
+            <AddressFields value={address} onChange={setAddress} storedAddress={profile.address} />
+          </FieldSet>
           {error ? (
             <p role="alert" className="text-destructive text-sm">
               {error}
