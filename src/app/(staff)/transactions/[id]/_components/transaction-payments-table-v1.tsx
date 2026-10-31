@@ -136,17 +136,12 @@ export function TransactionPaymentsTableV1({
         // PayMongo confirms its own payments through the webhook; only payments recorded by staff are verified here.
         canReview && !row.original.verified_by && !row.original.rejected_at && !row.original.paymongo_checkout_id ? (
           <div className="flex justify-end gap-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 px-2 text-xs"
-              onClick={() => onVerifyPayment(row.original.id as string)}
-            >
+            <Button size="sm" onClick={() => onVerifyPayment(row.original.id as string)}>
               Verify
             </Button>
             <RejectReasonDialog
               trigger={
-                <Button variant="ghost" size="sm" className="h-6 px-2 text-destructive text-xs">
+                <Button variant="outline" size="sm" className="text-destructive">
                   Reject
                 </Button>
               }

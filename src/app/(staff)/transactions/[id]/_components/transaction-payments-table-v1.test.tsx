@@ -88,4 +88,19 @@ describe("TransactionPaymentsTableV1 (T03 HA2, HA3)", () => {
     expect(screen.queryByRole("button", { name: "Verify" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Reject" })).not.toBeInTheDocument();
   });
+
+  it("gives Verify and Reject the weight of normal buttons (T05)", () => {
+    renderTable([base]);
+
+    const verify = screen.getByRole("button", { name: "Verify" });
+    const reject = screen.getByRole("button", { name: "Reject" });
+    for (const button of [verify, reject]) {
+      expect(button).toHaveAttribute("data-size", "sm");
+      expect(button.className).not.toContain("h-6");
+      expect(button.className).not.toContain("text-xs");
+    }
+    // Verify is the filled action; Reject stays the quieter, outlined one.
+    expect(verify).toHaveAttribute("data-variant", "default");
+    expect(reject).toHaveAttribute("data-variant", "outline");
+  });
 });
