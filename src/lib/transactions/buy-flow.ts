@@ -355,6 +355,9 @@ export function paymentAllowedBeforeSigning(details: SaleDetails, paymentKind: u
 
 const peso = (amount: unknown) => `PHP ${Number(amount ?? 0).toLocaleString("en-PH")}`;
 
+// GCE's own name as it prints on the papers: the financing contract and the Deed of Sale / Policy & Warranty.
+export const GCE_SELLER = "GCE Auto Sales";
+
 // The pre-made contract the Sales Manager can start from, filled in from the agreed financing terms.
 export function contractTemplate(sale: {
   buyer: string;
@@ -371,7 +374,7 @@ export function contractTemplate(sale: {
   return [
     "VEHICLE SALE AND IN-HOUSE FINANCING CONTRACT",
     "",
-    `Seller: GCE Auto Sales. Buyer: ${sale.buyer}.`,
+    `Seller: ${GCE_SELLER}. Buyer: ${sale.buyer}.`,
     `Vehicle: ${sale.vehicle}.`,
     `Vehicle price: ${peso(sale.price)}.`,
     ...(terms
@@ -384,7 +387,7 @@ export function contractTemplate(sale: {
     "The buyer has inspected the vehicle and accepts it in its present condition.",
     "The vehicle stays under this contract until every payment is made. If the payments are not made, GCE will take back the vehicle.",
     "",
-    "Signed by the buyer and by GCE Auto Sales.",
+    `Signed by the buyer and by ${GCE_SELLER}.`,
   ].join("\n");
 }
 

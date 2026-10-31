@@ -5,6 +5,9 @@ import { VEHICLE_PURPOSES } from "@/lib/vehicles/catalog";
 export const vehicleSchema = z.object({
   stock_code: z.string().min(1, "Stock code is required.").max(50, "Stock code must be at most 50 characters."),
   vin: z.string().max(50).optional().or(z.literal("")),
+  plate_number: z.string().max(50).optional().or(z.literal("")),
+  engine_number: z.string().max(50).optional().or(z.literal("")),
+  chassis_number: z.string().max(50).optional().or(z.literal("")),
   make: z.string().min(1, "Make is required.").max(100),
   model: z.string().min(1, "Model is required.").max(100),
   year: z.coerce.number().int().min(1900, "Year must be 1900 or later.").max(2100),
