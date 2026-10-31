@@ -65,6 +65,7 @@ import {
   paidTowardPrice,
   signsInApp,
 } from "@/lib/transactions/buy-flow";
+import { deliveryArea, deliveryFeeRangeLabel } from "@/lib/transactions/delivery-fee";
 import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_SIZE, transactionDocumentLabel } from "@/lib/transactions/document-media";
 import {
   arrangementKindLabel,
@@ -155,6 +156,7 @@ export function TransactionDetail({
   gceVisitOnly = false,
   delivery = null,
   counterOffer = null,
+  buyerRegionCode = null,
 }: {
   readonly transaction: Record<string, unknown>;
   readonly history: Record<string, unknown>[];
@@ -167,6 +169,8 @@ export function TransactionDetail({
   readonly negotiationThreadId?: string | null;
   readonly takenSlots?: string[];
   readonly gceVisitOnly?: boolean;
+  /** T05 P7: the buyer's `profiles.region_code`, which sets the delivery fee range. */
+  readonly buyerRegionCode?: string | null;
   readonly delivery?: {
     status: string | null;
     delay_note: string | null;
@@ -188,6 +192,9 @@ export function TransactionDetail({
   const kind = transaction.transaction_kind as string;
   const vehicles = transaction.vehicles as Record<string, unknown> | undefined;
   const purchaseDetails = transaction.purchase_details as Record<string, unknown> | undefined;
+  // T05 P7: the buyer's region sets the delivery fee range they read before the Sales Manager sets the fee.
+  const buyerArea = deliveryArea(buyerRegionCode);
+  const deliveryFeeRange = buyerArea ? deliveryFeeRangeLabel(buyerArea) : null;
   const sellDetails = transaction.sell_details as Record<string, unknown> | undefined;
   const vehicleRequests = transaction.vehicle_requests as Record<string, unknown> | undefined;
   const openedAt = transaction.opened_at as string;
@@ -712,24 +719,31 @@ export function TransactionDetail({
                   </div>
                 ) : null}
                 {arrangementKind === "delivery" && !deliveryTermsAgreedAt ? (
-                  <div className="flex items-start gap-2 rounded-md border p-3 text-sm">
-                    <Checkbox
-                      id="agree-delivery-terms"
-                      checked={agreeDeliveryTerms}
-                      onCheckedChange={(checked) => setAgreeDeliveryTerms(checked === true)}
-                    />
-                    <label htmlFor="agree-delivery-terms" className="flex flex-col gap-1">
-                      <span>
-                        Delivery has a delivery fee and a downpayment. The downpayment and fee are paid first through
-                        PayMongo.{" "}
-                        {financingPicked
-                          ? "The rest is paid in monthly instalments."
-                          : paymentMethod === "bank_transfer"
-                            ? "The rest is paid by bank transfer through PayMongo when the car arrives."
-                            : "The rest is paid in cash when the car arrives."}
-                      </span>
-                      <span className="font-medium">I agree</span>
-                    </label>
+                  <div className="flex flex-col gap-2">
+                    <p className="text-muted-foreground text-xs">
+                      {deliveryFeeRange
+                        ? `Delivery fee for your area: ${deliveryFeeRange}. The Sales Manager confirms the exact fee.`
+                        : "Add your region in your profile to see the delivery fee for your area."}
+                    </p>
+                    <div className="flex items-start gap-2 rounded-md border p-3 text-sm">
+                      <Checkbox
+                        id="agree-delivery-terms"
+                        checked={agreeDeliveryTerms}
+                        onCheckedChange={(checked) => setAgreeDeliveryTerms(checked === true)}
+                      />
+                      <label htmlFor="agree-delivery-terms" className="flex flex-col gap-1">
+                        <span>
+                          Delivery has a delivery fee and a downpayment. The downpayment and fee are paid first through
+                          PayMongo.{" "}
+                          {financingPicked
+                            ? "The rest is paid in monthly instalments."
+                            : paymentMethod === "bank_transfer"
+                              ? "The rest is paid by bank transfer through PayMongo when the car arrives."
+                              : "The rest is paid in cash when the car arrives."}
+                        </span>
+                        <span className="font-medium">I agree</span>
+                      </label>
+                    </div>
                   </div>
                 ) : null}
                 {arrangementKind === "gce_visit" ? (
@@ -907,10 +921,16 @@ export function TransactionDetail({
                 <h2 className="font-medium tracking-tight">Delivery</h2>
                 <p className="text-sm">
                   Delivery fee {formatCurrency(Number(purchaseDetails.delivery_fee ?? 0))} and downpayment{" "}
-                  {formatCurrency(Number(purchaseDetails.downpayment_amount ?? 0))} are paid online through PayMongo
-                  before {format(new Date(purchaseDetails.downpayment_due_at as string), "MMM d, yyyy")}.{" "}
+                  {formatCurrency(Number(purchaseDetails.downpayment_amount ?? 0))} (10% of the vehicle price) are paid
+                  online through PayMongo before{" "}
+                  {format(new Date(purchaseDetails.downpayment_due_at as string), "MMM d, yyyy")}.{" "}
                   {deliveryBalanceNote(purchaseDetails.payment_method, "buyer")}
                 </p>
+                {deliveryFeeRange ? (
+                  <p className="text-muted-foreground text-xs">
+                    Delivery fee range for your area: <span className="tabular-nums">{deliveryFeeRange}</span>.
+                  </p>
+                ) : null}
                 {purchaseDetails.downpayment_forfeited_at ? (
                   <p className="text-destructive text-sm">Your downpayment was forfeited.</p>
                 ) : null}

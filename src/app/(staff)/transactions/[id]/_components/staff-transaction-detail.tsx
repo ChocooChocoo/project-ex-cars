@@ -106,6 +106,10 @@ export function StaffTransactionDetail({
   const openedAt = transaction.opened_at as string;
   const completedAt = transaction.completed_at as string | null;
   const customerName = ((transaction.profiles as Record<string, unknown> | null)?.full_name as string | null) ?? null;
+  // T05 P7: the buyer's region sets the delivery fee range on both pricing panels.
+  const buyerRegionCode =
+    ((transaction.profiles as Record<string, unknown> | null)?.region_code as string | null) ?? null;
+  const vehiclePrice = Number(purchaseDetails?.final_price ?? 0);
   const updatedAt = transaction.updated_at as string;
 
   const [transitioning, setTransitioning] = useState(false);
@@ -394,7 +398,9 @@ export function StaffTransactionDetail({
           threadId={financing.threadId ?? null}
           arrangementKind={(purchaseDetails?.arrangement_kind as string | undefined) ?? "gce_visit"}
           signingReported={Boolean(handover.signing_reported_at)}
-          defaultTotal={financedTotal(Number(purchaseDetails?.final_price ?? 0)) || undefined}
+          defaultTotal={financedTotal(vehiclePrice) || undefined}
+          vehiclePrice={vehiclePrice}
+          buyerRegionCode={buyerRegionCode}
         />
       ) : null}
 
@@ -431,6 +437,7 @@ export function StaffTransactionDetail({
           flowStatus={(transaction.flow_status as string | null) ?? null}
           team={delivery.team}
           userRole={userRole}
+          buyerRegionCode={buyerRegionCode}
         />
       ) : null}
 
