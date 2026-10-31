@@ -11,6 +11,8 @@ import { toast } from "sonner";
 import { createMeetupFieldCase } from "@/app/(staff)/transactions/delivery-actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 import { PersonSelect } from "./delivery-panel";
 
@@ -20,6 +22,8 @@ type Person = { id: string; full_name: string | null };
 export interface MeetupPick {
   readonly informant_id?: string;
   readonly mechanic_id?: string;
+  /** Bank Transfer meet-ups only: the amount the buyer pays online before the meet-up. */
+  readonly downpayment_amount?: string;
 }
 
 // Meet Halfway: the Confidential Informant and the Mechanic who meet the buyer.
@@ -28,6 +32,7 @@ export interface MeetupPick {
 export function MeetupTeamPanel({
   transactionId,
   mode,
+  paymentMethod,
   informants,
   mechanics,
   pick,
@@ -37,6 +42,7 @@ export function MeetupTeamPanel({
 }: {
   readonly transactionId: string;
   readonly mode: "approval" | "assign" | "assigned";
+  readonly paymentMethod?: string | null;
   readonly informants: Person[];
   readonly mechanics: Person[];
   readonly pick: MeetupPick;
@@ -46,7 +52,10 @@ export function MeetupTeamPanel({
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-  const complete = Boolean(pick.informant_id && pick.mechanic_id);
+  const downpaymentRequired = paymentMethod === "bank_transfer";
+  const downpayment = Number(pick.downpayment_amount ?? 0);
+  const downpaymentReady = !downpaymentRequired || (Number.isFinite(downpayment) && downpayment > 0);
+  const complete = Boolean(pick.informant_id && pick.mechanic_id) && downpaymentReady;
   const received = (at: unknown) => (at ? `received ${format(new Date(at as string), "MMM d, h:mm a")}` : "not yet");
 
   async function assign() {
@@ -107,11 +116,31 @@ export function MeetupTeamPanel({
                 onChange={(mechanic_id) => onPick({ ...pick, mechanic_id })}
               />
             </div>
+            {mode === "approval" && downpaymentRequired ? (
+              <div className="grid gap-2">
+                <Label htmlFor="meetup-downpayment">Downpayment required (₱)</Label>
+                <Input
+                  id="meetup-downpayment"
+                  type="number"
+                  min={1}
+                  step={100}
+                  inputMode="decimal"
+                  value={pick.downpayment_amount ?? ""}
+                  onChange={(event) => onPick({ ...pick, downpayment_amount: event.target.value })}
+                  aria-describedby="meetup-downpayment-help"
+                />
+                <p id="meetup-downpayment-help" className="text-muted-foreground text-xs">
+                  The buyer pays this through PayMongo before the meet-up. The balance follows at the meet-up.
+                </p>
+              </div>
+            ) : null}
             {mode === "approval" ? (
               <p className="text-muted-foreground text-xs">
                 {complete
                   ? "Team chosen. Approve the request to send the command."
-                  : "The request cannot be approved until both are chosen."}
+                  : downpaymentReady
+                    ? "The request cannot be approved until both are chosen."
+                    : "Enter the downpayment the buyer pays before the meet-up."}
               </p>
             ) : (
               <>

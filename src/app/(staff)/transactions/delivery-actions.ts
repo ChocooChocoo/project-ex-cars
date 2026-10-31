@@ -186,7 +186,7 @@ export async function setDeliveryTerms(formData: FormData): Promise<DeliveryActi
     {
       kind: "delivery_terms_set",
       title: "Your delivery is confirmed",
-      body: `Pay the delivery fee of ${peso(parsed.data.delivery_fee)} and the downpayment of ${peso(parsed.data.downpayment_amount)} through PayMongo before ${due.toLocaleDateString("en-PH")}. ${deliveryBalanceNote(tx.details.payment_method, "buyer")}`,
+      body: `Pay the delivery fee of ${peso(parsed.data.delivery_fee)} and the downpayment of ${peso(parsed.data.downpayment_amount)} through PayMongo before ${due.toLocaleDateString("en-PH", { timeZone: "Asia/Manila" })}. ${deliveryBalanceNote(tx.details.payment_method, "buyer")}`,
       transactionId: tx.id,
     },
   );
@@ -260,7 +260,7 @@ export async function createDeliveryFieldCase(formData: FormData): Promise<Deliv
       {
         kind: "field_case_assigned",
         title: "New delivery",
-        body: `Deliver a car on ${new Date(tx.arrangement.schedule).toLocaleString("en-PH")} to ${tx.arrangement.location ?? "the buyer's address"}.`,
+        body: `Deliver a car on ${new Date(tx.arrangement.schedule).toLocaleString("en-PH", { timeZone: "Asia/Manila" })} to ${tx.arrangement.location ?? "the buyer's address"}.`,
         transactionId: tx.id,
       },
     );
@@ -376,7 +376,7 @@ export async function rescheduleDelivery(formData: FormData): Promise<DeliveryAc
     admin,
     tx,
     actor.userId,
-    `Delivery moved to ${schedule.toLocaleString("en-PH")} at ${parsed.data.location}; fee ${peso(parsed.data.fee)}`,
+    `Delivery moved to ${schedule.toLocaleString("en-PH", { timeZone: "Asia/Manila" })} at ${parsed.data.location}; fee ${peso(parsed.data.fee)}`,
   );
   await notify(
     admin,
@@ -384,7 +384,7 @@ export async function rescheduleDelivery(formData: FormData): Promise<DeliveryAc
     {
       kind: "delivery_rescheduled",
       title: "Your delivery was rescheduled",
-      body: `New delivery: ${schedule.toLocaleString("en-PH")} at ${parsed.data.location}.${parsed.data.fee > 0 ? ` Pay the ${peso(parsed.data.fee)} rescheduling fee.` : ""}`,
+      body: `New delivery: ${schedule.toLocaleString("en-PH", { timeZone: "Asia/Manila" })} at ${parsed.data.location}.${parsed.data.fee > 0 ? ` Pay the ${peso(parsed.data.fee)} rescheduling fee.` : ""}`,
       transactionId: tx.id,
     },
   );
@@ -401,7 +401,7 @@ export async function relayDeliveryDelay(formData: FormData): Promise<DeliveryAc
   if (!tx?.fieldCase?.delay_note) return { error: "No delay has been reported." };
 
   const eta = tx.fieldCase.expected_arrival
-    ? ` Expected arrival: ${new Date(tx.fieldCase.expected_arrival).toLocaleString("en-PH")}.`
+    ? ` Expected arrival: ${new Date(tx.fieldCase.expected_arrival).toLocaleString("en-PH", { timeZone: "Asia/Manila" })}.`
     : "";
   await notify(
     admin,

@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { FINANCING_TERM_MONTHS } from "@/lib/transactions/buy-flow";
 import { SELL_MEETUP_METHODS } from "@/lib/transactions/sell-flow";
-import { PAYMENT_METHODS } from "@/lib/transactions/state-machine";
+import { PURCHASE_PAYMENT_METHODS } from "@/lib/transactions/state-machine";
 import { VEHICLE_PURPOSES } from "@/lib/vehicles/catalog";
 
 export const buyTransactionSchema = z.object({
@@ -15,7 +15,7 @@ export const buyDetailsSchema = z.object({
   transaction_id: z.string().uuid(),
   // T04 P5: Full Payment or Financing. Older forms send only the method; the option then follows it.
   payment_option: z.enum(["full", "financing"]).optional().or(z.literal("")),
-  payment_method: z.enum(PAYMENT_METHODS, {
+  payment_method: z.enum(PURCHASE_PAYMENT_METHODS, {
     error: "Select a payment method.",
   }),
   arrangement_kind: z.enum(["delivery", "meetup", "gce_visit"]).optional().or(z.literal("")),

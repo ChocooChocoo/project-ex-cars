@@ -14,8 +14,17 @@ export type TransactionState = (typeof TRANSACTION_STATES)[number];
 export const TRANSACTION_KINDS = ["buy", "sell", "request_a_car"] as const;
 export type TransactionKind = (typeof TRANSACTION_KINDS)[number];
 
-// down_payment stays for old rows only; new forms offer bank_transfer (a downpayment is an amount, not a method).
-export const PAYMENT_METHODS = ["cash", "financing", "down_payment", "bank_transfer", "paymongo"] as const;
+// T06: what a Full Payment buyer picks on purchase_details. Bank Transfer is paid through PayMongo, which is
+// the channel, not a method of its own. Financing is a Payment Option, and down_payment stays for old rows only
+// (a downpayment is an amount, not a method).
+export const BUYER_PAYMENT_METHODS = ["cash", "bank_transfer"] as const;
+export type BuyerPaymentMethod = (typeof BUYER_PAYMENT_METHODS)[number];
+
+// Everything purchase_details.payment_method may hold: the buyer methods, Financing, and legacy down_payment.
+export const PURCHASE_PAYMENT_METHODS = ["cash", "financing", "down_payment", "bank_transfer"] as const;
+
+// payment_records.method adds paymongo: the channel a Bank Transfer is paid on.
+export const PAYMENT_METHODS = [...PURCHASE_PAYMENT_METHODS, "paymongo"] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
 export const ARRANGEMENT_KINDS = ["delivery", "meetup", "gce_visit"] as const;
