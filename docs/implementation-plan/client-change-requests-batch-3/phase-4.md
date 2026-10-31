@@ -1,6 +1,6 @@
 [← Previous: Phase 3](./phase-3.md) | [Next: Phase 5 →](./phase-5.md)
 
-**Status:** 🟡 In progress — code complete and migration applied; SM-side browser check outstanding (2026-10-31).
+**Status:** ✅ Done (2026-10-31, integration round).
 deferred to the integrator (subagent verification budget).
 
 # Phase 4: Record Payment automation and Head Accountant cleanup
@@ -85,6 +85,25 @@ Integration verification (2026-10-31)
   "Recorded, waiting for the Head Accountant's check" state. That needs a cash buy with a payment actually
   due; every candidate found was waiting on signing or on a booked slot. Unit tests cover the prefill,
   the 23505 mapping and the pending state.
+
+
+Integration verification (2026-10-31)
+
+- Merged into `batch3/integration` as `4718d65`.
+- Pre-check and cleanup executed earlier in the batch: 6 duplicate live payment groups were soft-rejected
+  with user approval (4 plain rejects; 2 verified rows had `verified_by` cleared and the original verifier
+  recorded in the reason, because `payment_records_verified_or_rejected` forbids both stamps). 0 groups
+  remain, so `20261101100000_t05_payment_once.sql` applied cleanly; index
+  `idx_payment_records_once_per_kind` is live with the exact partial predicate from the plan.
+- Browser, signed in as the Sales Manager on the approved cash buy `df319f3d`: the Record payment form
+  arrived prefilled and read-only (Amount ₱1,180,000.00, "Full Payment", "Cash"), with only the date and
+  the optional proof editable.
+- Double submit: the second click on Record Payment was refused because the button disables while pending;
+  exactly one payment row was written (`payment_records` count = 1 for that transaction) and the form was
+  replaced by "Recorded, waiting for the Head Accountant's check."
+- Browser as the Head Accountant: no Mark Sold action on `e5499f32` or `28284fe0` (only the step
+  description text remains), no Record Payment form, and on `893c0464` the Verify and Reject buttons are
+  real `size="sm"` controls (28 px): Verify solid primary, Reject outline with destructive text.
 
 ## Done when
 

@@ -1,6 +1,6 @@
 [← Previous: Phase 6](./phase-6.md) | [Next: Phase 8 →](./phase-8.md)
 
-**Status:** 🟡 In progress — code complete and unit-verified; buyer/SM browser checks outstanding (2026-10-31).
+**Status:** ✅ Done (2026-10-31, integration round).
 `check:fix` / `tsc` / `test` / `build` suite are outside this phase's verification budget and remain open.
 
 Status note (2026-10-31): implemented and verified as described below.
@@ -88,6 +88,23 @@ Integration verification (2026-10-31)
   "Price Range" next to the delivery fee, and the read-only 10% down payment. Transactions inspected
   were already past the fee-setting stage, and the Cebu case exists only in unit tests because no
   seeded buyer has a Visayas region.
+- Region mapping assumption: BARMM (15) is treated as Mindanao; NIR (18) as Visayas; prefix 19 does not
+  exist in the PSGC bundle.
+
+
+Integration verification (2026-10-31)
+
+- Merged into `batch3/integration` as `e200249`. No migration needed.
+- Browser as the buyer in Laguna (CALABARZON), on a pending delivery request: "Delivery fee for your area:
+  Free delivery. The Sales Manager confirms the exact fee."
+- Same buyer, profile changed through the UI to Central Visayas → Cebu → Alcantara → Cabadiangan and saved:
+  the same request then read "Delivery fee for your area: ₱10,000 – ₱15,000". The profile was restored to
+  CALABARZON → Laguna → City of Calamba → Bagong Kalsada afterwards.
+- Browser as the Sales Manager on the approved cash delivery `e5499f32`: after answering the serviceability
+  question, the panel showed "Delivery fee ₱0 · Free in CALABARZON", "Price Range: Free delivery" and a
+  read-only "Down payment (10% of the vehicle price) ₱80,800.00" — exactly 10% of the ₱808,000 price.
+- Unit coverage: `deliveryArea`, `DELIVERY_FEE_RANGES`, `feeWithinRange`, `downPaymentFor`, including the
+  Visayas ₱9,000 refusal, plus delivery-terms and financing-actions suites (31 tests).
 - Region mapping assumption: BARMM (15) is treated as Mindanao; NIR (18) as Visayas; prefix 19 does not
   exist in the PSGC bundle.
 
