@@ -11,6 +11,10 @@ ALTER TABLE public.profiles
 
 -- Codes come from the bundled PSGC lists (public/psgc), so a set code is always nine digits. Rows saved
 -- before T05 keep NULL codes; the app asks for the parts the next time the profile is saved.
+-- The constraints are dropped first so the file can be replayed on a database that already has them.
+ALTER TABLE public.profiles
+  DROP CONSTRAINT IF EXISTS chk_profiles_psgc_codes;
+
 ALTER TABLE public.profiles
   ADD CONSTRAINT chk_profiles_psgc_codes
     CHECK (
@@ -19,6 +23,9 @@ ALTER TABLE public.profiles
       AND (city_code IS NULL OR city_code ~ '^[0-9]{9}$')
       AND (barangay_code IS NULL OR barangay_code ~ '^[0-9]{9}$')
     );
+
+ALTER TABLE public.profiles
+  DROP CONSTRAINT IF EXISTS chk_profiles_address_line_length;
 
 ALTER TABLE public.profiles
   ADD CONSTRAINT chk_profiles_address_line_length
