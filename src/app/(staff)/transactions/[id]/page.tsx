@@ -229,7 +229,7 @@ export default async function TransactionDetailPage({ params }: { readonly param
           isDelivery
             ? {
                 fieldCase: deliveryCase as Record<string, unknown> | null,
-                team: { informants, mechanics, headSecurity },
+                team: { informants, headSecurity },
               }
             : null
         }

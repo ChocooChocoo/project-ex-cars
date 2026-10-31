@@ -57,11 +57,12 @@ export default async function FieldCasePage({ params }: { readonly params: Promi
       ? { data: null }
       : await admin.from("sale_handovers").select("*").eq("transaction_id", fieldCase.transaction_id).maybeSingle();
   const papersStatus = (handover?.papers_status as PapersStatus | null | undefined) ?? null;
-  // Who the user is on this case, for the contract steps only the assigned team may record.
+  // Who the user is on this case, for the contract steps only the assigned team may record. A delivery
+  // has no Mechanic (T05); the Mechanic belongs to a Meet Halfway.
   const member =
     role === "confidential_informant" && fieldCase.assigned_confidential_informant === user.id
       ? "informant"
-      : role === "mechanic" && fieldCase.mechanic_id === user.id
+      : fieldCase.case_kind === "buyer_meetup" && role === "mechanic" && fieldCase.mechanic_id === user.id
         ? "mechanic"
         : null;
 
