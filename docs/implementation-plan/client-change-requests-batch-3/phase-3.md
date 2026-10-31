@@ -69,19 +69,6 @@ Assumptions). Financing buys keep their current actions.
   guard remains the enforcement for any direct action call.
 - `field_cases.mechanic_id` is already nullable, so no migration was added and no database was touched.
 
-
-Integration verification (2026-10-31)
-
-- Merged into `batch3/integration` as `a542b94`.
-- Browser (Playwright MCP) as the Sales Manager on the approved cash delivery `e5499f32-…`: no Cancel
-  action anywhere on the page, and no Valid ID / Proof of Billing upload action. Unit coverage for the
-  same rules: `sales-manager-cash.test.ts`, triage, documents-card and delivery-team suites (135 tests).
-- Still to verify in a browser: Cancel absent on a *pre-approval* cash buy, Buyer Declined hidden after
-  papers are requested, and the delivery team form showing only the Confidential Informant and Head
-  Security. All three are covered by unit tests but were not exercised against the running app.
-- Assumption recorded: the three legacy `down_payment` buys keep the current Sales Manager actions.
-
-
 Integration verification (2026-10-31)
 
 - Merged into `batch3/integration` as `a542b94`.
