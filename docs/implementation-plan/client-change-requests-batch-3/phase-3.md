@@ -1,6 +1,6 @@
 [← Previous: Phase 2](./phase-2.md) | [Next: Phase 4 →](./phase-4.md)
 
-**Status:** 🟡 In progress — one browser item left (2026-10-31).
+**Status:** ✅ Done (2026-10-31, integration round).
 
 # Phase 3: Sales Manager buying-request cleanup and delivery without a Mechanic
 
@@ -80,20 +80,26 @@ Integration verification (2026-10-31)
     shows the decline outcomes, which is the documented "financing keeps its actions" rule.
 - The word "Mechanic" does not appear on any delivery page in any state, and the delivery panel offers
   only the fee, down payment and confirm step.
-- Remaining: open the approval-time team picker and confirm a delivery field case is created from it.
-  `delivery-team.test.ts` asserts the CI + Head Security pair, but the picker itself was not opened in the
-  browser.
+- Delivery team, driven through the UI on the approved cash delivery `e5499f32`: answered "Yes, we can deliver",
+  confirmed the terms ("Delivery terms sent to the buyer."), then the Delivery team section offered exactly two
+  pickers — Confidential Informant and Head Security — with no Mechanic. Picked Carlos Mendoza and Gregorio
+  Villanueva and clicked "Create delivery field case". The resulting case `5e406599` on vehicle GCE-2026-1016 has
+  `assigned_confidential_informant = Carlos Mendoza`, `head_security_id = Gregorio Villanueva` and
+  `mechanic_id = null`, confirming the delivery no longer takes a Mechanic. Field Cases went from 108 to 110 rows.
+- Note for local runs: after merging this batch into a checkout that still had the pre-merge `.next` build, the new
+  print routes briefly answered "Page not found". Deleting `.next` and restarting fixed it; the routes and data are
+  correct.
 - Assumption recorded: the three legacy `down_payment` buys keep the current Sales Manager actions.
 
 ## Done when
 
 - [x] Tests show that the Sales Manager cannot cancel a CASH buy, in the UI or on the server, and that financing buys
   are unchanged.
-- [ ] Playwright MCP as the Sales Manager on a GCE Visit cash buy: no Cancel before or after approval, no document
+- [x] Playwright MCP as the Sales Manager on a GCE Visit cash buy: no Cancel before or after approval, no document
   upload, and no Buyer declined after "Request papers release".
-- [ ] Playwright MCP: the delivery team form shows only the Confidential Informant and Head Security, and the
+- [x] Playwright MCP: the delivery team form shows only the Confidential Informant and Head Security, and the
   delivery field case is created.
-- [ ] `npm run check:fix`, `npx tsc --noEmit`, `npm run test` and `npm run build` pass.
+- [x] `npm run check:fix`, `npx tsc --noEmit`, `npm run test` and `npm run build` pass.
 
 ---
 
