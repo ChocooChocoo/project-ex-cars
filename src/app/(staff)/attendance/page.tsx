@@ -267,11 +267,6 @@ function scheduleLabel(schedule: ScheduleDetails) {
   return `Workdays ${days} · ${formatScheduleTime(schedule.start_time)} to ${formatScheduleTime(schedule.end_time)}`;
 }
 
-function philippinesIsoWeekday(now: Date) {
-  const weekday = new Intl.DateTimeFormat("en-US", { timeZone: TIME_ZONE, weekday: "short" }).format(now);
-  return ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(weekday) + 1;
-}
-
 function toAttendanceEntry(row: AttendanceEntryRow): AttendanceEntry {
   return {
     id: row.id,
@@ -284,54 +279,6 @@ function toAttendanceEntry(row: AttendanceEntryRow): AttendanceEntry {
     status: row.status,
     notes: row.notes,
     checked_by: row.checked_by,
-  };
-}
-
-function _buildAttendanceState({
-  now,
-  currentEntry,
-  profile,
-  schedule,
-  onApprovedLeave,
-}: {
-  now: Date;
-  currentEntry: AttendanceEntry | null;
-  profile: ProfileRow | null;
-  schedule: WorkScheduleRow | null;
-  onApprovedLeave: boolean;
-}): AttendanceState {
-  const unavailable = (reason: string): AttendanceState => ({
-    serverNow: now.toISOString(),
-    timeZone: TIME_ZONE,
-    timeZoneLabel: "PHT / Asia/Manila",
-    currentEntry,
-    scheduleLabel: schedule ? scheduleLabel(schedule) : null,
-    graceMinutes: schedule ? schedule.grace_minutes : null,
-    reason,
-    clockIn: { allowed: false, reason },
-    clockOut: {
-      allowed: Boolean(currentEntry?.time_in && !currentEntry.time_out),
-      reason: currentEntry?.time_in && !currentEntry.time_out ? null : "Clock in first.",
-    },
-  });
-
-  if (profile?.account_state !== "active") return unavailable("Your account is not active for attendance.");
-  if (!schedule) return unavailable("No work schedule is assigned today.");
-  if (!schedule.workdays.includes(philippinesIsoWeekday(now))) return unavailable("Today is an assigned off day.");
-  if (onApprovedLeave) return unavailable("Approved leave applies today.");
-
-  const canClockIn = !currentEntry?.time_in;
-  const canClockOut = Boolean(currentEntry?.time_in && !currentEntry.time_out);
-  return {
-    serverNow: now.toISOString(),
-    timeZone: TIME_ZONE,
-    timeZoneLabel: "PHT / Asia/Manila",
-    currentEntry,
-    scheduleLabel: scheduleLabel(schedule),
-    graceMinutes: schedule.grace_minutes,
-    reason: null,
-    clockIn: { allowed: canClockIn, reason: canClockIn ? null : "You have already clocked in today." },
-    clockOut: { allowed: canClockOut, reason: canClockOut ? null : "Clock in first." },
   };
 }
 
