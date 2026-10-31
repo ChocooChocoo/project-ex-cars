@@ -25,7 +25,10 @@ export function resolveInternalPath(role: string, segment: string): string {
 
   if (isStaffRole(role)) {
     if (seg === "dashboard") return "/dashboard";
-    if (seg.startsWith("showroom")) return seg.replace("showroom", "/staff-showroom");
+    // Only the showroom list has a staff variant; `/staff-showroom` has no `[id]`, so a car's
+    // page stays on the customer route instead of 404ing.
+    if (seg === "showroom") return "/staff-showroom";
+    if (seg.startsWith("showroom/")) return `/${seg}`;
     if (seg.startsWith("recommendations")) return seg.replace("recommendations", "/staff-recommendations");
     return `/${seg}`;
   }

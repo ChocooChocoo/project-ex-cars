@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
+
 import type { ColumnDef } from "@tanstack/react-table";
-import { Archive, MoreHorizontal, Pencil, PhilippinePeso, Send, Trash2 } from "lucide-react";
+import { Archive, Eye, MoreHorizontal, Pencil, PhilippinePeso, Send, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -62,7 +64,14 @@ export function createColumns(
     {
       accessorKey: "stock_code",
       header: "Stock Code",
-      cell: ({ row }) => <span className="font-medium text-sm">{row.getValue("stock_code") as string}</span>,
+      cell: ({ row }) => (
+        <Link
+          href={`/dashboard/vehicles/${row.original.id as string}`}
+          className="font-medium text-sm underline-offset-4 hover:underline"
+        >
+          {row.getValue("stock_code") as string}
+        </Link>
+      ),
     },
     {
       id: "vehicle",
@@ -161,6 +170,12 @@ export function createColumns(
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem asChild>
+                <Link href={`/dashboard/vehicles/${id}`}>
+                  <Eye className="mr-2 size-4" />
+                  View Details
+                </Link>
+              </DropdownMenuItem>
               {canManage ? (
                 <DropdownMenuItem onClick={() => onEdit(vehicle)}>
                   <Pencil className="mr-2 size-4" />
