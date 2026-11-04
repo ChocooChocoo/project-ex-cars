@@ -6,11 +6,13 @@ import { z } from "zod";
 
 import { getCurrentRole } from "@/app/auth/actions";
 import { notify } from "@/lib/notifications/notify";
+import { getFinancingMarkupPct } from "@/lib/settings/financing";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { addWorkingDays, DOWNPAYMENT_WORKING_DAYS, financedTotal } from "@/lib/transactions/buy-flow";
 import { downPaymentFor } from "@/lib/transactions/delivery-fee";
 import { loadFinancing, openFinancingAccount } from "@/lib/transactions/financing-server";
+import { monthlyInstallment } from "@/lib/transactions/loan-calculator";
 
 type FinancingResult = { error: string } | { success: true };
 type Admin = ReturnType<typeof createAdminClient>;
@@ -40,6 +42,7 @@ function purchase(tx: { purchase_details: unknown }) {
   return (Array.isArray(tx.purchase_details) ? tx.purchase_details[0] : tx.purchase_details) as {
     arrangement_kind?: string;
     final_price?: number | null;
+    requested_term_months?: number | null;
   } | null;
 }
 
@@ -54,17 +57,16 @@ function done(transactionId: string): FinancingResult {
   return { success: true };
 }
 
-// §6 steps 6–7: the Sales Manager records the buyer's payment duration and proposes the Initial
-// Downpayment and terms (Q6 default: the Sales Manager calculates, the Head Accountant reviews).
+// §6 steps 6–7: the Sales Manager proposes the terms (Q6 default: the Sales Manager calculates, the Head
+// Accountant reviews). T06: the buyer chooses the payment term when requesting the car, so the Sales Manager
+// no longer sets it; the monthly payment follows from the total, the downpayment and that term.
 export async function proposeFinancingTerms(formData: FormData): Promise<FinancingResult> {
   const who = await actor(["sales_manager", "ceo"]);
   if ("error" in who) return who;
   const parsed = z
     .object({
-      duration_months: z.coerce.number().int().min(1, "Choose a payment duration.").max(84),
       // T04 P6: left blank, it defaults to the car's price plus 10%.
       total_amount: z.coerce.number().positive("Enter the vehicle price.").optional().or(z.literal("")),
-      monthly_payment: z.coerce.number().positive("Enter the monthly payment."),
       first_due_date: z.string().min(1, "Set the first due date."),
       missed_payment_policy: z.string().trim().min(1, "State the missed payment policy.").max(1000),
       delivery_fee: z.coerce.number().min(0).optional(),
@@ -79,7 +81,8 @@ export async function proposeFinancingTerms(formData: FormData): Promise<Financi
   if (tx.current_state !== "approved") return { error: "Approve the request before proposing terms." };
   if (tx.terms && !["returned"].includes(tx.terms.state)) return { error: "Terms are already in review." };
 
-  const totalAmount = parsed.data.total_amount || financedTotal(Number(purchase(tx)?.final_price ?? 0));
+  const totalAmount =
+    parsed.data.total_amount || financedTotal(Number(purchase(tx)?.final_price ?? 0), await getFinancingMarkupPct());
   if (!totalAmount) return { error: "Enter the vehicle price." };
 
   // A meet-up takes no downpayment. A delivery's fee is approved with the terms.
@@ -93,17 +96,20 @@ export async function proposeFinancingTerms(formData: FormData): Promise<Financi
   if (downPayment >= totalAmount) {
     return { error: "The Initial Downpayment must be below the vehicle price." };
   }
+  const durationMonths = Number(purchase(tx)?.requested_term_months ?? 0);
+  if (!(durationMonths > 0)) return { error: "The buyer has not chosen a payment term yet." };
+  const monthlyPayment = monthlyInstallment(totalAmount, downPayment, durationMonths);
 
   const row = {
     purchase_transaction_id: tx.id,
-    arrangement_description: parsed.data.notes || `${parsed.data.duration_months}-month In-House Financing`,
+    arrangement_description: parsed.data.notes || `${durationMonths}-month In-House Financing`,
     total_amount: totalAmount,
     down_payment: downPayment,
-    monthly_payment: parsed.data.monthly_payment,
+    monthly_payment: monthlyPayment,
     missed_payment_policy: parsed.data.missed_payment_policy,
     delivery_fee: delivery ? (parsed.data.delivery_fee ?? 0) : null,
-    number_of_payments: parsed.data.duration_months,
-    duration_months: parsed.data.duration_months,
+    number_of_payments: durationMonths,
+    duration_months: durationMonths,
     payment_frequency: "monthly",
     first_due_date: parsed.data.first_due_date,
     agreed_by: who.userId,
@@ -121,7 +127,7 @@ export async function proposeFinancingTerms(formData: FormData): Promise<Financi
     admin,
     tx,
     who.userId,
-    `Financing proposed: ${parsed.data.duration_months} months, downpayment ${peso(downPayment)}`,
+    `Financing proposed: ${durationMonths} months, downpayment ${peso(downPayment)}`,
   );
   await notify(
     admin,
@@ -129,7 +135,7 @@ export async function proposeFinancingTerms(formData: FormData): Promise<Financi
     {
       kind: "financing_terms_proposed",
       title: "Financing terms to review",
-      body: `${parsed.data.duration_months} months on ${peso(totalAmount)}, Initial Downpayment ${peso(downPayment)}.`,
+      body: `${durationMonths} months on ${peso(totalAmount)}, Initial Downpayment ${peso(downPayment)}.`,
       transactionId: tx.id,
     },
   );

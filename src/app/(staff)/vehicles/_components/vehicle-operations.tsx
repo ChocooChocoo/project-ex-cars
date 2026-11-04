@@ -38,14 +38,14 @@ export function VehicleOperations({
   proposals,
   vehicles,
   canManage,
-  canDelete,
+  canView,
   isHeadAccountant,
   userRole = null,
 }: {
   readonly proposals: PriceProposalRow[];
   readonly vehicles: Record<string, unknown>[];
   readonly canManage: boolean;
-  readonly canDelete: boolean;
+  readonly canView: boolean;
   readonly isHeadAccountant?: boolean;
   readonly userRole?: string | null;
 }) {
@@ -126,7 +126,7 @@ export function VehicleOperations({
       {segment === "pending" ? (
         <PendingApprovalsTable proposals={proposals} canApprove={!isHeadAccountant} />
       ) : (
-        <VehicleTable vehicles={filteredVehicles} canManage={canManage} canDelete={canDelete} />
+        <VehicleTable vehicles={filteredVehicles} canManage={canManage} canView={canView} />
       )}
     </div>
   );

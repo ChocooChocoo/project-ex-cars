@@ -142,7 +142,9 @@ describe("EmployeeRequestsClient", () => {
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByText("Review request")).toBeInTheDocument();
 
-    await within(dialog).getByRole("button", { name: "Approve" }).click();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Approve" }));
+    // T06: the decision asks for confirmation first.
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Approve" }));
 
     await waitFor(() => expect(mocks.reviewEmployeeRequest).toHaveBeenCalledTimes(1));
     const submitted = mocks.reviewEmployeeRequest.mock.calls[0]?.[0] as FormData;

@@ -6,6 +6,8 @@ import { redirect } from "next/navigation";
 import { getTotalUnreadCount } from "@/app/(customer)/my-inquiries/actions";
 import { AppSidebar } from "@/app/(staff)/_components/sidebar/app-sidebar";
 import { getCurrentRole } from "@/app/auth/actions";
+import { needsTutorial } from "@/components/onboarding/actions";
+import { OnboardingTour } from "@/components/onboarding/onboarding-tour";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { getNotifications } from "@/lib/notifications/actions";
@@ -38,7 +40,10 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
     getCurrentRole(),
     getTotalUnreadCount().catch(() => 0),
   ]);
-  const notifications = role ? await getNotifications(role) : [];
+  const [notifications, showTutorial] = await Promise.all([
+    role ? getNotifications(role) : Promise.resolve([]),
+    needsTutorial(),
+  ]);
 
   return (
     <SidebarProvider
@@ -95,6 +100,7 @@ export default async function Layout({ children }: Readonly<{ children: ReactNod
           {children}
         </div>
       </SidebarInset>
+      {showTutorial ? <OnboardingTour userRole={role} /> : null}
     </SidebarProvider>
   );
 }

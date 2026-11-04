@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { rankVehicles, rankWithinBudget, type VehicleInput } from "@/lib/recommendations/engine";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { statedPreferencesSchema } from "@/lib/validation/recommendations";
 
 const CRITERIA_VERSION = "1.0";
 
@@ -64,12 +65,14 @@ async function loadRankInputs(supabase: ServerSupabase) {
   return { vehicles, vehicleInputs };
 }
 
-export async function runRecommendation(budget: number, _preferences: Record<string, string>) {
+export async function runRecommendation(budget: number, preferences: Record<string, string>) {
   const supabase = await createServerSupabaseClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated" };
+  const parsed = statedPreferencesSchema.safeParse(preferences);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Fill in the required preferences." };
 
   const loaded = await loadRankInputs(supabase);
   if ("error" in loaded) return { error: loaded.error };
@@ -82,7 +85,7 @@ export async function runRecommendation(budget: number, _preferences: Record<str
     .insert({
       customer_id: user.id,
       budget,
-      stated_preferences: JSON.stringify(_preferences),
+      stated_preferences: JSON.stringify(preferences),
       criteria_version: CRITERIA_VERSION,
     })
     .select()

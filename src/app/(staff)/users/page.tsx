@@ -11,7 +11,7 @@ import { Users } from "./_components/users";
 
 export default async function Page() {
   const role = await getCurrentRole();
-  if (!role || !["ceo", "account_manager"].includes(role)) {
+  if (!role || !["ceo", "account_manager", "super_admin"].includes(role)) {
     redirect("/unauthorized");
   }
 

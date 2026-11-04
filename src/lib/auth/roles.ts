@@ -9,6 +9,7 @@ export const GCE_ROLES = [
   "mechanic",
   "sales_manager",
   "head_security",
+  "super_admin",
 ] as const;
 
 export type GceRole = (typeof GCE_ROLES)[number];
@@ -24,6 +25,7 @@ export const ROLE_LABELS: Record<GceRole, string> = {
   mechanic: "Mechanic",
   sales_manager: "Sales Manager",
   head_security: "Head Security",
+  super_admin: "Super Admin",
 };
 
 export const STAFF_ROLES: GceRole[] = [
@@ -65,6 +67,15 @@ export const TRANSACTION_VIEWER_ROLES: GceRole[] = [
  * neither may open the transaction list, so this surface gives them the car without the ledger.
  */
 export const SELL_SUBMISSION_VIEWER_ROLES: GceRole[] = ["mechanic", "confidential_informant"];
+
+/** T06: roles that may change system settings such as GCE's financing profit. */
+export const SETTINGS_MANAGER_ROLES: GceRole[] = ["ceo", "super_admin"];
+
+/**
+ * T06: IT Support. Manages accounts, roles and settings for maintenance, patching and updates, and sees no
+ * business data. Deliberately not in STAFF_ROLES, which gates the business pages and the employee lists.
+ */
+export const SUPER_ADMIN_ROLE = "super_admin" satisfies GceRole;
 
 export const RBAC_MANAGED_ROLES = [
   "supplier",
@@ -214,6 +225,7 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
     "roadmap",
     "roles",
     "users",
+    "settings",
     "suppliers",
     "staff-records",
     "create-walk-in",
@@ -317,6 +329,7 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
     "security-duty-checks",
     "announcements",
   ]),
+  super_admin: new Set(["users", "roles", "settings"]),
 };
 
 /** Landing page path for each role after sign-in (resolved to role-prefixed URL by {@link landingPath}). */
@@ -331,4 +344,5 @@ export const ROLE_LANDING_PAGES: Record<GceRole, string> = {
   sales_manager: "/vehicles",
   confidential_informant: "/dashboard",
   head_security: "/dashboard",
+  super_admin: "/users",
 };

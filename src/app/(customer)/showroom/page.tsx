@@ -4,6 +4,7 @@ import { Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { withoutIdentifiers } from "@/lib/vehicles/identifiers";
 
 import { ShowroomGrid } from "./_components/showroom-grid";
 
@@ -14,11 +15,12 @@ export default async function ShowroomPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data: vehicles } = await supabase
+  const { data: rows } = await supabase
     .from("vehicles")
     .select("*")
     .in("listing_state", ["available", "reserved"])
     .order("posted_at", { ascending: false });
+  const vehicles = (rows ?? []).map(withoutIdentifiers);
 
   let favouriteIds: string[] = [];
   if (user) {

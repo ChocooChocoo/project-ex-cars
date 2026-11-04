@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 
 import { toast } from "sonner";
 
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -149,21 +150,26 @@ export function VehicleDocumentList({ documents: initialDocs }: { readonly docum
                       )}
                       {d.submitted_state === "submitted" && (
                         <>
-                          <Button
-                            size="sm"
-                            disabled={verifying === d.id}
-                            onClick={() => handleVerify(d.id, "verified")}
-                          >
-                            Verify
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={verifying === d.id}
-                            onClick={() => handleVerify(d.id, "rejected")}
-                          >
-                            Reject
-                          </Button>
+                          <ConfirmDialog
+                            action="approve"
+                            title="Are you sure you want to verify this document?"
+                            confirmLabel="Verify"
+                            onConfirm={() => handleVerify(d.id, "verified")}
+                            trigger={
+                              <Button size="sm" disabled={verifying === d.id}>
+                                Verify
+                              </Button>
+                            }
+                          />
+                          <ConfirmDialog
+                            action="reject"
+                            onConfirm={() => handleVerify(d.id, "rejected")}
+                            trigger={
+                              <Button size="sm" variant="outline" disabled={verifying === d.id}>
+                                Reject
+                              </Button>
+                            }
+                          />
                         </>
                       )}
                     </div>

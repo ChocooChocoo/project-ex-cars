@@ -15,6 +15,7 @@ import {
   recordVisitDecision,
   reviewFinancingTerms,
 } from "@/app/(staff)/transactions/financing-actions";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,6 +24,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { missedInstallments } from "@/lib/transactions/buy-flow";
 import { deliveryArea, deliveryFeeRangeLabel, downPaymentFor } from "@/lib/transactions/delivery-fee";
+import { monthlyInstallment } from "@/lib/transactions/loan-calculator";
 import { formatCurrency } from "@/lib/utils";
 
 type Row = Record<string, unknown>;
@@ -53,6 +55,7 @@ export function FinancingPanel({
   threadId = null,
   defaultTotal,
   vehiclePrice = 0,
+  requestedTermMonths = null,
   buyerRegionCode = null,
 }: {
   readonly transactionId: string;
@@ -71,6 +74,8 @@ export function FinancingPanel({
   readonly vehiclePrice?: number;
   /** T05 P7: the buyer's `profiles.region_code`, which sets the delivery fee range. */
   readonly buyerRegionCode?: string | null;
+  /** T06: the payment term the buyer chose; the Sales Manager no longer sets it. */
+  readonly requestedTermMonths?: number | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -85,10 +90,13 @@ export function FinancingPanel({
   const area = deliveryArea(buyerRegionCode);
   const free = area === "calabarzon";
   const feeRangeLabel = area ? deliveryFeeRangeLabel(area) : null;
+  const monthlyEstimate =
+    requestedTermMonths && Number(form.total_amount) > 0
+      ? monthlyInstallment(Number(form.total_amount), meetup ? 0 : downPayment, requestedTermMonths)
+      : null;
   const termsReady =
-    form.duration_months &&
+    requestedTermMonths &&
     form.total_amount &&
-    form.monthly_payment &&
     form.first_due_date &&
     form.missed_payment_policy?.trim() &&
     (meetup || vehiclePrice > 0) &&
@@ -185,13 +193,12 @@ export function FinancingPanel({
           <section className="flex flex-col gap-2 rounded-md border p-3">
             <p className="font-medium">{terms ? "Revise the terms" : "Propose the financing terms"}</p>
             <div className="grid gap-2 sm:grid-cols-4">
-              <Field
-                id="fin-duration"
-                label="Payment duration (months)"
-                value={form.duration_months}
-                onChange={set("duration_months")}
-                type="number"
-              />
+              <div className="flex flex-col gap-1.5">
+                <p className="text-muted-foreground text-xs">Payment term (chosen by the buyer)</p>
+                <p className="font-medium tabular-nums">
+                  {requestedTermMonths ? `${requestedTermMonths} months` : "Not chosen yet"}
+                </p>
+              </div>
               <Field
                 id="fin-price"
                 label="Total with financing (₱)"
@@ -235,13 +242,12 @@ export function FinancingPanel({
                   )}
                 </div>
               ) : null}
-              <Field
-                id="fin-monthly"
-                label="Monthly payment (₱)"
-                value={form.monthly_payment}
-                onChange={set("monthly_payment")}
-                type="number"
-              />
+              <div className="flex flex-col gap-1.5">
+                <p className="text-muted-foreground text-xs">Monthly payment</p>
+                <p className="font-medium tabular-nums">
+                  {monthlyEstimate === null ? "—" : formatCurrency(monthlyEstimate)}
+                </p>
+              </div>
               <Field
                 id="fin-first-due"
                 label="First installment due"
@@ -269,10 +275,8 @@ export function FinancingPanel({
                 submit(
                   proposeFinancingTerms,
                   {
-                    duration_months: form.duration_months,
                     total_amount: form.total_amount,
                     delivery_fee: free ? "0" : form.delivery_fee,
-                    monthly_payment: form.monthly_payment,
                     first_due_date: form.first_due_date,
                     missed_payment_policy: form.missed_payment_policy,
                   },
@@ -294,10 +298,15 @@ export function FinancingPanel({
             <p className="font-medium">{userRole === "ceo" ? "Confirm the financing" : "Review the financing"}</p>
             <Field id="fin-return-reason" label="Reason, if returning" value={form.reason} onChange={set("reason")} />
             <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                disabled={busy}
-                onClick={() =>
+              <ConfirmDialog
+                action="approve"
+                confirmLabel={userRole === "ceo" ? "Confirm" : "Approve"}
+                description={
+                  userRole === "ceo"
+                    ? "The buyer is notified of the financing offer."
+                    : "The terms go to the CEO for confirmation."
+                }
+                onConfirm={() =>
                   userRole === "ceo"
                     ? submit(
                         confirmFinancingTerms,
@@ -306,23 +315,30 @@ export function FinancingPanel({
                       )
                     : submit(reviewFinancingTerms, { decision: "approve" }, "Terms sent to the CEO.")
                 }
-              >
-                {userRole === "ceo" ? "Confirm" : "Approve"}
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={busy}
-                onClick={() =>
+                trigger={
+                  <Button size="sm" disabled={busy}>
+                    {userRole === "ceo" ? "Confirm" : "Approve"}
+                  </Button>
+                }
+              />
+              <ConfirmDialog
+                action="reject"
+                title="Are you sure you want to return these terms?"
+                description="The terms go back to the Sales Manager for revision."
+                confirmLabel="Return for revision"
+                onConfirm={() =>
                   submit(
                     userRole === "ceo" ? confirmFinancingTerms : reviewFinancingTerms,
                     { decision: "return", reason: form.reason },
                     "Terms returned to the Sales Manager.",
                   )
                 }
-              >
-                Return for revision
-              </Button>
+                trigger={
+                  <Button size="sm" variant="outline" disabled={busy}>
+                    Return for revision
+                  </Button>
+                }
+              />
             </div>
           </section>
         ) : null}

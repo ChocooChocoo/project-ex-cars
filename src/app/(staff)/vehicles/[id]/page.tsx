@@ -14,6 +14,7 @@ import { ReconditioningPanel } from "./_components/reconditioning-panel";
 import {
   type PendingProposal,
   PendingProposalAlert,
+  RevisionRequestedAlert,
   VehicleDescriptionCard,
   type VehicleDetail,
   VehicleMetricCards,
@@ -34,7 +35,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
 
   const v = vehicle as unknown as VehicleDetail;
 
-  const [{ data: media }, { data: proposal }, { data: reconditioning }] = await Promise.all([
+  const [{ data: media }, { data: proposal }, { data: reconditioning }, { data: revision }] = await Promise.all([
     supabase
       .from("vehicle_media")
       .select("id, media_kind, storage_path, display_order")
@@ -43,7 +44,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
     role === "ceo"
       ? supabase
           .from("vehicle_price_proposals")
-          .select("id, proposed_amount, notes, created_at")
+          .select("id, proposed_amount, notes, created_at, proposal_kind")
           .eq("vehicle_id", id)
           .eq("decision", "pending")
           .order("created_at", { ascending: false })
@@ -57,6 +58,18 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
+    // T06: the CEO's latest Request Revision, while the car still waits for a new price.
+    role === "marketing_specialist" && (v.listing_state === "draft" || v.listing_state === "repairing")
+      ? supabase
+          .from("vehicle_price_proposals")
+          .select("decision, decision_notes, decision_date")
+          .eq("vehicle_id", id)
+          .neq("proposal_kind", "purchase_ceiling")
+          .neq("proposal_kind", "revised_ceiling")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
 
   return (
@@ -93,6 +106,14 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
       </div>
 
       <PendingProposalAlert proposal={(proposal as unknown as PendingProposal | null) ?? null} />
+
+      <RevisionRequestedAlert
+        revision={
+          revision?.decision === "rejected"
+            ? (revision as { decision_notes: string | null; decision_date: string | null })
+            : null
+        }
+      />
 
       <VehicleMetricCards vehicle={v} />
 

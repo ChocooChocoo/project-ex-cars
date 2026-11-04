@@ -32,6 +32,21 @@ export const BRAND_MODELS: Record<string, readonly string[]> = {
 
 export const BRANDS = Object.keys(BRAND_MODELS);
 
+export const BODY_TYPES = [
+  "Sedan",
+  "SUV",
+  "Hatchback",
+  "Coupe",
+  "MPV",
+  "Pickup",
+  "Van",
+  "Wagon",
+  "Convertible",
+] as const;
+
+/** T06: seat counts a buyer can ask for in Recommendations. */
+export const SEAT_OPTIONS = ["2", "4", "5", "7", "8+"] as const;
+
 /** Models for a brand, matched without case so a typed "toyota" still gets Toyota's models. */
 export function modelsFor(brand: string): readonly string[] {
   const key = BRANDS.find((name) => name.toLowerCase() === brand.trim().toLowerCase());

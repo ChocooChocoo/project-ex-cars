@@ -31,7 +31,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { archiveVehicle, deleteVehicle, proposePrice, publishVehicle } from "@/app/(staff)/vehicles/actions";
+import { archiveVehicle, proposePrice, publishVehicle } from "@/app/(staff)/vehicles/actions";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -64,6 +64,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { nextStockCode } from "@/lib/vehicles/stock-code";
 
 import { VehicleFormSheet } from "./vehicle-form-sheet";
 import { createColumns } from "./vehicles-columns";
@@ -100,11 +101,11 @@ const sortOptions = [
 export function VehicleTable({
   vehicles,
   canManage,
-  canDelete,
+  canView,
 }: {
   readonly vehicles: Record<string, unknown>[];
   readonly canManage: boolean;
-  readonly canDelete: boolean;
+  readonly canView: boolean;
 }) {
   const router = useRouter();
   const [rowSelection, setRowSelection] = React.useState({});
@@ -126,8 +127,6 @@ export function VehicleTable({
   const [proposingPrice, setProposingPrice] = React.useState(false);
   const [archiveTarget, setArchiveTarget] = React.useState<Record<string, unknown> | null>(null);
   const [archiving, setArchiving] = React.useState(false);
-  const [deleteTarget, setDeleteTarget] = React.useState<Record<string, unknown> | null>(null);
-  const [deleting, setDeleting] = React.useState(false);
   const [formSheet, setFormSheet] = React.useState<{
     mode: "add" | "edit";
     vehicle: Record<string, unknown> | null;
@@ -169,20 +168,6 @@ export function VehicleTable({
     router.refresh();
   }
 
-  async function handleDelete() {
-    if (!deleteTarget) return;
-    setDeleting(true);
-    const result = await deleteVehicle(deleteTarget.id as string);
-    setDeleting(false);
-    if (result.error) {
-      toast.error(result.error);
-      return;
-    }
-    toast.success("Vehicle deleted.");
-    setDeleteTarget(null);
-    router.refresh();
-  }
-
   async function handleArchive() {
     if (!archiveTarget) return;
     setArchiving(true);
@@ -210,9 +195,8 @@ export function VehicleTable({
         setProposedAmount((vehicle.current_price as number | null)?.toString() ?? "");
       },
       (vehicle: Record<string, unknown>) => setArchiveTarget(vehicle),
-      (vehicle: Record<string, unknown>) => setDeleteTarget(vehicle),
       canManage,
-      canDelete,
+      canView,
     ),
     state: {
       rowSelection,
@@ -593,29 +577,11 @@ export function VehicleTable({
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this vehicle?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {deleteTarget
-                ? `${deleteTarget.make as string} ${deleteTarget.model as string} will be permanently removed.`
-                : null}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" onClick={handleDelete} disabled={deleting}>
-              {deleting ? "Deleting..." : "Delete"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
       <VehicleFormSheet
         open={formSheet !== null}
         mode={formSheet?.mode ?? "add"}
         vehicle={formSheet?.vehicle ?? null}
+        stockCodePreview={nextStockCode(vehicles.map((vehicle) => vehicle.stock_code as string))}
         onOpenChange={(open) => {
           if (!open) setFormSheet(null);
         }}

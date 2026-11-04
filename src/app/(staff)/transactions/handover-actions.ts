@@ -409,7 +409,11 @@ export async function reportSigning(formData: FormData): Promise<HandoverResult>
   if (!sale.handover.buyer_met_at) return { error: "Record Buyer Met first." };
 
   const signed = sale.handover.contract_state === "signed";
-  if (signsInApp(sale.details) && !signed) return { error: "The buyer has not signed the contract in the app yet." };
+  // T06: a buyer who chose face-to-face signs the approved contract in front of the CI.
+  const faceToFace = sale.handover.signing_method === "face_to_face" && sale.handover.contract_state === "approved";
+  if (signsInApp(sale.details) && !signed && !faceToFace) {
+    return { error: "The buyer has not signed the contract in the app yet." };
+  }
 
   const now = new Date().toISOString();
   const error = await setHandover(
@@ -433,6 +437,30 @@ export async function reportSigning(formData: FormData): Promise<HandoverResult>
     );
   }
   return { success: true };
+}
+
+// T06: at a GCE visit, a buyer who chose face-to-face signs the approved contract with the Sales Manager, who
+// records it here. In the field the CI reports it with reportSigning instead.
+export async function recordFaceToFaceSigning(formData: FormData): Promise<HandoverResult> {
+  const who = await actor();
+  if ("error" in who) return who;
+  if (!["sales_manager", "ceo"].includes(who.role)) return { error: "Only the Sales Manager records the signing." };
+
+  const admin = createAdminClient();
+  const sale = await loadSale(admin, formData.get("transaction_id"));
+  if (!sale) return { error: NOT_FOUND };
+  if (sale.field) return { error: "In the field, the Confidential Informant reports the signing." };
+  if (sale.handover.signing_method !== "face_to_face") return { error: "The buyer did not choose face-to-face." };
+  if (sale.handover.contract_state !== "approved") return { error: "The contract is not approved yet." };
+
+  const error = await setHandover(
+    admin,
+    sale,
+    who.userId,
+    { contract_state: "signed", contract_signed_at: new Date().toISOString() },
+    "Contract signed face-to-face",
+  );
+  return error ? { error } : { success: true };
 }
 
 // Meet-up or delivery: the CI, and at a cash Meet Halfway the Mechanic, record that they hold a signed copy.

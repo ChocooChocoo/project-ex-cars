@@ -6,6 +6,7 @@ import { ArrowRight, Building2, Car, MapPin, Truck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { getFinancingMarkupPct } from "@/lib/settings/financing";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { cn, formatCurrency } from "@/lib/utils";
 
@@ -59,6 +60,7 @@ export default async function LandingPage() {
   const announcements = items.filter((c) => c.content_kind === "announcement");
 
   // Cars currently in the showroom, newest first.
+  const markupPct = await getFinancingMarkupPct();
   const { data: vehicles } = await supabase
     .from("vehicles")
     .select("id, make, model, year, current_price, stock_code")
@@ -259,19 +261,20 @@ export default async function LandingPage() {
                   Pay in full, or in monthly terms
                 </h2>
                 <p className="max-w-prose text-muted-foreground">
-                  Full payment works by cash or bank transfer through PayMongo. Financing with GCE adds 10% to the car's
-                  price, the same for every term.
+                  Full payment works by cash or bank transfer through PayMongo. Financing with GCE adds {markupPct}% to
+                  the car's price, the same for every term.
                 </p>
               </Reveal>
               <Reveal className="flex flex-wrap gap-2" delay={0.08}>
                 <Badge variant="secondary">Cash</Badge>
                 <Badge variant="secondary">Bank Transfer (via PayMongo)</Badge>
-                <Badge>Financing +10%</Badge>
+                <Badge>Financing +{markupPct}%</Badge>
               </Reveal>
             </div>
             {cars.length > 0 ? (
               <Reveal delay={0.1}>
                 <FinancingEstimator
+                  markupPct={markupPct}
                   cars={cars.map((c) => ({ id: c.id, label: carName(c), price: Number(c.current_price) }))}
                 />
               </Reveal>

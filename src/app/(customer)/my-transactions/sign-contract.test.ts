@@ -33,10 +33,11 @@ import { signContract } from "./actions";
 const buyerId = "11111111-1111-4111-8111-111111111111";
 const transactionId = "22222222-2222-4222-8222-222222222222";
 
-function form(name = "Maria Santos") {
+function form(name = "Maria Santos", signaturePath = `${transactionId}/signature-1.png`) {
   const fd = new FormData();
   fd.set("transaction_id", transactionId);
   fd.set("signed_name", name);
+  fd.set("signature_path", signaturePath);
   return fd;
 }
 
@@ -89,12 +90,38 @@ describe("signContract", () => {
     contract("approved");
 
     await expect(signContract(form())).resolves.toEqual({ success: true });
-    expect(signedWrite()).toMatchObject({ contract_state: "signed", contract_signed_at: expect.any(String) });
+    expect(signedWrite()).toMatchObject({
+      contract_state: "signed",
+      contract_signed_at: expect.any(String),
+      signing_method: "e_signature",
+      signature_path: `${transactionId}/signature-1.png`,
+    });
     expect(db.writes).toContainEqual(
       expect.objectContaining({
         table: "transaction_status_history",
         payload: expect.objectContaining({ reason: "Contract signed by Maria Santos" }),
       }),
+    );
+    expect(notify).toHaveBeenCalledWith(expect.anything(), { role: "sales_manager" }, expect.anything());
+  });
+
+  it("T06: needs a drawn signature from this transaction's folder", async () => {
+    contract("approved");
+
+    await expect(signContract(form("Maria Santos", "other-tx/signature-1.png"))).resolves.toEqual({
+      error: "Draw your signature to sign.",
+    });
+  });
+
+  it("T06: records a face-to-face choice without signing", async () => {
+    contract("approved");
+    const fd = new FormData();
+    fd.set("transaction_id", transactionId);
+    fd.set("signing_method", "face_to_face");
+
+    await expect(signContract(fd)).resolves.toEqual({ success: true });
+    expect(db.writes).toContainEqual(
+      expect.objectContaining({ table: "sale_handovers", payload: { signing_method: "face_to_face" } }),
     );
     expect(notify).toHaveBeenCalledWith(expect.anything(), { role: "sales_manager" }, expect.anything());
   });

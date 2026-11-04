@@ -14,6 +14,7 @@ import {
   reviewPayrollRun,
   saveCompensation,
 } from "@/app/(staff)/payroll/actions";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -45,6 +46,8 @@ export function PayrollClient({
 }: PayrollClientProps) {
   const router = useRouter();
   const [formOpen, setFormOpen] = useState(false);
+  // T06: approving or rejecting a run asks for confirmation first.
+  const [pendingReview, setPendingReview] = useState<{ id: string; decision: "approved" | "rejected" } | null>(null);
   const [periodStart, setPeriodStart] = useState("");
   const [periodEnd, setPeriodEnd] = useState("");
   const [notes, setNotes] = useState("");
@@ -198,12 +201,24 @@ export function PayrollClient({
               data={runs}
               canReview={canReview}
               canFinalize={canFinalize}
-              onReview={submitReview}
+              onReview={(id, decision) => setPendingReview({ id, decision })}
               onFinalize={submitFinalize}
             />
           )}
         </CardContent>
       </Card>
+
+      <ConfirmDialog
+        open={pendingReview !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingReview(null);
+        }}
+        action={pendingReview?.decision === "rejected" ? "reject" : "approve"}
+        description={
+          pendingReview?.decision === "rejected" ? "The run goes back to draft." : "The run is approved for release."
+        }
+        onConfirm={() => (pendingReview ? submitReview(pendingReview.id, pendingReview.decision) : undefined)}
+      />
 
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent>

@@ -3,7 +3,7 @@
 import Link from "next/link";
 
 import type { ColumnDef } from "@tanstack/react-table";
-import { Archive, Eye, MoreHorizontal, Pencil, PhilippinePeso, Send, Trash2 } from "lucide-react";
+import { Archive, Eye, MoreHorizontal, Pencil, PhilippinePeso, Send } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,9 +21,9 @@ export function createColumns(
   onEdit: (vehicle: Record<string, unknown>) => void,
   onProposePrice: (vehicle: Record<string, unknown>) => void,
   onArchive: (vehicle: Record<string, unknown>) => void,
-  onDelete: (vehicle: Record<string, unknown>) => void,
   canManage: boolean,
-  canDelete: boolean,
+  /** T06: the CEO's only list action is View; approval happens inside the vehicle view. */
+  canView: boolean,
 ): ColumnDef<Record<string, unknown>>[] {
   const columns: ColumnDef<Record<string, unknown>>[] = [
     {
@@ -146,7 +146,7 @@ export function createColumns(
   ];
 
   // A role with no row action (the Sales Manager) gets no Actions column, not an empty one.
-  if (!(canManage || canDelete)) return columns;
+  if (!(canManage || canView)) return columns;
 
   columns.push({
     id: "actions",
@@ -201,12 +201,6 @@ export function createColumns(
                 <DropdownMenuItem onClick={() => onArchive(vehicle)}>
                   <Archive className="mr-2 size-4" />
                   Archive
-                </DropdownMenuItem>
-              ) : null}
-              {canDelete ? (
-                <DropdownMenuItem variant="destructive" onClick={() => onDelete(vehicle)}>
-                  <Trash2 className="mr-2 size-4" />
-                  Delete
                 </DropdownMenuItem>
               ) : null}
             </DropdownMenuContent>

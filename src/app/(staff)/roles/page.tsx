@@ -45,9 +45,9 @@ interface AssignmentRow {
 }
 
 export default async function Page() {
-  await requireRole(["ceo"]);
+  await requireRole(["ceo", "super_admin"]);
   const role = await getCurrentRole();
-  const canManage = role === "ceo";
+  const canManage = role === "ceo" || role === "super_admin";
   const supabase = await createServerSupabase();
 
   const [

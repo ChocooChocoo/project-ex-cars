@@ -4,10 +4,11 @@ import { VEHICLE_PURPOSES } from "@/lib/vehicles/catalog";
 
 export const vehicleSchema = z.object({
   stock_code: z.string().min(1, "Stock code is required.").max(50, "Stock code must be at most 50 characters."),
-  vin: z.string().max(50).optional().or(z.literal("")),
-  plate_number: z.string().max(50).optional().or(z.literal("")),
-  engine_number: z.string().max(50).optional().or(z.literal("")),
-  chassis_number: z.string().max(50).optional().or(z.literal("")),
+  // T06: the four identifiers are required. GCE keeps them in its records only; the showroom never reads them.
+  vin: z.string().trim().min(1, "VIN is required.").max(50),
+  plate_number: z.string().trim().min(1, "Plate number is required.").max(50),
+  engine_number: z.string().trim().min(1, "Engine number is required.").max(50),
+  chassis_number: z.string().trim().min(1, "Chassis number is required.").max(50),
   make: z.string().min(1, "Make is required.").max(100),
   model: z.string().min(1, "Model is required.").max(100),
   year: z.coerce.number().int().min(1900, "Year must be 1900 or later.").max(2100),

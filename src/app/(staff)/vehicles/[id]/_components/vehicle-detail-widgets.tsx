@@ -7,7 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { CEILING_PROPOSAL_KINDS } from "@/lib/transactions/sell-flow";
 import { listingStateLabel, listingStateVariant } from "@/lib/vehicles/labels";
+
+import { ProposalReviewActions } from "./proposal-review-actions";
 
 export interface VehicleDetail {
   id: string;
@@ -203,10 +206,13 @@ export interface PendingProposal {
   proposed_amount: number;
   notes: string | null;
   created_at: string;
+  proposal_kind: string;
 }
 
 export function PendingProposalAlert({ proposal }: { readonly proposal: PendingProposal | null }) {
   if (!proposal) return null;
+  // T06: a listing price is decided here. Purchase ceilings belong to a sell offer and stay in Pending.
+  const listingPrice = !(CEILING_PROPOSAL_KINDS as readonly string[]).includes(proposal.proposal_kind);
 
   return (
     <div
@@ -225,9 +231,37 @@ export function PendingProposalAlert({ proposal }: { readonly proposal: PendingP
           </p>
         </div>
       </div>
-      <Button asChild variant="outline" size="sm" className="shrink-0">
-        <Link href="/dashboard/vehicles">Review in Pending</Link>
-      </Button>
+      {listingPrice ? (
+        <ProposalReviewActions proposalId={proposal.id} amount={proposal.proposed_amount} />
+      ) : (
+        <Button asChild variant="outline" size="sm" className="shrink-0">
+          <Link href="/dashboard/vehicles">Review in Pending</Link>
+        </Button>
+      )}
+    </div>
+  );
+}
+
+/** T06: the Marketing Specialist sees why the CEO sent the price back. */
+export function RevisionRequestedAlert({
+  revision,
+}: {
+  readonly revision: { decision_notes: string | null; decision_date: string | null } | null;
+}) {
+  if (!revision) return null;
+  return (
+    <div role="alert" className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/5 p-4">
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-md border border-destructive/40 bg-background text-destructive">
+        <Stamp className="size-4" />
+      </span>
+      <div>
+        <p className="font-medium text-sm">
+          Price revision requested{revision.decision_date ? ` on ${formatDate(revision.decision_date)}` : ""}
+        </p>
+        <p className="whitespace-pre-wrap text-muted-foreground text-sm">
+          {revision.decision_notes ?? "The CEO did not give a reason."} Propose a new price from the vehicle list.
+        </p>
+      </div>
     </div>
   );
 }

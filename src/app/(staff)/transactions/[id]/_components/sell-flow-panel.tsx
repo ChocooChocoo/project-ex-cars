@@ -16,6 +16,7 @@ import {
   recordSellerResponse,
 } from "@/app/(staff)/transactions/sell-actions";
 import { approvePrice } from "@/app/(staff)/vehicles/actions";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { TransactionStatusBadge } from "@/components/transaction-status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -224,16 +225,18 @@ export function SellFlowPanel({
               >
                 Flag
               </Button>
-              <Button
-                size="sm"
-                variant="destructive"
-                disabled={busy}
-                onClick={() =>
+              <ConfirmDialog
+                action="reject"
+                description="The seller's offer is closed."
+                onConfirm={() =>
                   submit(flagSellSubmission, { outcome: "reject", reason: form.reason }, "Offer rejected.")
                 }
-              >
-                Reject
-              </Button>
+                trigger={
+                  <Button size="sm" variant="destructive" disabled={busy}>
+                    Reject
+                  </Button>
+                }
+              />
             </div>
           </section>
         ) : null}
@@ -249,12 +252,16 @@ export function SellFlowPanel({
             ) : null}
             <div className="flex gap-2">
               {(["approved", "rejected"] as const).map((decision) => (
-                <Button
+                <ConfirmDialog
                   key={decision}
-                  size="sm"
-                  variant={decision === "approved" ? "default" : "destructive"}
-                  disabled={busy}
-                  onClick={async () => {
+                  action={decision === "approved" ? "approve" : "reject"}
+                  description="This decides the purchase ceiling for the seller's offer."
+                  trigger={
+                    <Button size="sm" variant={decision === "approved" ? "default" : "destructive"} disabled={busy}>
+                      {decision === "approved" ? "Approve" : "Reject"}
+                    </Button>
+                  }
+                  onConfirm={async () => {
                     setBusy(true);
                     const fd = new FormData();
                     fd.set("proposal_id", pendingProposal.id as string);
@@ -267,9 +274,7 @@ export function SellFlowPanel({
                       router.refresh();
                     }
                   }}
-                >
-                  {decision === "approved" ? "Approve" : "Reject"}
-                </Button>
+                />
               ))}
             </div>
           </section>

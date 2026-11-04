@@ -40,11 +40,13 @@ export function buyerIdsComplete(documents: DocumentLike[]): boolean {
 // PayMongo, which is the channel, so it is no longer a method of its own.
 export const DIRECT_PAYMENT_METHODS = ["cash", "bank_transfer"] as const;
 
-// T04 P6/P7: financing adds a flat 10% to the car's price, for every term.
+// T04 P6/P7: financing adds a flat markup to the car's price, for every term. T06: the markup is adjustable
+// (`app_settings.financing_markup_pct`, read with `getFinancingMarkupPct`); 10% is GCE's original figure.
 export const FINANCING_TERM_MONTHS = [6, 12, 24, 36, 60] as const;
+export const DEFAULT_FINANCING_MARKUP_PCT = 10;
 
-export function financedTotal(price: number): number {
-  return Math.round(price * 1.1);
+export function financedTotal(price: number, markupPct: number): number {
+  return Math.round(price * (1 + markupPct / 100));
 }
 
 export function isDirectPayment(details: { payment_method?: unknown } | null): boolean {

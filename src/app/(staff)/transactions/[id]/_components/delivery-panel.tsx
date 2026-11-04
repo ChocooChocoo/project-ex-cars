@@ -15,6 +15,7 @@ import {
   rescheduleDelivery,
   setDeliveryTerms,
 } from "@/app/(staff)/transactions/delivery-actions";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DeliveryLastSeen } from "@/components/delivery-last-seen";
 import { SlotPicker } from "@/components/transactions/slot-picker";
 import { Badge } from "@/components/ui/badge";
@@ -151,15 +152,16 @@ export function DeliveryPanel({
               payment deadline, once the CEO confirms the terms.
             </p>
             {canManage ? (
-              <Button
-                size="sm"
-                variant="destructive"
-                className="self-start"
-                disabled={busy}
-                onClick={() => submit(setDeliveryTerms, { serviceable: "no" }, "Request closed: not serviceable.")}
-              >
-                Reject: not serviceable
-              </Button>
+              <ConfirmDialog
+                action="reject"
+                description="The request closes because GCE cannot deliver to this address."
+                onConfirm={() => submit(setDeliveryTerms, { serviceable: "no" }, "Request closed: not serviceable.")}
+                trigger={
+                  <Button size="sm" variant="destructive" className="self-start" disabled={busy}>
+                    Reject: not serviceable
+                  </Button>
+                }
+              />
             ) : null}
           </>
         ) : null}
@@ -216,12 +218,15 @@ export function DeliveryPanel({
                 </>
               ) : null}
             </div>
-            <Button
-              size="sm"
-              className="self-start"
-              variant={form.serviceable === "no" ? "destructive" : "default"}
-              disabled={busy || !form.serviceable || (form.serviceable === "yes" && (!area || finalPrice <= 0))}
-              onClick={() =>
+            <ConfirmDialog
+              action={form.serviceable === "no" ? "reject" : "approve"}
+              description={
+                form.serviceable === "no"
+                  ? "The request closes because GCE cannot deliver to this address."
+                  : "The delivery terms are sent to the buyer."
+              }
+              confirmLabel={form.serviceable === "no" ? "Reject" : "Confirm"}
+              onConfirm={() =>
                 submit(
                   setDeliveryTerms,
                   {
@@ -231,9 +236,17 @@ export function DeliveryPanel({
                   form.serviceable === "no" ? "Request closed: not serviceable." : "Delivery terms sent to the buyer.",
                 )
               }
-            >
-              {form.serviceable === "no" ? "Reject: not serviceable" : "Confirm and notify buyer"}
-            </Button>
+              trigger={
+                <Button
+                  size="sm"
+                  className="self-start"
+                  variant={form.serviceable === "no" ? "destructive" : "default"}
+                  disabled={busy || !form.serviceable || (form.serviceable === "yes" && (!area || finalPrice <= 0))}
+                >
+                  {form.serviceable === "no" ? "Reject: not serviceable" : "Confirm and notify buyer"}
+                </Button>
+              }
+            />
           </section>
         ) : null}
 

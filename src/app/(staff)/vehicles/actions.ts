@@ -15,6 +15,7 @@ import {
   vehicleSchema,
 } from "@/lib/validation/vehicles";
 import { isVehicleMediaKind } from "@/lib/vehicles/media-kinds";
+import { nextStockCode } from "@/lib/vehicles/stock-code";
 
 export async function createVehicle(formData: FormData) {
   const supabase = await createServerSupabaseClient();
@@ -33,34 +34,46 @@ export async function createVehicle(formData: FormData) {
 
   const data = parsed.data;
 
-  const { data: vehicle, error } = await supabase
-    .from("vehicles")
-    .insert({
-      stock_code: data.stock_code,
-      vin: data.vin || null,
-      plate_number: data.plate_number || null,
-      engine_number: data.engine_number || null,
-      chassis_number: data.chassis_number || null,
-      make: data.make,
-      model: data.model,
-      year: data.year,
-      condition: data.condition,
-      mileage: data.mileage ?? null,
-      fuel_type: data.fuel_type || null,
-      transmission: data.transmission || null,
-      exterior_color: data.exterior_color || null,
-      interior_color: data.interior_color || null,
-      body_type: data.body_type || null,
-      purpose: data.purpose || null,
-      engine: data.engine || null,
-      description: data.description || null,
-      current_price: data.current_price ?? null,
-      pricing_type: data.pricing_type || "negotiable",
-      warranty_details: data.warranty_details || null,
-      offer_details: data.offer_details || null,
-    })
-    .select()
-    .single();
+  // T06: the server numbers the car (the form only previews the code). One retry covers two Marketing
+  // Specialists saving at the same moment; the UNIQUE constraint rejects the loser of the race.
+  const insertVehicle = async () => {
+    const { data: codes } = await createAdminClient()
+      .from("vehicles")
+      .select("stock_code")
+      .ilike("stock_code", "GCE-%");
+    return supabase
+      .from("vehicles")
+      .insert({
+        stock_code: nextStockCode((codes ?? []).map((row) => row.stock_code as string)),
+        vin: data.vin || null,
+        plate_number: data.plate_number || null,
+        engine_number: data.engine_number || null,
+        chassis_number: data.chassis_number || null,
+        make: data.make,
+        model: data.model,
+        year: data.year,
+        condition: data.condition,
+        mileage: data.mileage ?? null,
+        fuel_type: data.fuel_type || null,
+        transmission: data.transmission || null,
+        exterior_color: data.exterior_color || null,
+        interior_color: data.interior_color || null,
+        body_type: data.body_type || null,
+        purpose: data.purpose || null,
+        engine: data.engine || null,
+        description: data.description || null,
+        current_price: data.current_price ?? null,
+        pricing_type: data.pricing_type || "negotiable",
+        warranty_details: data.warranty_details || null,
+        offer_details: data.offer_details || null,
+      })
+      .select()
+      .single();
+  };
+  let { data: vehicle, error } = await insertVehicle();
+  if (error?.code === "23505" && error.message.includes("stock_code")) {
+    ({ data: vehicle, error } = await insertVehicle());
+  }
 
   if (error) return { error: error.message };
 
@@ -89,7 +102,6 @@ export async function updateVehicle(formData: FormData) {
   const { error } = await supabase
     .from("vehicles")
     .update({
-      stock_code: data.stock_code,
       vin: data.vin || null,
       plate_number: data.plate_number || null,
       engine_number: data.engine_number || null,
@@ -233,12 +245,17 @@ export async function approvePrice(formData: FormData) {
   const proposalId = formData.get("proposal_id") as string;
   const decision = formData.get("decision") as string;
   if (!["approved", "rejected"].includes(decision)) return { error: "Invalid proposal decision." };
+  // T06: Request Revision sends the price back to the Marketing Specialist with the CEO's reason.
+  const decisionNotes =
+    String(formData.get("decision_notes") ?? "")
+      .trim()
+      .slice(0, 1000) || null;
 
   const admin = createAdminClient();
 
   const { data: proposal, error: proposalError } = await admin
     .from("vehicle_price_proposals")
-    .select("vehicle_id, proposed_amount, decision, proposal_kind, transaction_id")
+    .select("vehicle_id, proposed_amount, decision, proposal_kind, transaction_id, proposer_id")
     .eq("id", proposalId)
     .eq("decision", "pending")
     .maybeSingle();
@@ -259,6 +276,7 @@ export async function approvePrice(formData: FormData) {
       decision,
       decider_id: user.user.id,
       decision_date: new Date().toISOString(),
+      decision_notes: decisionNotes,
     })
     .eq("id", proposalId)
     .eq("decision", "pending");
@@ -283,6 +301,17 @@ export async function approvePrice(formData: FormData) {
         ...(decision === "approved" && !current?.posted_at ? { posted_at: new Date().toISOString() } : {}),
       })
       .eq("id", vehicleId);
+
+    if (decision === "rejected" && proposal.proposer_id) {
+      await admin.from("notifications").insert({
+        recipient_id: proposal.proposer_id,
+        kind: "price_revision_requested",
+        title: "Price revision requested",
+        body: decisionNotes ? `The CEO asked for a new price: ${decisionNotes}` : "The CEO asked for a new price.",
+        reference_table: "vehicles",
+        reference_id: vehicleId,
+      });
+    }
   }
 
   await admin.from("audit_events").insert({
@@ -620,35 +649,6 @@ export async function archiveVehicle(vehicleId: string) {
   const { error } = await supabase.from("vehicles").update({ listing_state: "archived" }).eq("id", vehicleId);
 
   if (error) return { error: error.message };
-
-  revalidatePath("/dashboard/vehicles");
-  return { success: true };
-}
-
-export async function deleteVehicle(vehicleId: string) {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
-
-  const role = await getCurrentRole();
-  if (!role || !["ceo"].includes(role)) {
-    return { error: "Not authorized" };
-  }
-
-  const { data: vehicle } = await supabase.from("vehicles").select("listing_state").eq("id", vehicleId).single();
-  if (!vehicle) return { error: "Vehicle not found." };
-  if (["reserved", "sold"].includes(vehicle.listing_state as string)) {
-    return { error: "Reserved or sold vehicles cannot be deleted." };
-  }
-
-  const { error } = await supabase.from("vehicles").delete().eq("id", vehicleId);
-
-  if (error) {
-    return {
-      error:
-        error.code === "23503" ? "This vehicle has related transaction records and cannot be deleted." : error.message,
-    };
-  }
 
   revalidatePath("/dashboard/vehicles");
   return { success: true };
