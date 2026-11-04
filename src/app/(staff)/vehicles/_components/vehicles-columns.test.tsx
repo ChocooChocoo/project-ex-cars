@@ -27,7 +27,7 @@ const noop = () => {
 function Harness({ data = vehicles }: { readonly data?: Record<string, unknown>[] }) {
   const table = useReactTable({
     data,
-    columns: createColumns(noop, noop, noop, noop, noop, true, true),
+    columns: createColumns(noop, noop, noop, noop, true, true),
     state: { columnVisibility },
     getRowId: (row) => row.id as string,
     getCoreRowModel: getCoreRowModel(),
@@ -91,14 +91,14 @@ describe("vehicle table columns", () => {
     expect(screen.queryByText(/undefined/)).not.toBeInTheDocument();
   });
 
-  it("drops the Actions column for roles that can neither manage nor delete (Sales Manager)", () => {
-    const ids = createColumns(noop, noop, noop, noop, noop, false, false).map((column) => column.id);
+  it("drops the Actions column for roles that can neither manage nor view (Sales Manager)", () => {
+    const ids = createColumns(noop, noop, noop, noop, false, false).map((column) => column.id);
 
     expect(ids).not.toContain("actions");
   });
 
-  it("keeps the Actions column when the role can manage or delete", () => {
-    expect(createColumns(noop, noop, noop, noop, noop, true, false).map((c) => c.id)).toContain("actions");
-    expect(createColumns(noop, noop, noop, noop, noop, false, true).map((c) => c.id)).toContain("actions");
+  it("keeps the Actions column when the role can manage or view", () => {
+    expect(createColumns(noop, noop, noop, noop, true, false).map((c) => c.id)).toContain("actions");
+    expect(createColumns(noop, noop, noop, noop, false, true).map((c) => c.id)).toContain("actions");
   });
 });

@@ -4,6 +4,7 @@ import { STAFF_ROLES } from "@/lib/auth/roles";
 import { checkAndNotifyDueInstallments, checkAndNotifyOverdueReviews } from "@/lib/notifications/actions";
 
 import { MetricCards } from "./_components/metric-cards";
+import { NextMonthForecast } from "./_components/next-month-forecast";
 import { PerformanceOverview } from "./_components/performance-overview";
 import { Phase6Overview } from "./_components/phase6-overview";
 import { ReconditioningOverview } from "./_components/reconditioning-overview";
@@ -31,6 +32,7 @@ export default async function Page() {
         </section>
       ) : null}
       <MetricCards summary={summary} />
+      {isCeo ? <NextMonthForecast forecast={summary.forecast} /> : null}
       <PerformanceOverview monthly={summary.monthly} />
       <ReconditioningOverview />
     </div>

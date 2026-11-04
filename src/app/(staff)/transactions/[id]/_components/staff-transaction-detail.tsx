@@ -73,7 +73,7 @@ export function StaffTransactionDetail({
   readonly sellFlow?: SellFlowData | null;
   readonly carBuyers?: CarBuyerRow[];
   readonly delivery?: { fieldCase: Record<string, unknown> | null; team: DeliveryTeam } | null;
-  readonly financing?: { hasRecoveryCase: boolean; threadId?: string | null } | null;
+  readonly financing?: { hasRecoveryCase: boolean; threadId?: string | null; markupPct: number } | null;
   readonly meetup?: {
     fieldCase: Record<string, unknown> | null;
     informants: { id: string; full_name: string | null }[];
@@ -411,9 +411,10 @@ export function StaffTransactionDetail({
           threadId={financing.threadId ?? null}
           arrangementKind={(purchaseDetails?.arrangement_kind as string | undefined) ?? "gce_visit"}
           signingReported={Boolean(handover.signing_reported_at)}
-          defaultTotal={financedTotal(vehiclePrice) || undefined}
+          defaultTotal={financedTotal(vehiclePrice, financing.markupPct) || undefined}
           vehiclePrice={vehiclePrice}
           buyerRegionCode={buyerRegionCode}
+          requestedTermMonths={Number(purchaseDetails?.requested_term_months) || null}
         />
       ) : null}
 

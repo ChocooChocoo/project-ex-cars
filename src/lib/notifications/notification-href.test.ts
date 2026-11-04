@@ -47,6 +47,12 @@ describe("notificationHref (T03 G1)", () => {
 
   it("gives no link without a reference or for an unknown table", () => {
     expect(notificationHref({ reference_table: null, reference_id: null }, "ceo")).toBeNull();
-    expect(notificationHref({ reference_table: "vehicles", reference_id: "v-1" }, "ceo")).toBeNull();
+    expect(notificationHref({ reference_table: "suppliers", reference_id: "s-1" }, "ceo")).toBeNull();
+  });
+
+  it("T06: opens the car for a price revision request", () => {
+    const row = { reference_table: "vehicles", reference_id: "v-1" };
+    expect(notificationHref(row, "marketing_specialist")).toBe("/marketing_specialist/vehicles/v-1");
+    expect(notificationHref(row, "customer")).toBeNull();
   });
 });

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { requireRole } from "@/lib/auth/guards";
 import { rolePath } from "@/lib/routing/paths";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { withoutIdentifiers } from "@/lib/vehicles/identifiers";
 
 export default async function DashboardShowroomPage() {
   await requireRole(["ceo", "marketing_specialist", "sales_manager"]);
@@ -18,11 +19,12 @@ export default async function DashboardShowroomPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data: vehicles } = await supabase
+  const { data: rows } = await supabase
     .from("vehicles")
     .select("*")
     .in("listing_state", ["available", "reserved"])
     .order("posted_at", { ascending: false });
+  const vehicles = (rows ?? []).map(withoutIdentifiers);
 
   let favouriteIds: string[] = [];
   if (user) {

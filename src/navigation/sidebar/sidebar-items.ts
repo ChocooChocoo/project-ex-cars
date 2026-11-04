@@ -27,6 +27,7 @@ import {
   ScrollText,
   Search,
   Server,
+  Settings,
   Shield,
   ShoppingBag,
   Sparkles,
@@ -323,6 +324,12 @@ export const sidebarItems: NavGroup[] = [
         title: "Roles",
         url: "/roles",
         icon: Lock,
+      },
+      {
+        id: "settings",
+        title: "Settings",
+        url: "/settings",
+        icon: Settings,
       },
       {
         id: "authentication",

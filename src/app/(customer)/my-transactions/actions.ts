@@ -1078,12 +1078,41 @@ export async function signContract(formData: FormData) {
   if (handover?.contract_state === "signed") return { error: "The contract is already signed." };
   if (handover?.contract_state !== "approved") return { error: "The contract is not approved yet." };
 
+  // T06: the buyer signs here (typed name plus a drawn signature) or chooses to sign face-to-face at GCE.
+  if (formData.get("signing_method") === "face_to_face") {
+    const { error } = await admin
+      .from("sale_handovers")
+      .update({ signing_method: "face_to_face" })
+      .eq("transaction_id", tx.id)
+      .eq("contract_state", "approved");
+    if (error) return { error: error.message };
+    await notify(
+      admin,
+      { role: "sales_manager" },
+      {
+        kind: "contract_face_to_face",
+        title: "Buyer will sign face-to-face",
+        body: "The buyer chose to sign the contract in person. Mark it signed once they do.",
+        transactionId: tx.id,
+      },
+    );
+    revalidatePath(`/my-transactions/${tx.id}`);
+    return { success: true };
+  }
+
   const name = String(formData.get("signed_name") ?? "").trim();
   if (!name) return { error: "Type your full name to sign." };
+  const signaturePath = String(formData.get("signature_path") ?? "");
+  if (!signaturePath.startsWith(`${tx.id}/signature-`)) return { error: "Draw your signature to sign." };
 
   const { error } = await admin
     .from("sale_handovers")
-    .update({ contract_state: "signed", contract_signed_at: new Date().toISOString() })
+    .update({
+      contract_state: "signed",
+      contract_signed_at: new Date().toISOString(),
+      signing_method: "e_signature",
+      signature_path: signaturePath,
+    })
     .eq("transaction_id", tx.id)
     .eq("contract_state", "approved");
   if (error) return { error: error.message };

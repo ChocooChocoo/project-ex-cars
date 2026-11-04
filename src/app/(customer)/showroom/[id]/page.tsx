@@ -5,13 +5,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { type VehicleMediaItem, VehicleMediaViewer } from "@/components/vehicle-media-viewer";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { withoutIdentifiers } from "@/lib/vehicles/identifiers";
 
 import { InquiryButtons } from "../_components/inquiry-buttons";
 
 export default async function VehicleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createServerSupabase();
-  const { data: vehicle } = await supabase.from("vehicles").select("*").eq("id", id).single();
+  const { data: row } = await supabase.from("vehicles").select("*").eq("id", id).single();
+  const vehicle = row ? withoutIdentifiers(row) : null;
 
   if (!vehicle) notFound();
 

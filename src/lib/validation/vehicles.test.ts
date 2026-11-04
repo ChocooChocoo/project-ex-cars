@@ -15,6 +15,7 @@ describe("vehicle identifiers on the vehicle form", () => {
   it("keeps the plate, engine and chassis numbers the Deed of Sale prints", () => {
     const parsed = vehicleSchema.parse({
       ...car,
+      vin: "VIN-1",
       plate_number: "ABC 1234",
       engine_number: "ENG-9",
       chassis_number: "CHS-7",
@@ -24,10 +25,11 @@ describe("vehicle identifiers on the vehicle form", () => {
     expect(parsed.chassis_number).toBe("CHS-7");
   });
 
-  it("leaves them optional for cars already on the lot", () => {
-    const parsed = vehicleSchema.parse(car);
-    expect(parsed.plate_number).toBeUndefined();
-    expect(parsed.engine_number).toBeUndefined();
-    expect(parsed.chassis_number).toBeUndefined();
+  it("T06: requires all four identifiers", () => {
+    const result = vehicleSchema.safeParse({ ...car, vin: " ", plate_number: "", engine_number: "E" });
+    expect(result.success).toBe(false);
+    const missing = result.error?.issues.map((issue) => issue.path[0]);
+    expect(missing).toEqual(expect.arrayContaining(["vin", "plate_number", "chassis_number"]));
+    expect(missing).not.toContain("engine_number");
   });
 });

@@ -196,10 +196,15 @@ describe("TransactionDetail ID sides and removal", () => {
     signed_url: null,
   };
 
-  it("asks which side of the ID is being uploaded", () => {
-    renderPendingBuy([]);
+  it("T06: lists two valid IDs, front and back, and one proof of billing", () => {
+    renderPendingBuy([pendingFront]);
 
-    expect(screen.getByLabelText("Side")).toBeInTheDocument();
+    expect(screen.getByText("Valid ID #1")).toBeInTheDocument();
+    expect(screen.getByText("Valid ID #2")).toBeInTheDocument();
+    expect(screen.getByText("Proof of billing")).toBeInTheDocument();
+    expect(screen.getAllByLabelText("Front")).toHaveLength(1);
+    expect(screen.getAllByLabelText("Back")).toHaveLength(2);
+    expect(screen.getAllByText("Missing")).toHaveLength(4);
   });
 
   it("shows the side of an ID and removes a pending image", async () => {

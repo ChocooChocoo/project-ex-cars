@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Separator } from "@/components/ui/separator";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { FINANCING_TERM_MONTHS, financedTotal } from "@/lib/transactions/buy-flow";
+import { DEFAULT_FINANCING_MARKUP_PCT, FINANCING_TERM_MONTHS, financedTotal } from "@/lib/transactions/buy-flow";
 import { formatCurrency } from "@/lib/utils";
 
 type Car = { id: string; label: string; price: number };
@@ -16,15 +16,21 @@ const TERM_LABEL: Record<number, string> = { 6: "6 mo", 12: "1 yr", 24: "2 yrs",
 
 const peso = (amount: number) => formatCurrency(amount, { noDecimals: true });
 
-// Financing at GCE adds a flat 10% to the car's price, for every term (buy-flow.ts financedTotal).
-export function FinancingEstimator({ cars }: { readonly cars: Car[] }) {
+// Financing at GCE adds a flat markup to the car's price, for every term (buy-flow.ts financedTotal).
+export function FinancingEstimator({
+  cars,
+  markupPct = DEFAULT_FINANCING_MARKUP_PCT,
+}: {
+  readonly cars: Car[];
+  readonly markupPct?: number;
+}) {
   const ids = useId();
   const [carId, setCarId] = useState(cars[0].id);
   const [months, setMonths] = useState("12");
 
   const car = cars.find((c) => c.id === carId);
   if (!car) return null;
-  const total = financedTotal(car.price);
+  const total = financedTotal(car.price, markupPct);
 
   return (
     <Card>

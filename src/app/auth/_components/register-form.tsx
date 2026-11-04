@@ -15,7 +15,10 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldContent, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { COMPANY_POLICY, TERMS_AND_CONDITIONS } from "@/lib/legal/documents";
 import { emailSchema, fullNameSchema, newPasswordSchema } from "@/lib/validation/forms";
+
+import { PolicyDialog } from "./policy-dialog";
 
 const formSchema = z
   .object({
@@ -33,14 +36,29 @@ const formSchema = z
 
 type FormValues = z.infer<typeof formSchema>;
 
+// T06: each box unlocks only after its document has been read to the end.
 const POLICY_FIELDS = [
-  { name: "acceptTerms", id: "register-accept-terms", label: "I agree to the Terms and Conditions" },
-  { name: "acceptPolicy", id: "register-accept-policy", label: "I agree to the Company Policy" },
+  {
+    name: "acceptTerms",
+    id: "register-accept-terms",
+    label: "I agree to the Terms and Conditions",
+    document: TERMS_AND_CONDITIONS,
+  },
+  {
+    name: "acceptPolicy",
+    id: "register-accept-policy",
+    label: "I agree to the Company Policy",
+    document: COMPANY_POLICY,
+  },
 ] as const;
 
 export function RegisterForm() {
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [read, setRead] = useState<Record<(typeof POLICY_FIELDS)[number]["name"], boolean>>({
+    acceptTerms: false,
+    acceptPolicy: false,
+  });
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -171,13 +189,23 @@ export function RegisterForm() {
                   id={policy.id}
                   name={field.name}
                   checked={field.value}
+                  disabled={!read[policy.name]}
                   onCheckedChange={(checked) => field.onChange(Boolean(checked))}
                   aria-invalid={fieldState.invalid}
+                  aria-describedby={`${policy.id}-hint`}
                 />
                 <FieldContent>
                   <FieldLabel htmlFor={policy.id} className="font-normal">
                     {policy.label}
                   </FieldLabel>
+                  <div id={`${policy.id}-hint`} className="flex flex-wrap items-center gap-x-1 text-sm">
+                    <PolicyDialog
+                      document={policy.document}
+                      read={read[policy.name]}
+                      onRead={() => setRead((current) => ({ ...current, [policy.name]: true }))}
+                    />
+                    {read[policy.name] ? null : <span className="text-muted-foreground">to unlock this box.</span>}
+                  </div>
                   {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                 </FieldContent>
               </Field>

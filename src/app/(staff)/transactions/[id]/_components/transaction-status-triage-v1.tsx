@@ -3,6 +3,7 @@
 
 import { format } from "date-fns";
 
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { canRecordNoShow, isDirectPayment } from "@/lib/transactions/buy-flow";
@@ -151,21 +152,30 @@ export function TransactionStatusTriageV1({
 
         {allowed.length > 0 ? (
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-            {allowed.map((to) => (
-              <button
-                key={to}
-                type="button"
-                disabled={transitioning}
-                onClick={() => onTransition(to)}
-                className="space-y-1 rounded-md border bg-muted/20 px-2.5 py-2 text-left transition-colors hover:bg-muted/35 disabled:opacity-50"
-              >
-                <div className="text-muted-foreground text-xs">Transition</div>
-                <div className="font-semibold text-sm capitalize">{TRANSACTION_ACTION_LABELS[to]}</div>
-                <div className="text-muted-foreground text-xs">
-                  Mark as {TRANSACTION_STATE_LABELS[to].toLowerCase()}
-                </div>
-              </button>
-            ))}
+            {allowed.map((to) => {
+              // T06: approving or rejecting a request asks for confirmation first.
+              const decision = to === "approved" ? "approve" : to === "rejected" ? "reject" : null;
+              const button = (
+                <button
+                  key={to}
+                  type="button"
+                  disabled={transitioning}
+                  onClick={decision ? undefined : () => onTransition(to)}
+                  className="space-y-1 rounded-md border bg-muted/20 px-2.5 py-2 text-left transition-colors hover:bg-muted/35 disabled:opacity-50"
+                >
+                  <div className="text-muted-foreground text-xs">Transition</div>
+                  <div className="font-semibold text-sm capitalize">{TRANSACTION_ACTION_LABELS[to]}</div>
+                  <div className="text-muted-foreground text-xs">
+                    Mark as {TRANSACTION_STATE_LABELS[to].toLowerCase()}
+                  </div>
+                </button>
+              );
+              return decision ? (
+                <ConfirmDialog key={to} action={decision} onConfirm={() => onTransition(to)} trigger={button} />
+              ) : (
+                button
+              );
+            })}
             {onVisitOutcome
               ? visibleOutcomes.map((item) => (
                   <button

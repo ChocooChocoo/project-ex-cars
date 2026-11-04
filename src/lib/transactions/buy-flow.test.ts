@@ -234,9 +234,14 @@ describe("§7–9 bank transfer", () => {
 
 describe("T04 financing", () => {
   it("adds a flat 10% to the price", () => {
-    expect(financedTotal(1_000_000)).toBe(1_100_000);
-    expect(financedTotal(499_999)).toBe(549_999);
-    expect(financedTotal(0)).toBe(0);
+    expect(financedTotal(1_000_000, 10)).toBe(1_100_000);
+    expect(financedTotal(499_999, 10)).toBe(549_999);
+    expect(financedTotal(0, 10)).toBe(0);
+  });
+
+  it("T06: uses the adjustable markup", () => {
+    expect(financedTotal(1_000_000, 12.5)).toBe(1_125_000);
+    expect(financedTotal(1_000_000, 0)).toBe(1_000_000);
   });
 
   it("offers 6, 12, 24, 36 and 60 months", () => {

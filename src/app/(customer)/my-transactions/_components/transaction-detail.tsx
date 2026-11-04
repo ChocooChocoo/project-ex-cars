@@ -1,13 +1,13 @@
 "use client";
 "use no memo";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { format } from "date-fns";
-import { Calendar, FileText, ShieldCheck, XCircle } from "lucide-react";
+import { Calendar, FileText, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -19,6 +19,7 @@ import {
   uploadPurchaseDocument,
 } from "@/app/(customer)/my-transactions/actions";
 import { DeliveryLastSeen } from "@/components/delivery-last-seen";
+import { LoanCalculator } from "@/components/loan-calculator";
 import { RejectReasonDialog } from "@/components/reject-reason-dialog";
 import { TransactionImagePreview } from "@/components/transaction-image-preview";
 import { TransactionStatusBadge } from "@/components/transaction-status-badge";
@@ -50,6 +51,7 @@ import {
   activeBuyerIds,
   BUYER_ID_IMAGES,
   buyerIdsComplete,
+  DEFAULT_FINANCING_MARKUP_PCT,
   DELIVERY_LEAD_DAYS,
   DELIVERY_STATUS_LABELS,
   DELIVERY_STATUSES,
@@ -65,7 +67,7 @@ import {
   paidTowardPrice,
   signsInApp,
 } from "@/lib/transactions/buy-flow";
-import { deliveryArea, deliveryFeeRangeLabel } from "@/lib/transactions/delivery-fee";
+import { deliveryArea, deliveryFeeRangeLabel, downPaymentFor } from "@/lib/transactions/delivery-fee";
 import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_SIZE, transactionDocumentLabel } from "@/lib/transactions/document-media";
 import {
   arrangementKindLabel,
@@ -73,11 +75,13 @@ import {
   TRANSACTION_STATE_LABELS,
   transactionKindLabel,
 } from "@/lib/transactions/labels";
+import { monthlyInstallment } from "@/lib/transactions/loan-calculator";
 import type { FlowStatus, QueueState, TransactionFlag, TransactionState } from "@/lib/transactions/state-machine";
 import { cn, formatCurrency } from "@/lib/utils";
 
 import { ContractSign } from "./contract-sign";
 import { OnlinePayment } from "./online-payment";
+import { type DocumentUpload, PurchaseDocumentChecklist } from "./purchase-document-checklist";
 import type { TransactionPaperProps } from "./transaction-paper";
 import { TransactionPreview } from "./transaction-preview";
 
@@ -157,6 +161,7 @@ export function TransactionDetail({
   delivery = null,
   counterOffer = null,
   buyerRegionCode = null,
+  financingMarkupPct = DEFAULT_FINANCING_MARKUP_PCT,
 }: {
   readonly transaction: Record<string, unknown>;
   readonly history: Record<string, unknown>[];
@@ -171,6 +176,8 @@ export function TransactionDetail({
   readonly gceVisitOnly?: boolean;
   /** T05 P7: the buyer's `profiles.region_code`, which sets the delivery fee range. */
   readonly buyerRegionCode?: string | null;
+  /** T06: GCE's adjustable financing profit, in percent. */
+  readonly financingMarkupPct?: number;
   readonly delivery?: {
     status: string | null;
     delay_note: string | null;
@@ -237,12 +244,8 @@ export function TransactionDetail({
   const [cancelling, setCancelling] = useState(false);
 
   // Purchase document upload state
-  const [docKind, setDocKind] = useState("valid_id");
-  const [docIdType, setDocIdType] = useState("");
-  const [docIdSide, setDocIdSide] = useState("front");
   const [uploading, setUploading] = useState(false);
   const [removingDocumentId, setRemovingDocumentId] = useState<string | null>(null);
-  const docFileRef = useRef<HTMLInputElement>(null);
 
   const buyerDocuments = documents as {
     document_kind: unknown;
@@ -268,18 +271,14 @@ export function TransactionDetail({
     }
   }
 
-  async function handleUploadDocument() {
-    const file = docFileRef.current?.files?.[0];
-    if (!file) {
-      toast.error("Select a file to upload.");
-      return;
-    }
+  async function handleUploadDocument({
+    kind: docKind,
+    idType: docIdType = "",
+    side: docIdSide = "front",
+    file,
+  }: DocumentUpload) {
     if (docKind === "valid_id" && !docIdType) {
       toast.error("Select the ID type.");
-      return;
-    }
-    if (docKind === "valid_id" && !docIdSide) {
-      toast.error("Select front or back of the ID.");
       return;
     }
     const ext = DOCUMENT_EXTENSIONS[file.type];
@@ -324,7 +323,6 @@ export function TransactionDetail({
         ? "Valid ID uploaded. GCE staff will verify it."
         : "Proof of billing uploaded. GCE staff will verify it.",
     );
-    if (docFileRef.current) docFileRef.current.value = "";
     router.refresh();
   }
 
@@ -405,8 +403,8 @@ export function TransactionDetail({
     purchaseDetails?.requested_term_months ? String(purchaseDetails.requested_term_months) : "",
   );
   const financingPicked = paymentOption === "financing";
-  // T04 P6: financing adds a flat 10% to the Showroom price.
-  const financingTotal = financedTotal(Number(vehicles?.current_price || 0));
+  // T04 P6: financing adds a flat markup (T06: adjustable) to the Showroom price.
+  const financingTotal = financedTotal(Number(vehicles?.current_price || 0), financingMarkupPct);
   // A delivery is dated at request, financed or not; other financing books after the approval.
   const savedDelivery = purchaseDetails?.arrangement_kind === "delivery";
   const booksAfterApproval = financingSaved && !savedDelivery;
@@ -638,7 +636,7 @@ export function TransactionDetail({
                   <p className="text-sm">
                     Total with financing:{" "}
                     <span className="font-medium tabular-nums">{formatCurrency(financingTotal)}</span>
-                    <span className="text-muted-foreground"> (Showroom price plus 10%)</span>
+                    <span className="text-muted-foreground"> (Showroom price plus {financingMarkupPct}%)</span>
                   </p>
                 ) : null}
                 <Separator />
@@ -713,9 +711,16 @@ export function TransactionDetail({
                     </Select>
                     <p id="requested-term-estimate" className="text-muted-foreground text-xs">
                       {termMonths && financingTotal > 0
-                        ? `About ${formatCurrency(financingTotal / Number(termMonths))} a month for ${termMonths} months. The Sales Manager confirms the final amount.`
+                        ? `About ${formatCurrency(monthlyInstallment(financingTotal, downPaymentFor(Number(vehicles?.current_price || 0)), Number(termMonths)))} a month for ${termMonths} months, after the 10% downpayment. You choose the term; GCE confirms the final amount.`
                         : "Pick a term to see the monthly payment."}
                     </p>
+                    {Number(vehicles?.current_price || 0) > 0 ? (
+                      <LoanCalculator
+                        price={Number(vehicles?.current_price)}
+                        markupPct={financingMarkupPct}
+                        selectedMonths={Number(termMonths) || null}
+                      />
+                    ) : null}
                   </div>
                 ) : null}
                 {arrangementKind === "delivery" && !deliveryTermsAgreedAt ? (
@@ -836,6 +841,7 @@ export function TransactionDetail({
                 contractState={contractState}
                 contractBody={(handover.contract_body as string | null | undefined) ?? null}
                 signedAt={(handover.contract_signed_at as string | null | undefined) ?? null}
+                signingMethod={(handover.signing_method as string | null | undefined) ?? null}
               />
               <Separator />
             </>
@@ -1086,89 +1092,13 @@ export function TransactionDetail({
             <h2 className="font-medium tracking-tight">Documents</h2>
             {kind === "buy" && !isTerminal ? (
               <>
-                <div className="flex flex-wrap items-center gap-2 rounded-lg border p-3">
-                  <ShieldCheck className="size-4 text-muted-foreground" />
-                  <p className="text-muted-foreground text-xs">
-                    GCE requires the front and back of two valid IDs and one proof of billing to complete your purchase.
-                  </p>
-                </div>
-                <p className="text-xs">
-                  <span className="font-medium">
-                    {activeIdImages}/{BUYER_ID_IMAGES}
-                  </span>{" "}
-                  ID images · proof of billing {hasBilling ? "uploaded" : "pending"}
-                </p>
-                <div className="flex flex-wrap items-end gap-2">
-                  <div className="flex flex-col gap-1">
-                    <Label htmlFor="cust-doc-kind" className="text-xs">
-                      Document
-                    </Label>
-                    <Select value={docKind} onValueChange={setDocKind}>
-                      <SelectTrigger id="cust-doc-kind" className="w-36">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          <SelectItem value="valid_id">Valid ID</SelectItem>
-                          <SelectItem value="proof_of_billing">Proof of Billing</SelectItem>
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {docKind === "valid_id" ? (
-                    <div className="flex flex-col gap-1">
-                      <Label htmlFor="cust-doc-id-type" className="text-xs">
-                        ID Type
-                      </Label>
-                      <Select value={docIdType} onValueChange={setDocIdType}>
-                        <SelectTrigger id="cust-doc-id-type" className="w-36">
-                          <SelectValue placeholder="Select ID" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            <SelectItem value="passport">Passport</SelectItem>
-                            <SelectItem value="drivers_license">Driver's License</SelectItem>
-                            <SelectItem value="umid">UMID</SelectItem>
-                            <SelectItem value="sss_id">SSS ID</SelectItem>
-                            <SelectItem value="gsis_id">GSIS ID</SelectItem>
-                            <SelectItem value="philhealth_id">PhilHealth ID</SelectItem>
-                            <SelectItem value="voters_id">Voter's ID</SelectItem>
-                            <SelectItem value="national_id">National ID</SelectItem>
-                            <SelectItem value="prc_id">PRC ID</SelectItem>
-                            <SelectItem value="postal_id">Postal ID</SelectItem>
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  ) : null}
-                  {docKind === "valid_id" ? (
-                    <div className="flex flex-col gap-1">
-                      <Label htmlFor="cust-doc-id-side" className="text-xs">
-                        Side
-                      </Label>
-                      <Select value={docIdSide} onValueChange={setDocIdSide}>
-                        <SelectTrigger id="cust-doc-id-side" className="w-28">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            <SelectItem value="front">Front</SelectItem>
-                            <SelectItem value="back">Back</SelectItem>
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  ) : null}
-                  <Input
-                    ref={docFileRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,application/pdf"
-                    className="w-44"
-                  />
-                  <Button size="sm" onClick={handleUploadDocument} disabled={uploading}>
-                    {uploading ? "Uploading..." : "Upload"}
-                  </Button>
-                </div>
+                <PurchaseDocumentChecklist
+                  documents={buyerDocuments}
+                  canUpload
+                  uploading={uploading}
+                  onUpload={handleUploadDocument}
+                />
+                {documents.length > 0 ? <h3 className="font-medium text-sm">Uploaded files</h3> : null}
               </>
             ) : null}
             {documents.length === 0 ? (

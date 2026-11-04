@@ -50,7 +50,12 @@ function request(arrangement: string, overrides: Record<string, unknown> = {}) {
     current_state: "approved",
     flow_status: null,
     transaction_kind: "buy",
-    purchase_details: { payment_method: "financing", arrangement_kind: arrangement, final_price: 1_000_000 },
+    purchase_details: {
+      payment_method: "financing",
+      arrangement_kind: arrangement,
+      final_price: 1_000_000,
+      requested_term_months: 12,
+    },
     payment_records: [],
     ...overrides,
   };
@@ -95,15 +100,40 @@ describe("proposeFinancingTerms", () => {
 
   it("defaults the total to the car's price plus 10% when left blank", async () => {
     request("gce_visit", {
-      purchase_details: { payment_method: "financing", arrangement_kind: "gce_visit", final_price: 1_000_000 },
+      purchase_details: {
+        payment_method: "financing",
+        arrangement_kind: "gce_visit",
+        final_price: 1_000_000,
+        requested_term_months: 12,
+      },
     });
 
     await expect(proposeFinancingTerms(form({ ...offer, total_amount: "" }))).resolves.toEqual({ success: true });
     expect(written("payment_terms")[0]).toMatchObject({ total_amount: 1_100_000 });
   });
 
+  it("T06: takes the term from the buyer and works out the monthly payment", async () => {
+    request("gce_visit");
+
+    await proposeFinancingTerms(form({ ...offer, duration_months: "60", monthly_payment: "1" }));
+    expect(written("payment_terms")[0]).toMatchObject({
+      number_of_payments: 12,
+      duration_months: 12,
+      monthly_payment: 33334,
+    });
+  });
+
+  it("T06: refuses terms before the buyer chose a term", async () => {
+    request("gce_visit", {
+      purchase_details: { payment_method: "financing", arrangement_kind: "gce_visit", final_price: 1_000_000 },
+    });
+
+    await expect(proposeFinancingTerms(form(offer))).resolves.toEqual({
+      error: "The buyer has not chosen a payment term yet.",
+    });
+  });
+
   it.each([
-    ["monthly_payment", "Enter the monthly payment."],
     ["missed_payment_policy", "State the missed payment policy."],
   ])("refuses terms without %s", async (field, error) => {
     request("gce_visit");
@@ -131,7 +161,12 @@ describe("proposeFinancingTerms", () => {
 
   it("sets the down payment from 10% of the vehicle price, not from the form", async () => {
     request("gce_visit", {
-      purchase_details: { payment_method: "financing", arrangement_kind: "gce_visit", final_price: 850_000 },
+      purchase_details: {
+        payment_method: "financing",
+        arrangement_kind: "gce_visit",
+        final_price: 850_000,
+        requested_term_months: 12,
+      },
     });
 
     await expect(proposeFinancingTerms(form({ ...offer, down_payment: "1" }))).resolves.toEqual({ success: true });
@@ -140,7 +175,12 @@ describe("proposeFinancingTerms", () => {
 
   it("refuses terms when the request has no vehicle price", async () => {
     request("gce_visit", {
-      purchase_details: { payment_method: "financing", arrangement_kind: "gce_visit", final_price: null },
+      purchase_details: {
+        payment_method: "financing",
+        arrangement_kind: "gce_visit",
+        final_price: null,
+        requested_term_months: 12,
+      },
     });
 
     await expect(proposeFinancingTerms(form(offer))).resolves.toEqual({ error: "Set the vehicle price first." });

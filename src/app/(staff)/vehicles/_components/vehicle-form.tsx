@@ -18,19 +18,25 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/in
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { type VehicleFormData, vehicleSchema } from "@/lib/validation/vehicles";
-import { VEHICLE_PURPOSES } from "@/lib/vehicles/catalog";
+import { BODY_TYPES, BRANDS, listedYears, modelsFor, VEHICLE_PURPOSES } from "@/lib/vehicles/catalog";
 
 interface VehicleFormProps {
   defaultValues?: VehicleFormData & { id?: string };
+  /** T06: the next stock code, shown read-only on a new car. The server assigns the final one. */
+  stockCodePreview?: string;
   onSuccess?: () => void;
   onCancel?: () => void;
 }
 
 const fuelTypes = ["Gasoline", "Diesel", "Hybrid", "Electric", "LPG"];
 const transmissions = ["Manual", "Automatic", "CVT", "DCT"];
-const bodyTypes = ["Sedan", "SUV", "Hatchback", "Coupe", "MPV", "Pickup", "Van", "Wagon", "Convertible"];
 
-export function VehicleForm({ defaultValues, onSuccess, onCancel }: VehicleFormProps) {
+// A car saved before T06 may carry a make, model or year outside the lists; keep it selectable.
+function withCurrent(options: readonly string[], current: string | undefined): readonly string[] {
+  return current && !options.includes(current) ? [current, ...options] : options;
+}
+
+export function VehicleForm({ defaultValues, stockCodePreview, onSuccess, onCancel }: VehicleFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const isEdit = !!defaultValues?.id;
@@ -40,7 +46,7 @@ export function VehicleForm({ defaultValues, onSuccess, onCancel }: VehicleFormP
     // biome-ignore lint/suspicious/noExplicitAny: zod coerce fields cause resolver type mismatch
     resolver: zodResolver(vehicleSchema) as any,
     defaultValues: (defaultValues ?? {
-      stock_code: "",
+      stock_code: stockCodePreview ?? "",
       vin: "",
       plate_number: "",
       engine_number: "",
@@ -64,6 +70,8 @@ export function VehicleForm({ defaultValues, onSuccess, onCancel }: VehicleFormP
       offer_details: "",
     }) as never,
   });
+
+  const make = form.watch("make");
 
   async function onSubmit(data: z.infer<typeof vehicleSchema>) {
     setLoading(true);
@@ -116,8 +124,9 @@ export function VehicleForm({ defaultValues, onSuccess, onCancel }: VehicleFormP
                 name="stock_code"
                 render={({ field, fieldState }) => (
                   <Field data-invalid={fieldState.invalid}>
-                    <FieldLabel>Stock Code</FieldLabel>
-                    <Input {...field} value={field.value ?? ""} placeholder="GCE-001" />
+                    <FieldLabel htmlFor="vehicle-stock-code">Stock Code</FieldLabel>
+                    <Input {...field} id="vehicle-stock-code" value={field.value ?? ""} readOnly aria-readonly />
+                    {!isEdit && <p className="text-muted-foreground text-xs">Assigned automatically when you save.</p>}
                     {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                   </Field>
                 )}
@@ -127,7 +136,7 @@ export function VehicleForm({ defaultValues, onSuccess, onCancel }: VehicleFormP
                 name="vin"
                 render={({ field, fieldState }) => (
                   <Field data-invalid={fieldState.invalid}>
-                    <FieldLabel>VIN (optional)</FieldLabel>
+                    <FieldLabel>VIN</FieldLabel>
                     <Input {...field} value={field.value ?? ""} placeholder="Vehicle Identification Number" />
                     {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                   </Field>
@@ -139,7 +148,7 @@ export function VehicleForm({ defaultValues, onSuccess, onCancel }: VehicleFormP
                   name="plate_number"
                   render={({ field, fieldState }) => (
                     <Field data-invalid={fieldState.invalid}>
-                      <FieldLabel htmlFor="vehicle-plate-number">Plate Number (optional)</FieldLabel>
+                      <FieldLabel htmlFor="vehicle-plate-number">Plate Number</FieldLabel>
                       <Input {...field} id="vehicle-plate-number" value={field.value ?? ""} placeholder="ABC 1234" />
                       {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                     </Field>
@@ -150,7 +159,7 @@ export function VehicleForm({ defaultValues, onSuccess, onCancel }: VehicleFormP
                   name="engine_number"
                   render={({ field, fieldState }) => (
                     <Field data-invalid={fieldState.invalid}>
-                      <FieldLabel htmlFor="vehicle-engine-number">Engine Number (optional)</FieldLabel>
+                      <FieldLabel htmlFor="vehicle-engine-number">Engine Number</FieldLabel>
                       <Input
                         {...field}
                         id="vehicle-engine-number"
@@ -166,7 +175,7 @@ export function VehicleForm({ defaultValues, onSuccess, onCancel }: VehicleFormP
                   name="chassis_number"
                   render={({ field, fieldState }) => (
                     <Field data-invalid={fieldState.invalid}>
-                      <FieldLabel htmlFor="vehicle-chassis-number">Chassis Number (optional)</FieldLabel>
+                      <FieldLabel htmlFor="vehicle-chassis-number">Chassis Number</FieldLabel>
                       <Input
                         {...field}
                         id="vehicle-chassis-number"
@@ -185,7 +194,26 @@ export function VehicleForm({ defaultValues, onSuccess, onCancel }: VehicleFormP
                   render={({ field, fieldState }) => (
                     <Field data-invalid={fieldState.invalid}>
                       <FieldLabel>Make</FieldLabel>
-                      <Input {...field} value={field.value ?? ""} placeholder="Toyota" />
+                      <Select
+                        value={field.value || undefined}
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          form.setValue("model", "");
+                        }}
+                      >
+                        <SelectTrigger aria-label="Make">
+                          <SelectValue placeholder="Select make" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            {withCurrent(BRANDS, field.value).map((brand) => (
+                              <SelectItem key={brand} value={brand}>
+                                {brand}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
                       {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                     </Field>
                   )}
@@ -196,7 +224,20 @@ export function VehicleForm({ defaultValues, onSuccess, onCancel }: VehicleFormP
                   render={({ field, fieldState }) => (
                     <Field data-invalid={fieldState.invalid}>
                       <FieldLabel>Model</FieldLabel>
-                      <Input {...field} value={field.value ?? ""} placeholder="Vios" />
+                      <Select value={field.value || undefined} onValueChange={field.onChange} disabled={!make}>
+                        <SelectTrigger aria-label="Model">
+                          <SelectValue placeholder={make ? "Select model" : "Select a make first"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            {withCurrent(modelsFor(make ?? ""), field.value).map((model) => (
+                              <SelectItem key={model} value={model}>
+                                {model}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
                       {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                     </Field>
                   )}
@@ -209,7 +250,22 @@ export function VehicleForm({ defaultValues, onSuccess, onCancel }: VehicleFormP
                   render={({ field, fieldState }) => (
                     <Field data-invalid={fieldState.invalid}>
                       <FieldLabel>Year</FieldLabel>
-                      <Input {...field} value={field.value ?? ""} type="number" />
+                      <Select value={field.value ? String(field.value) : undefined} onValueChange={field.onChange}>
+                        <SelectTrigger aria-label="Year">
+                          <SelectValue placeholder="Select year" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            {withCurrent(listedYears().map(String), field.value ? String(field.value) : "").map(
+                              (year) => (
+                                <SelectItem key={year} value={year}>
+                                  {year}
+                                </SelectItem>
+                              ),
+                            )}
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
                       {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                     </Field>
                   )}
@@ -320,7 +376,7 @@ export function VehicleForm({ defaultValues, onSuccess, onCancel }: VehicleFormP
                         </SelectTrigger>
                         <SelectContent>
                           <SelectGroup>
-                            {bodyTypes.map((b) => (
+                            {BODY_TYPES.map((b) => (
                               <SelectItem key={b} value={b}>
                                 {b}
                               </SelectItem>

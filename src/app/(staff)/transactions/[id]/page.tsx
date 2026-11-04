@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getCurrentRole } from "@/app/auth/actions";
 import { requireRole } from "@/lib/auth/guards";
 import { TRANSACTION_VIEWER_ROLES } from "@/lib/auth/roles";
+import { getFinancingMarkupPct } from "@/lib/settings/financing";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { withSignedTransactionDocumentUrls } from "@/lib/transactions/document-media";
 
@@ -220,6 +221,7 @@ export default async function TransactionDetailPage({ params }: { readonly param
             ? {
                 hasRecoveryCase: (recoveryCases ?? 0) > 0,
                 threadId: (financingThread as { id: string } | null)?.id ?? null,
+                markupPct: await getFinancingMarkupPct(),
               }
             : null
         }

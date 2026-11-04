@@ -10,6 +10,8 @@ import { LayoutControls } from "@/app/(staff)/_components/sidebar/layout-control
 import { NotificationPopover } from "@/app/(staff)/_components/sidebar/notification-popover";
 import { ThemeSwitcher } from "@/app/(staff)/_components/sidebar/theme-switcher";
 import { getCurrentRole } from "@/app/auth/actions";
+import { needsTutorial } from "@/components/onboarding/actions";
+import { OnboardingTour } from "@/components/onboarding/onboarding-tour";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { getNotifications } from "@/lib/notifications/actions";
@@ -41,7 +43,10 @@ export default async function CustomerLayout({ children }: Readonly<{ children: 
     redirect("/supplier/overview");
   }
 
-  const notifications = role ? await getNotifications(role) : [];
+  const [notifications, showTutorial] = await Promise.all([
+    role ? getNotifications(role) : Promise.resolve([]),
+    needsTutorial(),
+  ]);
 
   return (
     <SidebarProvider
@@ -95,6 +100,7 @@ export default async function CustomerLayout({ children }: Readonly<{ children: 
           {children}
         </div>
       </SidebarInset>
+      {showTutorial ? <OnboardingTour userRole={role} /> : null}
     </SidebarProvider>
   );
 }

@@ -177,7 +177,8 @@ export async function assignRole(params: AssignRoleParams) {
 
   const { data: roles } = await supabase.rpc("get_user_roles");
   // T03 R2: only the CEO grants roles; the Account Manager manages employees without RBAC access.
-  const hasRole = (roles as { role: string }[] | undefined)?.some((r) => r.role === "ceo");
+  // T06: the Super Admin (IT Support) grants roles too.
+  const hasRole = (roles as { role: string }[] | undefined)?.some((r) => r.role === "ceo" || r.role === "super_admin");
   if (!hasRole) return { error: "Not authorized" };
 
   const admin = createAdminClient();

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { percentChange, summarizeDashboard } from "./dashboard-summary";
+import { forecastNext, percentChange, summarizeDashboard } from "./dashboard-summary";
 
 // 2026-10-26 10:00 in Manila.
 const now = new Date("2026-10-26T02:00:00Z");
@@ -96,5 +96,36 @@ describe("summarizeDashboard", () => {
     expect(empty.salesThisMonth).toBe(0);
     expect(empty.revenueThisMonth).toBeNull();
     expect(empty.monthly.every((m) => m.sales === 0 && m.newCustomers === 0)).toBe(true);
+  });
+});
+
+describe("T06 DSS forecast", () => {
+  it("continues a straight trend with no spread", () => {
+    expect(forecastNext([1, 2, 3, 4, 5, 6])).toEqual({ expected: 7, low: 7, high: 7 });
+    expect(forecastNext([1, 2, 3, 4, 5, 6], 2)).toEqual({ expected: 8, low: 8, high: 8 });
+  });
+
+  it("gives a range around a noisy trend and never goes below zero", () => {
+    const noisy = forecastNext([4, 6, 5, 7, 6, 8]);
+    expect(noisy.expected).toBeCloseTo(8.2, 1);
+    expect(noisy.low).toBeLessThan(noisy.expected);
+    expect(noisy.high).toBeGreaterThan(noisy.expected);
+    expect(forecastNext([9, 6, 3, 0, 0, 0]).low).toBe(0);
+    expect(forecastNext([]).expected).toBe(0);
+  });
+
+  it("forecasts next month from the six completed months before this one", () => {
+    // Sales in May to September 2026 (1, 2, 3, 4, 5); none in April. October is still running.
+    const completed = (month: number) => ({
+      customer_id: `c${month}`,
+      opened_at: `2026-${String(month).padStart(2, "0")}-01T00:00:00Z`,
+      completed_at: `2026-${String(month).padStart(2, "0")}-15T00:00:00Z`,
+      current_state: "completed",
+    });
+    const transactions = [5, 6, 6, 7, 7, 7, 8, 8, 8, 8, 9, 9, 9, 9, 9].map(completed);
+    const summary = summarizeDashboard({ transactions, revenue: null, availableVehicles: 0 }, now);
+    expect(summary.forecast.month).toBe("2026-11");
+    expect(summary.forecast.revenue).toBeNull();
+    expect(summary.forecast.sales.expected).toBeCloseTo(7, 5);
   });
 });

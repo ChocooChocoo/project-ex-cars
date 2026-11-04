@@ -11,6 +11,8 @@ import {
   Wrench,
 } from "lucide-react";
 
+import { ROLE_LABELS } from "@/lib/auth/roles";
+
 export type UserStatus = "Active" | "Pending invite" | "Deactivated" | "Locked" | "Suspended";
 
 export type UserRow = {
@@ -24,18 +26,7 @@ export type UserRow = {
   workspace: string[];
 };
 
-export const GCE_ROLE_LABELS: Record<string, string> = {
-  customer: "Customer",
-  supplier: "Supplier",
-  ceo: "CEO",
-  account_manager: "Account Manager",
-  head_accountant: "Head Accountant",
-  confidential_informant: "Confidential Informant",
-  marketing_specialist: "Marketing Specialist",
-  mechanic: "Mechanic",
-  sales_manager: "Sales Manager",
-  head_security: "Head Security",
-};
+export const GCE_ROLE_LABELS: Record<string, string> = ROLE_LABELS;
 
 export function mapAccountState(state: string | null | undefined): UserStatus {
   switch (state) {

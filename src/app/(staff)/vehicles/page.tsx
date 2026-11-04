@@ -42,7 +42,7 @@ export default async function VehiclesPage() {
         proposals={(proposals as unknown as PriceProposalRow[]) ?? []}
         vehicles={(vehicles as Record<string, unknown>[]) ?? []}
         canManage={canManage}
-        canDelete={isCeo}
+        canView={isCeo}
         isHeadAccountant={isHeadAccountant}
         userRole={role}
       />

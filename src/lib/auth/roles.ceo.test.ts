@@ -55,7 +55,7 @@ describe("Account Manager navigation (T03 R2, AM6)", () => {
   });
 
   it("is kept out of the Roles and Field Cases pages", () => {
-    expect(read("src/app/(staff)/roles/page.tsx")).toMatch(/requireRole\(\["ceo"\]\)/);
+    expect(read("src/app/(staff)/roles/page.tsx")).toMatch(/requireRole\(\["ceo", "super_admin"\]\)/);
     expect(read("src/app/(staff)/field-cases/page.tsx")).not.toMatch(/"account_manager"/);
   });
 

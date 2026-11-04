@@ -37,6 +37,7 @@ import {
   reviewEmployeeRequest,
   submitEmployeeRequest,
 } from "@/app/(staff)/employee-requests/actions";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -798,12 +799,24 @@ export function EmployeeRequestsClient({ requests, canReview, canSubmit }: Emplo
             <Button type="button" variant="outline" onClick={() => setReviewTarget(null)}>
               Cancel
             </Button>
-            <Button type="button" variant="destructive" onClick={() => submitReview("rejected")} disabled={loading}>
-              Reject
-            </Button>
-            <Button type="button" onClick={() => submitReview("approved")} disabled={loading}>
-              Approve
-            </Button>
+            <ConfirmDialog
+              action="reject"
+              onConfirm={() => submitReview("rejected")}
+              trigger={
+                <Button type="button" variant="destructive" disabled={loading}>
+                  Reject
+                </Button>
+              }
+            />
+            <ConfirmDialog
+              action="approve"
+              onConfirm={() => submitReview("approved")}
+              trigger={
+                <Button type="button" disabled={loading}>
+                  Approve
+                </Button>
+              }
+            />
           </DialogFooter>
         </DialogContent>
       </Dialog>

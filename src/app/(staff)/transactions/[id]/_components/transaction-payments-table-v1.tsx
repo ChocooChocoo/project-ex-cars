@@ -13,6 +13,7 @@ import {
 } from "@tanstack/react-table";
 import { ArrowUpDown } from "lucide-react";
 
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { RejectReasonDialog } from "@/components/reject-reason-dialog";
 import { TransactionImagePreview } from "@/components/transaction-image-preview";
 import { Badge } from "@/components/ui/badge";
@@ -136,9 +137,14 @@ export function TransactionPaymentsTableV1({
         // PayMongo confirms its own payments through the webhook; only payments recorded by staff are verified here.
         canReview && !row.original.verified_by && !row.original.rejected_at && !row.original.paymongo_checkout_id ? (
           <div className="flex justify-end gap-1">
-            <Button size="sm" onClick={() => onVerifyPayment(row.original.id as string)}>
-              Verify
-            </Button>
+            <ConfirmDialog
+              action="approve"
+              title="Are you sure you want to verify this payment?"
+              description="It counts toward the buyer's balance once verified."
+              confirmLabel="Verify"
+              onConfirm={() => onVerifyPayment(row.original.id as string)}
+              trigger={<Button size="sm">Verify</Button>}
+            />
             <RejectReasonDialog
               trigger={
                 <Button variant="outline" size="sm" className="text-destructive">

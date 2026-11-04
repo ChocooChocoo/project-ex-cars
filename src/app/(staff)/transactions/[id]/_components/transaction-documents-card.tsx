@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 
 import { toast } from "sonner";
 
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { RejectReasonDialog } from "@/components/reject-reason-dialog";
 import { TransactionImagePreview } from "@/components/transaction-image-preview";
 import { Badge } from "@/components/ui/badge";
@@ -198,9 +199,17 @@ export function TransactionDocumentsCard({
                   ) : null}
                   {doc.verification_state === "pending" && canVerify(doc.document_kind) ? (
                     <div className="mt-auto flex gap-1.5">
-                      <Button size="sm" className="h-8 px-2.5 text-xs" onClick={() => onVerifyDocument(id)}>
-                        Verify
-                      </Button>
+                      <ConfirmDialog
+                        action="approve"
+                        title="Are you sure you want to verify this document?"
+                        confirmLabel="Verify"
+                        onConfirm={() => onVerifyDocument(id)}
+                        trigger={
+                          <Button size="sm" className="h-8 px-2.5 text-xs">
+                            Verify
+                          </Button>
+                        }
+                      />
                       <RejectReasonDialog
                         trigger={
                           <Button

@@ -27,7 +27,43 @@ export type DashboardSummary = {
   revenueChange: number | null;
   availableVehicles: number;
   monthly: MonthPoint[];
+  /** T06 DSS: next month's expected sales and income, from the last completed months. */
+  forecast: {
+    month: string;
+    basisMonths: number;
+    sales: Forecast;
+    /** Null when the role may not read revenue. */
+    revenue: Forecast | null;
+  };
 };
+
+export type Forecast = { expected: number; low: number; high: number };
+
+export const FORECAST_BASIS_MONTHS = 6;
+
+/**
+ * T06 DSS: least-squares line through the monthly values (oldest first), read `ahead` steps past the last one.
+ * The range is the line plus or minus one standard deviation of the misses; nothing goes below zero.
+ * ponytail: straight-line trend; switch to a seasonal model once 24+ months of sales exist.
+ */
+export function forecastNext(values: readonly number[], ahead = 1): Forecast {
+  const n = values.length;
+  if (n === 0) return { expected: 0, low: 0, high: 0 };
+  const meanX = (n - 1) / 2;
+  const meanY = values.reduce((sum, y) => sum + y, 0) / n;
+  let sxx = 0;
+  let sxy = 0;
+  for (let x = 0; x < n; x++) {
+    sxx += (x - meanX) ** 2;
+    sxy += (x - meanX) * (values[x] - meanY);
+  }
+  const slope = sxx === 0 ? 0 : sxy / sxx;
+  const at = (x: number) => meanY + slope * (x - meanX);
+  const squaredMisses = values.reduce((sum, y, x) => sum + (y - at(x)) ** 2, 0);
+  const spread = n > 2 ? Math.sqrt(squaredMisses / (n - 2)) : 0;
+  const expected = Math.max(0, at(n - 1 + ahead));
+  return { expected, low: Math.max(0, expected - spread), high: expected + spread };
+}
 
 const OPEN_STATES = new Set(["pending", "under_review", "approved"]);
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -91,6 +127,7 @@ export function summarizeDashboard(
 
   let revenueThisMonth: number | null = null;
   let revenueLastMonth: number | null = null;
+  const revenueByMonth = new Map<string, number>();
   if (data.revenue) {
     revenueThisMonth = 0;
     revenueLastMonth = 0;
@@ -98,10 +135,31 @@ export function summarizeDashboard(
       if (!entry.date) continue;
       const pesos = Number(entry.amount ?? 0);
       const month = manilaMonth(entry.date);
+      revenueByMonth.set(month, (revenueByMonth.get(month) ?? 0) + pesos);
       if (month === thisMonth) revenueThisMonth += pesos;
       else if (month === lastMonth) revenueLastMonth += pesos;
     }
   }
+
+  // The current month is still running, so the trend uses the completed months before it and reads two steps
+  // ahead (this month, then next month).
+  const basis = Array.from({ length: FORECAST_BASIS_MONTHS }, (_, i) =>
+    shiftMonth(thisMonth, i - FORECAST_BASIS_MONTHS),
+  );
+  const forecast = {
+    month: shiftMonth(thisMonth, 1),
+    basisMonths: FORECAST_BASIS_MONTHS,
+    sales: forecastNext(
+      basis.map((month) => sales.get(month) ?? 0),
+      2,
+    ),
+    revenue: data.revenue
+      ? forecastNext(
+          basis.map((month) => revenueByMonth.get(month) ?? 0),
+          2,
+        )
+      : null,
+  };
 
   const salesThisMonth = sales.get(thisMonth) ?? 0;
   const salesLastMonth = sales.get(lastMonth) ?? 0;
@@ -120,5 +178,6 @@ export function summarizeDashboard(
       revenueThisMonth === null || revenueLastMonth === null ? null : percentChange(revenueThisMonth, revenueLastMonth),
     availableVehicles: data.availableVehicles,
     monthly: months.map((month) => ({ month, sales: sales.get(month) ?? 0, newCustomers: newByMonth.get(month) ?? 0 })),
+    forecast,
   };
 }

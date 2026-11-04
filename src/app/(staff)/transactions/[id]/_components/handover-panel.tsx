@@ -8,10 +8,12 @@ import { toast } from "sonner";
 
 import {
   receivePapers,
+  recordFaceToFaceSigning,
   requestPapersRelease,
   reviewContract,
   saveContract,
 } from "@/app/(staff)/transactions/handover-actions";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ContractProgress } from "@/components/contract-progress";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -233,34 +235,57 @@ export function ContractCard({
 
         {canReview ? (
           <div className="flex flex-col gap-2 border-t pt-3">
-            <Button
-              size="sm"
-              className="self-start"
-              disabled={busy}
-              onClick={() => send(reviewContract, { decision: "approve" }, "Contract approved. The buyer can sign it.")}
-            >
-              Approve contract
-            </Button>
+            <ConfirmDialog
+              action="approve"
+              description="The buyer can then read and sign the contract."
+              onConfirm={() =>
+                send(reviewContract, { decision: "approve" }, "Contract approved. The buyer can sign it.")
+              }
+              trigger={
+                <Button size="sm" className="self-start" disabled={busy}>
+                  Approve contract
+                </Button>
+              }
+            />
             <Label htmlFor="contract-return-reason">What to revise</Label>
             <Textarea id="contract-return-reason" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} />
-            <Button
-              size="sm"
-              variant="outline"
-              className="self-start"
-              disabled={busy || !reason.trim()}
-              onClick={() =>
+            <ConfirmDialog
+              action="reject"
+              title="Are you sure you want to return this contract?"
+              description="The contract goes back to the Sales Manager for revision."
+              confirmLabel="Return for revision"
+              onConfirm={() =>
                 send(reviewContract, { decision: "return", reason }, "Contract returned to the Sales Manager.")
               }
-            >
-              Return for revision
-            </Button>
+              trigger={
+                <Button size="sm" variant="outline" className="self-start" disabled={busy || !reason.trim()}>
+                  Return for revision
+                </Button>
+              }
+            />
           </div>
         ) : null}
 
         {state === "pending_approval" && !canReview ? (
           <p className="text-muted-foreground">Waiting for the Head Accountant to approve or return it.</p>
         ) : null}
-        {state === "approved" ? <p className="text-muted-foreground">Waiting for the buyer to sign.</p> : null}
+        {state === "approved" && handover.signing_method === "face_to_face" ? (
+          <div className="flex flex-col gap-2 border-t pt-3">
+            <p>The buyer chose to sign face-to-face.</p>
+            {!isFieldArrangement(details) && ["sales_manager", "ceo"].includes(userRole) ? (
+              <Button
+                size="sm"
+                className="self-start"
+                disabled={busy}
+                onClick={() => send(recordFaceToFaceSigning, {}, "Contract marked as signed.")}
+              >
+                Mark signed in person
+              </Button>
+            ) : null}
+          </div>
+        ) : state === "approved" ? (
+          <p className="text-muted-foreground">Waiting for the buyer to sign.</p>
+        ) : null}
 
         {state === "signed" || isFieldArrangement(details) ? (
           <ContractProgress details={details} handover={handover} />

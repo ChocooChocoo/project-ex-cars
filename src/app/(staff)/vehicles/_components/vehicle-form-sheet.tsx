@@ -9,6 +9,7 @@ interface VehicleFormSheetProps {
   open: boolean;
   mode: "add" | "edit";
   vehicle: Record<string, unknown> | null;
+  stockCodePreview?: string;
   onOpenChange: (open: boolean) => void;
 }
 
@@ -40,13 +41,19 @@ function toFormDefaults(vehicle: Record<string, unknown>): VehicleFormData & { i
   };
 }
 
-export function VehicleFormSheet({ open, mode, vehicle, onOpenChange }: VehicleFormSheetProps) {
+export function VehicleFormSheet({ open, mode, vehicle, stockCodePreview, onOpenChange }: VehicleFormSheetProps) {
   const isEdit = mode === "edit";
   const vehicleName = vehicle ? `${(vehicle.make as string) ?? ""} ${(vehicle.model as string) ?? ""}`.trim() : "";
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full gap-0 p-0 sm:max-w-2xl">
+      {/* T06: a click outside (for example after dismissing a dropdown) must not close the form and lose
+          what was typed. The sheet closes with Cancel, the X button or Escape. */}
+      <SheetContent
+        side="right"
+        className="w-full gap-0 p-0 sm:max-w-2xl"
+        onInteractOutside={(event) => event.preventDefault()}
+      >
         <SheetHeader className="border-b">
           <SheetTitle>{isEdit ? "Edit Vehicle" : "Add Vehicle"}</SheetTitle>
           <SheetDescription>
@@ -63,6 +70,7 @@ export function VehicleFormSheet({ open, mode, vehicle, onOpenChange }: VehicleF
           {open ? (
             <VehicleForm
               defaultValues={isEdit && vehicle ? toFormDefaults(vehicle) : undefined}
+              stockCodePreview={stockCodePreview}
               onSuccess={() => onOpenChange(false)}
               onCancel={() => onOpenChange(false)}
             />
