@@ -20,7 +20,6 @@ describe("SELL_SUBMISSION_VIEWER_ROLES", () => {
       "marketing_specialist",
       "head_security",
       "customer",
-      "supplier",
     ]) {
       expect(SELL_SUBMISSION_VIEWER_ROLES).not.toContain(role);
     }

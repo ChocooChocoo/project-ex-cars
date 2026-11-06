@@ -73,7 +73,6 @@ const offer = {
   down_payment: "100000",
   monthly_payment: "33334",
   first_due_date: "2033-12-01",
-  missed_payment_policy: "After 4 missed months GCE takes back the vehicle.",
 };
 
 beforeEach(() => {
@@ -85,7 +84,7 @@ beforeEach(() => {
 });
 
 describe("proposeFinancingTerms", () => {
-  it("stores the monthly payment and the missed payment policy with the terms", async () => {
+  it("stores the monthly payment without an editable missed payment policy", async () => {
     request("gce_visit");
 
     await expect(proposeFinancingTerms(form(offer))).resolves.toEqual({ success: true });
@@ -93,9 +92,9 @@ describe("proposeFinancingTerms", () => {
       total_amount: 500000,
       down_payment: 100000,
       monthly_payment: 33334,
-      missed_payment_policy: "After 4 missed months GCE takes back the vehicle.",
       delivery_fee: null,
     });
+    expect(written("payment_terms")[0]).not.toHaveProperty("missed_payment_policy");
   });
 
   it("defaults the total to the car's price plus 10% when left blank", async () => {
@@ -133,9 +132,7 @@ describe("proposeFinancingTerms", () => {
     });
   });
 
-  it.each([
-    ["missed_payment_policy", "State the missed payment policy."],
-  ])("refuses terms without %s", async (field, error) => {
+  it.each([["first_due_date", "Set the first due date."]])("refuses terms without %s", async (field, error) => {
     request("gce_visit");
 
     await expect(proposeFinancingTerms(form({ ...offer, [field]: "" }))).resolves.toEqual({ error });
@@ -147,6 +144,28 @@ describe("proposeFinancingTerms", () => {
 
     await expect(proposeFinancingTerms(form(offer))).resolves.toEqual({ success: true });
     expect(written("payment_terms")[0]).toMatchObject({ down_payment: 0 });
+  });
+
+  it.each(["approved", "active", "completed"])("locks the due date when terms are %s", async (state) => {
+    request("gce_visit");
+    terms({ id: "terms-1", state, first_due_date: "2033-11-01" });
+    await expect(proposeFinancingTerms(form(offer))).resolves.toEqual({
+      error: "The first due date cannot change after financing approval.",
+    });
+    expect(written("payment_terms")).toEqual([]);
+    await expect(proposeFinancingTerms(form({ ...offer, first_due_date: "2033-11-01" }))).resolves.toEqual({
+      error: "Terms are already in review.",
+    });
+  });
+
+  it("allows revision of returned terms without writing a submitted policy", async () => {
+    request("gce_visit");
+    terms({ id: "terms-1", state: "returned", first_due_date: "2033-11-01" });
+    await expect(
+      proposeFinancingTerms(form({ ...offer, missed_payment_policy: "Ignore fixed policy" })),
+    ).resolves.toEqual({ success: true });
+    expect(written("payment_terms")[0]).toMatchObject({ first_due_date: offer.first_due_date });
+    expect(written("payment_terms")[0]).not.toHaveProperty("missed_payment_policy");
   });
 
   it("needs the delivery fee on a delivery", async () => {

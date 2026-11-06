@@ -31,10 +31,12 @@ describe("TransactionStatusTriageV1 cash-buy rules (T05)", () => {
     expect(screen.getByText("Move to Review")).toBeInTheDocument();
   });
 
-  it("keeps Cancel on a financing buy", () => {
-    renderTriage({ paymentMethod: "financing" });
+  it("offers only Approve and Reject on a financing buy in review", () => {
+    renderTriage({ state: "under_review", paymentMethod: "financing" });
 
-    expect(screen.getByText("Cancel")).toBeInTheDocument();
+    expect(screen.queryByText("Cancel")).not.toBeInTheDocument();
+    expect(screen.getByText("Approve")).toBeInTheDocument();
+    expect(screen.getByText("Reject")).toBeInTheDocument();
   });
 
   it("keeps Cancel for the CEO", () => {

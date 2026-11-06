@@ -11,6 +11,8 @@ export const transactionRowSchema = z.object({
   vehicleModel: z.string(),
   vehicleYear: z.string(),
   openedAt: z.string(),
+  paidInstallments: z.number().optional(),
+  totalInstallments: z.number().optional(),
 });
 
 export type TransactionRow = z.infer<typeof transactionRowSchema>;

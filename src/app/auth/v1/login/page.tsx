@@ -43,9 +43,15 @@ export default async function LoginV1({
             </div>
           </div>
           <div className="space-y-4">
-            {error === "auth_callback_failed" && (
+            {error && (
               <Alert variant="destructive">
-                <AlertDescription>Sign-in could not be completed. Please try again.</AlertDescription>
+                <AlertDescription>
+                  {error === "auth_callback_failed"
+                    ? "Sign-in could not be completed. Please try again."
+                    : error === "confirmation_failed" || error === "otp_expired" || error === "access_denied"
+                      ? "This confirmation link is invalid or has expired. Register again or request a new link."
+                      : "Sign-in could not be completed. Please try again."}
+                </AlertDescription>
               </Alert>
             )}
             {notice === "email_confirmed" && (

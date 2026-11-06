@@ -41,13 +41,16 @@ export async function rejectPayment(paymentId: string, reason: string) {
   }
 
   // The verified_by / rejected_at filters keep a concurrent Verify from being overwritten.
-  const { error } = await admin
+  const { data: rejected, error } = await admin
     .from("payment_records")
     .update({ rejected_by: user.user.id, rejected_at: new Date().toISOString(), rejection_reason: text })
     .eq("id", paymentId)
     .is("verified_by", null)
-    .is("rejected_at", null);
+    .is("rejected_at", null)
+    .select("id")
+    .maybeSingle();
   if (error) return { error: error.message };
+  if (!rejected) return { error: "Only a payment waiting for verification can be rejected." };
 
   if (payment.installment_id) {
     const { data: installment } = await admin
@@ -56,10 +59,11 @@ export async function rejectPayment(paymentId: string, reason: string) {
       .eq("id", payment.installment_id)
       .maybeSingle();
     const today = new Date().toISOString().slice(0, 10);
-    await admin
+    const { error: installmentError } = await admin
       .from("installments")
       .update({ state: installmentStateFor(String(installment?.due_date ?? today), today), payment_date: null })
       .eq("id", payment.installment_id);
+    if (installmentError) return { error: installmentError.message };
   }
 
   const customerId = (payment.transactions as unknown as { customer_id: string } | null)?.customer_id;
@@ -85,5 +89,6 @@ export async function rejectPayment(paymentId: string, reason: string) {
   });
 
   revalidatePath(`/dashboard/transactions/${payment.transaction_id}`);
+  revalidatePath(`/my-transactions/${payment.transaction_id}`);
   return { success: true };
 }

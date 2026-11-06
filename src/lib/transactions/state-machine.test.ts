@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { canCancelScheduled, canSalesManagerCancel, canTransition, isOverdue, nextQueueState } from "./state-machine";
+import { canCancelScheduled, canTransition, getAllowedTransitions, isOverdue, nextQueueState } from "./state-machine";
 
 const now = new Date("2026-09-30T12:00:00Z");
 
@@ -34,29 +34,15 @@ describe("canCancelScheduled", () => {
   });
 });
 
-describe("canSalesManagerCancel", () => {
-  const buy = (paymentMethod: string) => ({
-    transaction_kind: "buy",
-    purchase_details: { payment_method: paymentMethod },
+describe("T07 cancellation permissions", () => {
+  it.each(["pending", "under_review", "approved"] as const)("denies Sales Manager cancellation in %s", (state) => {
+    expect(canTransition(state, "cancelled", "sales_manager")).toBe(false);
+    expect(canTransition(state, "cancelled", "ceo")).toBe(true);
   });
 
-  it("refuses every direct-payment buy", () => {
-    expect(canSalesManagerCancel(buy("cash"))).toBe(false);
-    expect(canSalesManagerCancel(buy("bank_transfer"))).toBe(false);
-  });
-
-  it("keeps the Sales Manager's Cancel on a financing buy", () => {
-    expect(canSalesManagerCancel(buy("financing"))).toBe(true);
-  });
-
-  it("is not about sell offers or a missing request", () => {
-    expect(canSalesManagerCancel({ transaction_kind: "sell", purchase_details: null })).toBe(true);
-  });
-
-  it("reads purchase_details whether it comes as a row or an array", () => {
-    expect(canSalesManagerCancel({ transaction_kind: "buy", purchase_details: [{ payment_method: "cash" }] })).toBe(
-      false,
-    );
+  it("preserves Account Manager cancellation of pending requests", () => {
+    expect(canTransition("pending", "cancelled", "account_manager")).toBe(true);
+    expect(getAllowedTransitions("under_review", "sales_manager")).toEqual(["approved", "rejected"]);
   });
 });
 

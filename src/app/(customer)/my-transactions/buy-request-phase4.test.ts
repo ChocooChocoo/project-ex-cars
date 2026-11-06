@@ -17,6 +17,7 @@ const { getUser, notify, db } = vi.hoisted(() => {
       };
     }
     builder.maybeSingle = answer;
+    builder.single = answer;
     // biome-ignore lint/suspicious/noThenProperty: the Supabase builder is awaited directly.
     builder.then = (resolve: (value: unknown) => unknown) => answer().then(resolve);
     return builder;
@@ -28,11 +29,16 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/notifications/notify", () => ({ notify }));
 vi.mock("@/lib/transactions/buy-flow-server", () => ({ releaseVisitSlots: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({
+  createServerSupabase: vi.fn(async () => ({
+    auth: { getUser },
+    rpc: vi.fn(async () => ({ data: [{ account_id: buyerId, role: "customer" }], error: null })),
+  })),
   createServerSupabaseClient: vi.fn(async () => ({ auth: { getUser }, from: db.from })),
 }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn(() => ({ from: db.from })) }));
 
-import { saveBuyDetails, submitBuyRequest } from "./actions";
+import { cancelTransaction, saveBuyDetails, submitBuyRequest } from "./actions";
+import { submitReview } from "./review-actions";
 
 const buyerId = "11111111-1111-4111-8111-111111111111";
 const transactionId = "22222222-2222-4222-8222-222222222222";
@@ -48,6 +54,129 @@ function details(fields: Record<string, string>) {
 }
 
 const saved = () => db.writes.find((write) => write.table === "purchase_details")?.payload;
+
+describe("T07 cancellation and reviews", () => {
+  function transaction(current_state = "approved") {
+    db.rows.transactions = {
+      id: transactionId,
+      customer_id: buyerId,
+      vehicle_id: "car-1",
+      current_state,
+      purchase_details: { payment_method: "financing" },
+      payment_terms: { state: "active" },
+    };
+  }
+  function cancellation(consent = false) {
+    const fd = new FormData();
+    fd.set("id", transactionId);
+    if (consent) fd.set("towing_ack", "yes");
+    return fd;
+  }
+  it("requires towing consent for active financing", async () => {
+    transaction();
+    await expect(cancelTransaction(cancellation())).resolves.toMatchObject({ error: expect.stringContaining("Agree") });
+    expect(db.writes).toHaveLength(0);
+  });
+  it("creates unassigned recovery, records consent and alerts all three roles after delivery", async () => {
+    transaction();
+    db.rows.viewing_arrangements = [{ schedule: "2020-01-01T00:00:00Z" }];
+    await expect(cancelTransaction(cancellation(true))).resolves.toMatchObject({ success: true });
+    expect(saved()).toMatchObject({
+      cancellation_towing_ack_by: buyerId,
+      cancellation_towing_ack_at: expect.any(String),
+    });
+    expect(db.writes).toContainEqual(
+      expect.objectContaining({ table: "vehicles", payload: { listing_state: "repairing" } }),
+    );
+    expect(db.writes).toContainEqual(
+      expect.objectContaining({
+        table: "field_cases",
+        op: "insert",
+        payload: expect.objectContaining({ transaction_id: transactionId, case_kind: "recovery", state: "assigned" }),
+      }),
+    );
+    for (const role of ["head_accountant", "confidential_informant", "head_security"]) {
+      expect(notify).toHaveBeenCalledWith(
+        expect.anything(),
+        { role },
+        expect.objectContaining({ kind: "financing_cancelled_recovery" }),
+      );
+    }
+  });
+  it("does not duplicate an open recovery", async () => {
+    transaction();
+    db.rows.field_cases = { id: "existing" };
+    await cancelTransaction(cancellation(true));
+    expect(db.writes.filter((write) => write.table === "field_cases" && write.op === "insert")).toHaveLength(0);
+  });
+  it("requires consent after financed delivery even before the active state is synchronized", async () => {
+    db.rows.transactions = {
+      id: transactionId,
+      customer_id: buyerId,
+      vehicle_id: "car-1",
+      current_state: "approved",
+      purchase_details: { payment_method: "financing" },
+      payment_terms: { state: "pending" },
+    };
+    db.rows.field_cases = { id: "delivered-case" };
+    await expect(cancelTransaction(cancellation())).resolves.toMatchObject({ error: expect.stringContaining("Agree") });
+    expect(db.writes).toHaveLength(0);
+  });
+  it("rejects foreign and terminal transactions", async () => {
+    transaction("completed");
+    await expect(cancelTransaction(cancellation(true))).resolves.toHaveProperty("error");
+    db.rows.transactions = { customer_id: "someone-else", current_state: "approved" };
+    await expect(cancelTransaction(cancellation(true))).resolves.toHaveProperty("error");
+    expect(db.writes).toHaveLength(0);
+  });
+  it("keeps the five-hour cutoff for ordinary cancellations", async () => {
+    db.rows.transactions = { id: transactionId, customer_id: buyerId, current_state: "approved" };
+    db.rows.viewing_arrangements = [{ schedule: "2020-01-01T00:00:00Z" }];
+    await expect(cancelTransaction(cancellation())).resolves.toMatchObject({
+      error: expect.stringContaining("5 hours"),
+    });
+  });
+  function review(rating = "5", body = "  Helpful team  ") {
+    const fd = new FormData();
+    fd.set("transaction_id", transactionId);
+    fd.set("rating", rating);
+    fd.set("body", body);
+    return fd;
+  }
+  it("only accepts a completed transaction review and trims the body", async () => {
+    transaction();
+    await expect(submitReview(review())).resolves.toHaveProperty("error");
+    transaction("completed");
+    await expect(submitReview(review())).resolves.toEqual({ success: true });
+    expect(db.writes).toContainEqual(
+      expect.objectContaining({
+        table: "customer_reviews",
+        payload: expect.objectContaining({ body: "Helpful team", rating: 5, customer_id: buyerId }),
+      }),
+    );
+  });
+  it("rejects a second review using the unique transaction constraint", async () => {
+    transaction("completed");
+    db.insertErrors.customer_reviews = { code: "23505", message: "duplicate" };
+    await expect(submitReview(review())).resolves.toEqual({ error: "You already reviewed this transaction." });
+  });
+  it("rejects reviews of someone else's completed transaction", async () => {
+    db.rows.transactions = { id: transactionId, customer_id: "other", current_state: "completed" };
+    await expect(submitReview(review())).resolves.toEqual({ error: "Transaction not found." });
+    expect(db.writes).toHaveLength(0);
+  });
+  it.each([
+    ["0", "text"],
+    ["6", "text"],
+    ["1.5", "text"],
+    ["5", "   "],
+    ["5", "x".repeat(2001)],
+  ])("rejects invalid review %s", async (rating, body) => {
+    transaction("completed");
+    await expect(submitReview(review(rating, body))).resolves.toHaveProperty("error");
+    expect(db.writes).toHaveLength(0);
+  });
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -70,6 +199,12 @@ describe("saveBuyDetails", () => {
   });
 
   const delivery = { payment_method: "cash", arrangement_kind: "delivery", schedule: slot, location: "12 Mabini St" };
+  it.each(["meetup", "delivery"])("rejects saving blank %s locations", async (arrangement_kind) => {
+    await expect(
+      saveBuyDetails(details({ payment_method: "cash", arrangement_kind, location: "  " })),
+    ).resolves.toEqual({ error: "Enter a location for meet-up or delivery." });
+    expect(saved()).toBeUndefined();
+  });
 
   it("refuses a delivery until the buyer agrees to the delivery terms", async () => {
     await expect(saveBuyDetails(details(delivery))).resolves.toEqual({
@@ -86,7 +221,7 @@ describe("saveBuyDetails", () => {
   });
 
   it("asks a financed meet-up for the payment term", async () => {
-    const meetup = { payment_method: "financing", arrangement_kind: "meetup" };
+    const meetup = { payment_method: "financing", arrangement_kind: "meetup", location: "Calamba" };
 
     await expect(saveBuyDetails(details(meetup))).resolves.toEqual({ error: "Choose a payment term." });
 
@@ -203,6 +338,7 @@ describe("submitBuyRequest", () => {
       purchase_details: {
         payment_method: "financing",
         arrangement_kind: arrangement,
+        location: arrangement === "gce_visit" ? null : "Calamba",
         condition_acknowledged_at: "2033-01-01T00:00:00.000Z",
         ...extra,
       },
@@ -218,6 +354,16 @@ describe("submitBuyRequest", () => {
     fd.set("transaction_id", transactionId);
     return fd;
   };
+  it.each(["meetup", "delivery"])("rejects submitting blank saved %s location", async (arrangement) => {
+    request(arrangement, { location: "  " });
+    await expect(submitBuyRequest(form())).resolves.toEqual({ error: "Enter a location for meet-up or delivery." });
+    expect(db.writes).toHaveLength(0);
+  });
+  it("rejects a location different from its booked arrangement", async () => {
+    request("meetup");
+    db.rows.viewing_arrangements = { schedule: slot, arrangement_kind: "meetup", location: "Elsewhere" };
+    await expect(submitBuyRequest(form())).resolves.toMatchObject({ error: expect.stringContaining("matches") });
+  });
 
   it("refuses a request without proof of billing", async () => {
     request("gce_visit");
@@ -240,7 +386,7 @@ describe("submitBuyRequest", () => {
 
   it("does not send a delivery the buyer has not agreed the terms of", async () => {
     request("delivery");
-    db.rows.viewing_arrangements = { schedule: slot, arrangement_kind: "delivery" };
+    db.rows.viewing_arrangements = { schedule: slot, arrangement_kind: "delivery", location: "Calamba" };
 
     await expect(submitBuyRequest(form())).resolves.toEqual({ error: "Agree to the delivery terms first." });
     expect(db.writes.some((write) => write.table === "transactions")).toBe(false);

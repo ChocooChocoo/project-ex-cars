@@ -221,7 +221,7 @@ function roleOrOwnFilter(role: string): string {
   return `recipient_role.eq.${safeRole},recipient_id.not.is.null`;
 }
 
-// Awaited during Server Component renders (the staff/customer/supplier layouts), so it must
+// Awaited during Server Component renders (the staff/customer layouts), so it must
 // use the read-only client and never write cookies.
 export async function getNotifications(role: string): Promise<NotificationRow[]> {
   const supabase = await createServerSupabase();

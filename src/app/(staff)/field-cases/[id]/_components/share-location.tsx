@@ -13,7 +13,13 @@ const SEND_EVERY_MS = 60_000;
 // T03 D1: the delivery team shares its position while the car is on the road, at most once a minute.
 // The parent renders this only while the status is In Transit or Arriving, so marking Delivered unmounts it
 // and stops the watch.
-export function ShareLocation({ fieldCaseId }: { readonly fieldCaseId: string }) {
+export function ShareLocation({
+  fieldCaseId,
+  updateLocation = updateDeliveryLocation,
+}: {
+  readonly fieldCaseId: string;
+  readonly updateLocation?: typeof updateDeliveryLocation;
+}) {
   const [sharing, setSharing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [lastSent, setLastSent] = useState<Date | null>(null);
@@ -26,7 +32,7 @@ export function ShareLocation({ fieldCaseId }: { readonly fieldCaseId: string })
       setMessage(null);
       if (Date.now() - lastSentAt.current < SEND_EVERY_MS) return;
       lastSentAt.current = Date.now();
-      const result = await updateDeliveryLocation(fieldCaseId, position.coords.latitude, position.coords.longitude);
+      const result = await updateLocation(fieldCaseId, position.coords.latitude, position.coords.longitude);
       if ("error" in result) {
         setMessage(result.error);
         setSharing(false);
@@ -52,7 +58,7 @@ export function ShareLocation({ fieldCaseId }: { readonly fieldCaseId: string })
       { enableHighAccuracy: true, maximumAge: 30_000, timeout: 30_000 },
     );
     return () => navigator.geolocation.clearWatch(watchId);
-  }, [sharing, fieldCaseId]);
+  }, [sharing, fieldCaseId, updateLocation]);
 
   function toggle(on: boolean) {
     if (on && !("geolocation" in navigator)) {

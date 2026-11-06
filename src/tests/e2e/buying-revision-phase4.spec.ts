@@ -26,7 +26,6 @@ import { archiveListedTestVehicles, canCreateTestVehicle, createTestVehicle } fr
 // Scenario 8 takes no downpayment and opens the account on the CI's signing report, Scenario 9 sets the
 // delivery fee and downpayment with the financing terms, and financing is agreed in a chat thread.
 
-const POLICY = "From the 4th missed month GCE takes back the vehicle.";
 const complete = (page: Page) => page.getByRole("button", { name: "Complete financing agreement" });
 
 test.describe
@@ -108,7 +107,6 @@ test.describe
       await page.getByLabel("Monthly payment (₱)").fill("13889");
       await page.getByLabel("First installment due").fill("2033-12-01");
       await expect(send).toBeDisabled();
-      await page.getByLabel("Missed payment policy").fill(POLICY);
       await page.screenshot({ path: "test-results/phase4-terms-meetup-desktop.png", fullPage: true });
       await send.click();
       await expect(page.getByText("Terms sent to the Head Accountant.")).toBeVisible();
@@ -234,7 +232,6 @@ test.describe
       await page.getByLabel("Downpayment (₱)").fill("100000");
       await page.getByLabel("Monthly payment (₱)").fill("33334");
       await page.getByLabel("First installment due").fill("2033-12-01");
-      await page.getByLabel("Missed payment policy").fill(POLICY);
       await expect(send).toBeDisabled();
       await page.getByLabel("Delivery fee (₱)").fill("2500");
       await send.click();

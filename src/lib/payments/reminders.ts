@@ -35,7 +35,7 @@ export function reminderMessage(input: {
       `Hi ${input.name ?? "there"},`,
       "",
       `Your In-House Financing installment of ₱${pesos} for ${input.car} is due ${when}, on ${input.dueDate}.`,
-      "Pay it from My Transactions in the GCE app, or at the GCE office.",
+      "Open My Transactions in the GCE app. Use Payment for your next installment or Advanced Payment to select future installments. Submit your cash payment or bank-transfer proof for Head Accountant verification.",
       "",
       "If you have already paid, you can ignore this email.",
       "",

@@ -26,10 +26,9 @@ describe("transactionActionsFor (T05)", () => {
     expect(transactionActionsFor(row({ paymentMethod: "bank_transfer" }), "sales_manager")).toEqual(["under_review"]);
   });
 
-  it("keeps Cancel on a financing buy", () => {
+  it("removes Cancel on a financing buy", () => {
     expect(transactionActionsFor(row({ state: "approved", paymentMethod: "financing" }), "sales_manager")).toEqual([
       "completed",
-      "cancelled",
     ]);
   });
 

@@ -39,9 +39,7 @@ export default async function CustomerLayout({ children }: Readonly<{ children: 
     getCachedRole(),
   ]);
 
-  if (role === "supplier") {
-    redirect("/supplier/overview");
-  }
+  if (role !== "customer") redirect("/unauthorized");
 
   const [notifications, showTutorial] = await Promise.all([
     role ? getNotifications(role) : Promise.resolve([]),

@@ -12,10 +12,6 @@ describe("sidebar brand", () => {
     expect(brandFor("customer")).toEqual({ label: "Global Car Exchange", href: "/customer/showroom" });
   });
 
-  it("sends a supplier to its own overview", () => {
-    expect(brandFor("supplier")).toEqual({ label: "Global Car Exchange", href: "/supplier/overview" });
-  });
-
   it("falls back to the dashboard when the role is unknown", () => {
     expect(brandFor(null)).toEqual({ label: "Global Car Exchange", href: "/dashboard/default" });
   });

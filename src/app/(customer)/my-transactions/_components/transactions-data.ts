@@ -16,7 +16,7 @@ export interface TransactionRow {
 /**
  * Maps raw `transactions` rows (with an embedded `vehicles` relation) to table rows.
  * The two lines must never repeat: a row with no linked vehicle used to show the kind
- * label on both, e.g. "Request a Car" over "Request a Car".
+ * label on both, e.g. "Buy" over "Buy".
  */
 export function buildTransactionRows(transactions: Record<string, unknown>[]): TransactionRow[] {
   return transactions.map((tx) => {
@@ -43,7 +43,7 @@ export function buildTransactionRows(transactions: Record<string, unknown>[]): T
   });
 }
 
-export const KIND_FILTER_OPTIONS = ["All", "Buy", "Sell", "Request a Car"] as const;
+export const KIND_FILTER_OPTIONS = ["All", "Buy", "Sell"] as const;
 export const STATUS_FILTER_OPTIONS = ["All", ...Object.values(TRANSACTION_STATE_LABELS)] as const;
 
 export const statusMeta: Record<TransactionState, { badgeClass: string; dotClass: string }> = {

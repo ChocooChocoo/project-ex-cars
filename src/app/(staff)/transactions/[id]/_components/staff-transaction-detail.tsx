@@ -98,11 +98,6 @@ export function StaffTransactionDetail({
   const papersStatus = (handover.papers_status as PapersStatus | null | undefined) ?? null;
   const sellDetailsRaw = transaction.sell_details as Record<string, unknown> | Record<string, unknown>[] | undefined;
   const sellDetails = Array.isArray(sellDetailsRaw) ? sellDetailsRaw[0] : sellDetailsRaw;
-  const vehicleRequestsRaw = transaction.vehicle_requests as
-    | Record<string, unknown>
-    | Record<string, unknown>[]
-    | undefined;
-  const vehicleRequests = Array.isArray(vehicleRequestsRaw) ? vehicleRequestsRaw[0] : vehicleRequestsRaw;
   const openedAt = transaction.opened_at as string;
   const completedAt = transaction.completed_at as string | null;
   const customerName = ((transaction.profiles as Record<string, unknown> | null)?.full_name as string | null) ?? null;
@@ -269,7 +264,7 @@ export function StaffTransactionDetail({
     const result = await recordPayment(fd);
     if (result.error) toast.error(result.error);
     else {
-      toast.success("Installment recorded as paid.");
+      toast.success("Installment payment recorded for verification.");
       router.refresh();
     }
   }
@@ -313,7 +308,6 @@ export function StaffTransactionDetail({
         vehicles={vehicles}
         purchaseDetails={purchaseDetails}
         sellDetails={sellDetails}
-        vehicleRequests={vehicleRequests}
         customerName={customerName}
         openedAt={openedAt}
         completedAt={completedAt}
@@ -328,7 +322,6 @@ export function StaffTransactionDetail({
             payments={countedPayments}
             purchaseDetails={purchaseDetails}
             sellDetails={sellDetails}
-            vehicleRequests={vehicleRequests}
             installmentAccount={installmentAccount}
           />
           {kind === "sell" && sellFlow ? (

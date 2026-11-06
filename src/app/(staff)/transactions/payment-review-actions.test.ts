@@ -53,7 +53,10 @@ function builder(table: string, rows: Record<string, unknown>) {
       entry.filters.push([column, value]);
       return chain;
     },
-    maybeSingle: async () => ({ data: rows[table] ?? null, error: null }),
+    maybeSingle: async () => ({
+      data: entry.op === "update" && `${table}_updated` in rows ? rows[`${table}_updated`] : (rows[table] ?? null),
+      error: null,
+    }),
     // biome-ignore lint/suspicious/noThenProperty: mimics the awaitable Supabase query builder
     then: (resolve: (value: unknown) => void) => resolve({ data: null, error: null }),
   };
@@ -121,7 +124,7 @@ describe("rejectPayment (T03 HA3)", () => {
 
   it("reopens the installment a rejected payment had marked paid, by its due date", async () => {
     useRows({
-      payment_records: { ...pending, installment_id: installmentId },
+      payment_records: { ...pending, payment_kind: "installment", installment_id: installmentId },
       installments: { due_date: "2020-01-15" },
     });
     await rejectPayment(paymentId, "Transfer was reversed");
@@ -129,6 +132,16 @@ describe("rejectPayment (T03 HA3)", () => {
     const installment = calls.find((c) => c.table === "installments" && c.op === "update");
     expect(installment?.payload).toEqual({ state: "overdue", payment_date: null });
     expect(installment?.filters).toContainEqual(["id", installmentId]);
+  });
+
+  it("does not reopen an installment when a concurrent verification wins", async () => {
+    useRows({
+      payment_records: { ...pending, installment_id: installmentId, payment_kind: "installment" },
+      payment_records_updated: null,
+    });
+    expect(await rejectPayment(paymentId, "Wrong slip")).toHaveProperty("error");
+    expect(calls.some((call) => call.table === "installments")).toBe(false);
+    expect(notify).not.toHaveBeenCalled();
   });
 });
 

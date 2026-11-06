@@ -1,8 +1,6 @@
 // Pure state machine for Phase 5 transaction states (R-18).
 // No I/O, no server imports — usable from both server actions and client UI.
 
-import { isDirectPayment } from "./buy-flow";
-
 export const TRANSACTION_STATES = [
   "pending",
   "under_review",
@@ -13,7 +11,7 @@ export const TRANSACTION_STATES = [
 ] as const;
 export type TransactionState = (typeof TRANSACTION_STATES)[number];
 
-export const TRANSACTION_KINDS = ["buy", "sell", "request_a_car"] as const;
+export const TRANSACTION_KINDS = ["buy", "sell"] as const;
 export type TransactionKind = (typeof TRANSACTION_KINDS)[number];
 
 // T06: what a Full Payment buyer picks on purchase_details. Bank Transfer is paid through PayMongo, which is
@@ -89,6 +87,7 @@ const A = ["account_manager"] as TransitionRole[];
 
 const SCA = [...S, ...C, ...A];
 const SC = [...S, ...C];
+const CA = [...C, ...A];
 
 // GCE Process Flows §2–4 (T01 Q0a): the Sales Manager reviews and approves or rejects buyer
 // requests; the CEO keeps an override. Documents are still verified before approval (see
@@ -100,16 +99,16 @@ export const TRANSITION_RULES: Record<
 > = {
   pending: {
     under_review: SCA,
-    cancelled: SCA,
+    cancelled: CA,
   },
   under_review: {
     approved: SC,
     rejected: SC,
-    cancelled: SC,
+    cancelled: C,
   },
   approved: {
     completed: SC,
-    cancelled: SC,
+    cancelled: C,
   },
   rejected: {},
   completed: {},
@@ -132,18 +131,6 @@ export function getAllowedTransitions(from: TransactionState, role: string): Tra
 
 export function isTerminal(state: TransactionState): boolean {
   return state === "rejected" || state === "completed" || state === "cancelled";
-}
-
-type CancellableBuy = {
-  transaction_kind?: unknown;
-  purchase_details?: { payment_method?: unknown } | { payment_method?: unknown }[] | null;
-};
-
-// T05: a buy paid in cash or by bank transfer is cancelled by the buyer or the CEO; the Sales Manager
-// loses Cancel before and after approval. A financing buy keeps its current actions.
-export function canSalesManagerCancel(tx: CancellableBuy): boolean {
-  const details = Array.isArray(tx.purchase_details) ? tx.purchase_details[0] : tx.purchase_details;
-  return !(tx.transaction_kind === "buy" && isDirectPayment(details ?? null));
 }
 
 // Review window lapsed without a decision. Decisions clear review_due_at; nothing auto-cancels.

@@ -16,6 +16,26 @@ const informant = { id: "11111111-1111-4111-8111-111111111111", full_name: "Info
 const security = { id: "22222222-2222-4222-8222-222222222222", full_name: "Security One" };
 
 describe("DeliveryPanel delivery team (T05)", () => {
+  it("gives the Head Accountant the fixed financing policy to print at delivery", () => {
+    render(
+      <DeliveryPanel
+        transactionId="tx"
+        state="approved"
+        purchaseDetails={{ payment_method: "financing" }}
+        payments={[]}
+        arrangement={null}
+        fieldCase={null}
+        flowStatus={null}
+        team={{ informants: [], headSecurity: [] }}
+        userRole="head_accountant"
+      />,
+    );
+    expect(screen.getByRole("link", { name: "Print missed payment policy" })).toHaveAttribute(
+      "href",
+      "/vehicle-papers/tx/missed-payment-policy",
+    );
+  });
+
   it("asks only for the Confidential Informant and the Head Security", () => {
     render(
       <DeliveryPanel

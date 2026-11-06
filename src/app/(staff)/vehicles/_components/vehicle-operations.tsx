@@ -9,7 +9,9 @@ import { PendingApprovalsTable, type PriceProposalRow } from "./price-approvals"
 import { HeadAccountantVehicleSummary } from "./vehicle-finance-summary";
 import { VehicleTable } from "./vehicles-table";
 
-type VehicleQuickFilter = "all" | "available" | "ready" | "on_lot" | "needs_inspection";
+type VehicleQuickFilter = "all" | "available" | "ready" | "on_lot" | "needs_inspection" | "ready_for_pricing";
+
+type ReconditioningSummary = { state: string; papers_processed_at: string | null };
 
 function getVehicleFilterOptions(userRole: string | null) {
   if (userRole === "sales_manager") {
@@ -31,6 +33,12 @@ function getVehicleFilterOptions(userRole: string | null) {
       { value: "needs_inspection" as const, label: "Needs inspection" },
     ];
   }
+  if (userRole === "marketing_specialist") {
+    return [
+      { value: "all" as const, label: "All" },
+      { value: "ready_for_pricing" as const, label: "Reconditioned — ready for pricing" },
+    ];
+  }
   return null;
 }
 
@@ -41,6 +49,7 @@ export function VehicleOperations({
   canView,
   isHeadAccountant,
   userRole = null,
+  reconditioningByVehicle = {},
 }: {
   readonly proposals: PriceProposalRow[];
   readonly vehicles: Record<string, unknown>[];
@@ -48,6 +57,7 @@ export function VehicleOperations({
   readonly canView: boolean;
   readonly isHeadAccountant?: boolean;
   readonly userRole?: string | null;
+  readonly reconditioningByVehicle?: Record<string, ReconditioningSummary>;
 }) {
   const [segment, setSegment] = useState<"pending" | "vehicles">(proposals.length > 0 ? "pending" : "vehicles");
   const [vehicleFilter, setVehicleFilter] = useState<VehicleQuickFilter>("all");
@@ -73,8 +83,14 @@ export function VehicleOperations({
     if (userRole === "mechanic" && vehicleFilter === "needs_inspection") {
       return vehicles.filter((v) => v.listing_state === "inspecting" || v.listing_state === "repairing");
     }
+    if (userRole === "marketing_specialist" && vehicleFilter === "ready_for_pricing") {
+      return vehicles.filter((v) => {
+        const job = reconditioningByVehicle[String(v.id)];
+        return v.listing_state === "repairing" && job?.state === "completed" && Boolean(job.papers_processed_at);
+      });
+    }
     return vehicles;
-  }, [vehicles, vehicleFilter, userRole, filterOptions]);
+  }, [vehicles, vehicleFilter, userRole, filterOptions, reconditioningByVehicle]);
 
   const showVehicleFilter = segment === "vehicles" && filterOptions !== null;
 

@@ -5,7 +5,7 @@ import Link from "next/link";
 
 import type { ColumnDef } from "@tanstack/react-table";
 import { differenceInCalendarDays, endOfToday, format, parseISO } from "date-fns";
-import { CircleCheck, Clock3, Eye, MoreHorizontal, PhilippinePeso, UserRound } from "lucide-react";
+import { CircleCheck, Eye, MoreHorizontal, PhilippinePeso, UserRound } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { TRANSACTION_STATE_LABELS, transactionKindLabel } from "@/lib/transactions/labels";
-import { canSalesManagerCancel, getAllowedTransitions, type TransactionState } from "@/lib/transactions/state-machine";
+import { getAllowedTransitions, type TransactionState } from "@/lib/transactions/state-machine";
 
 import type { TransactionRow } from "./schema";
 
@@ -31,17 +31,8 @@ export const TRANSACTION_ACTION_LABELS: Record<TransactionState, string> = {
   cancelled: "Cancel",
 };
 
-// T05: the Sales Manager loses Cancel on a CASH buy; the buyer or the CEO still closes it.
 export function transactionActionsFor(row: TransactionRow, userRole: string): TransactionState[] {
-  return getAllowedTransitions(row.state as TransactionState, userRole).filter(
-    (to) =>
-      to !== "cancelled" ||
-      userRole !== "sales_manager" ||
-      canSalesManagerCancel({
-        transaction_kind: row.kind,
-        purchase_details: { payment_method: row.paymentMethod },
-      }),
-  );
+  return getAllowedTransitions(row.state as TransactionState, userRole);
 }
 
 function kindIcon(kind: string) {
@@ -50,8 +41,6 @@ function kindIcon(kind: string) {
       return <CircleCheck className="fill-green-500 stroke-primary-foreground dark:fill-green-600" />;
     case "sell":
       return <PhilippinePeso className="text-amber-600 dark:text-amber-500" />;
-    case "request_a_car":
-      return <Clock3 className="text-muted-foreground" />;
     default:
       return null;
   }
@@ -118,9 +107,16 @@ export function createTransactionColumns(
       header: "Status",
       filterFn: "equalsString",
       cell: ({ row }) => (
-        <Badge variant="outline" className="px-1.5 text-muted-foreground">
-          {TRANSACTION_STATE_LABELS[row.original.state as TransactionState]}
-        </Badge>
+        <div className="flex flex-wrap gap-1.5">
+          <Badge variant="outline" className="px-1.5 text-muted-foreground">
+            {TRANSACTION_STATE_LABELS[row.original.state as TransactionState]}
+          </Badge>
+          {(row.original.totalInstallments ?? 0) > 0 ? (
+            <Badge variant="secondary">
+              Paid {row.original.paidInstallments ?? 0} of {row.original.totalInstallments}
+            </Badge>
+          ) : null}
+        </div>
       ),
     },
     {

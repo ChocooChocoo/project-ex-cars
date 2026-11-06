@@ -2,6 +2,7 @@
 // here and only here, so a change to the Deed of Sale or the Policy & Warranty is one edit.
 
 import { GCE_SELLER } from "@/lib/transactions/buy-flow";
+import { MISSED_PAYMENT_POLICY } from "@/lib/transactions/missed-payment-policy";
 
 // What a line reads when GCE has no value for it: the CI writes it in by hand before signing.
 export const PAPER_BLANK = "________";
@@ -49,6 +50,10 @@ export interface PaperSale {
 export interface PaperDocument {
   title: string;
   paragraphs: string[];
+}
+
+export function missedPaymentPolicy(): PaperDocument {
+  return { title: "MISSED PAYMENT POLICY", paragraphs: [MISSED_PAYMENT_POLICY] };
 }
 
 function one<T>(value: Embedded<T>): T | null {

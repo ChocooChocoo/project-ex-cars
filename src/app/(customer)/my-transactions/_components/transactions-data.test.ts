@@ -17,9 +17,9 @@ function row(overrides: Record<string, unknown>) {
 
 describe("buildTransactionRows", () => {
   it("keeps the kind as the primary label but uses the reference id beneath it", () => {
-    const [request] = buildTransactionRows([row({ transaction_kind: "request_a_car" })]);
+    const [request] = buildTransactionRows([row({ transaction_kind: "buy" })]);
 
-    expect(request.vehicleLabel).toBe("Request a Car");
+    expect(request.vehicleLabel).toBe("Buy");
     expect(request.subLabel).toBe("#11111111");
     expect(request.subLabel).not.toBe(request.vehicleLabel);
   });

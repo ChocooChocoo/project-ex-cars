@@ -132,7 +132,7 @@ test.describe("Task 17 CEO portal UI", () => {
     }
   });
 
-  test("inspections and suppliers retain the shared table interactions", async ({ page }) => {
+  test("inspections retain the shared table interactions", async ({ page }) => {
     await signIn(page, "/ceo/inspections");
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(page.locator("table")).toBeVisible();
@@ -140,22 +140,6 @@ test.describe("Task 17 CEO portal UI", () => {
     await expect(page.getByText("Page 1 of 2", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "2", exact: true }).click();
     await expect(page.getByText("Page 2 of 2", { exact: true })).toBeVisible();
-    await assertNoPageOverflow(page);
-
-    await signIn(page, "/ceo/suppliers");
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await expect(page.locator("table")).toBeVisible();
-    await expect(page.locator("#suppliers-rows-per-page")).toBeVisible();
-    const supplierRow = page.locator("tbody tr").first();
-    await supplierRow.locator("button").last().click();
-    await page.getByRole("menuitem", { name: "View Documents", exact: true }).click();
-    const documentsSheet = page
-      .locator("[data-slot='sheet-content']")
-      .filter({ has: page.getByRole("heading", { name: "Supplier Documents", exact: true }) })
-      .first();
-    await expect(documentsSheet).toBeVisible();
-    await documentsSheet.getByRole("button", { name: "Close", exact: true }).first().click();
-    await expect(documentsSheet).toBeHidden();
     await assertNoPageOverflow(page);
   });
 });

@@ -15,10 +15,10 @@ import {
   canRecordNoShow,
   contractReadyForSale,
   DOWNPAYMENT_WORKING_DAYS,
+  financingFullyPaid,
   isDirectPayment,
   isHalfwayCashRequest,
   MISSED_INSTALLMENTS_BEFORE_REPOSSESSION,
-  missedInstallments,
   missingContractCopies,
   needsContract,
   nextDuePayment,
@@ -29,9 +29,10 @@ import {
 import { finalizeBuySale, recordStandingEvent, releaseVisitSlots } from "@/lib/transactions/buy-flow-server";
 import { closeFinancingIfPaid, confirmInitialDownpaymentIfPaid } from "@/lib/transactions/financing-server";
 import { bookedMeetup, meetupTeamError, openMeetupCase } from "@/lib/transactions/meetup-server";
+import { consecutiveMissedPayments } from "@/lib/transactions/recovery";
 import { SELL_PAPER_KINDS } from "@/lib/transactions/sell-flow";
 import type { TransactionState } from "@/lib/transactions/state-machine";
-import { canSalesManagerCancel, canTransition, reviewDueAt } from "@/lib/transactions/state-machine";
+import { canTransition, reviewDueAt } from "@/lib/transactions/state-machine";
 import { fieldCaseCreateSchema } from "@/lib/validation/phase6";
 import { paymentRecordSchema, transitionSchema } from "@/lib/validation/transactions";
 
@@ -85,12 +86,6 @@ export async function transitionTransaction(formData: FormData) {
 
   if (!canTransition(fromState, toState, role)) {
     return { error: "This action is not allowed for your role." };
-  }
-
-  // T05: the Sales Manager loses Cancel on a CASH buy, before and after approval. The buyer or the CEO
-  // still closes it; a financing buy keeps Cancel.
-  if (toState === "cancelled" && role === "sales_manager" && !canSalesManagerCancel(tx)) {
-    return { error: "The Sales Manager cannot cancel a cash purchase." };
   }
 
   // Use admin client for state transitions (bypass RLS for role-gated logic).
@@ -201,9 +196,19 @@ export async function transitionTransaction(formData: FormData) {
           : "Record the buyer's payment before marking the car sold.",
       };
     }
-    // §6 step 20: a financed car is sold once the Initial Downpayment is confirmed and the account is active.
-    if (financing && tx.flow_status !== "financing_active") {
-      return { error: "Complete the financing agreement before marking the car sold." };
+    if (financing) {
+      if (!["financing_active", "financing_completed"].includes(tx.flow_status ?? "")) {
+        return { error: "Complete the financing agreement before marking the car sold." };
+      }
+      const { data: account, error: accountError } = await admin
+        .from("installment_accounts")
+        .select("installments(state, due_date)")
+        .eq("purchase_transaction_id", id)
+        .maybeSingle();
+      if (accountError) return { error: accountError.message };
+      if (!financingFullyPaid(account?.installments ?? [])) {
+        return { error: "Pay or waive every financing installment before marking the car sold." };
+      }
     }
     // §4 step 9: a delivered car is sold only once the team has handed it over.
     const { data: deliveryCase } = await admin
@@ -642,7 +647,7 @@ export async function recordPayment(formData: FormData) {
 
   let amount = parsed.data.amount;
   let method = parsed.data.method;
-  let paymentKind: string | null = parsed.data.payment_kind || null;
+  let paymentKind: string | null = installmentId ? "installment" : parsed.data.payment_kind || null;
 
   // Contract first: no money is recorded on a sale that needs a contract until the buyer has signed.
   // A delivery's fee and downpayment come before the day, and an installment only exists after signing.
@@ -704,15 +709,6 @@ export async function recordPayment(formData: FormData) {
     return { error: error.message };
   }
 
-  // Update installment state if linked.
-  if (installmentId) {
-    await supabase
-      .from("installments")
-      .update({ state: "paid", payment_date: parsed.data.settlement_date })
-      .eq("id", installmentId);
-    await closeFinancingIfPaid(createAdminClient(), transactionId);
-  }
-
   // §6 step 17: the Initial Downpayment of a claimed car now waits for the Head Accountant.
   if (paymentKind === "downpayment") {
     await createAdminClient()
@@ -751,13 +747,23 @@ export async function verifyPayment(paymentId: string) {
     .eq("id", paymentId)
     // T03 HA3: a rejected payment cannot be verified afterwards.
     .is("rejected_at", null)
-    .select("transaction_id")
+    .select("transaction_id, installment_id, settlement_date")
     .maybeSingle();
 
   if (error) return { error: error.message };
   if (payment) {
-    await confirmInitialDownpaymentIfPaid(createAdminClient(), payment.transaction_id);
+    const admin = createAdminClient();
+    if (payment.installment_id) {
+      const { error: installmentError } = await admin
+        .from("installments")
+        .update({ state: "paid", payment_date: payment.settlement_date ?? new Date().toISOString().slice(0, 10) })
+        .eq("id", payment.installment_id);
+      if (installmentError) return { error: installmentError.message };
+      await closeFinancingIfPaid(admin, payment.transaction_id);
+    }
+    await confirmInitialDownpaymentIfPaid(admin, payment.transaction_id);
     revalidatePath(`/dashboard/transactions/${payment.transaction_id}`);
+    revalidatePath(`/my-transactions/${payment.transaction_id}`);
   }
 
   revalidatePath("/dashboard/transactions/payments");
@@ -977,37 +983,6 @@ export async function verifyTransactionDocument(formData: FormData) {
   return { success: true };
 }
 
-export async function assignInformant(formData: FormData) {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
-
-  const role = await getCurrentRole();
-  if (!role || !["ceo", "sales_manager"].includes(role)) {
-    return { error: "Not authorized" };
-  }
-
-  const transactionId = formData.get("transaction_id") as string;
-  const informantId = formData.get("informant_id") as string;
-
-  const { error } = await supabase
-    .from("vehicle_requests")
-    .update({ assigned_confidential_informant: informantId })
-    .eq("transaction_id", transactionId);
-
-  if (error) return { error: error.message };
-
-  // Optionally create field case.
-  await supabase.from("field_cases").insert({
-    transaction_id: transactionId,
-    case_kind: "sourcing",
-    assigned_confidential_informant: informantId,
-  });
-
-  revalidatePath(`/dashboard/transactions/${transactionId}`);
-  return { success: true };
-}
-
 export async function markInstallmentWaived(installmentId: string) {
   const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
@@ -1018,9 +993,28 @@ export async function markInstallmentWaived(installmentId: string) {
     return { error: "Not authorized" };
   }
 
-  const { error } = await supabase.from("installments").update({ state: "waived" }).eq("id", installmentId);
+  const { data: installment, error } = await supabase
+    .from("installments")
+    .update({ state: "waived" })
+    .eq("id", installmentId)
+    .select("account_id")
+    .maybeSingle();
 
   if (error) return { error: error.message };
+
+  if (installment) {
+    const admin = createAdminClient();
+    const { data: account } = await admin
+      .from("installment_accounts")
+      .select("purchase_transaction_id")
+      .eq("id", installment.account_id)
+      .maybeSingle();
+    if (account) {
+      await closeFinancingIfPaid(admin, account.purchase_transaction_id);
+      revalidatePath(`/my-transactions/${account.purchase_transaction_id}`);
+      revalidatePath(`/dashboard/transactions/${account.purchase_transaction_id}`);
+    }
+  }
 
   await logAuditEvent({
     actorId: user.user.id,
@@ -1098,7 +1092,6 @@ export async function createFieldCase(formData: FormData) {
     acquisition: ["ceo", "confidential_informant", "sales_manager"],
     delivery: ["ceo", "confidential_informant", "sales_manager"],
     recovery: ["ceo", "head_accountant"],
-    sourcing: ["ceo", "sales_manager"],
     buyer_meetup: ["ceo", "sales_manager"],
   };
 
@@ -1191,6 +1184,15 @@ export async function assignMechanic(formData: FormData) {
     summary: `Mechanic ${mechanicId} assigned to field case ${fieldCaseId}`,
   });
 
+  await createAdminClient().from("notifications").insert({
+    recipient_id: mechanicId,
+    kind: "mechanic_assigned",
+    title: "Field case assigned",
+    body: "You have been assigned as the mechanic. Open the case for instructions.",
+    reference_table: "field_cases",
+    reference_id: fieldCaseId,
+  });
+
   revalidatePath("/dashboard/field-cases");
   return { success: true };
 }
@@ -1228,7 +1230,7 @@ export async function instructRepossession(formData: FormData) {
     .order("due_date", { ascending: true });
   const rows = installments ?? [];
   // Q5 default (§6 steps 24 and 26): repossession starts from the 4th missed installment.
-  const missed = missedInstallments(rows);
+  const missed = consecutiveMissedPayments(rows);
   if (missed < MISSED_INSTALLMENTS_BEFORE_REPOSSESSION) {
     return {
       error: `Repossession starts after ${MISSED_INSTALLMENTS_BEFORE_REPOSSESSION} missed installments; this account has ${missed}.`,
@@ -1242,6 +1244,16 @@ export async function instructRepossession(formData: FormData) {
   const unpaidTotal = unpaid.reduce((sum, i) => sum + Number(i.amount_due), 0);
   const statement = `Paid ₱${paidTotal.toLocaleString()}; unsettled ₱${unpaidTotal.toLocaleString()} over ${unpaid.length} installments (${missed} missed).`;
   const headSecurityId = (formData.get("head_security_id") as string) || null;
+
+  const { data: existing, error: duplicateError } = await supabase
+    .from("field_cases")
+    .select("id")
+    .eq("transaction_id", transactionId)
+    .eq("case_kind", "recovery")
+    .in("state", ["assigned", "accepted", "in_progress"])
+    .limit(1);
+  if (duplicateError) return { error: duplicateError.message };
+  if (existing?.length) return { error: "An open recovery case already exists for this transaction." };
 
   const { data: fieldCase, error } = await supabase
     .from("field_cases")
@@ -1263,6 +1275,29 @@ export async function instructRepossession(formData: FormData) {
     actor_id: user.user.id,
     notes: reason ?? `Repossession instructed for transaction ${transactionId}`,
   });
+
+  await createAdminClient()
+    .from("notifications")
+    .insert([
+      ...[informantId, headSecurityId]
+        .filter((id): id is string => Boolean(id))
+        .map((id) => ({
+          recipient_id: id,
+          kind: "repossession_assigned",
+          title: "Towing requested",
+          body: `${reason ?? "Four consecutive missed payments."} ${statement}`,
+          reference_table: "field_cases",
+          reference_id: fieldCase.id,
+        })),
+      {
+        recipient_role: "head_accountant",
+        kind: "financing_repossession_due",
+        title: "Recovery case opened",
+        body: statement,
+        reference_table: "transactions",
+        reference_id: transactionId,
+      },
+    ]);
 
   await logAuditEvent({
     actorId: user.user.id,

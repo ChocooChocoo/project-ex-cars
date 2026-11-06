@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 
+import { z } from "zod";
+
 import { getCurrentRole } from "@/app/auth/actions";
 import {
   computePayslip,
@@ -24,6 +26,7 @@ type Phase6ActionResult = { error: string } | { success: true };
 
 const PAYROLL_PREPARERS = ["ceo", "account_manager"];
 const PAYROLL_REVIEWERS = ["ceo", "head_accountant"];
+const PAYROLL_VIEWERS = ["ceo", "account_manager", "head_accountant"];
 
 function groupByEmployee<T>(rows: unknown[] | null): Map<string, T[]> {
   const groups = new Map<string, T[]>();
@@ -452,4 +455,27 @@ export async function addPayslipItem(formData: FormData): Promise<Phase6ActionRe
 
   revalidatePayroll(role, "payslips");
   return { success: true };
+}
+
+// Phase 6 T07: the payroll row opens this detail before any approval action.
+export async function getPayrollRunDetail(runId: string) {
+  const supabase = await createServerSupabaseClient();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+  const role = await getCurrentRole();
+  if (!role || !PAYROLL_VIEWERS.includes(role)) return { error: "Not authorized to view payroll" };
+
+  const parsed = z.string().uuid().safeParse(runId);
+  if (!parsed.success) return { error: "Invalid payroll run." };
+
+  const { data: run, error } = await supabase
+    .from("payroll_runs")
+    .select(
+      "*, payslips(*, profiles!payslips_employee_id_fkey(full_name), payslip_items(*)), payroll_approvals(*, profiles!payroll_approvals_reviewer_id_fkey(full_name))",
+    )
+    .eq("id", parsed.data)
+    .maybeSingle();
+  if (error) return { error: error.message };
+  if (!run) return { error: "Payroll run not found." };
+  return { success: true as const, run };
 }

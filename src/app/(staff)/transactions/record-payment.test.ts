@@ -15,7 +15,8 @@ const { getUser, getCurrentRole, db, audit } = vi.hoisted(() => {
           : { data: rows[table] ?? null, count: 0, error: null },
       );
     const builder: Record<string, unknown> = {};
-    for (const step of ["select", "eq", "neq", "in", "not", "or", "order", "limit"]) builder[step] = () => builder;
+    for (const step of ["select", "eq", "neq", "in", "is", "not", "or", "order", "limit"])
+      builder[step] = () => builder;
     for (const write of ["insert", "update", "upsert"]) {
       builder[write] = (payload: Record<string, unknown>) => {
         operation = write;
@@ -59,7 +60,9 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn(() => ({ from: db.from })) }));
 
-import { recordPayment } from "./actions";
+import { closeFinancingIfPaid } from "@/lib/transactions/financing-server";
+
+import { markInstallmentWaived, recordPayment, verifyPayment } from "./actions";
 
 const userId = "11111111-1111-4111-8111-111111111111";
 const transactionId = "22222222-2222-4222-8222-222222222222";
@@ -177,7 +180,7 @@ describe("who records a payment (T05)", () => {
     expect(inserts()).toEqual([]);
   });
 
-  it("keeps the financing 'Record paid' button working for the Head Accountant", async () => {
+  it("records an installment pending verification for the Head Accountant", async () => {
     getCurrentRole.mockResolvedValue("head_accountant");
 
     await expect(
@@ -189,8 +192,15 @@ describe("who records a payment (T05)", () => {
       }),
     ).resolves.toEqual({ success: true });
     expect(inserts()).toEqual([
-      expect.objectContaining({ installment_id: installmentId, amount: 25_000, method: "bank_transfer" }),
+      expect.objectContaining({
+        installment_id: installmentId,
+        amount: 25_000,
+        method: "bank_transfer",
+        payment_kind: "installment",
+      }),
     ]);
+    expect(db.writes.some((write) => write.table === "installments")).toBe(false);
+    expect(closeFinancingIfPaid).not.toHaveBeenCalled();
   });
 
   it("still records a financing payment for the Sales Manager", async () => {
@@ -203,5 +213,38 @@ describe("who records a payment (T05)", () => {
       success: true,
     });
     expect(inserts()).toEqual([expect.objectContaining({ amount: 5000, method: "cash", payment_kind: "downpayment" })]);
+  });
+});
+
+describe("verify financing installment", () => {
+  it("checks financing closure after waiving the last unpaid installment", async () => {
+    getCurrentRole.mockResolvedValue("head_accountant");
+    db.rows.installments = { account_id: "account-1" };
+    db.rows.installment_accounts = { purchase_transaction_id: transactionId };
+    expect(await markInstallmentWaived(installmentId)).toEqual({ success: true });
+    expect(closeFinancingIfPaid).toHaveBeenCalledWith(expect.anything(), transactionId);
+  });
+
+  it("marks the linked installment paid on settlement date and checks account closure", async () => {
+    getCurrentRole.mockResolvedValue("head_accountant");
+    db.rows.payment_records = {
+      transaction_id: transactionId,
+      installment_id: installmentId,
+      settlement_date: "2026-11-05",
+    };
+    expect(await verifyPayment("payment-1")).toEqual({ success: true });
+    expect(db.writes).toContainEqual({
+      table: "installments",
+      op: "update",
+      payload: { state: "paid", payment_date: "2026-11-05" },
+    });
+    expect(closeFinancingIfPaid).toHaveBeenCalledWith(expect.anything(), transactionId);
+  });
+
+  it("does not mark installments when no unrejected payment was updated", async () => {
+    getCurrentRole.mockResolvedValue("head_accountant");
+    db.rows.payment_records = null;
+    await verifyPayment("payment-1");
+    expect(db.writes.some((write) => write.table === "installments")).toBe(false);
   });
 });

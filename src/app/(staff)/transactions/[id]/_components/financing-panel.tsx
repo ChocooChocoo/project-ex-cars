@@ -21,10 +21,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { missedInstallments } from "@/lib/transactions/buy-flow";
 import { deliveryArea, deliveryFeeRangeLabel, downPaymentFor } from "@/lib/transactions/delivery-fee";
+import { paidInstallmentCount } from "@/lib/transactions/financing-payments";
 import { monthlyInstallment } from "@/lib/transactions/loan-calculator";
+import { MISSED_PAYMENT_POLICY, MISSED_PAYMENT_POLICY_LABEL } from "@/lib/transactions/missed-payment-policy";
 import { formatCurrency } from "@/lib/utils";
 
 type Row = Record<string, unknown>;
@@ -98,7 +99,6 @@ export function FinancingPanel({
     requestedTermMonths &&
     form.total_amount &&
     form.first_due_date &&
-    form.missed_payment_policy?.trim() &&
     (meetup || vehiclePrice > 0) &&
     (!delivery || free || form.delivery_fee);
   // In the field the account opens once the Confidential Informant reports the signing.
@@ -147,6 +147,15 @@ export function FinancingPanel({
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4 text-sm">
+        <section className="flex flex-col gap-2">
+          <p className="font-medium">{MISSED_PAYMENT_POLICY_LABEL}</p>
+          <p>{MISSED_PAYMENT_POLICY}</p>
+          {["head_accountant", "ceo"].includes(userRole) ? (
+            <Button asChild variant="outline" className="self-start">
+              <Link href={`/vehicle-papers/${transactionId}/missed-payment-policy`}>Print missed payment policy</Link>
+            </Button>
+          ) : null}
+        </section>
         {threadId ? (
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild size="sm" variant="outline">
@@ -177,12 +186,6 @@ export function FinancingPanel({
                 <Fact label="Delivery fee" value={formatCurrency(Number(terms.delivery_fee))} />
               ) : null}
             </dl>
-            {terms.missed_payment_policy ? (
-              <p>
-                <span className="text-muted-foreground">Missed payment policy: </span>
-                {String(terms.missed_payment_policy)}
-              </p>
-            ) : null}
             {termsState === "returned" && terms.returned_reason ? (
               <p className="text-destructive text-xs">Returned: {String(terms.returned_reason)}</p>
             ) : null}
@@ -256,17 +259,6 @@ export function FinancingPanel({
                 type="date"
               />
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="fin-missed-policy" className="text-xs">
-                Missed payment policy
-              </Label>
-              <Textarea
-                id="fin-missed-policy"
-                rows={2}
-                value={form.missed_payment_policy ?? ""}
-                onChange={(e) => set("missed_payment_policy")(e.target.value)}
-              />
-            </div>
             <Button
               size="sm"
               className="self-start"
@@ -278,7 +270,6 @@ export function FinancingPanel({
                     total_amount: form.total_amount,
                     delivery_fee: free ? "0" : form.delivery_fee,
                     first_due_date: form.first_due_date,
-                    missed_payment_policy: form.missed_payment_policy,
                   },
                   "Terms sent to the Head Accountant.",
                 )
@@ -394,6 +385,9 @@ export function FinancingPanel({
           <section className="flex flex-col gap-2 rounded-md border p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="font-medium">Financing account</p>
+              <Badge variant="outline">
+                Paid {paidInstallmentCount(installments)} of {installments.length}
+              </Badge>
               <div className="flex gap-2">
                 {account.flagged_at ? <Badge variant="destructive">Flagged: missed payment</Badge> : null}
                 <Badge variant="secondary" className="capitalize">

@@ -10,7 +10,6 @@ FROM auth.users au
 JOIN (
   VALUES
     ('customer@gce.local', 'customer'),
-    ('supplier@gce.local', 'supplier'),
     ('ceo@gce.local', 'ceo'),
     ('account_manager@gce.local', 'account_manager'),
     ('head_accountant@gce.local', 'head_accountant'),

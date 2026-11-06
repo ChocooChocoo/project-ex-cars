@@ -7,6 +7,7 @@ import { getCurrentRole } from "@/app/auth/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { type VehicleMediaItem, VehicleMediaViewer } from "@/components/vehicle-media-viewer";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { listingStateLabel, listingStateVariant } from "@/lib/vehicles/labels";
 
@@ -53,7 +54,9 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
     // §6 steps 27–38: the latest reconditioning job of a repossessed car (RLS limits who sees it).
     supabase
       .from("reconditioning_jobs")
-      .select("*, disbursement_requests(status)")
+      .select(
+        "*, disbursement_requests(status, amount_cents), reconditioning_parts(*), reconditioning_fund_requests(*, reconditioning_fund_receipts(*), disbursement_requests(status))",
+      )
       .eq("vehicle_id", id)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -71,6 +74,28 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
           .maybeSingle()
       : Promise.resolve({ data: null }),
   ]);
+
+  // Receipts live in a private bucket; the panel gets short-lived signed links.
+  const reconditioningJob = reconditioning as
+    | (Record<string, unknown> & {
+        reconditioning_fund_requests?: Array<
+          Record<string, unknown> & {
+            reconditioning_fund_receipts?: Array<Record<string, unknown>>;
+          }
+        >;
+      })
+    | null;
+  if (reconditioningJob?.reconditioning_fund_requests?.length) {
+    const admin = createAdminClient();
+    for (const request of reconditioningJob.reconditioning_fund_requests) {
+      for (const receipt of request.reconditioning_fund_receipts ?? []) {
+        const path = String(receipt.storage_path ?? "");
+        if (!path) continue;
+        const { data } = await admin.storage.from("reconditioning-receipts").createSignedUrl(path, 3600);
+        receipt.signed_url = data?.signedUrl ?? null;
+      }
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -119,9 +144,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
 
       <VehicleDescriptionCard vehicle={v} />
 
-      {reconditioning ? (
-        <ReconditioningPanel job={reconditioning as Record<string, unknown>} userRole={role ?? ""} />
-      ) : null}
+      {reconditioningJob ? <ReconditioningPanel job={reconditioningJob} userRole={role ?? ""} /> : null}
 
       {MEDIA_MANAGER_ROLES.includes(role ?? "") ? (
         <VehicleMediaManager vehicleId={id} media={(media as unknown as StaffMediaRow[]) ?? []} />

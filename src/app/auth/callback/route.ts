@@ -6,9 +6,15 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
+  const errorCode = searchParams.get("error_code") ?? searchParams.get("error");
   // Only same-site paths, so the link cannot send users to another site.
   const next = searchParams.get("next");
   const nextPath = next?.startsWith("/") && !next.startsWith("//") ? next : null;
+
+  // Supabase returns the reason for an expired or reused confirmation link.
+  if (errorCode) {
+    return NextResponse.redirect(`${origin}/auth/v1/login?error=${encodeURIComponent(errorCode)}`);
+  }
 
   if (code) {
     const supabase = await createServerSupabaseClient();

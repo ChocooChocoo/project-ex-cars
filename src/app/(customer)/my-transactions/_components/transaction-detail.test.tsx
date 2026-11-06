@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { removePurchaseDocument, saveBuyDetails } from "@/app/(customer)/my-transactions/actions";
+import { cancelTransaction, removePurchaseDocument, saveBuyDetails } from "@/app/(customer)/my-transactions/actions";
 
 import { TransactionDetail } from "./transaction-detail";
 
@@ -12,7 +12,12 @@ vi.mock("@/app/(customer)/my-transactions/actions", () => ({
   removePurchaseDocument: vi.fn(),
   saveBuyDetails: vi.fn(),
   uploadPurchaseDocument: vi.fn(),
+  submitBuyRequest: vi.fn(),
+  respondToFinancingOffer: vi.fn(),
+  submitFinancingPayment: vi.fn(),
+  submitAdvancedPayment: vi.fn(),
 }));
+vi.mock("@/app/(customer)/my-transactions/review-actions", () => ({ submitReview: vi.fn() }));
 vi.mock("./transaction-preview", () => ({
   TransactionPreview: ({ paper }: { paper: { total: number; paid?: number } }) => (
     <div data-testid="paper">{`${paper.total}/${paper.paid}`}</div>
@@ -66,6 +71,103 @@ describe("TransactionDetail completed sell offer", () => {
     expect(screen.getByText("Agreed Price").nextElementSibling).toHaveTextContent("₱450,000");
     expect(screen.getByText("Decision").nextElementSibling).toHaveTextContent("Completed");
     expect(screen.getByTestId("paper")).toHaveTextContent("450000/450000");
+  });
+});
+
+describe("T07 customer transaction controls", () => {
+  it("renders financing payment controls and paid count for an active account", () => {
+    render(
+      <TransactionDetail
+        transaction={{
+          ...transaction,
+          purchase_details: { payment_method: "financing", arrangement_kind: "gce_visit" },
+        }}
+        history={[]}
+        documents={[]}
+        payments={[]}
+        installmentAccount={{
+          state: "active",
+          installments: [
+            { id: "1", state: "paid", due_date: "2026-10-15", amount_due: 1000 },
+            { id: "2", state: "upcoming", due_date: "2026-12-15", amount_due: 1000 },
+          ],
+        }}
+        paymentTerms={null}
+        viewingArrangements={[]}
+        autofill={null}
+      />,
+    );
+    expect(screen.getByText("Paid 1 of 2")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Payment" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Advanced Payment" })).toBeEnabled();
+  });
+
+  function detail(tx: Record<string, unknown>, paymentTerms: Record<string, unknown> | null = null) {
+    return render(
+      <TransactionDetail
+        transaction={{ ...transaction, ...tx }}
+        history={[]}
+        documents={[]}
+        payments={[]}
+        installmentAccount={null}
+        paymentTerms={paymentTerms}
+        viewingArrangements={[]}
+        autofill={null}
+        delivery={null}
+        review={null}
+      />,
+    );
+  }
+  it("offers both Full Payment and Financing on a pending buy", async () => {
+    HTMLElement.prototype.scrollIntoView = vi.fn();
+    detail({ current_state: "pending" });
+    fireEvent.keyDown(screen.getByLabelText("Payment Option"), { key: "Enter" });
+    expect(await screen.findByRole("option", { name: "Full Payment" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Financing" })).toBeInTheDocument();
+  });
+  it("renders Financing for a pending buyer and retains a saved financing selection", () => {
+    detail({
+      current_state: "pending",
+      purchase_details: {
+        payment_option: "financing",
+        payment_method: "financing",
+        arrangement_kind: "gce_visit",
+        requested_term_months: 12,
+      },
+    });
+    expect(screen.getByLabelText("Payment Option")).toHaveTextContent("Financing");
+    expect(screen.getByLabelText("Payment term")).toHaveTextContent("1 year");
+    expect(screen.queryByLabelText("Payment Method")).not.toBeInTheDocument();
+  });
+  it("requires location inline and blocks saving until entered", () => {
+    detail({ current_state: "pending", purchase_details: { arrangement_kind: "meetup" } });
+    expect(screen.getByText("Enter a location for meet-up or delivery.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save Details" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Location *"), { target: { value: "Calamba" } });
+    expect(screen.getByRole("button", { name: "Save Details" })).toBeEnabled();
+  });
+  it("loads the saved location instead of losing it on reload", () => {
+    detail({ current_state: "pending", purchase_details: { arrangement_kind: "meetup", location: "Saved address" } });
+    expect(screen.getByLabelText("Location *")).toHaveValue("Saved address");
+  });
+  it("requires agreement before cancelling active financing and sends consent", async () => {
+    vi.mocked(cancelTransaction).mockResolvedValue({ success: true });
+    detail({ flow_status: "financing_active", purchase_details: { payment_method: "financing" } }, { state: "active" });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel Transaction" }));
+    const confirm = screen.getByRole("button", { name: "Yes, Cancel Transaction" });
+    expect(confirm).toBeDisabled();
+    fireEvent.click(screen.getByLabelText("I agree that GCE will tow and take back the car."));
+    expect(confirm).toBeEnabled();
+    fireEvent.click(confirm);
+    await waitFor(() => expect(cancelTransaction).toHaveBeenCalled());
+    expect(vi.mocked(cancelTransaction).mock.calls.at(-1)?.[0].get("towing_ack")).toBe("yes");
+  });
+  it("offers reviews only after completion", () => {
+    detail({ current_state: "completed" });
+    expect(screen.getByRole("heading", { name: "Rate GCE" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Submit review" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Your review"), { target: { value: "Helpful staff" } });
+    expect(screen.getByRole("button", { name: "Submit review" })).toBeEnabled();
   });
 });
 

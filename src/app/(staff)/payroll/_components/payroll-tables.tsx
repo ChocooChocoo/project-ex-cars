@@ -20,7 +20,6 @@ import {
 import {
   ArrowUpDown,
   CalendarDays,
-  Check,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
@@ -421,16 +420,10 @@ export function CompensationTable({ data }: { readonly data: CompensationRow[] }
 
 export function PayrollRunsTable({
   data,
-  canReview,
-  canFinalize,
-  onReview,
-  onFinalize,
+  onOpenDetail,
 }: {
   readonly data: PayrollRunRow[];
-  readonly canReview: boolean;
-  readonly canFinalize: boolean;
-  readonly onReview: (id: string, decision: "approved" | "rejected") => void;
-  readonly onFinalize: (id: string) => void;
+  readonly onOpenDetail: (id: string) => void;
 }) {
   const [rowSelection, setRowSelection] = useState({});
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -497,41 +490,21 @@ export function PayrollRunsTable({
         enableHiding: false,
         cell: ({ row }) => {
           const run = row.original;
-          const canDecide = canReview && (run.status === "draft" || run.status === "pending_approval");
-          const canClose = canFinalize && run.status === "approved";
           return (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="size-8" aria-label="Open payroll run actions">
-                  <MoreHorizontal className="size-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                {canDecide ? (
-                  <>
-                    <DropdownMenuItem onClick={() => onReview(run.id, "approved")}>
-                      <Check data-icon="inline-start" />
-                      Approve
-                    </DropdownMenuItem>
-                    <DropdownMenuItem variant="destructive" onClick={() => onReview(run.id, "rejected")}>
-                      Reject
-                    </DropdownMenuItem>
-                  </>
-                ) : null}
-                {canClose ? (
-                  <DropdownMenuItem onClick={() => onFinalize(run.id)}>
-                    <Check data-icon="inline-start" />
-                    Finalize
-                  </DropdownMenuItem>
-                ) : null}
-                {!canDecide && !canClose ? <DropdownMenuItem disabled>No actions available</DropdownMenuItem> : null}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8"
+              aria-label="View payroll run details"
+              onClick={() => onOpenDetail(run.id)}
+            >
+              <MoreHorizontal className="size-4" />
+            </Button>
           );
         },
       },
     ],
-    [canFinalize, canReview, onFinalize, onReview],
+    [onOpenDetail],
   );
   const table = useReactTable({
     data,

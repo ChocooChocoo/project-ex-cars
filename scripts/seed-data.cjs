@@ -174,7 +174,6 @@ async function loadUsers() {
   const byEmail = new Map(data.users.map((u) => [u.email, u.id]));
   const wanted = {
     customer: "customer@gce.local",
-    supplier: "supplier@gce.local",
     ceo: "ceo@gce.local",
     account_manager: "account_manager@gce.local",
     head_accountant: "head_accountant@gce.local",
@@ -217,7 +216,6 @@ const WIPE_TABLES = [
   "employee_requests",
   "attendance_entries",
   "employee_work_schedules",
-  "supplier_messages",
   "roadmap_items",
   "payment_records",
   "collection_actions",
@@ -226,7 +224,6 @@ const WIPE_TABLES = [
   "payment_terms",
   "field_cases",
   "transaction_documents",
-  "vehicle_requests",
   "sell_details",
   "purchase_details",
   "transaction_status_history",
@@ -250,101 +247,8 @@ const WIPE_TABLES = [
   "vehicle_inspections",
   "vehicle_media",
   "vehicles",
-  "supplier_documents",
-  "suppliers",
   "customer_documents",
 ];
-
-// ---------------------------------------------------------------------------
-// 2. Suppliers (6)
-// ---------------------------------------------------------------------------
-async function seedSuppliers(users) {
-  const created = [];
-  const defs = [
-    {
-      kind: "company",
-      name: "Northland Auto Trading",
-      contact: "Ramon Delgado",
-      state: "approved",
-      route: "staff-created",
-    },
-    {
-      kind: "company",
-      name: "Metro Motors Supply",
-      contact: "Liza Marcelo",
-      state: "approved",
-      route: "staff-created",
-    },
-    { kind: "individual", name: "Jose Ramirez", contact: "Jose Ramirez", state: "approved", route: "staff-created" },
-    {
-      kind: "company",
-      name: "Southern Fleet Dealers",
-      contact: "Nestor Villar",
-      state: "pending_approval",
-      route: "staff-created",
-    },
-    { kind: "individual", name: "Aileen Santos", contact: "Aileen Santos", state: "rejected", route: "staff-created" },
-    {
-      kind: "company",
-      name: "Cavite Auto Parts Corp",
-      contact: "Melchor Tan",
-      state: "suspended",
-      route: "staff-created",
-    },
-  ];
-  for (const d of defs) {
-    const decision =
-      d.state === "approved" || d.state === "suspended" ? "approved" : d.state === "rejected" ? "rejected" : "pending";
-    const { data, error } = await admin
-      .from("suppliers")
-      .insert({
-        account_id: d.state === "approved" ? users.supplier : null,
-        supplier_kind: d.kind,
-        business_name: d.name,
-        contact_name: d.contact,
-        contact_email: `${d.contact.toLowerCase().replace(/ /g, ".")}@gce.local`,
-        contact_phone: `09${randInt(100000000, 999999999)}`,
-        created_by: users.account_manager,
-        creation_route: d.route,
-        approval_decision: decision,
-        approved_by: d.state === "approved" ? users.account_manager : null,
-        approved_at: d.state === "approved" ? iso(daysAgo(20)) : null,
-        state: d.state,
-      })
-      .select("id")
-      .single();
-    if (error) throw error;
-    created.push({ id: data.id, state: d.state, name: d.name });
-  }
-  log("P1", "suppliers", created.length);
-
-  const docs = [];
-  for (const s of created) {
-    docs.push(
-      {
-        supplier_id: s.id,
-        document_kind: "business_permit",
-        is_primary_id: s.state === "approved",
-        storage_path: `suppliers/${s.id}/business_permit.pdf`,
-        verification_state: s.state === "approved" ? "verified" : "pending",
-        verified_by: s.state === "approved" ? users.account_manager : null,
-        verified_at: s.state === "approved" ? iso(daysAgo(19)) : null,
-      },
-      {
-        supplier_id: s.id,
-        document_kind: "dti_registration",
-        is_primary_id: false,
-        storage_path: `suppliers/${s.id}/dti_registration.pdf`,
-        verification_state: s.state === "approved" ? "verified" : "pending",
-        verified_by: s.state === "approved" ? users.account_manager : null,
-        verified_at: s.state === "approved" ? iso(daysAgo(19)) : null,
-      },
-    );
-  }
-  const inserted = await insert("supplier_documents", docs);
-  log("P1", "supplier_documents", inserted.length);
-  return created;
-}
 
 // ---------------------------------------------------------------------------
 // 3. Vehicles (30) + media uploads (photos + 360 frames)
@@ -845,7 +749,7 @@ async function seedInquiries(users, vehicles) {
 }
 
 // ---------------------------------------------------------------------------
-// 7. Transactions (12 buy, 6 sell, 7 request) + history + details + installments
+// 7. Transactions (12 buy, 6 sell) + history + details + installments
 // ---------------------------------------------------------------------------
 async function seedTransactions(users, vehicles) {
   const created = [];
@@ -902,23 +806,6 @@ async function seedTransactions(users, vehicles) {
     created.push({ id: data.id, kind: "sell", state, vehicleId: null });
   }
 
-  for (let i = 0; i < 7; i++) {
-    const state = pick(["pending", "under_review", "approved", "completed", "cancelled"]);
-    const { data, error } = await admin
-      .from("transactions")
-      .insert({
-        customer_id: users.customer,
-        transaction_kind: "request_a_car",
-        current_state: state,
-        created_by: users.customer,
-        opened_at: iso(daysAgo(randInt(5, 50))),
-        completed_at: state === "completed" ? iso(daysAgo(randInt(1, 10))) : null,
-      })
-      .select("id")
-      .single();
-    if (error) throw error;
-    created.push({ id: data.id, kind: "request_a_car", state, vehicleId: null });
-  }
   log("P5", "transactions", created.length);
 
   // Status history.
@@ -985,21 +872,6 @@ async function seedTransactions(users, vehicles) {
   }));
   const sells = await insert("sell_details", sellRows);
   log("P5", "sell_details", sells.length);
-
-  const reqTxs = created.filter((t) => t.kind === "request_a_car");
-  const reqRows = reqTxs.map((t) => ({
-    transaction_id: t.id,
-    requested_make: pick(["Toyota", "Honda", "Mitsubishi"]),
-    requested_model: pick(["Hilux", "Civic", "Montero Sport"]),
-    year_min: 2018,
-    year_max: 2023,
-    budget: randInt(700000, 1800000),
-    other_preferences: pick(["Automatic transmission", "Diesel engine", "Low mileage", "White or silver color"]),
-    agreed_price: t.state === "completed" ? randInt(750000, 1700000) : null,
-    assigned_confidential_informant: rand() < 0.5 ? users.confidential_informant : null,
-  }));
-  const requests = await insert("vehicle_requests", reqRows);
-  log("P5", "vehicle_requests", requests.length);
 
   // Financing: 4 installment accounts from financing purchases.
   const financedBuys = buyTxs.filter((t, i) => purchaseRows[i]?.payment_method === "financing");
@@ -1126,7 +998,7 @@ async function seedTransactions(users, vehicles) {
     caseRows.push({
       vehicle_id: v.id,
       transaction_id: created[i % created.length].id,
-      case_kind: pick(["acquisition", "delivery", "recovery", "sourcing"]),
+      case_kind: pick(["acquisition", "delivery", "recovery"]),
       // T04 L3 plus batch 2 phase 6: field cases spread over the four CIs and four Mechanics.
       assigned_confidential_informant: pick([
         users.confidential_informant,
@@ -1790,9 +1662,9 @@ async function seedPayroll(users) {
 }
 
 // ---------------------------------------------------------------------------
-// 12. Phase 6 — security duty checks, supplier messages, roadmap
+// 12. Phase 6: security duty checks, roadmap
 // ---------------------------------------------------------------------------
-async function seedOps(users, suppliers) {
+async function seedOps(users) {
   const dutyRows = [];
   for (let d = 24; d >= 1; d--) {
     const date = addDays(now, -d);
@@ -1809,30 +1681,6 @@ async function seedOps(users, suppliers) {
   }
   const duties = await insert("security_duty_checks", dutyRows);
   log("P6", "security_duty_checks", duties.length);
-
-  const approvedSupplier = suppliers.find((s) => s.state === "approved");
-  const msgRows = [];
-  if (approvedSupplier) {
-    const lines = [
-      "Good day, we have new units available for your inventory.",
-      "Can you share the current price list?",
-      "We received your latest shipment.",
-      "The documents for the next delivery are ready.",
-      "Please confirm the delivery schedule.",
-      "Thank you — we will prepare the requirements.",
-    ];
-    for (let i = 0; i < 20; i++) {
-      const fromCeo = i % 2 === 0;
-      msgRows.push({
-        supplier_id: approvedSupplier.id,
-        sender_id: fromCeo ? users.ceo : users.supplier,
-        message_text: pick(lines),
-        read_at: rand() < 0.6 ? iso(daysAgo(randInt(0, 8))) : null,
-      });
-    }
-  }
-  const messages = await insert("supplier_messages", msgRows);
-  log("P6", "supplier_messages", messages.length);
 
   const roadmap = [
     {
@@ -1965,7 +1813,7 @@ async function seedOps(users, suppliers) {
     },
     {
       kind: "initiative",
-      title: "Supplier Ecosystem",
+      title: "Customer Experience",
       status: "planned",
       priority: "medium",
       quarter: "Q4",
@@ -1975,7 +1823,7 @@ async function seedOps(users, suppliers) {
     {
       kind: "epic",
       parent: 13,
-      title: "Supplier Portal",
+      title: "Customer Portal",
       status: "on_hold",
       priority: "low",
       quarter: "Q4",
@@ -1985,7 +1833,7 @@ async function seedOps(users, suppliers) {
     {
       kind: "feature",
       parent: 14,
-      title: "Supplier self-service dashboard",
+      title: "Customer self-service dashboard",
       status: "on_hold",
       priority: "low",
       quarter: "Q4",
@@ -1995,7 +1843,7 @@ async function seedOps(users, suppliers) {
     {
       kind: "feature",
       parent: 14,
-      title: "CEO–supplier messaging",
+      title: "Customer messaging",
       status: "completed",
       priority: "medium",
       quarter: "Q4",
@@ -2056,8 +1904,6 @@ async function main() {
   }
   console.log("");
 
-  console.log("Seeding suppliers...");
-  const suppliers = await seedSuppliers(users);
 
   console.log("Seeding vehicles + media...");
   const vehicles = await seedVehicles(users);
@@ -2089,8 +1935,8 @@ async function main() {
   console.log("Seeding payroll...");
   await seedPayroll(users);
 
-  console.log("Seeding security duties, supplier messages, roadmap...");
-  await seedOps(users, suppliers);
+  console.log("Seeding security duties, roadmap...");
+  await seedOps(users);
 
   console.log("\n=== Seed complete ===");
   console.log("Roles were NOT reassigned. If roles are missing, run:");

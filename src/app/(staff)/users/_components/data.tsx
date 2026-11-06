@@ -61,7 +61,6 @@ export const roleMeta: Record<string, { className: string; icon: LucideIcon }> =
   "Sales Manager": { className: "text-rose-300", icon: CarFront },
   "Head Security": { className: "text-cyan-300", icon: ShieldCheck },
   Customer: { className: "text-muted-foreground", icon: UserRound },
-  Supplier: { className: "text-muted-foreground", icon: UserRound },
 };
 
 export const statusMeta: Record<UserStatus, { badgeClass: string; dotClass: string }> = {

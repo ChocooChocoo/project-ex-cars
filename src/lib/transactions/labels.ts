@@ -17,7 +17,6 @@ export function transactionKindLabel(kind: TransactionKind): string {
   const map: Record<TransactionKind, string> = {
     buy: "Buy",
     sell: "Sell",
-    request_a_car: "Request a Car",
   };
   return map[kind];
 }
@@ -41,6 +40,7 @@ export function paymentKindLabel(kind: string | null | undefined): string {
     downpayment: "Downpayment",
     balance: "Balance",
     reschedule_fee: "Reschedule Fee",
+    installment: "Installment",
   };
   return kind ? (map[kind] ?? kind) : "—";
 }

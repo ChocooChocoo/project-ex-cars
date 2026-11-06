@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { type CompensationRow, PayrollClient, type PayrollRunRow } from "./payroll-client";
@@ -6,6 +6,7 @@ import { type CompensationRow, PayrollClient, type PayrollRunRow } from "./payro
 const mocks = vi.hoisted(() => ({
   createPayrollRun: vi.fn(),
   finalizePayrollRun: vi.fn(),
+  getPayrollRunDetail: vi.fn(),
   reviewPayrollRun: vi.fn(),
   saveCompensation: vi.fn(),
   refresh: vi.fn(),
@@ -16,6 +17,7 @@ vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 vi.mock("@/app/(staff)/payroll/actions", () => ({
   createPayrollRun: mocks.createPayrollRun,
   finalizePayrollRun: mocks.finalizePayrollRun,
+  getPayrollRunDetail: mocks.getPayrollRunDetail,
   reviewPayrollRun: mocks.reviewPayrollRun,
   saveCompensation: mocks.saveCompensation,
 }));
@@ -51,6 +53,25 @@ describe("PayrollClient template tables", () => {
     mocks.finalizePayrollRun.mockResolvedValue({ success: true });
     mocks.reviewPayrollRun.mockResolvedValue({ success: true });
     mocks.saveCompensation.mockResolvedValue({ success: true });
+    mocks.getPayrollRunDetail.mockResolvedValue({
+      success: true,
+      run: {
+        ...runs[0],
+        payslips: [
+          {
+            id: "payslip-1",
+            employee_id: "employee-1",
+            gross_cents: 500000,
+            deductions_cents: 50000,
+            net_cents: 450000,
+            status: "draft",
+            profiles: { full_name: "Ada Santos" },
+            payslip_items: [],
+          },
+        ],
+        payroll_approvals: [],
+      },
+    });
   });
 
   it("renders both payroll tables with template search, filters, selection, and pagination", () => {
@@ -65,18 +86,15 @@ describe("PayrollClient template tables", () => {
     expect(document.getElementById("payroll-runs-rows-per-page")).toBeInTheDocument();
   });
 
-  it("keeps payroll run workflow actions in the row menu", async () => {
+  it("opens the run detail before any approval action", async () => {
     render(
       <PayrollClient runs={runs} compensation={[]} employees={[]} canPrepare={false} canReview canFinalize={false} />,
     );
 
-    const trigger = screen.getByRole("button", { name: "Open payroll run actions" });
-    fireEvent.pointerDown(trigger);
-    fireEvent.mouseDown(trigger, { button: 0 });
-    fireEvent.mouseUp(trigger, { button: 0 });
-    fireEvent.click(trigger);
-    const menu = screen.getByRole("menu");
-    expect(within(menu).getByRole("menuitem", { name: "Approve" })).toBeInTheDocument();
-    expect(within(menu).getByRole("menuitem", { name: "Reject" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "View payroll run details" }));
+
+    expect(await screen.findByText("Ada Santos")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reject" })).toBeInTheDocument();
   });
 });

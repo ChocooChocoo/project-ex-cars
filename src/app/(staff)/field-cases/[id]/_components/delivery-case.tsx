@@ -9,7 +9,7 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 
 import { advanceDeliveryStatus, reportDeliveryDelay } from "@/app/(staff)/field-cases/delivery-actions";
-import { DeliveryLastSeen } from "@/components/delivery-last-seen";
+import { LiveLocationMap } from "@/components/live-location-map";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -165,7 +165,14 @@ export function DeliveryCase({
                 Mark {DELIVERY_STATUS_LABELS[next]}
               </Button>
             ) : null}
-            <DeliveryLastSeen lat={fieldCase.last_lat} lng={fieldCase.last_lng} at={fieldCase.last_located_at} />
+            <LiveLocationMap
+              fieldCaseId={String(fieldCase.id)}
+              initial={{
+                lat: fieldCase.last_lat as number | null,
+                lng: fieldCase.last_lng as number | null,
+                at: (fieldCase.last_located_at as string | null) ?? null,
+              }}
+            />
             {onTeam && open && (status === "in_transit" || status === "arriving") ? (
               <ShareLocation fieldCaseId={fieldCase.id as string} />
             ) : null}

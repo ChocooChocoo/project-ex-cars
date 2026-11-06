@@ -225,29 +225,31 @@ export function RecentTransactionsTable({
           </DropdownMenu>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center xl:w-auto">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <CreditCard />
-                Billing
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuRadioGroup
-                value={billingFilter}
-                onValueChange={(value) => {
-                  table.getColumn("kind")?.setFilterValue(value === "all" ? undefined : value);
-                  table.setPageIndex(0);
-                }}
-              >
-                {kindOptions.map((kind) => (
-                  <DropdownMenuRadioItem key={kind.value} value={kind.value}>
-                    {kind.label}
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {userRole !== "sales_manager" ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <CreditCard />
+                  Billing
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuRadioGroup
+                  value={billingFilter}
+                  onValueChange={(value) => {
+                    table.getColumn("kind")?.setFilterValue(value === "all" ? undefined : value);
+                    table.setPageIndex(0);
+                  }}
+                >
+                  {kindOptions.map((kind) => (
+                    <DropdownMenuRadioItem key={kind.value} value={kind.value}>
+                      {kind.label}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm">

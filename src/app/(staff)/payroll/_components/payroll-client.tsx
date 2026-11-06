@@ -8,13 +8,7 @@ import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 
-import {
-  createPayrollRun,
-  finalizePayrollRun,
-  reviewPayrollRun,
-  saveCompensation,
-} from "@/app/(staff)/payroll/actions";
-import { ConfirmDialog } from "@/components/confirm-dialog";
+import { createPayrollRun, saveCompensation } from "@/app/(staff)/payroll/actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -23,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
+import { PayrollRunDetailDialog } from "./payroll-run-detail";
 import { type CompensationRow, CompensationTable, type PayrollRunRow, PayrollRunsTable } from "./payroll-tables";
 
 export type { CompensationRow, PayrollRunRow } from "./payroll-tables";
@@ -46,8 +41,7 @@ export function PayrollClient({
 }: PayrollClientProps) {
   const router = useRouter();
   const [formOpen, setFormOpen] = useState(false);
-  // T06: approving or rejecting a run asks for confirmation first.
-  const [pendingReview, setPendingReview] = useState<{ id: string; decision: "approved" | "rejected" } | null>(null);
+  const [detailRunId, setDetailRunId] = useState<string | null>(null);
   const [periodStart, setPeriodStart] = useState("");
   const [periodEnd, setPeriodEnd] = useState("");
   const [notes, setNotes] = useState("");
@@ -125,31 +119,6 @@ export function PayrollClient({
     router.refresh();
   }
 
-  async function submitReview(runId: string, decision: "approved" | "rejected") {
-    const fd = new FormData();
-    fd.set("payroll_run_id", runId);
-    fd.set("decision", decision);
-    const result = await reviewPayrollRun(fd);
-    if ("error" in result && result.error) {
-      toast.error(result.error);
-      return;
-    }
-    toast.success(decision === "approved" ? "Run approved." : "Run rejected and returned to draft.");
-    router.refresh();
-  }
-
-  async function submitFinalize(runId: string) {
-    const fd = new FormData();
-    fd.set("payroll_run_id", runId);
-    const result = await finalizePayrollRun(fd);
-    if ("error" in result && result.error) {
-      toast.error(result.error);
-      return;
-    }
-    toast.success("Run finalized. Payslips are now final.");
-    router.refresh();
-  }
-
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -197,27 +166,19 @@ export function PayrollClient({
           {runs.length === 0 ? (
             <p className="text-muted-foreground text-sm">No payroll runs yet.</p>
           ) : (
-            <PayrollRunsTable
-              data={runs}
-              canReview={canReview}
-              canFinalize={canFinalize}
-              onReview={(id, decision) => setPendingReview({ id, decision })}
-              onFinalize={submitFinalize}
-            />
+            <PayrollRunsTable data={runs} onOpenDetail={setDetailRunId} />
           )}
         </CardContent>
       </Card>
 
-      <ConfirmDialog
-        open={pendingReview !== null}
+      <PayrollRunDetailDialog
+        runId={detailRunId}
+        open={detailRunId !== null}
         onOpenChange={(open) => {
-          if (!open) setPendingReview(null);
+          if (!open) setDetailRunId(null);
         }}
-        action={pendingReview?.decision === "rejected" ? "reject" : "approve"}
-        description={
-          pendingReview?.decision === "rejected" ? "The run goes back to draft." : "The run is approved for release."
-        }
-        onConfirm={() => (pendingReview ? submitReview(pendingReview.id, pendingReview.decision) : undefined)}
+        canReview={canReview}
+        canFinalize={canFinalize}
       />
 
       <Dialog open={formOpen} onOpenChange={setFormOpen}>

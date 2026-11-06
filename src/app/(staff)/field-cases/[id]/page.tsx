@@ -8,6 +8,7 @@ import { withSignedTransactionDocumentUrls } from "@/lib/transactions/document-m
 
 import { BuyerMeetupCase } from "./_components/buyer-meetup-case";
 import { DeliveryCase } from "./_components/delivery-case";
+import { RecoveryCase } from "./_components/recovery-case";
 import { SellMeetupCase } from "./_components/sell-meetup-case";
 
 // Who oversees each kind of case besides the assigned team.
@@ -15,6 +16,7 @@ const OVERSEERS: Record<string, string[]> = {
   acquisition: ["ceo", "marketing_specialist"],
   delivery: ["ceo", "sales_manager"],
   buyer_meetup: ["ceo", "sales_manager"],
+  recovery: ["ceo", "head_accountant"],
 };
 const FIELD_TEAM = ["confidential_informant", "mechanic", "head_security"];
 // Any Confidential Informant may read a delivery or a meet-up; only the assigned team acts on it.
@@ -38,7 +40,7 @@ export default async function FieldCasePage({ params }: { readonly params: Promi
     .from("field_cases")
     .select("*")
     .eq("id", id)
-    .in("case_kind", ["acquisition", "delivery", "buyer_meetup"])
+    .in("case_kind", ["acquisition", "delivery", "buyer_meetup", "recovery"])
     .maybeSingle();
   if (!fieldCase?.transaction_id) notFound();
 
@@ -50,6 +52,41 @@ export default async function FieldCasePage({ params }: { readonly params: Promi
   const overseer = OVERSEERS[fieldCase.case_kind]?.includes(role) ?? false;
   const ciViewer = role === "confidential_informant" && CI_OPEN_CASES.includes(fieldCase.case_kind);
   if (!overseer && !ciViewer && !(assigned && FIELD_TEAM.includes(role))) redirect("/unauthorized");
+
+  if (fieldCase.case_kind === "recovery") {
+    const [{ data: transaction }, { data: workers }, { data: photos }] = await Promise.all([
+      admin
+        .from("transactions")
+        .select("id, profiles(full_name, phone), vehicles(make, model, year)")
+        .eq("id", fieldCase.transaction_id)
+        .maybeSingle(),
+      (await createServerSupabase()).rpc("list_field_case_workers"),
+      admin
+        .from("transaction_documents")
+        .select("id, storage_path")
+        .eq("transaction_id", fieldCase.transaction_id)
+        .eq("document_kind", "inspection_photo"),
+    ]);
+    if (!transaction) notFound();
+    const evidence = await Promise.all(
+      (photos ?? [])
+        .filter((photo) => photo.storage_path.includes("/tow-"))
+        .map(async (photo) => {
+          const { data } = await admin.storage.from("transaction-documents").createSignedUrl(photo.storage_path, 900);
+          return { id: String(photo.id), url: data?.signedUrl ?? "" };
+        }),
+    );
+    return (
+      <RecoveryCase
+        fieldCase={fieldCase}
+        transaction={transaction}
+        mechanics={(workers ?? []).filter((worker: { role: string }) => worker.role === "mechanic")}
+        canAct={assigned && FIELD_TEAM.includes(role)}
+        isInformant={role === "confidential_informant" && fieldCase.assigned_confidential_informant === user.id}
+        evidence={evidence.filter((photo) => photo.url)}
+      />
+    );
+  }
 
   // The papers the Confidential Informant carries to a meet-up or a delivery.
   const { data: handover } =

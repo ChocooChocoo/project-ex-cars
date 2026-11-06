@@ -73,12 +73,4 @@ test.describe("Task 32 client feedback", () => {
       await expect(page.getByText("Processed (Sales)")).toBeVisible();
     }
   });
-
-  test("suppliers page offers vehicle/parts/both filter", async ({ page }) => {
-    await signInAs(page, "ceo@gce.local");
-    await page.goto("/ceo/suppliers");
-    await page.getByRole("button", { name: "Offering" }).click();
-    await expect(page.getByRole("menuitemradio", { name: "Vehicles", exact: true })).toBeVisible();
-    await expect(page.getByRole("menuitemradio", { name: "Both", exact: true })).toBeVisible();
-  });
 });

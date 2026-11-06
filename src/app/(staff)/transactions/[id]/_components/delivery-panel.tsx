@@ -117,6 +117,11 @@ export function DeliveryPanel({
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4 text-sm">
+        {purchaseDetails?.payment_method === "financing" && ["head_accountant", "ceo"].includes(userRole) ? (
+          <Button asChild variant="outline" className="self-start">
+            <Link href={`/vehicle-papers/${transactionId}/missed-payment-policy`}>Print missed payment policy</Link>
+          </Button>
+        ) : null}
         {termsSet ? (
           <dl className="grid gap-2 sm:grid-cols-3">
             <div>

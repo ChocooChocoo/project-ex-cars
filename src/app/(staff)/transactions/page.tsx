@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/auth/guards";
 import { TRANSACTION_VIEWER_ROLES } from "@/lib/auth/roles";
 import { checkAndNotifyOverdueReviews } from "@/lib/notifications/actions";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { paidInstallmentCount } from "@/lib/transactions/financing-payments";
 
 import type { TransactionRow } from "./_components/recent-transactions-table/schema";
 import { RecentTransactionsTable } from "./_components/recent-transactions-table/table";
@@ -22,9 +23,11 @@ export default async function TransactionsPage({
   let query = supabase
     .from("transactions")
     .select(
-      "*, vehicles(make, model, year), profiles(full_name), purchase_details(*), sell_details(*), vehicle_requests(*)",
+      "*, vehicles(make, model, year), profiles(full_name), purchase_details(*), sell_details(*), installment_accounts(installments(state))",
     )
     .order("updated_at", { ascending: false });
+
+  if (role === "sales_manager") query = query.eq("transaction_kind", "buy");
 
   if (state && ["pending", "under_review", "approved", "rejected", "completed", "cancelled"].includes(state)) {
     query = query.eq("current_state", state);
@@ -37,6 +40,10 @@ export default async function TransactionsPage({
     const vehicles = t.vehicles as Record<string, unknown> | null;
     const profile = t.profiles as Record<string, unknown> | null;
     const purchase = Array.isArray(t.purchase_details) ? t.purchase_details[0] : t.purchase_details;
+    const account = (Array.isArray(t.installment_accounts) ? t.installment_accounts[0] : t.installment_accounts) as {
+      installments?: { state: unknown }[];
+    } | null;
+    const installments = account?.installments ?? [];
 
     return {
       id: t.id as string,
@@ -49,6 +56,8 @@ export default async function TransactionsPage({
       vehicleModel: (vehicles?.model as string | undefined) ?? "",
       vehicleYear: (vehicles?.year as string | undefined) ?? "",
       openedAt: t.opened_at as string,
+      paidInstallments: paidInstallmentCount(installments),
+      totalInstallments: installments.length,
     };
   });
 
@@ -86,15 +95,16 @@ export default async function TransactionsPage({
     kpiDatum("Under Review", (t) => t.current_state === "under_review"),
     kpiDatum("Completed", (t) => t.current_state === "completed"),
     kpiDatum("Buy", (t) => t.transaction_kind === "buy"),
-    kpiDatum("Sell", (t) => t.transaction_kind === "sell"),
-    kpiDatum("Requests", (t) => t.transaction_kind === "request_a_car"),
+    ...(role === "sales_manager" ? [] : [kpiDatum("Sell", (t) => t.transaction_kind === "sell")]),
   ];
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
         <h1 className="text-3xl leading-none tracking-tight">Transactions</h1>
-        <p className="text-muted-foreground text-sm">Manage buy, sell, and request-a-car transactions.</p>
+        <p className="text-muted-foreground text-sm">
+          {role === "sales_manager" ? "Manage buying transactions." : "Manage buy and sell transactions."}
+        </p>
       </div>
       <TransactionsKpiStrip data={kpis} />
       <RecentTransactionsTable data={rows} userRole={role} />
