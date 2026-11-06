@@ -75,6 +75,29 @@ function SignaturePad({ onChange }: { readonly onChange: (canvas: HTMLCanvasElem
   );
 }
 
+// A meet-up or delivery contract is signed on paper with GCE staff, so the buyer only reads where and when.
+export function OnSiteContract({
+  arrangementKind,
+  signedAt,
+}: {
+  readonly arrangementKind: string | null;
+  readonly signedAt: string | null;
+}) {
+  const where = arrangementKind === "delivery" ? "when the car is delivered" : "at the meet-up";
+  return (
+    <section className="flex flex-col gap-3" aria-labelledby="contract-heading">
+      <h2 id="contract-heading" className="font-medium tracking-tight">
+        Your contract
+      </h2>
+      <p className="text-muted-foreground text-sm">
+        {signedAt
+          ? `You signed this contract on ${format(new Date(signedAt), "MMM d, yyyy 'at' h:mm a")}.`
+          : `You sign the printed contract with GCE staff ${where}. Read it there before you sign.`}
+      </p>
+    </section>
+  );
+}
+
 // The buyer reads the contract the Head Accountant approved and signs it. T06: by e-signature (typed full
 // name plus a drawn signature) or face-to-face with GCE staff. Before approval only the wait is explained.
 export function ContractSign({
