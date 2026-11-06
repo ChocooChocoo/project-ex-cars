@@ -11,6 +11,7 @@ vi.mock("@/app/(customer)/my-transactions/actions", () => ({
   cancelTransaction: vi.fn(),
   removePurchaseDocument: vi.fn(),
   saveBuyDetails: vi.fn(),
+  signContract: vi.fn(),
   uploadPurchaseDocument: vi.fn(),
 }));
 vi.mock("./transaction-preview", () => ({
@@ -232,5 +233,44 @@ describe("TransactionDetail ID sides and removal", () => {
     );
 
     expect(screen.queryByRole("button", { name: /^Remove/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("TransactionDetail contract", () => {
+  function renderApprovedBuy(purchase_details: Record<string, unknown>, contract_state: string | null) {
+    render(
+      <TransactionDetail
+        transaction={{ ...transaction, purchase_details, sale_handovers: { contract_state } }}
+        history={[]}
+        documents={[]}
+        payments={[]}
+        installmentAccount={null}
+        paymentTerms={null}
+        viewingArrangements={[]}
+        autofill={null}
+      />,
+    );
+  }
+
+  it("T06 G6: a cash delivery says the printed contract is signed on delivery, with no sign form", () => {
+    renderApprovedBuy({ payment_method: "cash", arrangement_kind: "delivery" }, null);
+
+    expect(screen.getByRole("heading", { name: "Your contract" })).toBeInTheDocument();
+    expect(screen.getByText(/sign the printed contract with GCE staff when the car is delivered/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Sign contract/ })).not.toBeInTheDocument();
+  });
+
+  it("keeps the in-app contract for financing at a GCE visit", () => {
+    renderApprovedBuy({ payment_method: "financing", arrangement_kind: "gce_visit" }, "pending_approval");
+
+    expect(screen.getByRole("heading", { name: "Your contract" })).toBeInTheDocument();
+    expect(screen.getByText(/You can read and sign it here once it is approved/)).toBeInTheDocument();
+    expect(screen.queryByText(/sign the printed contract/)).not.toBeInTheDocument();
+  });
+
+  it("shows no contract on a cash buy at a GCE visit, which has none", () => {
+    renderApprovedBuy({ payment_method: "cash", arrangement_kind: "gce_visit" }, null);
+
+    expect(screen.queryByRole("heading", { name: "Your contract" })).not.toBeInTheDocument();
   });
 });
