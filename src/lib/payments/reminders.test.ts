@@ -27,5 +27,8 @@ describe("T06 payment reminders", () => {
     });
     expect(message.subject).toBe("GCE payment reminder: ₱33,334.00 due tomorrow");
     expect(message.text).toContain("2022 Toyota Vios is due tomorrow, on 2026-11-05");
+    expect(message.text).toContain("Use Payment");
+    expect(message.text).toContain("Advanced Payment");
+    expect(message.text).toContain("Head Accountant verification");
   });
 });

@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import { GCE_SELLER } from "../transactions/buy-flow";
-import { deedOfSale, PAPER_BLANK, paperSale, policyWarranty } from "./templates";
+import { deedOfSale, missedPaymentPolicy, PAPER_BLANK, paperSale, policyWarranty } from "./templates";
+
+it("prints only the fixed missed payment policy", () => {
+  expect(missedPaymentPolicy()).toEqual({
+    title: "MISSED PAYMENT POLICY",
+    paragraphs: [
+      "After 4 consecutive missed monthly payments, GCE will tow and take back the car. The Head Accountant gives this policy to the client at delivery.",
+    ],
+  });
+});
 
 const saleRow = {
   opened_at: "2026-10-31T02:00:00.000Z",

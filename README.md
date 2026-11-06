@@ -1,21 +1,20 @@
 # Global Car Exchange (GCE)
 
-A role-based vehicle marketplace platform: a public-facing customer shopping experience, an isolated supplier portal, and a staff dashboard covering sales, inspections, inquiries, transactions, payroll, finance records, field operations, and management reporting. Built on Next.js 16 and Supabase.
+A role-based vehicle marketplace platform: a customer shopping experience and a staff dashboard covering sales, inspections, inquiries, transactions, payroll, finance records, field operations, and management reporting. Built on Next.js 16 and Supabase.
 
 ## Portals
 
 | Portal | Route group | Who | Notes |
 |---|---|---|---|
 | Staff dashboard | `src/app/(staff)/` | CEO, Account Manager, Head Accountant, Confidential Informant, Marketing Specialist, Mechanic, Sales Manager, Head Security | Role-prefixed URLs (`/ceo/…`, `/mechanic/…`) are rewritten by `src/proxy.ts` onto shared pages; access is filtered by `ROLE_NAV_ACCESS` in `src/lib/auth/roles.ts`, page-level role checks, action allowlists, and Supabase RLS |
-| Customer portal | `src/app/(customer)/` | Customer | Showroom, Find Your Car (recommendations), inquiries chat, transactions, favourites, sell-vehicle, request-a-car |
-| Supplier portal | `src/app/(supplier)/` | Supplier | Isolated overview (profile, documents, ID-verification progress) plus messages to the CEO; suppliers are staff-created and approved before first sign-in |
+| Customer portal | `src/app/(customer)/` | Customer | Showroom, Find Your Car (recommendations), inquiries chat, buy/sell transactions, favourites, sell-vehicle |
 | Public/auth | `src/app/(external)/`, `src/app/auth/`, `src/app/unauthorized/` | — | The app is login-first; four auth screens under `/auth/v1` and `/auth/v2`; `src/app/template/**` holds publicly reachable upstream-template design previews that are not part of the product surface |
 
 ## Tech Stack
 
 - **Framework:** Next.js 16 (App Router), React 19 + React Compiler, TypeScript strict
 - **UI:** Tailwind CSS v4 (CSS-first), shadcn/ui
-- **Backend:** Supabase (Postgres with row-level security, Auth, Storage, Realtime) — 43 SQL migrations in `supabase/migrations/`
+- **Backend:** Supabase (Postgres with row-level security, Auth, Storage, Realtime) — versioned SQL in `supabase/migrations/`
 - **State/forms:** Zustand, React Hook Form, Zod validation
 - **Tooling:** Biome, Husky, Vitest, Playwright
 
@@ -52,13 +51,26 @@ node --env-file=.env.local scripts/seed-users.cjs   # creates the ten test accou
 npx supabase db query --linked --file scripts/seed-roles.sql   # assigns their roles
 ```
 
+### Email confirmation links
+
+Set `NEXT_PUBLIC_SITE_URL` to the deployed origin and, in the hosted Supabase dashboard, set the same **Site URL** plus these **Redirect URLs**:
+
+```
+https://<deployed-origin>/auth/callback
+https://<deployed-origin>/auth/confirm
+http://localhost:3000/auth/callback
+http://localhost:3000/auth/confirm
+```
+
+The confirmation template in `supabase/templates/confirmation.html` links to `/auth/confirm?token_hash=…`, so a Gmail link works even when it opens in a different browser. Hosted Supabase projects must paste the same template into **Authentication → Email Templates → Confirm signup** (local config alone does not change the hosted project).
+
 Run the app:
 
 ```bash
 npm run dev    # http://localhost:3000
 ```
 
-The ten seeded accounts (one per role, e.g. `ceo@gce.local`, `supplier@gce.local`) and their landing pages are catalogued in [`docs/ANALYZER/AUDIT - GLOBAL CAR EXCHANGE/13 - USER ACCOUNTS.md`](docs/ANALYZER/AUDIT%20-%20GLOBAL%20CAR%20EXCHANGE/13%20-%20USER%20ACCOUNTS.md).
+Seeded accounts (e.g. `ceo@gce.local`, `customer@gce.local`) are defined in `scripts/seed-users.cjs`. Staff cannot use the customer showroom to buy cars.
 
 ## Commands
 
@@ -77,7 +89,7 @@ Husky pre-commit runs `generate:presets`, stages `src/lib/preferences/theme.ts`,
 
 ## Architecture in one paragraph
 
-Routes live directly under `src/app` in four groups (`(staff)`, `(customer)`, `(supplier)`, `(external)`) plus top-level `auth/`, `template/`, and `unauthorized/`; each route folder owns its `_components/`. Middleware resolves the signed-in role from the `gce-role` cookie and rewrites role-prefixed URLs onto shared internal pages (`src/lib/routing/paths.ts`). Authorization is layered: navigation filtering (`ROLE_NAV_ACCESS`), per-page role checks, per-action allowlists in `src/app/**/actions.ts`, and Postgres RLS across all public tables. Data access runs through server actions and `src/server/server-actions.ts`; `src/data/` contains mock/demo content only.
+Routes live directly under `src/app` in three groups (`(staff)`, `(customer)`, `(external)`) plus top-level `auth/`, `template/`, and `unauthorized/`; each route folder owns its `_components/`. Middleware resolves the signed-in role from the `gce-role` cookie and rewrites role-prefixed URLs onto shared internal pages (`src/lib/routing/paths.ts`). Authorization is layered: navigation filtering (`ROLE_NAV_ACCESS`), per-page role checks, non-redirecting customer action gates through `authorizeAction`, and Postgres RLS across all public tables. Data access runs through server actions and `src/server/server-actions.ts`; `src/data/` contains mock/demo content only.
 
 ## Documentation
 

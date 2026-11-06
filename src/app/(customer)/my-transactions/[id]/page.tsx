@@ -17,7 +17,7 @@ export default async function MyTransactionDetailPage({ params }: { readonly par
   const { data: transaction } = await supabase
     .from("transactions")
     .select(
-      "*, vehicles(make, model, year, stock_code, current_price), purchase_details(*), sell_details(*), vehicle_requests(*), sale_handovers(papers_status, contract_state, contract_body, contract_signed_at, signing_method)",
+      "*, vehicles(make, model, year, stock_code, current_price), purchase_details(*), sell_details(*), sale_handovers(papers_status, contract_state, contract_body, contract_signed_at, signing_method)",
     )
     .eq("id", id)
     .eq("customer_id", user.user.id)
@@ -75,6 +75,12 @@ export default async function MyTransactionDetailPage({ params }: { readonly par
     .order("created_at", { ascending: false });
 
   const autofill = await getProfileAutoFill();
+  const { data: review } = await supabase
+    .from("customer_reviews")
+    .select("rating, body, created_at")
+    .eq("transaction_id", id)
+    .eq("customer_id", user.user.id)
+    .maybeSingle();
 
   // T05 P7: the buyer's own region sets the delivery fee range shown on the transaction.
   const { data: buyerProfile } = await supabase
@@ -90,18 +96,23 @@ export default async function MyTransactionDetailPage({ params }: { readonly par
       ? await supabase.rpc("list_taken_visit_slots", { p_vehicle_id: vehicleId })
       : { data: null };
 
-  // §4 step 7a: the buyer tracks the delivery. Customers cannot read field cases under RLS; the row
-  // above is already limited to this customer, so the status is read with the service role.
-  const { data: deliveryCase } =
+  // §4 step 7a: the buyer tracks the delivery or the recovery. Customers cannot read field cases
+  // under RLS; the row above is already limited to this customer, so the cases are read with the
+  // service role.
+  const { data: fieldCases } =
     (transaction as Record<string, unknown>).transaction_kind === "buy"
       ? await createAdminClient()
           .from("field_cases")
-          .select("delivery_status, delay_note, expected_arrival, last_lat, last_lng, last_located_at")
+          .select(
+            "id, case_kind, state, delivery_status, delay_note, expected_arrival, last_lat, last_lng, last_located_at",
+          )
           .eq("transaction_id", id)
-          .eq("case_kind", "delivery")
+          .in("case_kind", ["delivery", "recovery"])
           .neq("state", "cancelled")
-          .maybeSingle()
+          .order("created_at", { ascending: false })
       : { data: null };
+  const deliveryCase = fieldCases?.find((row) => row.case_kind === "delivery") ?? null;
+  const recoveryCase = fieldCases?.find((row) => row.case_kind === "recovery") ?? null;
 
   // Appendix C: after 2 no-shows or a Not Legit decline the buyer may only visit GCE.
   const { data: standing } = await supabase
@@ -152,18 +163,31 @@ export default async function MyTransactionDetailPage({ params }: { readonly par
         paymentTerms={paymentTerms as Record<string, unknown> | null}
         viewingArrangements={(viewingArrangements as Record<string, unknown>[]) ?? []}
         autofill={autofill}
+        review={review}
         negotiationThreadId={(negotiationThread as { id: string } | null)?.id ?? null}
         counterOffer={counterOffer}
         gceVisitOnly={standing?.gce_visit_only === true}
         delivery={
           deliveryCase
             ? {
+                id: deliveryCase.id,
                 status: deliveryCase.delivery_status,
                 delay_note: deliveryCase.delay_note,
                 expected_arrival: deliveryCase.expected_arrival,
                 last_lat: deliveryCase.last_lat,
                 last_lng: deliveryCase.last_lng,
                 last_located_at: deliveryCase.last_located_at,
+              }
+            : null
+        }
+        recovery={
+          recoveryCase
+            ? {
+                id: recoveryCase.id,
+                state: recoveryCase.state,
+                last_lat: recoveryCase.last_lat,
+                last_lng: recoveryCase.last_lng,
+                last_located_at: recoveryCase.last_located_at,
               }
             : null
         }

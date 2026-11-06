@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { rankVehicles, rankWithinBudget, type VehicleInput } from "@/lib/recommendations/engine";
+import { rankVehicles, type VehicleInput } from "@/lib/recommendations/engine";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { statedPreferencesSchema } from "@/lib/validation/recommendations";
 
@@ -111,42 +111,6 @@ export async function runRecommendation(budget: number, preferences: Record<stri
   revalidatePath("/recommendations");
 
   return { success: true, runId: run.id, scored };
-}
-
-export interface BudgetCar {
-  id: string;
-  make: string | null;
-  model: string | null;
-  year: number | null;
-  current_price: number;
-}
-
-/** T03 C4: a short list of available cars priced at or below the budget. Read only; no recommendation run is saved. */
-export async function listCarsWithinBudget(budget: number): Promise<{ error: string } | { cars: BudgetCar[] }> {
-  if (!Number.isFinite(budget) || budget <= 0) return { cars: [] };
-  const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Not authenticated" };
-
-  const loaded = await loadRankInputs(supabase);
-  if ("error" in loaded) return { cars: [] };
-
-  const byId = new Map(loaded.vehicles.map((v) => [v.id as string, v]));
-  const cars = rankWithinBudget(loaded.vehicleInputs, budget)
-    .slice(0, 6)
-    .map(({ vehicleId }) => {
-      const v = byId.get(vehicleId);
-      return {
-        id: vehicleId,
-        make: (v?.make as string | null) ?? null,
-        model: (v?.model as string | null) ?? null,
-        year: (v?.year as number | null) ?? null,
-        current_price: Number(v?.current_price ?? 0),
-      };
-    });
-  return { cars };
 }
 
 export async function getRecommendationRun(runId: string) {

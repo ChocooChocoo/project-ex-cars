@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { InquiryThreadData } from "@/components/inquiries/types";
+import { authorizeAction } from "@/lib/auth/action-guard";
 import { type ActionResult, failure, notAuthenticated, notFound } from "@/lib/auth/action-result";
 import { getProfileAutoFill } from "@/lib/autofill";
 import {
@@ -23,6 +24,8 @@ import { createInquirySchema, scheduleArrangementSchema, sendMessageSchema } fro
 import { randomUUID } from "node:crypto";
 
 export async function createInquiry(formData: FormData) {
+  const authorization = await authorizeAction(["customer"]);
+  if (!authorization.ok) return { error: authorization.message };
   const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };

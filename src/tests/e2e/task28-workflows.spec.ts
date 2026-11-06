@@ -78,20 +78,4 @@ test.describe("Task 28 CEO workflow regressions", () => {
     await expect(page.getByRole("option").first()).toBeVisible();
     await page.keyboard.press("Escape");
   });
-
-  test("supplier messages uses a responsive master-detail conversation", async ({ page }) => {
-    await signIn(page, "/ceo/supplier-messages");
-    const shell = page.getByTestId("supplier-chat-shell");
-    await expect(shell).toBeVisible();
-    const rows = shell.getByTestId("supplier-row");
-    await expect(rows.first()).toBeVisible();
-    await rows.first().click();
-    await expect(shell.getByPlaceholder("Type a message...", { exact: true })).toBeVisible();
-
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.reload();
-    await rows.first().click();
-    await expect(page.getByRole("button", { name: "Back to conversations", exact: true })).toBeVisible();
-    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  });
 });

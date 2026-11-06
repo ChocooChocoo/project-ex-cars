@@ -19,7 +19,7 @@ describe("notificationHref (T03 G1)", () => {
 
   it("gives no link to roles that cannot open the transaction list", () => {
     expect(notificationHref(tx, "mechanic")).toBeNull();
-    expect(notificationHref(tx, "supplier")).toBeNull();
+    expect(notificationHref(tx, "unknown")).toBeNull();
     expect(notificationHref(tx, null)).toBeNull();
   });
 
@@ -47,7 +47,7 @@ describe("notificationHref (T03 G1)", () => {
 
   it("gives no link without a reference or for an unknown table", () => {
     expect(notificationHref({ reference_table: null, reference_id: null }, "ceo")).toBeNull();
-    expect(notificationHref({ reference_table: "suppliers", reference_id: "s-1" }, "ceo")).toBeNull();
+    expect(notificationHref({ reference_table: "unknown", reference_id: "s-1" }, "ceo")).toBeNull();
   });
 
   it("T06: opens the car for a price revision request", () => {

@@ -15,19 +15,23 @@ export function PaperDocumentView({
   paper,
   heading,
   note,
+  backHref = "/vehicle-papers",
+  backLabel = "Vehicle Papers",
 }: {
   readonly paper: PaperDocument;
   readonly heading: string;
   readonly note: string;
+  readonly backHref?: string;
+  readonly backLabel?: string;
 }) {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex flex-col gap-2">
           <Button asChild variant="ghost" size="sm" className="-ml-2 self-start text-muted-foreground">
-            <Link href="/vehicle-papers">
+            <Link href={backHref}>
               <ArrowLeft data-icon="inline-start" />
-              Vehicle Papers
+              {backLabel}
             </Link>
           </Button>
           <div className="flex flex-col gap-1">

@@ -229,10 +229,11 @@ export function verifiedPaid(payments: PaymentLike[], kind: string): number {
 // of the car price, so they do not reduce it.
 // A payment the Head Accountant rejected (T03 HA3) never counts.
 export function paidTowardPrice(
-  payments: { payment_kind?: unknown; amount?: unknown; rejected_at?: unknown }[],
+  payments: { payment_kind?: unknown; amount?: unknown; rejected_at?: unknown; verified_by?: unknown }[],
 ): number {
   return payments
     .filter((p) => !p.rejected_at && p.payment_kind !== "delivery_fee" && p.payment_kind !== "reschedule_fee")
+    .filter((p) => p.payment_kind !== "installment" || p.verified_by)
     .reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
 }
 

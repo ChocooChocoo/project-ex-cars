@@ -128,7 +128,7 @@ describe("server Supabase clients and expired sessions", () => {
       ),
     );
 
-    // Awaited inside src/app/(staff)/layout.tsx and the customer/supplier layouts, so a
+    // Awaited inside src/app/(staff)/layout.tsx and the customer layout, so a
     // cookie write here is a 500 on every page in those groups.
     await expect(getNotifications("ceo")).resolves.toEqual([]);
     await expect(getUnreadNotificationCount("ceo")).resolves.toBe(0);
@@ -149,7 +149,7 @@ describe("render-path wiring", () => {
     );
   });
 
-  it("getCurrentUser uses the read-only client, since the suppliers page renders it", () => {
+  it("getCurrentUser uses the read-only client during page rendering", () => {
     const actions = read("src/app/auth/actions.ts");
     const body = actions.slice(actions.indexOf("export async function getCurrentUser"));
 

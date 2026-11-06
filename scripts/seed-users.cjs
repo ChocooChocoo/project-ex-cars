@@ -33,7 +33,6 @@ if (!DEFAULT_PASSWORD) {
 
 const SEED_USERS = [
   { role: "customer", name: "Juan Dela Cruz", email: "customer@gce.local" },
-  { role: "supplier", name: "Maria Santos", email: "supplier@gce.local" },
   { role: "ceo", name: "Roberto Gonzales", email: "ceo@gce.local" },
   { role: "account_manager", name: "Angela Reyes", email: "account_manager@gce.local" },
   { role: "head_accountant", name: "Benjamin Tan", email: "head_accountant@gce.local" },

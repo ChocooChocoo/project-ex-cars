@@ -248,6 +248,11 @@ otp_expiry = 3600
 # subject = "You have been invited"
 # content_path = "./supabase/templates/invite.html"
 
+# T07: the confirmation link uses the token hash so Gmail can open it in another browser.
+[auth.email.template.confirmation]
+subject = "Confirm your GCE account"
+content_path = "./supabase/templates/confirmation.html"
+
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]
 # enabled = true

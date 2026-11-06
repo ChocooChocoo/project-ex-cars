@@ -68,7 +68,6 @@ export async function proposeFinancingTerms(formData: FormData): Promise<Financi
       // T04 P6: left blank, it defaults to the car's price plus 10%.
       total_amount: z.coerce.number().positive("Enter the vehicle price.").optional().or(z.literal("")),
       first_due_date: z.string().min(1, "Set the first due date."),
-      missed_payment_policy: z.string().trim().min(1, "State the missed payment policy.").max(1000),
       delivery_fee: z.coerce.number().min(0).optional(),
       notes: z.string().trim().max(500).optional().or(z.literal("")),
     })
@@ -78,6 +77,13 @@ export async function proposeFinancingTerms(formData: FormData): Promise<Financi
   const admin = createAdminClient();
   const tx = await loadFinancing(admin, formData.get("transaction_id"));
   if (!tx) return { error: "Financing request not found." };
+  if (
+    tx.terms &&
+    ["approved", "active", "completed"].includes(tx.terms.state) &&
+    parsed.data.first_due_date !== tx.terms.first_due_date
+  ) {
+    return { error: "The first due date cannot change after financing approval." };
+  }
   if (tx.current_state !== "approved") return { error: "Approve the request before proposing terms." };
   if (tx.terms && !["returned"].includes(tx.terms.state)) return { error: "Terms are already in review." };
 
@@ -106,7 +112,6 @@ export async function proposeFinancingTerms(formData: FormData): Promise<Financi
     total_amount: totalAmount,
     down_payment: downPayment,
     monthly_payment: monthlyPayment,
-    missed_payment_policy: parsed.data.missed_payment_policy,
     delivery_fee: delivery ? (parsed.data.delivery_fee ?? 0) : null,
     number_of_payments: durationMonths,
     duration_months: durationMonths,
@@ -340,6 +345,16 @@ export async function recordVisitDecision(formData: FormData): Promise<Financing
     return { error: "Another buyer already holds a Purchase Claim on this car." };
   await admin.from("vehicles").update({ listing_state: "reserved" }).eq("id", tx.vehicle_id);
   await admin.from("transactions").update({ flow_status: "purchase_claim" }).eq("id", tx.id);
+  // After the inspection claim, the Initial Downpayment becomes due within 2–3 working days.
+  if (tx.terms?.down_payment != null) {
+    await admin
+      .from("purchase_details")
+      .update({
+        downpayment_amount: tx.terms.down_payment,
+        downpayment_due_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+      })
+      .eq("transaction_id", tx.id);
+  }
   await history(admin, tx, who.userId, "Purchase Claim recorded; car reserved for this buyer");
 
   // Other buyers for the car are told it is now under a claim (§6 step 16).

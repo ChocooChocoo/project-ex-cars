@@ -26,7 +26,7 @@ test.describe("Task 33 corrective workflows", () => {
     await transaction.click();
     const transactionOption = page
       .getByRole("option")
-      .filter({ hasText: /Buy|Sell|Request a Car/ })
+      .filter({ hasText: /Buy|Sell/ })
       .first();
     await expect(transactionOption).toBeVisible();
     await transactionOption.click();

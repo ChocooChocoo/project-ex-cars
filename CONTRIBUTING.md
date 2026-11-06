@@ -19,7 +19,6 @@ src
 ├── app
 │   ├── (staff)      # Staff dashboard routes (~40 folders; nested (staff)/(legacy) holds v1 variants, reference only)
 │   ├── (customer)   # Customer shopping portal
-│   ├── (supplier)   # Isolated supplier portal (overview + messages)
 │   ├── (external)   # Public landing pages
 │   ├── auth         # Four auth screens + sign-in/sign-up server actions
 │   ├── template     # Upstream-template design previews — public, reference only, not product surface
@@ -65,7 +64,7 @@ docs                 # Specification, analysis, audit, and task documentation (s
 ## Where to Contribute
 
 - **Staff modules**: add routes under `src/app/(staff)/<module>/` with colocated `_components/`; register navigation in `src/navigation/sidebar/sidebar-items.ts` and grant it per role in `src/lib/auth/roles.ts` (`ROLE_NAV_ACCESS`). Enforce access with a page-level role check and an action-level allowlist.
-- **Customer/supplier portals**: `src/app/(customer)/` and `src/app/(supplier)/`; keep supplier/customer isolation intact (layout guards redirect cross-role traffic).
+- **Customer portal**: `src/app/(customer)/`; keep the customer-only layout guard and non-redirecting `authorizeAction(["customer"])` gates on purchase/inquiry mutations. Staff use their dashboard, not the showroom.
 - **Auth screens**: `src/app/auth/` (server actions in `src/app/auth/actions.ts`).
 - **Shared UI**: `src/components/` (never hand-edit `src/components/ui/` — shadcn-generated).
 - **Theme presets/fonts**: `src/styles/presets/` and `src/lib/fonts/registry.ts` (see CLAUDE.md for the four-layer preferences system).

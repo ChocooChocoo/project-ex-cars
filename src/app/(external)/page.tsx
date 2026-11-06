@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { getFinancingMarkupPct } from "@/lib/settings/financing";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { cn, formatCurrency } from "@/lib/utils";
+import { getPublishedReviews } from "@/server/customer-reviews";
 
 import { FinancingEstimator } from "./_components/financing-estimator";
 import { HeroCopy, HeroLine, HeroPhoto } from "./_components/hero-entrance";
@@ -48,6 +49,7 @@ export default async function LandingPage() {
   // which anon may not touch. This server-only page reads with the admin client instead, limited to public
   // columns of published content and available cars.
   const supabase = createAdminClient();
+  const customerReviews = await getPublishedReviews();
   const { data: content } = await supabase
     .from("content_items")
     .select("id, content_kind, title, body, vehicle_id")
@@ -304,6 +306,37 @@ export default async function LandingPage() {
                   ) : null}
                 </li>
               ))}
+            </ul>
+          </section>
+        ) : null}
+
+        {customerReviews.reviews.length ? (
+          <section aria-labelledby="reviews-heading" className="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6">
+            <h2 id="reviews-heading" className="font-semibold text-3xl tracking-tight">
+              What clients say
+            </h2>
+            {customerReviews.average !== null ? (
+              <p className="mt-2 text-muted-foreground">
+                {customerReviews.average.toFixed(1)}/5 from {customerReviews.count} client reviews
+              </p>
+            ) : null}
+            <ul className="mt-6 grid gap-x-12 sm:grid-cols-2">
+              {customerReviews.reviews.map((review) => {
+                const profile = Array.isArray(review.profiles) ? review.profiles[0] : review.profiles;
+                const vehicle = Array.isArray(review.vehicles) ? review.vehicles[0] : review.vehicles;
+                return (
+                  <li key={review.id} className="border-t py-5">
+                    <p className="font-medium">
+                      {profile?.full_name || "GCE client"} · {review.rating}/5
+                    </p>
+                    <p className="mt-2 whitespace-pre-wrap break-words text-sm">{review.body}</p>
+                    <p className="mt-2 text-muted-foreground text-sm">
+                      {new Date(review.created_at).toLocaleDateString("en-PH")}
+                      {vehicle ? ` · ${vehicle.year} ${vehicle.make} ${vehicle.model}` : ""}
+                    </p>
+                  </li>
+                );
+              })}
             </ul>
           </section>
         ) : null}

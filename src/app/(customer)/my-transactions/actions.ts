@@ -6,6 +6,7 @@ import { after } from "next/server";
 
 import { z } from "zod";
 
+import { authorizeAction } from "@/lib/auth/action-guard";
 import { ACCEPTED_ID_TYPES } from "@/lib/auth/roles";
 import { notify } from "@/lib/notifications/notify";
 import { markCheckoutPaid } from "@/lib/payments/checkout-paid";
@@ -31,11 +32,12 @@ import {
 } from "@/lib/transactions/buy-flow";
 import { releaseVisitSlots } from "@/lib/transactions/buy-flow-server";
 import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_SIZE } from "@/lib/transactions/document-media";
+import { nextUnpaidInstallment, unpaidInstallments } from "@/lib/transactions/financing-payments";
 import { canCancelScheduled, nextQueueState, reviewDueAt } from "@/lib/transactions/state-machine";
 import {
   buyDetailsSchema,
   buyTransactionSchema,
-  requestCarSchema,
+  paymentRecordSchema,
   sellVehicleSchema,
 } from "@/lib/validation/transactions";
 import { autoCheckDocument } from "@/lib/verification/verify-document";
@@ -160,6 +162,8 @@ export async function removePurchaseDocument(documentId: string) {
 }
 
 export async function createBuyTransaction(formData: FormData) {
+  const authorization = await authorizeAction(["customer"]);
+  if (!authorization.ok) return { error: authorization.message };
   const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
@@ -210,6 +214,8 @@ export async function createBuyTransaction(formData: FormData) {
 }
 
 export async function saveBuyDetails(formData: FormData) {
+  const authorization = await authorizeAction(["customer"]);
+  if (!authorization.ok) return { error: authorization.message };
   const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
@@ -299,6 +305,7 @@ export async function saveBuyDetails(formData: FormData) {
       // T04 P3: the buyer no longer types a price; the sale is at the Showroom price.
       final_price: vehicle?.current_price || null,
       arrangement_kind: arrangement_kind || null,
+      location: arrangement_kind === "gce_visit" ? null : location || null,
       ...(acknowledge_condition === "yes" ? { condition_acknowledged_at: new Date().toISOString() } : {}),
       ...(needsDeliveryTerms && agree_delivery_terms ? { delivery_terms_agreed_at: new Date().toISOString() } : {}),
       ...(financing ? { requested_term_months } : {}),
@@ -345,6 +352,13 @@ export async function saveBuyDetails(formData: FormData) {
     if (stale.length > 0) {
       await admin.from("viewing_arrangements").update({ confirmation_state: "cancelled" }).in("id", stale);
     }
+  } else if (arrangement_kind === "meetup" || arrangement_kind === "delivery") {
+    const { error: locationError } = await createAdminClient()
+      .from("viewing_arrangements")
+      .update({ location: location || null })
+      .eq("purchase_transaction_id", transactionId)
+      .in("confirmation_state", ["pending", "confirmed"]);
+    if (locationError) return { error: locationError.message };
   }
 
   revalidatePath(`/my-transactions/${transactionId}`);
@@ -356,6 +370,8 @@ export async function saveBuyDetails(formData: FormData) {
 // A GCE visit holds a locked slot; a Meet Halfway request joins the car's queue, Active if no other
 // request is Active, otherwise On Hold until the Sales Manager promotes it.
 export async function submitBuyRequest(formData: FormData) {
+  const authorization = await authorizeAction(["customer"]);
+  if (!authorization.ok) return { error: authorization.message };
   const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
@@ -366,7 +382,7 @@ export async function submitBuyRequest(formData: FormData) {
   const { data: tx } = await supabase
     .from("transactions")
     .select(
-      "id, customer_id, vehicle_id, transaction_kind, current_state, queue_state, purchase_details(payment_method, arrangement_kind, condition_acknowledged_at, delivery_terms_agreed_at)",
+      "id, customer_id, vehicle_id, transaction_kind, current_state, queue_state, purchase_details(payment_method, arrangement_kind, location, condition_acknowledged_at, delivery_terms_agreed_at)",
     )
     .eq("id", transactionId.data)
     .maybeSingle();
@@ -376,6 +392,8 @@ export async function submitBuyRequest(formData: FormData) {
   if (tx.current_state !== "pending" || tx.queue_state) return { error: "This request is already submitted." };
 
   const details = (Array.isArray(tx.purchase_details) ? tx.purchase_details[0] : tx.purchase_details) ?? null;
+  const needsLocation = ["meetup", "delivery"].includes(details?.arrangement_kind ?? "");
+  if (needsLocation && !details?.location?.trim()) return { error: "Enter a location for meet-up or delivery." };
   const queued = isQueuedRequest(details);
   // §6: a financing buyer books the GCE visit or the meet-up only after the financing is approved. A
   // delivery is dated at request, financed or not.
@@ -398,13 +416,16 @@ export async function submitBuyRequest(formData: FormData) {
       .eq("transaction_id", tx.id),
     supabase
       .from("viewing_arrangements")
-      .select("schedule, arrangement_kind")
+      .select("schedule, arrangement_kind, location")
       .eq("purchase_transaction_id", tx.id)
       .in("confirmation_state", ["pending", "confirmed"])
       .maybeSingle(),
     supabase.from("customer_standing").select("gce_visit_only").eq("account_id", user.user.id).maybeSingle(),
   ]);
   const buyerDocuments = documents ?? [];
+  if (needsLocation && slot && slot.location?.trim() !== details?.location?.trim()) {
+    return { error: "Save the location again so it matches your booked arrangement." };
+  }
   if (!buyerIdsComplete(buyerDocuments)) return { error: "Upload the front and back of two valid IDs first." };
   if (
     !buyerDocuments.some((doc) => doc.document_kind === "proof_of_billing" && doc.verification_state !== "rejected")
@@ -509,6 +530,8 @@ export async function submitBuyRequest(formData: FormData) {
 // §6 steps 11–12: the buyer reviews the approved financing. Declining closes the request with nothing
 // paid; proceeding books the inspection visit. No downpayment is taken before the car is inspected.
 export async function respondToFinancingOffer(formData: FormData) {
+  const authorization = await authorizeAction(["customer"]);
+  if (!authorization.ok) return { error: authorization.message };
   const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
@@ -591,6 +614,13 @@ export async function respondToFinancingOffer(formData: FormData) {
   });
   if (slotError?.code === "23505") return { error: "That visit slot is already taken. Choose another time." };
   if (slotError) return { error: slotError.message };
+  if (kind !== "gce_visit") {
+    const { error: locationError } = await admin
+      .from("purchase_details")
+      .update({ location: parsed.data.location })
+      .eq("transaction_id", tx.id);
+    if (locationError) return { error: locationError.message };
+  }
 
   await admin
     .from("transactions")
@@ -884,55 +914,6 @@ export async function submitSellVehicle(formData: FormData) {
   return { success: true, id: transaction.id };
 }
 
-export async function submitRequestCar(formData: FormData) {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
-
-  const parsed = requestCarSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid request details." };
-  }
-
-  const { data: transaction, error } = await supabase
-    .from("transactions")
-    .insert({
-      customer_id: user.user.id,
-      transaction_kind: "request_a_car",
-      current_state: "pending",
-      created_by: user.user.id,
-    })
-    .select()
-    .single();
-
-  if (error) return { error: error.message };
-
-  const { error: reqError } = await supabase.from("vehicle_requests").insert({
-    transaction_id: transaction.id,
-    requested_make: parsed.data.requested_make,
-    requested_model: parsed.data.requested_model,
-    year_min: parsed.data.year_min ?? null,
-    year_max: parsed.data.year_max ?? null,
-    budget: parsed.data.budget,
-    purpose: parsed.data.purpose || null,
-    other_preferences: parsed.data.other_preferences || null,
-  });
-
-  if (reqError) return { error: reqError.message };
-
-  await supabase.from("transaction_status_history").insert({
-    transaction_id: transaction.id,
-    from_state: "pending",
-    to_state: "pending",
-    actor_id: user.user.id,
-    reason: "Request-a-Car transaction created",
-  });
-
-  revalidatePath("/my-transactions");
-  revalidatePath("/dashboard/transactions");
-  return { success: true, id: transaction.id };
-}
-
 // The buyer pays what is due online (a delivery's fee and downpayment, or a financing downpayment) on a
 // PayMongo Checkout Session for the exact amounts. The rows are recorded unpaid with the session id; the
 // PayMongo webhook (src/app/api/paymongo/webhook/route.ts) marks them paid. Pay again reuses an open
@@ -940,6 +921,8 @@ export async function submitRequestCar(formData: FormData) {
 export async function startOnlinePayment(
   formData: FormData,
 ): Promise<{ error: string } | { success: true; url: string }> {
+  const authorization = await authorizeAction(["customer"]);
+  if (!authorization.ok) return { error: authorization.message };
   const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
@@ -1054,10 +1037,131 @@ export async function startOnlinePayment(
   return { success: true, url: session.checkoutUrl };
 }
 
+export async function submitFinancingPayment(formData: FormData) {
+  return submitInstallmentPayments(formData, false);
+}
+
+export async function submitAdvancedPayment(formData: FormData) {
+  return submitInstallmentPayments(formData, true);
+}
+
+async function submitInstallmentPayments(formData: FormData, advanced: boolean) {
+  const authorization = await authorizeAction(["customer"]);
+  if (!authorization.ok) return { error: authorization.message };
+  const supabase = await createServerSupabaseClient();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+
+  const id = z.string().uuid().safeParse(formData.get("transaction_id"));
+  if (!id.success) return { error: "Transaction not found." };
+  const method = z.enum(["cash", "bank_transfer"]).safeParse(formData.get("method"));
+  if (!method.success) return { error: "Choose cash or bank transfer." };
+
+  const admin = createAdminClient();
+  const { data: tx } = await admin
+    .from("transactions")
+    .select("id, customer_id, current_state")
+    .eq("id", id.data)
+    .maybeSingle();
+  if (!tx || tx.customer_id !== user.user.id) return { error: "Transaction not found." };
+  if (!["approved", "completed"].includes(tx.current_state))
+    return { error: "This financing is not open for payments." };
+  const { data: account, error: accountError } = await admin
+    .from("installment_accounts")
+    .select("id, state, installments(id, account_id, state, due_date, amount_due)")
+    .eq("purchase_transaction_id", tx.id)
+    .maybeSingle();
+  if (accountError) return { error: accountError.message };
+  if (account?.state !== "active") return { error: "This financing account is not active." };
+
+  const unpaid = unpaidInstallments(account.installments ?? []);
+  let selected = unpaid.slice(0, 1);
+  if (advanced) {
+    const ids = z.array(z.string().uuid()).min(1).safeParse(formData.getAll("installment_ids"));
+    if (!ids.success || new Set(ids.data).size !== ids.data.length)
+      return { error: "Select one or more unpaid installments." };
+    selected = unpaid.filter((installment) => ids.data.includes(installment.id));
+    if (selected.length !== ids.data.length) return { error: "Select unpaid installments from this account only." };
+  } else {
+    const next = nextUnpaidInstallment(unpaid);
+    selected = next ? [next] : [];
+  }
+  if (selected.length === 0) return { error: "No unpaid installments remain." };
+  if (selected.some((installment) => installment.account_id !== account.id)) return { error: "Installment not found." };
+
+  const { data: existing, error: existingError } = await admin
+    .from("payment_records")
+    .select("installment_id, rejected_at")
+    .eq("transaction_id", tx.id)
+    .in(
+      "installment_id",
+      selected.map((installment) => installment.id),
+    )
+    .is("rejected_at", null);
+  if (existingError) return { error: existingError.message };
+  if (existing?.some((payment) => !payment.rejected_at && selected.some((i) => i.id === payment.installment_id))) {
+    return { error: "A payment for a selected installment is already submitted. Wait for accountant verification." };
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const rows = selected.map((installment) =>
+    paymentRecordSchema.safeParse({
+      transaction_id: tx.id,
+      installment_id: installment.id,
+      amount: installment.amount_due,
+      method: method.data,
+      external_reference: formData.get("external_reference") ?? "",
+      settlement_date: today,
+      payment_kind: "installment",
+    }),
+  );
+  if (rows.some((row) => !row.success))
+    return { error: "Invalid payment details. Keep the reference under 100 characters." };
+
+  const proof = formData.get("proof");
+  if (proof !== null && !(proof instanceof File)) return { error: "Select a valid payment proof." };
+  if (method.data === "bank_transfer" && (!(proof instanceof File) || !proof.size))
+    return { error: "Upload proof of the bank transfer." };
+  let proofPath: string | null = null;
+  if (proof instanceof File && proof.size > 0) {
+    if (!/^image\/(jpeg|png|webp)$/.test(proof.type)) return { error: "The payment photo must be a JPG, PNG or WebP." };
+    if (proof.size > MAX_DOCUMENT_SIZE) return { error: "The payment proof is too large." };
+    proofPath = `${tx.id}/payment-proof-${randomUUID()}.${proof.type.split("/")[1].replace("jpeg", "jpg")}`;
+    const { error } = await admin.storage.from("transaction-documents").upload(proofPath, proof);
+    if (error) return { error: error.message };
+  }
+
+  const { error } = await admin.from("payment_records").insert(
+    rows.flatMap((row) =>
+      row.success
+        ? [
+            {
+              ...row.data,
+              external_reference: row.data.external_reference || null,
+              submitted_by: user.user.id,
+              recorded_by: user.user.id,
+              verified_by: null,
+              proof_path: proofPath,
+            },
+          ]
+        : [],
+    ),
+  );
+  if (error) {
+    if (proofPath) await admin.storage.from("transaction-documents").remove([proofPath]);
+    return { error: error.code === "23505" ? "A payment for this installment is already submitted." : error.message };
+  }
+  revalidatePath(`/my-transactions/${tx.id}`);
+  revalidatePath(`/dashboard/transactions/${tx.id}`);
+  return { success: true };
+}
+
 // The buyer signs the contract the Head Accountant approved: a typed full name and the time. The typed
 // name is kept in the request's history. Customers cannot write sale_handovers, so this uses the service
 // role after the ownership check.
 export async function signContract(formData: FormData) {
+  const authorization = await authorizeAction(["customer"]);
+  if (!authorization.ok) return { error: authorization.message };
   const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
@@ -1141,57 +1245,141 @@ export async function signContract(formData: FormData) {
 }
 
 export async function cancelTransaction(formData: FormData) {
+  const authorization = await authorizeAction(["customer"]);
+  if (!authorization.ok) return { error: authorization.message };
   const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
-  const id = formData.get("id") as string;
+  const parsedId = z.string().uuid().safeParse(formData.get("id"));
+  if (!parsedId.success) return { error: "Transaction not found" };
+  const id = parsedId.data;
   const reason = (formData.get("reason") as string) || null;
 
-  const { data: tx } = await supabase.from("transactions").select("current_state").eq("id", id).single();
+  const { data: tx } = await supabase
+    .from("transactions")
+    .select(
+      "id, customer_id, vehicle_id, current_state, flow_status, purchase_details(payment_method), payment_terms(state)",
+    )
+    .eq("id", id)
+    .single();
 
-  if (!tx) return { error: "Transaction not found" };
+  if (!tx || tx.customer_id !== user.user.id) return { error: "Transaction not found" };
 
   const currentState = tx.current_state as string;
   if (["completed", "cancelled", "rejected"].includes(currentState)) {
     return { error: "This transaction can no longer be cancelled." };
   }
+  const admin = createAdminClient();
+  const one = <T>(value: T | T[] | null) => (Array.isArray(value) ? value[0] : value);
+  const { data: delivered, error: deliveryError } = await admin
+    .from("field_cases")
+    .select("id")
+    .eq("transaction_id", id)
+    .eq("case_kind", "delivery")
+    .eq("delivery_status", "delivered")
+    .neq("state", "cancelled")
+    .limit(1)
+    .maybeSingle();
+  if (deliveryError) return { error: deliveryError.message };
+  const recovery =
+    one(tx.payment_terms)?.state === "active" ||
+    tx.flow_status === "financing_active" ||
+    (one(tx.purchase_details)?.payment_method === "financing" && !!delivered);
+  if (recovery && formData.get("towing_ack") !== "yes") {
+    return { error: "Agree that GCE will tow and take back the car before cancelling." };
+  }
 
   // §3 cancellation rule: a meet-up or delivery can be cancelled only 5 hours or more before it.
   // The database enforces the same cut-off (00051); this answers with a readable message first.
-  const { data: scheduled } = await supabase
+  const { data: scheduled, error: scheduleError } = await supabase
     .from("viewing_arrangements")
     .select("schedule")
     .eq("purchase_transaction_id", id)
     .in("arrangement_kind", ["meetup", "delivery"])
     .in("confirmation_state", ["pending", "confirmed"]);
-  if ((scheduled ?? []).some((arrangement) => !canCancelScheduled(arrangement.schedule))) {
+  if (scheduleError) return { error: scheduleError.message };
+  if (!recovery && (scheduled ?? []).some((arrangement) => !canCancelScheduled(arrangement.schedule))) {
     return { error: "Cancellation is only allowed 5 hours or more before the scheduled time." };
   }
 
-  const { error } = await supabase
+  if (recovery) {
+    const { error: consentError } = await admin
+      .from("purchase_details")
+      .update({
+        cancellation_towing_ack_at: new Date().toISOString(),
+        cancellation_towing_ack_by: user.user.id,
+      })
+      .eq("transaction_id", id);
+    if (consentError) return { error: consentError.message };
+  }
+  const { data: cancelled, error } = await admin
     .from("transactions")
     .update({
       current_state: "cancelled",
       completed_at: new Date().toISOString(),
     })
     .eq("id", id)
-    .eq("customer_id", user.user.id);
+    .eq("current_state", currentState)
+    .eq("customer_id", user.user.id)
+    .select("id")
+    .maybeSingle();
 
   if (error) return { error: error.message };
+  if (!cancelled) return { error: "This transaction changed. Refresh before cancelling." };
 
-  const { error: historyError } = await supabase.from("transaction_status_history").insert({
+  const { error: historyError } = await admin.from("transaction_status_history").insert({
     transaction_id: id,
     from_state: currentState,
     to_state: "cancelled",
     actor_id: user.user.id,
-    reason: reason ?? "Cancelled by customer",
+    reason: recovery
+      ? `Customer agreed to towing and recovery. ${reason ?? "Cancelled active financing"}`
+      : (reason ?? "Cancelled by customer"),
   });
 
   if (historyError) return { error: historyError.message };
+  if (recovery) {
+    const { error: vehicleError } = await admin
+      .from("vehicles")
+      .update({ listing_state: "repairing" })
+      .eq("id", tx.vehicle_id);
+    if (vehicleError) return { error: vehicleError.message };
+    const { data: existing, error: lookupError } = await admin
+      .from("field_cases")
+      .select("id")
+      .eq("transaction_id", id)
+      .eq("case_kind", "recovery")
+      .in("state", ["assigned", "accepted", "in_progress"])
+      .limit(1)
+      .maybeSingle();
+    if (lookupError) return { error: lookupError.message };
+    if (!existing) {
+      const { error: caseError } = await admin.from("field_cases").insert({
+        transaction_id: id,
+        vehicle_id: tx.vehicle_id,
+        case_kind: "recovery",
+        state: "assigned",
+        notes: "Client cancelled active financing and agreed that GCE must tow and take back the car.",
+      });
+      if (caseError) return { error: caseError.message };
+    }
+    for (const role of ["head_accountant", "confidential_informant", "head_security"] as const) {
+      await notify(
+        admin,
+        { role },
+        {
+          kind: "financing_cancelled_recovery",
+          title: "Financing cancelled: car recovery required",
+          body: "Client agreed to towing. Arrange recovery of the car and reconditioning.",
+          transactionId: id,
+        },
+      );
+    }
+  }
 
   // A cancelled request gives its visit slot back to other buyers.
-  await releaseVisitSlots(createAdminClient(), id);
+  await releaseVisitSlots(admin, id);
 
   revalidatePath(`/my-transactions/${id}`);
   revalidatePath("/my-transactions");

@@ -12,6 +12,9 @@ const { eq, insert, maybeSingle, select, upsert, getUser, from } = vi.hoisted(()
 });
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("@/lib/auth/action-guard", () => ({
+  authorizeAction: vi.fn(async () => ({ ok: true, data: { userId: "customer", role: "customer" } })),
+}));
 const { after, autoCheckDocument } = vi.hoisted(() => ({
   after: vi.fn(),
   autoCheckDocument: vi.fn(),

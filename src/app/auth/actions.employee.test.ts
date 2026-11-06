@@ -82,7 +82,7 @@ describe("createEmployeeAccount (T04 E6)", () => {
     expect(adminCreateUser).not.toHaveBeenCalled();
   });
 
-  it.each(["ceo", "customer", "supplier"])("refuses the %s role before creating a user", async (role) => {
+  it.each(["ceo", "customer", "unknown"])("refuses the %s role before creating a user", async (role) => {
     const result = await createEmployeeAccount(params(role));
     expect(result).toHaveProperty("error");
     expect(adminCreateUser).not.toHaveBeenCalled();

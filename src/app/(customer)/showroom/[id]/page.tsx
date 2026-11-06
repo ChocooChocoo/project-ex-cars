@@ -15,7 +15,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
   const { data: row } = await supabase.from("vehicles").select("*").eq("id", id).single();
   const vehicle = row ? withoutIdentifiers(row) : null;
 
-  if (!vehicle) notFound();
+  if (vehicle?.listing_state !== "available") notFound();
 
   const { data: media } = await supabase
     .from("vehicle_media")

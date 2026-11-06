@@ -105,15 +105,16 @@ describe("a CASH buy loses Cancel for the Sales Manager", () => {
     db.rows.transactions = buyRow(state);
 
     await expect(transition("cancelled")).resolves.toEqual({
-      error: "The Sales Manager cannot cancel a cash purchase.",
+      error: "This action is not allowed for your role.",
     });
     expect(updates("transactions")).toHaveLength(0);
   });
 
-  it("keeps Cancel on a financing buy", async () => {
+  it("refuses Cancel on a financing buy", async () => {
     db.rows.transactions = buyRow("approved", "financing");
 
-    await expect(transition("cancelled")).resolves.toEqual({ success: true });
+    await expect(transition("cancelled")).resolves.toEqual({ error: "This action is not allowed for your role." });
+    expect(updates("transactions")).toHaveLength(0);
   });
 
   it("keeps the CEO's override on a cash buy", async () => {

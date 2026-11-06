@@ -18,7 +18,7 @@ export default async function ShowroomPage() {
   const { data: rows } = await supabase
     .from("vehicles")
     .select("*")
-    .in("listing_state", ["available", "reserved"])
+    .eq("listing_state", "available")
     .order("posted_at", { ascending: false });
   const vehicles = (rows ?? []).map(withoutIdentifiers);
 

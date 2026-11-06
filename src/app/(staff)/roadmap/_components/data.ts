@@ -201,7 +201,7 @@ export const sampleRoadmapItems: RoadmapItem[] = [
     parent_id: null,
     kind: "initiative",
     title: "End-to-End Transactions",
-    description: "Buy, sell, and request-a-car journeys with complete paperwork and payment records.",
+    description: "Buy and sell journeys with complete paperwork and payment records.",
     status: "planned",
     priority: "high",
     quarter: "Q3",

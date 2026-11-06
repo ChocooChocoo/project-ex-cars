@@ -65,7 +65,7 @@ export async function ReconditioningOverview() {
       <CardContent className="flex flex-col gap-2">
         {vehicles.map((v) => (
           <div key={v.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3">
-            <div className="text-sm font-medium">
+            <div className="font-medium text-sm">
               {v.year} {v.make} {v.model}
             </div>
             <div className="flex items-center gap-2">

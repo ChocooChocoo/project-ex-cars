@@ -26,27 +26,8 @@ export function resolveInternalPath(role: string, segment: string): string {
 
   if (isStaffRole(role)) {
     if (seg === "dashboard") return "/dashboard";
-    // Only the showroom list has a staff variant; `/staff-showroom` has no `[id]`, so a car's
-    // page stays on the customer route instead of 404ing.
-    if (seg === "showroom") return "/staff-showroom";
-    if (seg.startsWith("showroom/")) return `/${seg}`;
     if (seg.startsWith("recommendations")) return seg.replace("recommendations", "/staff-recommendations");
     return `/${seg}`;
-  }
-
-  // Supplier isolated overview — maps /supplier/overview → /overview.
-  // Choice: isolated (supplier)/overview route group avoids leaking staff layout/header
-  // vs (staff)/supplier-overview reuse. Builder creates src/app/(supplier)/overview/page.tsx.
-  // Also accepts supplier-overview alias for staff-reuse fallback.
-  if (role === "supplier") {
-    if (seg === "overview" || seg.startsWith("overview/")) {
-      return seg === "overview" ? "/overview" : seg.replace("overview", "/overview");
-    }
-    if (seg === "supplier-overview" || seg.startsWith("supplier-overview")) {
-      return seg === "supplier-overview"
-        ? "/supplier-overview"
-        : seg.replace("supplier-overview", "/supplier-overview");
-    }
   }
 
   if (seg.startsWith("showroom")) return seg.replace("showroom", "/showroom");
@@ -55,10 +36,8 @@ export function resolveInternalPath(role: string, segment: string): string {
   if (seg.startsWith("my-transactions")) return `/${seg}`;
   if (seg.startsWith("favourites")) return `/${seg}`;
   if (seg.startsWith("recommendations")) return seg.replace("recommendations", "/recommendations");
-  if (seg.startsWith("request-a-car")) return `/${seg}`;
   if (seg.startsWith("sell-vehicle")) return `/${seg}`;
   if (seg.startsWith("buying-requirements")) return `/${seg}`;
-  if (seg.startsWith("supplier-messages")) return "/supplier-messages";
   // T03 C15: /customer/profile. Staff keep /profile, a different route group.
   if (seg === "profile") return "/my-profile";
 
@@ -68,7 +47,6 @@ export function resolveInternalPath(role: string, segment: string): string {
 export function landingPath(role: string): string {
   if (role === "mechanic") return `/${role}/inspections`;
   if (role === "marketing_specialist" || role === "sales_manager") return `/${role}/vehicles`;
-  if (role === "supplier") return `/${role}/overview`;
   if (role === SUPER_ADMIN_ROLE) return `/${role}/users`;
   if (role === "customer") return `/${role}/showroom`;
   return `/${role}/dashboard`;

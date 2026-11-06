@@ -188,6 +188,7 @@ export function EventCalendarViews({ views: userViews, ...restOptions }: EventCa
           ? info.text
           : info.textParts.map((textPart, i) => (
               <span
+                // biome-ignore lint/suspicious/noArrayIndexKey: date-format parts can repeat literal values; spans have no state.
                 key={`${textPart.value}-${i}`}
                 className={cn(
                   "whitespace-pre",

@@ -10,18 +10,18 @@ export function TransactionPaymentProgressV1({
   payments,
   purchaseDetails,
   sellDetails,
-  vehicleRequests,
   installmentAccount,
 }: {
   readonly kind: string;
   readonly payments: Record<string, unknown>[];
   readonly purchaseDetails: Record<string, unknown> | undefined;
   readonly sellDetails: Record<string, unknown> | undefined;
-  readonly vehicleRequests: Record<string, unknown> | undefined;
   readonly installmentAccount: Record<string, unknown> | null;
 }) {
-  const total = purchaseDetails?.final_price ?? sellDetails?.offered_amount ?? vehicleRequests?.budget ?? null;
-  const received = payments.reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
+  const total = purchaseDetails?.final_price ?? sellDetails?.offered_amount ?? null;
+  const received = payments
+    .filter((payment) => payment.payment_kind !== "installment" || (payment.verified_by && !payment.rejected_at))
+    .reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
   // A buyer pays the delivery and reschedule fees on top of the car price.
   const paid = kind === "buy" ? paidTowardPrice(payments) : received;
   const fees = received - paid;

@@ -251,13 +251,16 @@ describe("assigning the team of a financed meet-up", () => {
 });
 
 describe("Mark as Sold on a financed meet-up", () => {
-  it("asks for no payment record: nothing is paid before the account opens", async () => {
+  it.each([
+    "financing_active",
+    "financing_completed",
+  ])("requires every installment paid or waived (%s)", async (flowStatus) => {
     db.rows.transactions = {
       current_state: "approved",
       transaction_kind: "buy",
       vehicle_id: "car-1",
       customer_id: "buyer-1",
-      flow_status: "financing_active",
+      flow_status: flowStatus,
       purchase_details: { payment_method: "financing", arrangement_kind: "meetup" },
     };
     db.rows.transaction_documents = [
@@ -277,6 +280,17 @@ describe("Mark as Sold on a financed meet-up", () => {
     fd.set("id", transactionId);
     fd.set("to_state", "completed");
 
+    db.rows.installment_accounts = { installments: [{ state: "upcoming", due_date: "2033-04-08" }] };
+    await expect(transitionTransaction(fd)).resolves.toEqual({
+      error: "Pay or waive every financing installment before marking the car sold.",
+    });
+    expect(db.writes).toEqual([]);
+    db.rows.installment_accounts = {
+      installments: [
+        { state: "paid", due_date: "2033-04-08" },
+        { state: "waived", due_date: "2033-05-08" },
+      ],
+    };
     await expect(transitionTransaction(fd)).resolves.toEqual({ success: true });
   });
 });

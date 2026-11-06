@@ -16,7 +16,7 @@ import {
   useReactTable,
   type VisibilityState,
 } from "@tanstack/react-table";
-import { PlusCircle, ReceiptText, Search } from "lucide-react";
+import { ReceiptText, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -94,12 +94,6 @@ export function TransactionsView({ transactions }: { readonly transactions: Tran
               <Kbd className="h-4 text-[10px]">⌘K</Kbd>
             </InputGroupAddon>
           </InputGroup>
-          <Button asChild variant="outline" size="sm">
-            <Link href="/request-a-car">
-              <PlusCircle data-icon="inline-start" />
-              Request a Car
-            </Link>
-          </Button>
           <Button asChild size="sm">
             <Link href="/sell-vehicle">
               <ReceiptText data-icon="inline-start" />

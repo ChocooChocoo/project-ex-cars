@@ -37,6 +37,15 @@ function renderTable(payments: Record<string, unknown>[], canReview = true) {
 }
 
 describe("TransactionPaymentsTableV1 (T03 HA2, HA3)", () => {
+  it("keeps submitted installments pending and out of the paid total", () => {
+    renderTable([
+      { ...base, payment_kind: "installment", amount: 1000 },
+      { ...base, id: "p2", payment_kind: "installment", amount: 2000, verified_by: "accountant" },
+    ]);
+    expect(screen.queryByText("₱3,000.00")).not.toBeInTheDocument();
+    expect(screen.getAllByText("₱2,000.00")).toHaveLength(2);
+  });
+
   it("opens the deposit slip photo in a larger view before verifying", () => {
     renderTable([base]);
 

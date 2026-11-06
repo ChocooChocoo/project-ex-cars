@@ -98,7 +98,6 @@ export function TransactionOverviewV1({
   vehicles,
   purchaseDetails,
   sellDetails,
-  vehicleRequests,
   customerName,
   openedAt,
   completedAt,
@@ -111,7 +110,6 @@ export function TransactionOverviewV1({
   readonly vehicles: Record<string, unknown> | undefined;
   readonly purchaseDetails: Record<string, unknown> | undefined;
   readonly sellDetails: Record<string, unknown> | undefined;
-  readonly vehicleRequests: Record<string, unknown> | undefined;
   readonly customerName: string | null;
   readonly openedAt: string;
   readonly completedAt: string | null;
@@ -119,7 +117,7 @@ export function TransactionOverviewV1({
   readonly history?: Record<string, unknown>[];
   readonly documents?: Record<string, unknown>[];
 }) {
-  const amount = purchaseDetails?.final_price ?? sellDetails?.offered_amount ?? vehicleRequests?.budget;
+  const amount = purchaseDetails?.final_price ?? sellDetails?.offered_amount;
   const amountLabel = kind === "buy" ? "final price" : kind === "sell" ? "offered amount" : "budget";
   const stages = deriveApprovalStages({ state, kind, vehicles, purchaseDetails, history, documents });
 
@@ -220,9 +218,7 @@ export function TransactionOverviewV1({
                     ? sellDetails?.valuation_amount
                       ? formatCurrency(Number(sellDetails.valuation_amount))
                       : "—"
-                    : vehicleRequests?.requested_model
-                      ? String(vehicleRequests.requested_model)
-                      : "—"}
+                    : "—"}
               </div>
             </div>
             <div className="min-w-0 space-y-1">
@@ -238,9 +234,7 @@ export function TransactionOverviewV1({
                     ? sellDetails?.decision
                       ? String(sellDetails.decision)
                       : "Pending"
-                    : vehicleRequests?.requested_make
-                      ? String(vehicleRequests.requested_make)
-                      : "—"}
+                    : "—"}
               </div>
             </div>
           </div>

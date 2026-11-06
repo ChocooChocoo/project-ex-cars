@@ -86,7 +86,6 @@ export function AppSidebar({
             item.id === "vehicles" ||
             item.id === "content" ||
             item.id === "inspections" ||
-            item.id === "showroom" ||
             item.id === "roles" ||
             item.id === "users"
           );

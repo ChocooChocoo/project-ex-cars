@@ -1,10 +1,12 @@
 import { redirect } from "next/navigation";
 
 import { getCurrentRole } from "@/app/auth/actions";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 import { type FieldExpenseRow, FieldExpensesCard } from "./_components/field-expenses-card";
 import { type DisbursementRow, FinanceClient, type FinancialEntryRow } from "./_components/finance-client";
+import { type ReconditioningFundRow, ReconditioningFundsCard } from "./_components/reconditioning-funds-card";
 import { type SaleRecordRow, SaleRecordsCard } from "./_components/sale-records-card";
 
 const FINANCE_ROLES = ["ceo", "head_accountant", "account_manager", "confidential_informant"];
@@ -79,6 +81,33 @@ export default async function FinancePage() {
       .limit(1000),
   ]);
 
+  let reconditioningFunds: ReconditioningFundRow[] = [];
+  if (["ceo", "head_accountant"].includes(role)) {
+    const admin = createAdminClient();
+    const { data: fundRows } = await admin
+      .from("reconditioning_fund_requests")
+      .select(
+        "id, amount_cents, reason, shortfall_reason, created_at, disbursement_requests(status), reconditioning_jobs(id, vehicle_id, state, refund_due_cents, refunded_at, vehicles(make, model, year)), reconditioning_fund_receipts(storage_path)",
+      )
+      .order("created_at", { ascending: false })
+      .limit(200);
+    reconditioningFunds = ((fundRows ?? []) as unknown as ReconditioningFundRow[]).map((request) => ({
+      ...request,
+      reconditioning_fund_receipts: request.reconditioning_fund_receipts?.map((receipt) => ({
+        ...receipt,
+        signed_url: null,
+      })),
+    }));
+    for (const request of reconditioningFunds) {
+      for (const receipt of request.reconditioning_fund_receipts ?? []) {
+        const { data } = await admin.storage
+          .from("reconditioning-receipts")
+          .createSignedUrl(receipt.storage_path, 3600);
+        receipt.signed_url = data?.signedUrl ?? null;
+      }
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <FinanceClient
@@ -107,6 +136,7 @@ export default async function FinancePage() {
           canReimburse={role === "head_accountant"}
         />
       ) : null}
+      {["ceo", "head_accountant"].includes(role) ? <ReconditioningFundsCard requests={reconditioningFunds} /> : null}
     </div>
   );
 }

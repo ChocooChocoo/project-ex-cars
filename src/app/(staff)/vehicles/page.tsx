@@ -30,6 +30,23 @@ export default async function VehiclesPage() {
           .order("created_at", { ascending: false })
       : { data: [] };
 
+  const { data: reconditioningJobs } =
+    role === "marketing_specialist"
+      ? await supabase
+          .from("reconditioning_jobs")
+          .select("vehicle_id, state, papers_processed_at, created_at")
+          .order("created_at", { ascending: false })
+      : { data: [] };
+  const reconditioningByVehicle: Record<string, { state: string; papers_processed_at: string | null }> = {};
+  for (const job of reconditioningJobs ?? []) {
+    const vehicleId = String(job.vehicle_id ?? "");
+    if (!vehicleId || reconditioningByVehicle[vehicleId]) continue;
+    reconditioningByVehicle[vehicleId] = {
+      state: String(job.state ?? ""),
+      papers_processed_at: (job.papers_processed_at as string | null) ?? null,
+    };
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -45,6 +62,7 @@ export default async function VehiclesPage() {
         canView={isCeo}
         isHeadAccountant={isHeadAccountant}
         userRole={role}
+        reconditioningByVehicle={reconditioningByVehicle}
       />
     </div>
   );

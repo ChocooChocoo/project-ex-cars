@@ -39,7 +39,9 @@ export function TransactionPaymentsTableV1({
 }) {
   // T03 HA3: a rejected payment stays listed but never counts.
   const counted = payments.filter((p) => !p.rejected_at);
-  const totalPaid = counted.reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
+  const totalPaid = counted
+    .filter((payment) => payment.payment_kind !== "installment" || payment.verified_by)
+    .reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
   const verified = counted.filter((p) => p.verified_by).length;
   const pending = counted.length - verified;
   const rejected = payments.length - counted.length;
@@ -69,7 +71,11 @@ export function TransactionPaymentsTableV1({
       header: () => <span className="text-xs">Method</span>,
       enableSorting: false,
       cell: ({ row }: { row: { original: PaymentRow } }) => (
-        <span className="text-xs capitalize">{paymentMethodLabel(row.original.method as string)}</span>
+        <span className="text-xs capitalize">
+          {row.original.payment_kind === "installment" && row.original.method === "bank_transfer"
+            ? "Bank Transfer"
+            : paymentMethodLabel(row.original.method as string)}
+        </span>
       ),
     },
     {
@@ -134,7 +140,7 @@ export function TransactionPaymentsTableV1({
       header: () => <span className="sr-only">Actions</span>,
       enableSorting: false,
       cell: ({ row }: { row: { original: PaymentRow } }) =>
-        // PayMongo confirms its own payments through the webhook; only payments recorded by staff are verified here.
+        // PayMongo confirms through its webhook; manual staff and customer submissions are reviewed here.
         canReview && !row.original.verified_by && !row.original.rejected_at && !row.original.paymongo_checkout_id ? (
           <div className="flex justify-end gap-1">
             <ConfirmDialog

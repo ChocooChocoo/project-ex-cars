@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { nextDuePayment } from "@/lib/transactions/buy-flow";
+import { paidInstallmentCount } from "@/lib/transactions/financing-payments";
 import {
   arrangementKindLabel,
   paymentKindLabel,
@@ -245,7 +246,9 @@ export function TransactionDetailSidebarV1({
             <div className="space-y-2 rounded-md border bg-muted/20 px-3 py-2">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-muted-foreground text-xs">Installment schedule</p>
-                <Badge className="h-5 px-2 text-[11px] tabular-nums">{insts.length} total</Badge>
+                <Badge className="h-5 px-2 text-[11px] tabular-nums">
+                  Paid {paidInstallmentCount(insts.map((inst) => ({ state: inst.state })))} of {insts.length}
+                </Badge>
               </div>
               {userRole === "head_accountant" && hasDueOrOverdue && (
                 <div className="flex items-center justify-between gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-1.5">
@@ -281,14 +284,13 @@ export function TransactionDetailSidebarV1({
                       inst.state !== "waived" &&
                       isHeadAccountant &&
                       onRecordInstallmentPaid ? (
-                        // §6 step 23: the Head Accountant records a confirmed installment payment.
                         <Button
                           variant="outline"
                           size="sm"
                           className="h-6 px-2 text-xs"
                           onClick={() => onRecordInstallmentPaid(inst.id as string, String(inst.amount_due))}
                         >
-                          Record paid
+                          Record payment
                         </Button>
                       ) : null}
                       {inst.state !== "paid" && inst.state !== "waived" && (

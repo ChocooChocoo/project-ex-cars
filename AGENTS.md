@@ -26,8 +26,7 @@ Next.js 16 App Router, React 19 + React Compiler, Tailwind v4 (CSS-first, no con
 ## Route groups
 
 - `src/app/(staff)/` — staff dashboard routes (~40 route folders; includes the nested `src/app/(staff)/(legacy)/` group of deprecated v1 dashboard variants, kept for reference only)
-- `src/app/(customer)/` — customer shopping portal (showroom, recommendations, inquiries, transactions, favourites, sell-vehicle, request-a-car)
-- `src/app/(supplier)/` — isolated supplier portal (overview + messages; suppliers are staff-created and approval-gated)
+- `src/app/(customer)/` — customer-only shopping portal (showroom, recommendations, inquiries, transactions, favourites, sell-vehicle)
 - `src/app/(external)/` — public landing pages
 - Top-level non-grouped routes: `src/app/auth/` (four auth screens), `src/app/unauthorized/`, and `src/app/template/` (upstream-template design previews — `src/proxy.ts` skips them, so they are publicly reachable; reference only, not GCE product surface)
 
@@ -54,7 +53,7 @@ Adding a preference touches all four layers + CSS that reads the attribute.
 
 ## Supabase
 
-Real backend with 43 migrations in `supabase/migrations/` (numbered `00001`–`00039` with no `00008`, plus five timestamped task migrations such as `20260818052430_task30_rbac_management.sql`). Tables use RLS extensively. Server-side data access through `src/server/server-actions.ts` and server actions colocated as `src/app/**/actions.ts`. The `supabase` CLI must be configured locally to push migrations.
+Real backend with versioned SQL in `supabase/migrations/`. Tables use RLS extensively. Server-side data access through `src/server/server-actions.ts` and server actions colocated as `src/app/**/actions.ts`. `scripts/run-migration.mjs` uses `DATABASE_URL` from `.env.local`. Before destructive changes, back up public/private tables with `node scripts/backup-before-t07.mjs`; backups stay outside Git under `backups/`.
 
 ## Tests
 

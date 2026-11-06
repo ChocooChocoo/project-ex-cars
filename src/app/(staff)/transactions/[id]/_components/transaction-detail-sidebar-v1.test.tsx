@@ -37,6 +37,20 @@ function renderSidebar(
 }
 
 describe("TransactionDetailSidebarV1 private media", () => {
+  it("shows verified installment count instead of counting payment submissions", () => {
+    renderSidebar([], {
+      kind: "buy",
+      installmentAccount: {
+        installments: [
+          { id: "1", state: "paid", sequence_no: 1, due_date: "2026-10-15", amount_due: 1000 },
+          { id: "2", state: "upcoming", sequence_no: 2, due_date: "2026-12-15", amount_due: 1000 },
+          { id: "3", state: "waived", sequence_no: 3, due_date: "2027-01-15", amount_due: 1000 },
+        ],
+      },
+    });
+    expect(screen.getByText("Paid 1 of 3")).toBeInTheDocument();
+  });
+
   it("renders signed document and vehicle photo previews without raw paths", () => {
     renderSidebar([
       {

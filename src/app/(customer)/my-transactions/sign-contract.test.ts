@@ -25,7 +25,13 @@ const { getUser, notify, db } = vi.hoisted(() => {
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/notifications/notify", () => ({ notify }));
-vi.mock("@/lib/supabase/server", () => ({ createServerSupabaseClient: vi.fn(async () => ({ auth: { getUser } })) }));
+vi.mock("@/lib/supabase/server", () => ({
+  createServerSupabase: vi.fn(async () => ({
+    auth: { getUser },
+    rpc: vi.fn(async () => ({ data: [{ account_id: buyerId, role: "customer" }], error: null })),
+  })),
+  createServerSupabaseClient: vi.fn(async () => ({ auth: { getUser } })),
+}));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn(() => ({ from: db.from })) }));
 
 import { signContract } from "./actions";

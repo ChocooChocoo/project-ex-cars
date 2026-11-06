@@ -207,14 +207,16 @@ export function FieldCasesTable({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              {["acquisition", "delivery", "buyer_meetup"].includes(row.original.case_kind) ? (
+              {["acquisition", "delivery", "buyer_meetup", "recovery"].includes(row.original.case_kind) ? (
                 <DropdownMenuItem asChild>
                   <Link href={`/dashboard/field-cases/${row.original.id}`}>
-                    {row.original.case_kind === "delivery"
-                      ? "Open delivery"
-                      : row.original.case_kind === "buyer_meetup"
-                        ? "Open buyer meet-up"
-                        : "Open seller meet-up"}
+                    {row.original.case_kind === "recovery"
+                      ? "Open recovery"
+                      : row.original.case_kind === "delivery"
+                        ? "Open delivery"
+                        : row.original.case_kind === "buyer_meetup"
+                          ? "Open buyer meet-up"
+                          : "Open seller meet-up"}
                   </Link>
                 </DropdownMenuItem>
               ) : null}

@@ -102,6 +102,16 @@ describe("manilaDay", () => {
 });
 
 describe("paidTowardPrice", () => {
+  it("does not count customer installment submissions until verified", () => {
+    expect(
+      paidTowardPrice([
+        { payment_kind: "installment", amount: 1000, verified_by: null },
+        { payment_kind: "installment", amount: 1000, verified_by: "accountant" },
+        { payment_kind: "installment", amount: 1000, verified_by: null, rejected_at: "2026-11-06" },
+      ]),
+    ).toBe(1000);
+  });
+
   it("leaves a payment the Head Accountant rejected out of what was paid (T03 HA3)", () => {
     expect(
       paidTowardPrice([

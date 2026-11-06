@@ -35,7 +35,7 @@ describe("Staff Records attendance exemption", () => {
     expect(isMissingSchedule({ ...account, role })).toBe(true);
   });
 
-  it.each(["customer", "supplier", null])("does not treat %s as an employee needing a schedule", (role) => {
+  it.each(["customer", "unknown", null])("does not treat %s as an employee needing a schedule", (role) => {
     expect(isMissingSchedule({ ...account, role })).toBe(false);
   });
 });

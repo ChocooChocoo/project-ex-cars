@@ -1,6 +1,5 @@
 export const GCE_ROLES = [
   "customer",
-  "supplier",
   "ceo",
   "account_manager",
   "head_accountant",
@@ -16,7 +15,6 @@ export type GceRole = (typeof GCE_ROLES)[number];
 
 export const ROLE_LABELS: Record<GceRole, string> = {
   customer: "Customer",
-  supplier: "Supplier",
   ceo: "CEO",
   account_manager: "Account Manager",
   head_accountant: "Head Accountant",
@@ -78,7 +76,6 @@ export const SETTINGS_MANAGER_ROLES: GceRole[] = ["ceo", "super_admin"];
 export const SUPER_ADMIN_ROLE = "super_admin" satisfies GceRole;
 
 export const RBAC_MANAGED_ROLES = [
-  "supplier",
   "account_manager",
   "head_accountant",
   "confidential_informant",
@@ -93,15 +90,14 @@ export type RbacManagedRole = (typeof RBAC_MANAGED_ROLES)[number];
 export const RBAC_ACCESS_AREA_KEYS = [
   "dashboard",
   "finance",
+  "financing",
   "vehicles",
-  "staff_showroom",
   "content",
   "inspections",
   "inquiries",
   "recommendations",
   "transactions",
   "roadmap",
-  "suppliers",
   "staff_records",
   "attendance",
   "employee_requests",
@@ -111,14 +107,12 @@ export const RBAC_ACCESS_AREA_KEYS = [
   "security_duty_checks",
   "reports",
   "announcements",
-  "supplier_messages",
   "roles",
   "users",
   "customer_showroom",
   "customer_recommendations",
   "customer_inquiries",
   "customer_transactions",
-  "vehicle_requests",
   "sell_vehicle",
   "favourites",
 ] as const;
@@ -187,16 +181,6 @@ export const ID_LABELS: Record<AcceptedIdType, string> = {
 export const ACCOUNT_STATES = ["invited", "active", "suspended", "archived"] as const;
 export type AccountState = (typeof ACCOUNT_STATES)[number];
 
-export const SUPPLIER_STATES = [
-  "invited",
-  "registered",
-  "pending_approval",
-  "approved",
-  "rejected",
-  "suspended",
-] as const;
-export type SupplierState = (typeof SUPPLIER_STATES)[number];
-
 export const DOCUMENT_VERIFICATION_STATES = ["pending", "verified", "rejected"] as const;
 
 /** Nav item IDs each role may see. "all" grants access to every nav item. */
@@ -206,17 +190,15 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
     "cust-recommendations",
     "cust-inquiries",
     "cust-transactions",
-    "cust-request-car",
     "cust-sell-vehicle",
     "cust-buying-guide",
     "cust-favourites",
   ]),
-  supplier: new Set(["supplier-overview", "supplier-messages"]),
   ceo: new Set([
     "default",
     "finance",
+    "financing",
     "vehicles",
-    "showroom",
     "content",
     "inspections",
     "inquiries",
@@ -226,7 +208,6 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
     "roles",
     "users",
     "settings",
-    "suppliers",
     "staff-records",
     "create-walk-in",
     "attendance",
@@ -238,7 +219,6 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
     "security-duty-checks",
     "reports",
     "announcements",
-    "supplier-messages",
   ]),
   account_manager: new Set([
     "default",
@@ -250,7 +230,6 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
     "recommendations",
     "transactions",
     "roadmap",
-    "suppliers",
     "staff-records",
     "create-walk-in",
     "attendance",
@@ -261,6 +240,7 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
     "announcements",
   ]),
   head_accountant: new Set([
+    "financing",
     "default",
     "finance",
     "vehicles",
@@ -289,7 +269,6 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
   marketing_specialist: new Set([
     "default",
     "vehicles",
-    "showroom",
     "content",
     "transactions",
     "attendance",
@@ -299,7 +278,6 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
   sales_manager: new Set([
     "default",
     "vehicles",
-    "showroom",
     "inspections",
     "inquiries",
     "recommendations",
@@ -335,7 +313,6 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
 /** Landing page path for each role after sign-in (resolved to role-prefixed URL by {@link landingPath}). */
 export const ROLE_LANDING_PAGES: Record<GceRole, string> = {
   customer: "/showroom",
-  supplier: "/overview",
   ceo: "/dashboard",
   account_manager: "/dashboard",
   head_accountant: "/dashboard",

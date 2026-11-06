@@ -8,12 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { canRecordNoShow, isDirectPayment } from "@/lib/transactions/buy-flow";
 import { TRANSACTION_STATE_LABELS, transactionKindLabel } from "@/lib/transactions/labels";
-import {
-  canSalesManagerCancel,
-  getAllowedTransitions,
-  isTerminal,
-  type TransactionState,
-} from "@/lib/transactions/state-machine";
+import { getAllowedTransitions, isTerminal, type TransactionState } from "@/lib/transactions/state-machine";
 import { cn } from "@/lib/utils";
 
 const stateTone: Record<TransactionState, string> = {
@@ -78,13 +73,7 @@ export function TransactionStatusTriageV1({
 }) {
   const daysOpen = Math.max(0, Math.floor((Date.now() - new Date(openedAt).getTime()) / 86_400_000));
   const cashBuy = kind === "buy" && isDirectPayment({ payment_method: paymentMethod });
-  // T05: a CASH buy is cancelled by the buyer or the CEO, so the Sales Manager loses the Cancel tile.
-  const allowed = getAllowedTransitions(state, userRole).filter(
-    (to) =>
-      to !== "cancelled" ||
-      userRole !== "sales_manager" ||
-      canSalesManagerCancel({ transaction_kind: kind, purchase_details: { payment_method: paymentMethod } }),
-  );
+  const allowed = getAllowedTransitions(state, userRole);
   const canRecordOutcome = kind === "buy" && state === "approved" && ["sales_manager", "ceo"].includes(userRole);
   // T05: once the papers are requested, the Sales Manager loses the decline outcomes on a CASH buy. A
   // delivery's "Buyer unavailable" (a no-show) is still recorded.

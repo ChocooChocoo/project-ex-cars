@@ -138,7 +138,6 @@ const CASE_KIND_OPTIONS = [
   { value: "acquisition", label: "Acquisition" },
   { value: "delivery", label: "Delivery" },
   { value: "recovery", label: "Recovery" },
-  { value: "sourcing", label: "Sourcing" },
   { value: "buyer_meetup", label: "Buyer meet-up" },
 ] as const;
 
@@ -146,7 +145,6 @@ const CASE_KIND_RULES: Record<string, string[]> = {
   acquisition: ["ceo", "confidential_informant", "sales_manager"],
   delivery: ["ceo", "confidential_informant", "sales_manager"],
   recovery: ["ceo", "head_accountant"],
-  sourcing: ["ceo", "sales_manager"],
   // §3 step 6: the Sales Manager sends the field team to an approved Meet Halfway buyer.
   buyer_meetup: ["ceo", "sales_manager"],
 };
@@ -323,7 +321,7 @@ export function FieldCasesClient({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-semibold text-3xl tracking-tight">Field Cases</h1>
-          <p className="text-muted-foreground text-sm">Acquisition, delivery, sourcing, and recovery assignments.</p>
+          <p className="text-muted-foreground text-sm">Acquisition, delivery, and recovery assignments.</p>
         </div>
         {canCreate ? (
           <Button onClick={() => setCreateOpen(true)}>

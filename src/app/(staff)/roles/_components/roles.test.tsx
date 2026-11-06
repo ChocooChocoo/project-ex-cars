@@ -67,8 +67,8 @@ const permissions: RbacPermission[] = [
 ];
 const roles: RbacRole[] = [
   {
-    roleKey: "supplier",
-    description: "Supplier access",
+    roleKey: "head_security",
+    description: "Security access",
     status: "active",
     isProtected: false,
     permissionIds: [permissions[0].id],
@@ -94,13 +94,13 @@ describe("Roles", () => {
     expect(screen.queryByText("Access reviews")).not.toBeInTheDocument();
   });
 
-  it("offers the eight managed role choices and locks the canonical key", () => {
+  it("offers unseeded managed role choices and locks the canonical key", () => {
     renderRoles();
     fireEvent.click(screen.getByRole("button", { name: /create role/i }));
     const roleSelect = screen.getByLabelText("Role Label");
     expect(Array.from((roleSelect as HTMLSelectElement).options).map((option) => option.value)).toEqual([
       "",
-      ...RBAC_MANAGED_ROLES.filter((key) => key !== "supplier"),
+      ...RBAC_MANAGED_ROLES.filter((key) => key !== "head_security"),
     ]);
     fireEvent.change(roleSelect, { target: { value: "account_manager" } });
     expect(screen.getByLabelText("System Role Key")).toHaveValue("account_manager");
@@ -140,7 +140,7 @@ describe("Roles", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Roles" }), { button: 0 });
     fireEvent.click(screen.getByRole("tab", { name: "Roles" }));
-    fireEvent.click(screen.getByRole("button", { name: /edit supplier/i }));
+    fireEvent.click(screen.getByRole("button", { name: /edit head security/i }));
     expect(screen.getByText("Dashboard")).toBeInTheDocument();
     expect(screen.getByText(/1 of 1 assigned/)).toBeInTheDocument();
     expect(screen.getByLabelText("Select all Dashboard permissions")).toBeChecked();
@@ -153,7 +153,7 @@ describe("Roles", () => {
         roles={[
           {
             ...roles[0],
-            description: "Manages accounts, suppliers, staff records, inquiries, requests, and payroll preparation.",
+            description: "Manages staff records, inquiries, and payroll preparation.",
           },
         ]}
         permissions={permissions}
@@ -163,12 +163,12 @@ describe("Roles", () => {
       />,
     );
 
-    expect(screen.queryByText(/Manages accounts, suppliers/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Manages staff records/)).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /edit supplier/i }));
+    fireEvent.click(screen.getByRole("button", { name: /edit head security/i }));
     expect(screen.getByRole("dialog")).toHaveClass("max-w-5xl");
     expect(screen.getByLabelText("Description")).toHaveValue(
-      "Manages accounts, suppliers, staff records, inquiries, requests, and payroll preparation.",
+      "Manages staff records, inquiries, and payroll preparation.",
     );
     expect(screen.getByRole("combobox", { name: "Status" })).toHaveAttribute("data-slot", "select-trigger");
     expect(screen.getByText("Read Dashboard").closest("[data-slot='label']")).toHaveClass("flex-col");
@@ -179,7 +179,7 @@ describe("Roles", () => {
 
     expect(screen.queryByRole("heading", { name: "User role assignments" })).not.toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "Description" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /edit supplier/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /edit head security/i })).toBeInTheDocument();
   });
 
   it("canManage=false hides Save/Create/Delete mutations for account_manager view-only", () => {
@@ -194,7 +194,7 @@ describe("Roles", () => {
       />,
     );
     expect(screen.queryByRole("button", { name: /create role/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /edit supplier/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /edit head security/i })).not.toBeInTheDocument();
     // Permission tab
     fireEvent.mouseDown(screen.getByRole("tab", { name: "Permission" }), { button: 0 });
     fireEvent.click(screen.getByRole("tab", { name: "Permission" }));
@@ -212,7 +212,7 @@ describe("Roles", () => {
         canManage={false}
       />,
     );
-    expect(screen.getByText("Supplier")).toBeInTheDocument();
+    expect(screen.getByText("Head Security")).toBeInTheDocument();
     expect(screen.getByText(/1 assigned/)).toBeInTheDocument();
   });
 });

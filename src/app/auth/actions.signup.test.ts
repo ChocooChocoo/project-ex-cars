@@ -40,6 +40,7 @@ const user = { id: "u1", identities: [{ id: "i1" }] };
 describe("signUp", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env.NEXT_PUBLIC_SITE_URL = "https://gce.example";
   });
 
   it("asks the user to check their email when no session comes back", async () => {

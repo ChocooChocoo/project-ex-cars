@@ -57,17 +57,29 @@ export async function pickByLabel(page: Page, label: string, option?: string) {
   await (option ? page.getByRole("option", { name: option }) : page.getByRole("option").first()).click();
 }
 
-async function upload(page: Page, kind: "Valid ID" | "Proof of Billing", idType?: string, side?: "Front" | "Back") {
-  await pick(page, "cust-doc-kind", kind);
-  if (idType) await pick(page, "cust-doc-id-type", idType);
-  if (side) await pick(page, "cust-doc-id-side", side);
-  await page
-    .locator('input[type="file"]')
-    .last()
-    .setInputFiles(png(`${kind}.png`));
-  const uploadButton = page.getByRole("button", { name: "Upload", exact: true });
-  await uploadButton.click();
-  await expect(uploadButton).toBeEnabled();
+export async function uploadBuyerId(page: Page, index: 0 | 1, idType: string, side: "Front" | "Back") {
+  const card = page
+    .locator("li")
+    .filter({ hasText: `Valid ID #${index + 1}` })
+    .first();
+  await expect(card).toBeVisible();
+  const trigger = page.locator(`#id-type-${index}`);
+  if (await trigger.isEnabled()) await pick(page, `id-type-${index}`, idType);
+  const inputs = card.locator('input[type="file"]');
+  const count = await inputs.count();
+  if (count === 0) return;
+  const target = side === "Front" ? 0 : count >= 2 ? 1 : 0;
+  await inputs.nth(target).setInputFiles(png(`${idType}-${side}.png`));
+  await expect(inputs).toHaveCount(count - 1, { timeout: 30_000 });
+  await page.waitForLoadState("networkidle");
+}
+
+export async function uploadBuyerBilling(page: Page) {
+  const card = page.locator("li").filter({ hasText: "Proof of billing" }).first();
+  await expect(card).toBeVisible();
+  const input = card.locator('input[type="file"]');
+  await input.setInputFiles(png("Proof of Billing.png"));
+  await expect(input).toHaveCount(0, { timeout: 30_000 });
   await page.waitForLoadState("networkidle");
 }
 
@@ -90,11 +102,11 @@ export async function buyerRequest(
   await page.waitForLoadState("networkidle");
   const id = page.url().match(/[0-9a-f-]{36}/)?.[0] ?? "";
 
-  await upload(page, "Valid ID", "Passport", "Front");
-  await upload(page, "Valid ID", "Passport", "Back");
-  await upload(page, "Valid ID", "Driver's License", "Front");
-  await upload(page, "Valid ID", "Driver's License", "Back");
-  await upload(page, "Proof of Billing");
+  await uploadBuyerId(page, 0, "Passport", "Front");
+  await uploadBuyerId(page, 0, "Passport", "Back");
+  await uploadBuyerId(page, 1, "Driver's License", "Front");
+  await uploadBuyerId(page, 1, "Driver's License", "Back");
+  await uploadBuyerBilling(page);
   // T04: Financing is a Payment Option. T06: Full Payment is Cash or Bank Transfer (via PayMongo); PayMongo is
   // the channel, so it is never an option of its own.
   if (options.method === "Financing") await pick(page, "payment_option", "Financing");
@@ -122,6 +134,9 @@ export async function verifyAll(page: Page, expected: number) {
   await expect(verify).toHaveCount(expected);
   for (let left = expected; left > 0; left--) {
     await verify.first().click();
+    const dialog = page.getByRole("alertdialog");
+    await dialog.getByRole("button", { name: "Verify", exact: true }).click();
+    await expect(dialog).toBeHidden();
     await expect(verify).toHaveCount(left - 1);
   }
 }
@@ -150,7 +165,6 @@ export async function proposeTerms(page: Page, months: number, price: number, do
   await page.getByLabel("Initial Downpayment (₱)").fill(String(downpayment));
   await page.getByLabel("Monthly payment (₱)").fill(String(Math.ceil((price - downpayment) / months)));
   await page.getByLabel("First installment due").fill("2033-12-01");
-  await page.getByLabel("Missed payment policy").fill("From the 4th missed month GCE takes back the vehicle.");
   await page.getByRole("button", { name: "Send to Head Accountant" }).click();
   await expect(page.getByText("Terms sent to the Head Accountant.")).toBeVisible();
 }
@@ -195,15 +209,104 @@ export async function writeAndApproveContract(page: Page, id: string) {
   await signInAs(page, "head_accountant@gce.local");
   await open(page, `/head_accountant/transactions/${id}`);
   await page.getByRole("button", { name: "Approve contract" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Approve", exact: true }).click();
   await expect(page.getByText("Contract approved. The buyer can sign it.")).toBeVisible();
 }
 
 export async function buyerSignsContract(page: Page, id: string) {
   await signInAs(page, "customer@gce.local");
   await open(page, `/my-transactions/${id}`);
-  await page.getByLabel("Type your full name to sign").fill("Maria Santos");
+  await page.getByLabel("Type your full name").fill("Maria Santos");
+  const pad = page.getByRole("img", { name: /Signature pad/ });
+  await pad.scrollIntoViewIfNeeded();
+  const box = await pad.boundingBox();
+  if (box) {
+    await page.mouse.move(box.x + 30, box.y + 40);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 90, box.y + 80, { steps: 10 });
+    await page.mouse.up();
+  }
+  await expect(page.getByRole("button", { name: "Sign contract" })).toBeEnabled();
   await page.getByRole("button", { name: "Sign contract" }).click();
   await expect(page.getByText("Contract signed.")).toBeVisible();
+}
+
+function testAdmin() {
+  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL as string, process.env.SUPABASE_SERVICE_ROLE_KEY as string, {
+    auth: { persistSession: false },
+  });
+}
+
+// PayMongo checkout is external, so the financing downpayment is recorded as a verified bank transfer
+// for the rest of the browser chain.
+export async function recordFinancingDownpayment(transactionId: string) {
+  const admin = testAdmin();
+  const { data: transaction } = await admin
+    .from("transactions")
+    .select("customer_id, payment_terms(down_payment)")
+    .eq("id", transactionId)
+    .single();
+  const terms = Array.isArray(transaction?.payment_terms) ? transaction?.payment_terms[0] : transaction?.payment_terms;
+  const amount = Number(terms?.down_payment ?? 0);
+  await admin.from("payment_records").delete().eq("transaction_id", transactionId).eq("payment_kind", "downpayment");
+  const { error } = await admin.from("payment_records").insert({
+    transaction_id: transactionId,
+    amount,
+    method: "bank_transfer",
+    recorded_by: transaction?.customer_id,
+    verified_by: transaction?.customer_id,
+    settlement_date: new Date().toISOString().slice(0, 10),
+    payment_kind: "downpayment",
+  });
+  if (error) throw new Error(error.message);
+  await admin.from("transactions").update({ flow_status: "initial_dp_confirmed" }).eq("id", transactionId);
+}
+
+export async function markFinancingFullyPaid(transactionId: string) {
+  const admin = testAdmin();
+  const { data: account } = await admin
+    .from("installment_accounts")
+    .select("id")
+    .eq("purchase_transaction_id", transactionId)
+    .maybeSingle();
+  if (!account) throw new Error("Financing account not found.");
+  const today = new Date().toISOString().slice(0, 10);
+  await admin.from("installments").update({ state: "paid", payment_date: today }).eq("account_id", account.id);
+  await admin.from("installment_accounts").update({ state: "closed", closed_date: today }).eq("id", account.id);
+  await admin.from("payment_terms").update({ state: "completed" }).eq("purchase_transaction_id", transactionId);
+  await admin.from("transactions").update({ flow_status: "financing_completed" }).eq("id", transactionId);
+}
+
+// The delivery fee and downpayment are paid online through PayMongo; record the same verified rows a
+// successful checkout creates so the rest of the delivery chain can run.
+export async function recordDeliveryPayments(transactionId: string) {
+  const admin = testAdmin();
+  const { data: transaction } = await admin
+    .from("transactions")
+    .select("customer_id, purchase_details(delivery_fee, downpayment_amount)")
+    .eq("id", transactionId)
+    .single();
+  const details = Array.isArray(transaction?.purchase_details)
+    ? transaction?.purchase_details[0]
+    : transaction?.purchase_details;
+  const today = new Date().toISOString().slice(0, 10);
+  for (const [kind, amount] of [
+    ["delivery_fee", Number(details?.delivery_fee ?? 0)],
+    ["downpayment", Number(details?.downpayment_amount ?? 0)],
+  ] as const) {
+    if (amount <= 0) continue;
+    await admin.from("payment_records").delete().eq("transaction_id", transactionId).eq("payment_kind", kind);
+    const { error } = await admin.from("payment_records").insert({
+      transaction_id: transactionId,
+      amount,
+      method: "paymongo",
+      recorded_by: transaction?.customer_id,
+      verified_by: transaction?.customer_id,
+      settlement_date: today,
+      payment_kind: kind,
+    });
+    if (error) throw new Error(error.message);
+  }
 }
 
 // Head Accountant verifies every payment still waiting on the request.

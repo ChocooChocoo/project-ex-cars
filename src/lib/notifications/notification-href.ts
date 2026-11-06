@@ -14,6 +14,11 @@ export function notificationHref(
 ): string | null {
   if (!role || !row.reference_id) return null;
 
+  if (row.reference_table === "field_cases") {
+    const access = ROLE_NAV_ACCESS[role as GceRole];
+    return access === "all" || access?.has("field-cases") ? rolePath(role, `/field-cases/${row.reference_id}`) : null;
+  }
+
   // T06: a price revision request opens the car it is about.
   if (row.reference_table === "vehicles") {
     const access = ROLE_NAV_ACCESS[role as GceRole];

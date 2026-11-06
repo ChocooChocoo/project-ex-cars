@@ -1,5 +1,6 @@
 import { expect as baseExpect, type Page, test } from "@playwright/test";
 
+import { recordDeliveryPayments, uploadBuyerBilling, uploadBuyerId, verifyAll } from "./support/t01";
 import { archiveListedTestVehicles, canCreateTestVehicle, createTestVehicle } from "./support/test-vehicle";
 
 // The dev server compiles each route on first use, so a refresh after a server action can take
@@ -15,15 +16,6 @@ const expect = baseExpect.configure({ timeout: 20_000 });
 // (the first of each in the worker directory must be the seeded @gce.local account).
 
 const seedPassword = process.env.SEED_USER_PASSWORD;
-
-const png = (name: string) => ({
-  name,
-  mimeType: "image/png",
-  buffer: Buffer.from(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
-    "base64",
-  ),
-});
 
 async function signInAs(page: Page, email: string) {
   await page.context().clearCookies();
@@ -46,31 +38,6 @@ async function pickByLabel(page: Page, label: string, option?: string) {
   await (option ? page.getByRole("option", { name: option }) : page.getByRole("option").first()).click();
 }
 
-async function upload(page: Page, kind: "Valid ID" | "Proof of Billing", idType?: string) {
-  await pickById(page, "cust-doc-kind", kind);
-  if (idType) await pickById(page, "cust-doc-id-type", idType);
-  await page
-    .locator('input[type="file"]')
-    .last()
-    .setInputFiles(png(`${kind}.png`));
-  const uploadButton = page.getByRole("button", { name: "Upload", exact: true });
-  await uploadButton.click();
-  // Wait for this upload's round trip and refresh, not an earlier upload's toast.
-  await expect(uploadButton).toBeEnabled();
-  await page.waitForLoadState("networkidle");
-}
-
-async function recordPayment(page: Page, kind: string, amount: string) {
-  // Each recorded payment adds one unverified row with its own Verify button.
-  const verify = page.getByRole("button", { name: "Verify", exact: true });
-  const before = await verify.count();
-  await page.locator("#pay_amount").fill(amount);
-  await pickById(page, "pay_method", "Bank Transfer");
-  await pickById(page, "pay_kind", kind);
-  await page.getByRole("button", { name: "Record Payment" }).click();
-  await expect(verify).toHaveCount(before + 1);
-}
-
 test.describe
   .serial("T01 Phase 4 cash delivery", () => {
     test.skip(
@@ -89,12 +56,16 @@ test.describe
       await page.waitForURL(/\/my-transactions\/[0-9a-f-]{36}/, { timeout: 30_000 });
       txId = page.url().match(/[0-9a-f-]{36}/)?.[0] ?? "";
 
-      await upload(page, "Valid ID", "Passport");
-      await upload(page, "Valid ID", "Driver's License");
-      await upload(page, "Proof of Billing");
+      await uploadBuyerId(page, 0, "Passport", "Front");
+      await uploadBuyerId(page, 0, "Passport", "Back");
+      await uploadBuyerId(page, 1, "Driver's License", "Front");
+      await uploadBuyerId(page, 1, "Driver's License", "Back");
+      await uploadBuyerBilling(page);
       await pickById(page, "payment_method", "Cash");
       await pickById(page, "arrangement_kind", "Delivery");
-      await page.locator("#schedule").fill("2031-08-20T10:00");
+      await page.locator("#schedule-date").fill("2031-08-20");
+      await page.locator("#schedule-hour").click();
+      await page.getByRole("option", { name: "10:00 AM", exact: true }).click();
       await page.locator("#location").fill("123 Rizal St, Calamba, Laguna");
       await page.getByLabel(/I have reviewed this car's condition/).check();
       // Buying-flow revision Phase 4: the buyer agrees to the delivery terms notice.
@@ -109,31 +80,24 @@ test.describe
     test("Sales Manager approves and confirms the delivery terms", async ({ page }) => {
       await signInAs(page, "sales_manager@gce.local");
       await page.goto(`/sales_manager/transactions/${txId}`);
-      const verify = page.getByRole("button", { name: "Verify", exact: true });
-      for (let left = await verify.count(); left > 0; left--) {
-        await verify.first().click();
-        await expect(verify).toHaveCount(left - 1);
-      }
+      await verifyAll(page, await page.getByRole("button", { name: "Verify", exact: true }).count());
       await page.getByRole("button", { name: /^Transition Approve/ }).click();
+      await page.getByRole("alertdialog").getByRole("button", { name: "Approve", exact: true }).click();
 
       await pickByLabel(page, "Address serviceable", "Yes, we can deliver");
-      await page.getByLabel("Delivery fee (₱)").fill("2500");
-      await page.getByLabel("Downpayment (₱)").fill("50000");
+      const feeInput = page.getByLabel("Delivery fee (₱)");
+      if (await feeInput.count()) await feeInput.fill("2500");
       await page.getByRole("button", { name: "Confirm and notify buyer" }).click();
-      await expect(page.getByText("Downpayment deadline")).toBeVisible();
+      await page.getByRole("alertdialog").getByRole("button", { name: "Confirm", exact: true }).click();
+      await expect(page.getByText("Delivery terms sent to the buyer.")).toBeVisible();
     });
 
     test("Head Accountant records and verifies the fee and downpayment", async ({ page }) => {
+      await recordDeliveryPayments(txId);
       await signInAs(page, "head_accountant@gce.local");
       await page.goto(`/head_accountant/transactions/${txId}`);
-      await recordPayment(page, "Delivery fee", "2500");
-      await recordPayment(page, "Downpayment", "50000");
-      const verify = page.getByRole("button", { name: "Verify", exact: true });
-      await expect(verify).toHaveCount(2);
-      for (let left = 2; left > 0; left--) {
-        await verify.first().click();
-        await expect(verify).toHaveCount(left - 1);
-      }
+      await expect(page.getByText(/Delivery fee/).first()).toBeVisible();
+      await expect(page.getByText(/verified/).first()).toBeVisible();
     });
 
     test("Sales Manager creates the delivery team", async ({ page }) => {

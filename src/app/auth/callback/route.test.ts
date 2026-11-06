@@ -44,4 +44,9 @@ describe("auth callback", () => {
     const response = await call("");
     expect(response.headers.get("location")).toBe("https://gce.example/auth/v1/login?error=auth_callback_failed");
   });
+
+  it("explains an expired or reused confirmation link", async () => {
+    const response = await call("error_code=otp_expired&error_description=Email+link+is+invalid");
+    expect(response.headers.get("location")).toBe("https://gce.example/auth/v1/login?error=otp_expired");
+  });
 });

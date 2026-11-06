@@ -22,7 +22,7 @@ describe("T05 role work schedules", () => {
 
   it("does not invent schedules for unspecified roles", () => {
     expect(Object.keys(ROLE_WORK_SCHEDULES)).toHaveLength(6);
-    for (const role of ["ceo", "head_security", "customer", "supplier"]) {
+    for (const role of ["ceo", "head_security", "customer"]) {
       expect(ROLE_WORK_SCHEDULES[role]).toBeUndefined();
     }
   });

@@ -18,7 +18,8 @@ import {
   submitBuyRequest,
   uploadPurchaseDocument,
 } from "@/app/(customer)/my-transactions/actions";
-import { DeliveryLastSeen } from "@/components/delivery-last-seen";
+import { submitReview } from "@/app/(customer)/my-transactions/review-actions";
+import { LiveLocationMap } from "@/components/live-location-map";
 import { LoanCalculator } from "@/components/loan-calculator";
 import { RejectReasonDialog } from "@/components/reject-reason-dialog";
 import { TransactionImagePreview } from "@/components/transaction-image-preview";
@@ -80,6 +81,7 @@ import type { FlowStatus, QueueState, TransactionFlag, TransactionState } from "
 import { cn, formatCurrency } from "@/lib/utils";
 
 import { ContractSign } from "./contract-sign";
+import { FinancingPaymentPanel } from "./financing-payment-panel";
 import { OnlinePayment } from "./online-payment";
 import { type DocumentUpload, PurchaseDocumentChecklist } from "./purchase-document-checklist";
 import type { TransactionPaperProps } from "./transaction-paper";
@@ -159,11 +161,14 @@ export function TransactionDetail({
   takenSlots = [],
   gceVisitOnly = false,
   delivery = null,
+  recovery = null,
   counterOffer = null,
   buyerRegionCode = null,
   financingMarkupPct = DEFAULT_FINANCING_MARKUP_PCT,
+  review = null,
 }: {
   readonly transaction: Record<string, unknown>;
+  readonly review?: { rating: number; body: string; created_at: string } | null;
   readonly history: Record<string, unknown>[];
   readonly documents: Record<string, unknown>[];
   readonly payments: Record<string, unknown>[];
@@ -179,9 +184,18 @@ export function TransactionDetail({
   /** T06: GCE's adjustable financing profit, in percent. */
   readonly financingMarkupPct?: number;
   readonly delivery?: {
+    id: string;
     status: string | null;
     delay_note: string | null;
     expected_arrival: string | null;
+    last_lat?: number | null;
+    last_lng?: number | null;
+    last_located_at?: string | null;
+  } | null;
+  /** T07: the recovery case created when a financed buyer cancels after delivery. */
+  readonly recovery?: {
+    id: string;
+    state: string;
     last_lat?: number | null;
     last_lng?: number | null;
     last_located_at?: string | null;
@@ -203,7 +217,6 @@ export function TransactionDetail({
   const buyerArea = deliveryArea(buyerRegionCode);
   const deliveryFeeRange = buyerArea ? deliveryFeeRangeLabel(buyerArea) : null;
   const sellDetails = transaction.sell_details as Record<string, unknown> | undefined;
-  const vehicleRequests = transaction.vehicle_requests as Record<string, unknown> | undefined;
   const openedAt = transaction.opened_at as string;
   const completedAt = transaction.completed_at as string | null;
   const handoverRaw = transaction.sale_handovers as Record<string, unknown> | Record<string, unknown>[] | null;
@@ -242,6 +255,38 @@ export function TransactionDetail({
         ? recordedReason
         : null;
   const [cancelling, setCancelling] = useState(false);
+  const [towingAck, setTowingAck] = useState(false);
+  const needsTowingConsent =
+    paymentTerms?.state === "active" ||
+    transaction.flow_status === "financing_active" ||
+    (purchaseDetails?.payment_method === "financing" && delivery?.status === "delivered");
+  const [rating, setRating] = useState("5");
+  const [reviewBody, setReviewBody] = useState("");
+  const [reviewing, setReviewing] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [submittedReview, setSubmittedReview] = useState(review);
+
+  async function handleReview(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setReviewing(true);
+    setReviewError(null);
+    const fd = new FormData();
+    fd.set("transaction_id", id);
+    fd.set("rating", rating);
+    fd.set("body", reviewBody);
+    try {
+      const result = await submitReview(fd);
+      if (result.error) setReviewError(result.error);
+      else {
+        setSubmittedReview({ rating: Number(rating), body: reviewBody.trim(), created_at: new Date().toISOString() });
+        router.refresh();
+      }
+    } catch {
+      setReviewError("Could not send your review. Try again.");
+    } finally {
+      setReviewing(false);
+    }
+  }
 
   // Purchase document upload state
   const [uploading, setUploading] = useState(false);
@@ -337,7 +382,12 @@ export function TransactionDetail({
   const [schedule, setSchedule] = useState("");
   // The date half of the slot: a date without an hour cannot be saved.
   const [scheduleDate, setScheduleDate] = useState("");
-  const [location, setLocation] = useState(autofill?.address ?? "");
+  const [location, setLocation] = useState((purchaseDetails?.location as string | null) ?? autofill?.address ?? "");
+  const locationRequired = arrangementKind === "meetup" || arrangementKind === "delivery";
+  const locationMissing = locationRequired && !location.trim();
+  const savedLocationMissing =
+    ["meetup", "delivery"].includes(String(purchaseDetails?.arrangement_kind)) &&
+    !String(purchaseDetails?.location ?? "").trim();
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -348,6 +398,7 @@ export function TransactionDetail({
     setCancelling(true);
     const fd = new FormData();
     fd.set("id", id);
+    if (needsTowingConsent && towingAck) fd.set("towing_ack", "yes");
     const result = await cancelTransaction(fd);
     setCancelling(false);
     if (result.error) {
@@ -482,14 +533,7 @@ export function TransactionDetail({
         },
       ];
     }
-    return [
-      {
-        id: "request",
-        description: `Requested vehicle — ${(vehicleRequests?.requested_make as string) ?? ""} ${(vehicleRequests?.requested_model as string) ?? ""}`,
-        quantity: 1,
-        unitPrice: Number(vehicleRequests?.budget ?? 0),
-      },
-    ];
+    return [];
   })();
 
   const paperTotal = paperItems.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
@@ -574,12 +618,28 @@ export function TransactionDetail({
                   </AlertDialogMedia>
                   <AlertDialogTitle>Cancel this transaction?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will cancel the transaction and cannot be undone. Are you sure you want to continue?
+                    {needsTowingConsent
+                      ? "If you cancel this financing, GCE will tow and take back the car. This cancellation cannot be undone."
+                      : "This will cancel the transaction and cannot be undone. Are you sure you want to continue?"}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
+                {needsTowingConsent ? (
+                  <div className="flex items-start gap-2">
+                    <Checkbox
+                      id="towing-ack"
+                      checked={towingAck}
+                      onCheckedChange={(checked) => setTowingAck(checked === true)}
+                    />
+                    <Label htmlFor="towing-ack">I agree that GCE will tow and take back the car.</Label>
+                  </div>
+                ) : null}
                 <AlertDialogFooter>
                   <AlertDialogCancel>Keep Transaction</AlertDialogCancel>
-                  <AlertDialogAction variant="destructive" onClick={handleCancel} disabled={cancelling}>
+                  <AlertDialogAction
+                    variant="destructive"
+                    onClick={handleCancel}
+                    disabled={cancelling || (needsTowingConsent && !towingAck)}
+                  >
                     {cancelling ? "Cancelling..." : "Yes, Cancel Transaction"}
                   </AlertDialogAction>
                 </AlertDialogFooter>
@@ -588,6 +648,56 @@ export function TransactionDetail({
           )}
         </div>
       </div>
+
+      {state === "completed" ? (
+        <Card>
+          <CardContent className="flex flex-col gap-3">
+            <h2 className="font-medium">Rate GCE</h2>
+            {submittedReview ? (
+              <div className="flex flex-col gap-2">
+                <p>
+                  {submittedReview.rating}/5 · {format(new Date(submittedReview.created_at), "MMM d, yyyy")}
+                </p>
+                <p className="whitespace-pre-wrap break-words">{submittedReview.body}</p>
+                <p className="text-muted-foreground text-sm">Thank you for your review.</p>
+              </div>
+            ) : (
+              <form onSubmit={handleReview} className="flex max-w-xl flex-col gap-3">
+                <Label htmlFor="review-rating">Rating</Label>
+                <select
+                  id="review-rating"
+                  className="h-11 rounded-md border bg-background px-3"
+                  value={rating}
+                  onChange={(event) => setRating(event.target.value)}
+                >
+                  {[5, 4, 3, 2, 1].map((value) => (
+                    <option key={value} value={value}>
+                      {value} / 5
+                    </option>
+                  ))}
+                </select>
+                <Label htmlFor="review-body">Your review</Label>
+                <Textarea
+                  id="review-body"
+                  required
+                  maxLength={2000}
+                  value={reviewBody}
+                  onChange={(event) => setReviewBody(event.target.value)}
+                />
+                <p className="text-muted-foreground text-sm">Your review will be public on the GCE landing page.</p>
+                {reviewError ? (
+                  <p role="alert" className="text-destructive text-sm">
+                    {reviewError}
+                  </p>
+                ) : null}
+                <Button type="submit" className="self-start" disabled={reviewing || !reviewBody.trim()}>
+                  {reviewing ? "Sending..." : "Submit review"}
+                </Button>
+              </form>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid gap-5 xl:grid-cols-2">
         {/* Form column */}
@@ -762,13 +872,21 @@ export function TransactionDetail({
                 {/* T04 P2: a GCE Visit happens at GCE, so it asks for no location. */}
                 {arrangementKind === "gce_visit" ? null : (
                   <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="location">Location</Label>
+                    <Label htmlFor="location">Location{locationRequired ? " *" : ""}</Label>
                     <Input
                       id="location"
+                      required={locationRequired}
+                      aria-invalid={locationMissing}
+                      aria-describedby={locationMissing ? "location-error" : undefined}
                       value={location}
                       onChange={(e) => setLocation(e.target.value)}
                       placeholder="Address or meeting point"
                     />
+                    {locationMissing ? (
+                      <p id="location-error" className="text-destructive text-sm">
+                        Enter a location for meet-up or delivery.
+                      </p>
+                    ) : null}
                   </div>
                 )}
                 <div className="flex flex-col gap-1.5">
@@ -786,7 +904,7 @@ export function TransactionDetail({
                 ) : null}
                 <Button
                   onClick={handleSaveBuyDetails}
-                  disabled={saving || (scheduleDate !== "" && !schedule)}
+                  disabled={saving || locationMissing || (scheduleDate !== "" && !schedule)}
                   className="self-start"
                 >
                   {saving ? "Saving..." : "Save Details"}
@@ -815,6 +933,8 @@ export function TransactionDetail({
                       onClick={handleSubmitRequest}
                       disabled={
                         submitting ||
+                        locationMissing ||
+                        savedLocationMissing ||
                         !idsComplete ||
                         !hasBilling ||
                         (!bookedSlot && !booksAfterApproval) ||
@@ -920,6 +1040,13 @@ export function TransactionDetail({
             </>
           ) : null}
 
+          {kind === "buy" && installmentAccount && ["approved", "completed"].includes(state) ? (
+            <>
+              <FinancingPaymentPanel transactionId={id} account={installmentAccount} payments={payments} />
+              <Separator />
+            </>
+          ) : null}
+
           {kind === "buy" && purchaseDetails?.downpayment_due_at ? (
             <>
               {/* §4 steps 5a–7a: what to pay, by when, and where the delivery is. */}
@@ -953,7 +1080,14 @@ export function TransactionDetail({
                   })}
                 </ol>
                 {state === "approved" && (delivery?.status === "in_transit" || delivery?.status === "arriving") ? (
-                  <DeliveryLastSeen lat={delivery.last_lat} lng={delivery.last_lng} at={delivery.last_located_at} />
+                  <LiveLocationMap
+                    fieldCaseId={delivery.id}
+                    initial={{
+                      lat: delivery.last_lat ?? null,
+                      lng: delivery.last_lng ?? null,
+                      at: delivery.last_located_at ?? null,
+                    }}
+                  />
                 ) : null}
                 {delivery?.delay_note ? (
                   <p className="text-muted-foreground text-xs">
@@ -963,6 +1097,27 @@ export function TransactionDetail({
                       : ""}
                   </p>
                 ) : null}
+              </section>
+              <Separator />
+            </>
+          ) : null}
+
+          {kind === "buy" && recovery ? (
+            <>
+              <section className="flex flex-col gap-3">
+                <h2 className="font-medium tracking-tight">Recovery</h2>
+                <p className="text-sm">
+                  GCE is recovering the car after the financing cancellation. Status:{" "}
+                  <span className="font-medium">{recovery.state.replace(/_/g, " ")}</span>.
+                </p>
+                <LiveLocationMap
+                  fieldCaseId={recovery.id}
+                  initial={{
+                    lat: recovery.last_lat ?? null,
+                    lng: recovery.last_lng ?? null,
+                    at: recovery.last_located_at ?? null,
+                  }}
+                />
               </section>
               <Separator />
             </>
@@ -1051,38 +1206,6 @@ export function TransactionDetail({
                     </p>
                   </section>
                 ) : null}
-              </section>
-              <Separator />
-            </>
-          )}
-
-          {kind === "request_a_car" && vehicleRequests && (
-            <>
-              <section className="flex flex-col gap-3">
-                <h2 className="font-medium tracking-tight">Request Details</h2>
-                <DetailRow label="Make" value={vehicleRequests.requested_make as string} />
-                <DetailRow label="Model" value={vehicleRequests.requested_model as string} />
-                <DetailRow
-                  label="Year Range"
-                  value={
-                    vehicleRequests.year_min || vehicleRequests.year_max
-                      ? `${vehicleRequests.year_min ?? "Any"} – ${vehicleRequests.year_max ?? "Any"}`
-                      : "Any"
-                  }
-                />
-                <DetailRow
-                  label="Budget"
-                  value={vehicleRequests.budget ? `₱${Number(vehicleRequests.budget).toLocaleString()}` : "—"}
-                />
-                <DetailRow label="Other Preferences" value={(vehicleRequests.other_preferences as string) ?? "—"} />
-                <DetailRow
-                  label="Agreed Price"
-                  value={
-                    vehicleRequests.agreed_price
-                      ? `₱${Number(vehicleRequests.agreed_price).toLocaleString()}`
-                      : "Not yet agreed"
-                  }
-                />
               </section>
               <Separator />
             </>
