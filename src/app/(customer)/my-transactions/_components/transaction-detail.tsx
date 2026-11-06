@@ -62,6 +62,7 @@ import {
   isFinancingRequest,
   isOnsiteCashRequest,
   isQueuedRequest,
+  needsContract,
   onlinePaymentsDue,
   PAPERS_STATUS_LABELS,
   type PapersStatus,
@@ -80,7 +81,7 @@ import { monthlyInstallment } from "@/lib/transactions/loan-calculator";
 import type { FlowStatus, QueueState, TransactionFlag, TransactionState } from "@/lib/transactions/state-machine";
 import { cn, formatCurrency } from "@/lib/utils";
 
-import { ContractSign } from "./contract-sign";
+import { ContractSign, OnSiteContract } from "./contract-sign";
 import { FinancingPaymentPanel } from "./financing-payment-panel";
 import { OnlinePayment } from "./online-payment";
 import { type DocumentUpload, PurchaseDocumentChecklist } from "./purchase-document-checklist";
@@ -962,6 +963,16 @@ export function TransactionDetail({
                 contractBody={(handover.contract_body as string | null | undefined) ?? null}
                 signedAt={(handover.contract_signed_at as string | null | undefined) ?? null}
                 signingMethod={(handover.signing_method as string | null | undefined) ?? null}
+              />
+              <Separator />
+            </>
+          ) : kind === "buy" &&
+            needsContract(purchaseDetails ?? null) &&
+            (state === "approved" || contractState === "signed") ? (
+            <>
+              <OnSiteContract
+                arrangementKind={(purchaseDetails?.arrangement_kind as string | null | undefined) ?? null}
+                signedAt={(handover.contract_signed_at as string | null | undefined) ?? null}
               />
               <Separator />
             </>
