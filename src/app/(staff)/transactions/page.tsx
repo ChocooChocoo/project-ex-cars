@@ -21,9 +21,7 @@ export default async function TransactionsPage({
 
   let query = supabase
     .from("transactions")
-    .select(
-      "*, vehicles(make, model, year), profiles(full_name), purchase_details(*), sell_details(*), vehicle_requests(*)",
-    )
+    .select("*, vehicles(make, model, year), profiles(full_name), purchase_details(*), sell_details(*)")
     .order("updated_at", { ascending: false });
 
   if (state && ["pending", "under_review", "approved", "rejected", "completed", "cancelled"].includes(state)) {
