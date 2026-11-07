@@ -240,9 +240,22 @@ describe("a payment waits for the signed contract", () => {
     await expect(pay("full")).resolves.toEqual({ success: true });
 
     request("financing", "gce_visit", null);
+    db.rows.installments = {
+      id: "44444444-4444-4444-8444-444444444444",
+      amount_due: 100_000,
+      account_id: "55555555-5555-4555-8555-555555555555",
+      installment_accounts: { purchase_transaction_id: transactionId },
+    };
     await expect(pay("", { installment_id: "44444444-4444-4444-8444-444444444444" })).resolves.toEqual({
       success: true,
     });
+    // T07 CR1: the server forces the installment's own amount, paid in cash, whatever the form sent.
+    expect(db.writes).toContainEqual(
+      expect.objectContaining({
+        table: "payment_records",
+        payload: expect.objectContaining({ amount: 100_000, method: "cash", payment_kind: "installment" }),
+      }),
+    );
   });
 });
 

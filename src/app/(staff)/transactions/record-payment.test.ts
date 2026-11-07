@@ -171,7 +171,7 @@ describe("Record Payment on a CASH buy (T05)", () => {
 });
 
 describe("who records a payment (T05)", () => {
-  it("leaves the Head Accountant only the installment row", async () => {
+  it("refuses a payment recorded by the Head Accountant", async () => {
     getCurrentRole.mockResolvedValue("head_accountant");
 
     await expect(record()).resolves.toEqual({
@@ -180,14 +180,19 @@ describe("who records a payment (T05)", () => {
     expect(inserts()).toEqual([]);
   });
 
-  it("records an installment pending verification for the Head Accountant", async () => {
-    getCurrentRole.mockResolvedValue("head_accountant");
+  it("lets the Sales Manager record a cash installment for the Head Accountant", async () => {
+    getCurrentRole.mockResolvedValue("sales_manager");
+    db.rows.installments = {
+      amount_due: 25_000,
+      account_id: "account-1",
+      installment_accounts: { purchase_transaction_id: transactionId },
+    };
 
     await expect(
       record({
         installment_id: installmentId,
         amount: "25000",
-        method: "bank_transfer",
+        method: "cash",
         payment_kind: "",
       }),
     ).resolves.toEqual({ success: true });
@@ -195,12 +200,26 @@ describe("who records a payment (T05)", () => {
       expect.objectContaining({
         installment_id: installmentId,
         amount: 25_000,
-        method: "bank_transfer",
+        method: "cash",
         payment_kind: "installment",
       }),
     ]);
     expect(db.writes.some((write) => write.table === "installments")).toBe(false);
     expect(closeFinancingIfPaid).not.toHaveBeenCalled();
+  });
+
+  it("refuses an installment recorded by the Head Accountant", async () => {
+    getCurrentRole.mockResolvedValue("head_accountant");
+
+    await expect(
+      record({
+        installment_id: installmentId,
+        amount: "25000",
+        method: "cash",
+        payment_kind: "",
+      }),
+    ).resolves.toEqual({ error: "The Sales Manager records the installment. The Head Accountant verifies it." });
+    expect(inserts()).toEqual([]);
   });
 
   it("still records a financing payment for the Sales Manager", async () => {
@@ -231,7 +250,9 @@ describe("verify financing installment", () => {
       transaction_id: transactionId,
       installment_id: installmentId,
       settlement_date: "2026-11-05",
+      amount: 5000,
     };
+    db.rows.installments = { amount_due: 5000 };
     expect(await verifyPayment("payment-1")).toEqual({ success: true });
     expect(db.writes).toContainEqual({
       table: "installments",
@@ -239,6 +260,21 @@ describe("verify financing installment", () => {
       payload: { state: "paid", payment_date: "2026-11-05" },
     });
     expect(closeFinancingIfPaid).toHaveBeenCalledWith(expect.anything(), transactionId);
+  });
+
+  it("refuses an online installment the Sales Manager has not approved", async () => {
+    getCurrentRole.mockResolvedValue("head_accountant");
+    db.rows.payment_records = {
+      transaction_id: transactionId,
+      installment_id: installmentId,
+      method: "paymongo",
+      payment_kind: "installment",
+      approved_at: null,
+    };
+    expect(await verifyPayment("payment-1")).toEqual({
+      error: "The Sales Manager must approve this online payment first.",
+    });
+    expect(db.writes.some((write) => write.table === "installments")).toBe(false);
   });
 
   it("does not mark installments when no unrejected payment was updated", async () => {

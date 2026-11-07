@@ -388,7 +388,7 @@ export function ReconditioningPanel({
             </div>
             {job.refunded_at ? (
               <Badge variant="outline">Returned {format(new Date(job.refunded_at as string), "MMM d, yyyy")}</Badge>
-            ) : isMechanic ? (
+            ) : isMechanic || userRole === "head_accountant" ? (
               <Button
                 size="sm"
                 variant="outline"

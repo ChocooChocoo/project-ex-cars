@@ -28,14 +28,19 @@ type PaymentRow = Record<string, unknown>;
 export function TransactionPaymentsTableV1({
   payments,
   canReview,
+  canApproveOnline,
   onVerifyPayment,
   onRejectPayment,
+  onApproveOnlinePayment,
 }: {
   readonly payments: Record<string, unknown>[];
   /** CEO and Head Accountant: may verify or reject (same roles as the server actions). */
   readonly canReview: boolean;
+  /** Sales Manager and CEO: approve a PayMongo installment before the Head Accountant verifies it. */
+  readonly canApproveOnline: boolean;
   readonly onVerifyPayment: (paymentId: string) => Promise<void>;
   readonly onRejectPayment: (paymentId: string, reason: string) => Promise<void>;
+  readonly onApproveOnlinePayment: (paymentId: string) => Promise<void>;
 }) {
   // T03 HA3: a rejected payment stays listed but never counts.
   const counted = payments.filter((p) => !p.rejected_at);
@@ -103,52 +108,102 @@ export function TransactionPaymentsTableV1({
     },
     {
       accessorKey: "verified_by",
-      header: () => <span className="text-xs">Verified</span>,
+      header: () => <span className="text-xs">Status</span>,
       enableSorting: false,
-      cell: ({ row }: { row: { original: PaymentRow } }) => (
-        <span className="text-xs">
-          {row.original.rejected_at ? (
+      cell: ({ row }: { row: { original: PaymentRow } }) => {
+        const payment = row.original;
+        if (payment.rejected_at) {
+          return (
             <span className="flex flex-col items-start gap-1">
               <Badge variant="destructive" className="h-5 px-2 text-[11px]">
                 Rejected
               </Badge>
-              <span className="max-w-48 text-muted-foreground">{String(row.original.rejection_reason ?? "")}</span>
+              <span className="max-w-48 text-muted-foreground">{String(payment.rejection_reason ?? "")}</span>
             </span>
-          ) : row.original.paymongo_payment_id ? (
+          );
+        }
+        if (payment.verified_by) {
+          return (
+            <Badge className="h-5 border-green-600/35 bg-green-600/10 px-2 text-[11px] text-green-600">Verified</Badge>
+          );
+        }
+        // T07 CR1: PayMongo installments climb two staff steps before they count.
+        if (payment.payment_kind === "installment" && payment.method === "paymongo") {
+          if (!payment.paymongo_payment_id) {
+            return (
+              <Badge variant="outline" className="h-5 px-2 text-[11px]">
+                Waiting for PayMongo
+              </Badge>
+            );
+          }
+          return (
+            <Badge variant="outline" className="h-5 px-2 text-[11px]">
+              {payment.approved_at ? "Waiting for Head Accountant" : "Waiting for Sales Manager"}
+            </Badge>
+          );
+        }
+        if (payment.paymongo_payment_id) {
+          return (
             <Badge
               className="h-5 border-green-600/35 bg-green-600/10 px-2 text-[11px] text-green-600"
-              title={String(row.original.paymongo_payment_id)}
+              title={String(payment.paymongo_payment_id)}
             >
               Paid on PayMongo
             </Badge>
-          ) : row.original.verified_by ? (
-            <Badge className="h-5 border-green-600/35 bg-green-600/10 px-2 text-[11px] text-green-600">Verified</Badge>
-          ) : row.original.paymongo_checkout_id ? (
+          );
+        }
+        if (payment.paymongo_checkout_id) {
+          return (
             <Badge variant="outline" className="h-5 px-2 text-[11px]">
               Waiting for PayMongo
             </Badge>
-          ) : (
-            <Badge variant="outline" className="h-5 px-2 text-[11px]">
-              Pending
-            </Badge>
-          )}
-        </span>
-      ),
+          );
+        }
+        return (
+          <Badge variant="outline" className="h-5 px-2 text-[11px]">
+            Pending
+          </Badge>
+        );
+      },
     },
     {
       id: "actions",
       header: () => <span className="sr-only">Actions</span>,
       enableSorting: false,
-      cell: ({ row }: { row: { original: PaymentRow } }) =>
-        // PayMongo confirms through its webhook; manual staff and customer submissions are reviewed here.
-        canReview && !row.original.verified_by && !row.original.rejected_at && !row.original.paymongo_checkout_id ? (
+      cell: ({ row }: { row: { original: PaymentRow } }) => {
+        const payment = row.original;
+        if (payment.verified_by || payment.rejected_at) return null;
+
+        const onlineInstallment = payment.payment_kind === "installment" && payment.method === "paymongo";
+        if (onlineInstallment) {
+          if (!payment.paymongo_payment_id) return null;
+          if (!payment.approved_at) {
+            return canApproveOnline ? (
+              <div className="flex justify-end gap-1">
+                <ConfirmDialog
+                  action="approve"
+                  title="Approve this online installment?"
+                  description="The Head Accountant still has to verify it before it counts as paid."
+                  confirmLabel="Approve"
+                  onConfirm={() => onApproveOnlinePayment(payment.id as string)}
+                  trigger={<Button size="sm">Approve</Button>}
+                />
+              </div>
+            ) : null;
+          }
+        }
+        // A session PayMongo has not confirmed yet cannot be reviewed.
+        if (payment.paymongo_checkout_id && !payment.paymongo_payment_id) return null;
+        if (!canReview) return null;
+
+        return (
           <div className="flex justify-end gap-1">
             <ConfirmDialog
               action="approve"
               title="Are you sure you want to verify this payment?"
               description="It counts toward the buyer's balance once verified."
               confirmLabel="Verify"
-              onConfirm={() => onVerifyPayment(row.original.id as string)}
+              onConfirm={() => onVerifyPayment(payment.id as string)}
               trigger={<Button size="sm">Verify</Button>}
             />
             <RejectReasonDialog
@@ -158,13 +213,14 @@ export function TransactionPaymentsTableV1({
                 </Button>
               }
               title="Reject this payment?"
-              description={`${formatCurrency(Number(row.original.amount))} stays on record as rejected and stops counting toward what was paid. The buyer sees your reason.`}
+              description={`${formatCurrency(Number(payment.amount))} stays on record as rejected and stops counting toward what was paid. The buyer sees your reason.`}
               placeholder="e.g. The amount on the deposit slip does not match"
               confirmLabel="Reject payment"
-              onConfirm={(reason) => onRejectPayment(row.original.id as string, reason)}
+              onConfirm={(reason) => onRejectPayment(payment.id as string, reason)}
             />
           </div>
-        ) : null,
+        );
+      },
     },
   ];
 

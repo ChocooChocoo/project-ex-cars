@@ -22,6 +22,16 @@ try {
         WHERE table_schema = 'public' AND table_name = 'payment_records' AND column_name = 'submitted_by'
       ) AS present
       UNION ALL
+      SELECT 'installment_approved_by', EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'payment_records' AND column_name = 'approved_by'
+      )
+      UNION ALL
+      SELECT 'installment_approved_at', EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'payment_records' AND column_name = 'approved_at'
+      )
+      UNION ALL
       SELECT 'installment_kind', EXISTS (
         SELECT 1 FROM pg_constraint
         WHERE conrelid = 'public.payment_records'::regclass AND conname = 'payment_records_payment_kind_check'

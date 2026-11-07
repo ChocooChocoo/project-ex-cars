@@ -359,12 +359,13 @@ export async function completeReconditioning(formData: FormData): Promise<Recond
 }
 
 export async function markReconditioningRefundReturned(formData: FormData): Promise<ReconditioningResult> {
-  const who = await actorWith(["mechanic"]);
+  const who = await actorWith(["mechanic", "head_accountant"]);
   if ("error" in who) return who;
+  const role = await getCurrentRole();
   const job = await loadJob(formData.get("job_id"));
   if (!job) return { error: "Reconditioning job not found." };
   if (job.state !== "completed") return { error: "This job is not completed." };
-  if (job.mechanic_id && job.mechanic_id !== who.userId) {
+  if (role === "mechanic" && job.mechanic_id && job.mechanic_id !== who.userId) {
     return { error: "Only the assigned Mechanic can return the leftover funds." };
   }
   if (Number(job.refund_due_cents ?? 0) <= 0) return { error: "There is no leftover to return." };
@@ -379,7 +380,7 @@ export async function markReconditioningRefundReturned(formData: FormData): Prom
   await notifyRole(
     "head_accountant",
     "Reconditioning refund returned",
-    `The Mechanic returned ${peso(Number(job.refund_due_cents) / 100)} to GCE.`,
+    `${role === "head_accountant" ? "The Head Accountant" : "The Mechanic"} recorded ${peso(Number(job.refund_due_cents) / 100)} returned to GCE.`,
     transactionReference(job),
   );
   return done(job.vehicle_id);

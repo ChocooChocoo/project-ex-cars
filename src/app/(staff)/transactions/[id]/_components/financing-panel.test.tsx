@@ -22,6 +22,7 @@ const props = {
   terms: null,
   account: null,
   hasRecoveryCase: false,
+  recoveryInProgress: false,
   userRole: "sales_manager",
   defaultTotal: 500000,
   vehiclePrice: 400000,

@@ -82,34 +82,37 @@ export function TransactionStatusTriageV1({
   // is allowed 2h30m after the meet-up; a delivery buyer is "unavailable" once the team has arrived.
   const delivery = visit?.kind === "delivery";
   const classified = visit?.kind === "meetup" || delivery;
+  // T07 CR1: once the car is delivered, the sale is done. There is no decline or no-show left to record.
+  const delivered = delivery && visit?.deliveryStatus === "delivered";
   const noShowReady = delivery
-    ? ["arriving", "delivered"].includes(visit?.deliveryStatus ?? "")
+    ? visit?.deliveryStatus === "arriving"
     : Boolean(visit && canRecordNoShow(visit.schedule));
-  const outcomes: { outcome: VisitOutcome; label: string; detail: string }[] = !canRecordOutcome
-    ? []
-    : classified
-      ? [
-          {
-            outcome: "legit",
-            label: "Declined — Legit",
-            detail: delivery ? "No strike; downpayment refunded" : "Legitimate surprise; no penalty",
-          },
-          {
-            outcome: "not_legit",
-            label: "Declined — Not Legit",
-            detail: delivery ? "Strike; downpayment forfeited" : "Strike; buyer limited to GCE visits",
-          },
-          ...(noShowReady
-            ? [
-                {
-                  outcome: "no_show" as const,
-                  label: delivery ? "Buyer unavailable" : "Buyer didn't show up",
-                  detail: delivery ? "No-show; downpayment forfeited" : "Counts as one no-show",
-                },
-              ]
-            : []),
-        ]
-      : [{ outcome: "declined", label: "Buyer declined", detail: "Close the request; the car stays listed" }];
+  const outcomes: { outcome: VisitOutcome; label: string; detail: string }[] =
+    !canRecordOutcome || delivered
+      ? []
+      : classified
+        ? [
+            {
+              outcome: "legit",
+              label: "Declined — Legit",
+              detail: delivery ? "No strike; downpayment refunded" : "Legitimate surprise; no penalty",
+            },
+            {
+              outcome: "not_legit",
+              label: "Declined — Not Legit",
+              detail: delivery ? "Strike; downpayment forfeited" : "Strike; buyer limited to GCE visits",
+            },
+            ...(noShowReady
+              ? [
+                  {
+                    outcome: "no_show" as const,
+                    label: delivery ? "Buyer unavailable" : "Buyer didn't show up",
+                    detail: delivery ? "No-show; downpayment forfeited" : "Counts as one no-show",
+                  },
+                ]
+              : []),
+          ]
+        : [{ outcome: "declined", label: "Buyer declined", detail: "Close the request; the car stays listed" }];
   const visibleOutcomes = outcomes.filter((item) => !(declinesBlocked && item.outcome !== "no_show"));
 
   return (

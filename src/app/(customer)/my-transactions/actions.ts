@@ -34,12 +34,7 @@ import { releaseVisitSlots } from "@/lib/transactions/buy-flow-server";
 import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_SIZE } from "@/lib/transactions/document-media";
 import { nextUnpaidInstallment, unpaidInstallments } from "@/lib/transactions/financing-payments";
 import { canCancelScheduled, nextQueueState, reviewDueAt } from "@/lib/transactions/state-machine";
-import {
-  buyDetailsSchema,
-  buyTransactionSchema,
-  paymentRecordSchema,
-  sellVehicleSchema,
-} from "@/lib/validation/transactions";
+import { buyDetailsSchema, buyTransactionSchema, sellVehicleSchema } from "@/lib/validation/transactions";
 import { autoCheckDocument } from "@/lib/verification/verify-document";
 
 import { randomUUID } from "node:crypto";
@@ -964,10 +959,17 @@ export async function startOnlinePayment(
     paymongo_checkout_id: unknown;
     paid_at: unknown;
     verified_by: unknown;
+    rejected_at: unknown;
   };
   let rows = (tx.payment_records ?? []) as Row[];
   const waiting = rows.find(
-    (row) => row.method === "paymongo" && row.paymongo_checkout_id && !row.paid_at && !row.verified_by,
+    (row) =>
+      row.payment_kind !== "installment" &&
+      row.method === "paymongo" &&
+      row.paymongo_checkout_id &&
+      !row.paid_at &&
+      !row.verified_by &&
+      !row.rejected_at,
   );
   if (waiting) {
     const checkoutId = String(waiting.paymongo_checkout_id);
@@ -986,8 +988,10 @@ export async function startOnlinePayment(
       .from("payment_records")
       .delete()
       .eq("paymongo_checkout_id", checkoutId)
+      .neq("payment_kind", "installment")
       .is("paid_at", null)
-      .is("verified_by", null);
+      .is("verified_by", null)
+      .is("rejected_at", null);
     rows = rows.filter((row) => row.paymongo_checkout_id !== checkoutId);
   }
 
@@ -1037,25 +1041,20 @@ export async function startOnlinePayment(
   return { success: true, url: session.checkoutUrl };
 }
 
-export async function submitFinancingPayment(formData: FormData) {
-  return submitInstallmentPayments(formData, false);
-}
-
-export async function submitAdvancedPayment(formData: FormData) {
-  return submitInstallmentPayments(formData, true);
-}
-
-async function submitInstallmentPayments(formData: FormData, advanced: boolean) {
+// T07 CR1: a bank transfer is paid through PayMongo. The session covers the next unpaid installment, or the
+// ones the buyer ticks in Advanced Payment. The Sales Manager approves the result; the Head Accountant verifies it.
+export async function startInstallmentCheckout(formData: FormData) {
   const authorization = await authorizeAction(["customer"]);
   if (!authorization.ok) return { error: authorization.message };
   const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
   if (!user.user) return { error: "Not authenticated" };
 
+  const secretKey = process.env.PAYMONGO_SECRET_KEY;
+  if (!secretKey) return { error: "Online payment is not set up yet." };
+
   const id = z.string().uuid().safeParse(formData.get("transaction_id"));
   if (!id.success) return { error: "Transaction not found." };
-  const method = z.enum(["cash", "bank_transfer"]).safeParse(formData.get("method"));
-  if (!method.success) return { error: "Choose cash or bank transfer." };
 
   const admin = createAdminClient();
   const { data: tx } = await admin
@@ -1064,22 +1063,55 @@ async function submitInstallmentPayments(formData: FormData, advanced: boolean) 
     .eq("id", id.data)
     .maybeSingle();
   if (!tx || tx.customer_id !== user.user.id) return { error: "Transaction not found." };
-  if (!["approved", "completed"].includes(tx.current_state))
+  if (!["approved", "completed"].includes(tx.current_state)) {
     return { error: "This financing is not open for payments." };
+  }
+
   const { data: account, error: accountError } = await admin
     .from("installment_accounts")
-    .select("id, state, installments(id, account_id, state, due_date, amount_due)")
+    .select("id, state, installments(id, account_id, state, due_date, amount_due, sequence_no)")
     .eq("purchase_transaction_id", tx.id)
     .maybeSingle();
   if (accountError) return { error: accountError.message };
   if (account?.state !== "active") return { error: "This financing account is not active." };
 
+  // Reuse an open PayMongo session instead of blocking the buyer behind a checkout they abandoned.
+  const { data: liveRows, error: liveError } = await admin
+    .from("payment_records")
+    .select("installment_id, paymongo_checkout_id, paid_at")
+    .eq("transaction_id", tx.id)
+    .eq("payment_kind", "installment")
+    .is("rejected_at", null);
+  if (liveError) return { error: liveError.message };
+  const waiting = (liveRows ?? []).find((row) => row.paymongo_checkout_id && !row.paid_at);
+  if (waiting) {
+    const checkoutId = String(waiting.paymongo_checkout_id);
+    try {
+      const session = await retrieveCheckoutSession(secretKey, checkoutId);
+      if (session.paidPaymentId) {
+        await markCheckoutPaid(admin, checkoutId, session.paidPaymentId);
+        return { error: "Your payment is already received. Refresh the page to see it." };
+      }
+      if (session.status === "active") return { success: true, url: session.checkoutUrl };
+    } catch {
+      // An unreadable session is treated as expired and replaced below.
+    }
+    await admin
+      .from("payment_records")
+      .delete()
+      .eq("paymongo_checkout_id", checkoutId)
+      .is("paid_at", null)
+      .is("verified_by", null)
+      .is("rejected_at", null);
+  }
+
   const unpaid = unpaidInstallments(account.installments ?? []);
   let selected = unpaid.slice(0, 1);
-  if (advanced) {
+  if (formData.get("advanced") === "yes") {
     const ids = z.array(z.string().uuid()).min(1).safeParse(formData.getAll("installment_ids"));
-    if (!ids.success || new Set(ids.data).size !== ids.data.length)
+    if (!ids.success || new Set(ids.data).size !== ids.data.length) {
       return { error: "Select one or more unpaid installments." };
+    }
     selected = unpaid.filter((installment) => ids.data.includes(installment.id));
     if (selected.length !== ids.data.length) return { error: "Select unpaid installments from this account only." };
   } else {
@@ -1099,61 +1131,49 @@ async function submitInstallmentPayments(formData: FormData, advanced: boolean) 
     )
     .is("rejected_at", null);
   if (existingError) return { error: existingError.message };
-  if (existing?.some((payment) => !payment.rejected_at && selected.some((i) => i.id === payment.installment_id))) {
-    return { error: "A payment for a selected installment is already submitted. Wait for accountant verification." };
+  if ((existing ?? []).some((payment) => !payment.rejected_at)) {
+    return { error: "A payment for a selected installment is already submitted. Wait for the review." };
+  }
+
+  const origin = (await headers()).get("origin") ?? process.env.NEXT_PUBLIC_SITE_URL ?? "";
+  let session: { id: string; checkoutUrl: string };
+  try {
+    session = await createCheckoutSession(secretKey, {
+      lineItems: selected.map((installment) => ({
+        name: `Installment ${String(installment.sequence_no)} (due ${String(installment.due_date)})`,
+        amount: Number(installment.amount_due),
+      })),
+      referenceNumber: tx.id,
+      successUrl: `${origin}/my-transactions/${tx.id}?paid=1`,
+      cancelUrl: `${origin}/my-transactions/${tx.id}?cancelled=1`,
+    });
+  } catch (error) {
+    return { error: `PayMongo could not start the payment: ${(error as Error).message}` };
   }
 
   const today = new Date().toISOString().slice(0, 10);
-  const rows = selected.map((installment) =>
-    paymentRecordSchema.safeParse({
+  const { error } = await admin.from("payment_records").insert(
+    selected.map((installment) => ({
       transaction_id: tx.id,
       installment_id: installment.id,
       amount: installment.amount_due,
-      method: method.data,
-      external_reference: formData.get("external_reference") ?? "",
-      settlement_date: today,
+      method: "paymongo",
       payment_kind: "installment",
-    }),
-  );
-  if (rows.some((row) => !row.success))
-    return { error: "Invalid payment details. Keep the reference under 100 characters." };
-
-  const proof = formData.get("proof");
-  if (proof !== null && !(proof instanceof File)) return { error: "Select a valid payment proof." };
-  if (method.data === "bank_transfer" && (!(proof instanceof File) || !proof.size))
-    return { error: "Upload proof of the bank transfer." };
-  let proofPath: string | null = null;
-  if (proof instanceof File && proof.size > 0) {
-    if (!/^image\/(jpeg|png|webp)$/.test(proof.type)) return { error: "The payment photo must be a JPG, PNG or WebP." };
-    if (proof.size > MAX_DOCUMENT_SIZE) return { error: "The payment proof is too large." };
-    proofPath = `${tx.id}/payment-proof-${randomUUID()}.${proof.type.split("/")[1].replace("jpeg", "jpg")}`;
-    const { error } = await admin.storage.from("transaction-documents").upload(proofPath, proof);
-    if (error) return { error: error.message };
-  }
-
-  const { error } = await admin.from("payment_records").insert(
-    rows.flatMap((row) =>
-      row.success
-        ? [
-            {
-              ...row.data,
-              external_reference: row.data.external_reference || null,
-              submitted_by: user.user.id,
-              recorded_by: user.user.id,
-              verified_by: null,
-              proof_path: proofPath,
-            },
-          ]
-        : [],
-    ),
+      recorded_by: user.user.id,
+      submitted_by: user.user.id,
+      settlement_date: today,
+      paymongo_checkout_id: session.id,
+    })),
   );
   if (error) {
-    if (proofPath) await admin.storage.from("transaction-documents").remove([proofPath]);
-    return { error: error.code === "23505" ? "A payment for this installment is already submitted." : error.message };
+    return {
+      error: error.code === "23505" ? "A payment for this installment is already submitted." : error.message,
+    };
   }
+
   revalidatePath(`/my-transactions/${tx.id}`);
   revalidatePath(`/dashboard/transactions/${tx.id}`);
-  return { success: true };
+  return { success: true, url: session.checkoutUrl };
 }
 
 // The buyer signs the contract the Head Accountant approved: a typed full name and the time. The typed
@@ -1274,7 +1294,7 @@ export async function cancelTransaction(formData: FormData) {
   const one = <T>(value: T | T[] | null) => (Array.isArray(value) ? value[0] : value);
   const { data: delivered, error: deliveryError } = await admin
     .from("field_cases")
-    .select("id")
+    .select("id, assigned_confidential_informant, head_security_id")
     .eq("transaction_id", id)
     .eq("case_kind", "delivery")
     .eq("delivery_status", "delivered")
@@ -1340,11 +1360,8 @@ export async function cancelTransaction(formData: FormData) {
 
   if (historyError) return { error: historyError.message };
   if (recovery) {
-    const { error: vehicleError } = await admin
-      .from("vehicles")
-      .update({ listing_state: "repairing" })
-      .eq("id", tx.vehicle_id);
-    if (vehicleError) return { error: vehicleError.message };
+    // T07 CR1: cancelling opens a recovery case but does not repossess the car. Only the assigned
+    // Confidential Informant's hand-over moves it to repairing and opens reconditioning.
     const { data: existing, error: lookupError } = await admin
       .from("field_cases")
       .select("id")
@@ -1360,6 +1377,9 @@ export async function cancelTransaction(formData: FormData) {
         vehicle_id: tx.vehicle_id,
         case_kind: "recovery",
         state: "assigned",
+        // Carry the delivery team over so the case is actionable the moment it is created.
+        assigned_confidential_informant: delivered?.assigned_confidential_informant ?? null,
+        head_security_id: delivered?.head_security_id ?? null,
         notes: "Client cancelled active financing and agreed that GCE must tow and take back the car.",
       });
       if (caseError) return { error: caseError.message };

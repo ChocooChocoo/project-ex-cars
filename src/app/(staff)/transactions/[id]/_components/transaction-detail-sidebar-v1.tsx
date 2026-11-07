@@ -130,7 +130,7 @@ export function TransactionDetailSidebarV1({
   const isCeo = userRole === "ceo";
   // Only the Head Accountant may verify purchase documents, so the buttons match
   // the server-side guard in verifyTransactionDocument.
-  const isHeadAccountant = userRole === "head_accountant";
+  const canRecordCash = userRole === "sales_manager" || userRole === "ceo";
   const docSellPhotos = documents.filter((doc) => String(doc.document_kind) === "sell_photo");
   const photos =
     sellPhotos && sellPhotos.length > 0
@@ -280,10 +280,7 @@ export function TransactionDetailSidebarV1({
                       >
                         {inst.state as string}
                       </Badge>
-                      {inst.state !== "paid" &&
-                      inst.state !== "waived" &&
-                      isHeadAccountant &&
-                      onRecordInstallmentPaid ? (
+                      {inst.state !== "paid" && inst.state !== "waived" && canRecordCash && onRecordInstallmentPaid ? (
                         <Button
                           variant="outline"
                           size="sm"

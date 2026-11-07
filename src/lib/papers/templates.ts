@@ -2,7 +2,6 @@
 // here and only here, so a change to the Deed of Sale or the Policy & Warranty is one edit.
 
 import { GCE_SELLER } from "@/lib/transactions/buy-flow";
-import { MISSED_PAYMENT_POLICY } from "@/lib/transactions/missed-payment-policy";
 
 // What a line reads when GCE has no value for it: the CI writes it in by hand before signing.
 export const PAPER_BLANK = "________";
@@ -29,6 +28,15 @@ export interface TransactionPaperSource {
   purchase_details: Embedded<{ final_price?: number | string | null }>;
   profiles: Embedded<{ full_name?: string | null; address?: string | null }>;
   vehicles: Embedded<VehicleSource>;
+  payment_terms?: Embedded<{
+    total_amount?: number | string | null;
+    down_payment?: number | string | null;
+    duration_months?: number | string | null;
+    number_of_payments?: number | string | null;
+    monthly_payment?: number | string | null;
+    first_due_date?: string | null;
+  }>;
+  installment_accounts?: Embedded<{ opening_balance?: number | string | null }>;
 }
 
 export interface PaperSale {
@@ -47,17 +55,86 @@ export interface PaperSale {
   date: string;
 }
 
+export interface PaperFinancing {
+  price: string;
+  downPayment: string;
+  financed: string;
+  monthly: string;
+  term: string;
+  firstDue: string;
+}
+
 export interface PaperDocument {
   title: string;
   paragraphs: string[];
 }
 
-export function missedPaymentPolicy(): PaperDocument {
-  return { title: "MISSED PAYMENT POLICY", paragraphs: [MISSED_PAYMENT_POLICY] };
-}
-
 function one<T>(value: Embedded<T>): T | null {
   return Array.isArray(value) ? (value[0] ?? null) : value;
+}
+
+// The fixed financing policy, filled in with the client, the car and the money. The same wording is
+// printed for every sale; only the recorded values change.
+export function missedPaymentPolicy(sale: PaperSale, financing: PaperFinancing): PaperDocument {
+  return {
+    title: "MISSED PAYMENT POLICY",
+    paragraphs: [
+      "This policy forms part of the financing agreement between GCE and the client named below. It explains what happens when the monthly installments are not paid.",
+      `CLIENT\nName: ${sale.buyer.name}\nAddress: ${sale.buyer.address}`,
+      `MOTOR VEHICLE FINANCED\n${vehicleLines(sale)}`,
+      `FINANCING\n${financingLines(financing)}`,
+      [
+        "1. The client pays one monthly installment on or before each due date in the schedule.",
+        "2. Four (4) consecutive missed monthly payments is a default under this agreement.",
+        "3. On default, GCE may tow and take back the motor vehicle described above, with prior written notice to the client at the address stated here.",
+        "4. Towing, storage and recovery costs are for the client's account and are added to the outstanding balance.",
+        "5. The client may stop the towing by paying every missed installment and these costs in full before the recovery team takes the vehicle.",
+        "6. Returning the vehicle voluntarily does not cancel the remaining balance unless GCE accepts the surrender in writing.",
+      ].join("\n"),
+      `CLIENT\nSignature over printed name: ______________________________\nPrinted name: ${sale.buyer.name}\nDate: ____________________`,
+      "GCE REPRESENTATIVE\nSignature over printed name: ______________________________\nPrinted name: ______________________________\nDate: ____________________",
+    ],
+  };
+}
+
+// One financing sale as the policy states it. `opening_balance` is what GCE financed; when the
+// account is missing, the amount is price minus downpayment.
+export function paperFinancing(row: TransactionPaperSource): PaperFinancing {
+  const details = one(row.purchase_details);
+  const terms = one(row.payment_terms);
+  const account = one(row.installment_accounts);
+  const price = Number(terms?.total_amount ?? details?.final_price ?? Number.NaN);
+  const down = Number(terms?.down_payment ?? Number.NaN);
+  const opening = Number(account?.opening_balance ?? Number.NaN);
+  const financed = Number.isFinite(opening)
+    ? opening
+    : Number.isFinite(price) && Number.isFinite(down)
+      ? price - down
+      : Number.NaN;
+  const term = terms?.duration_months ?? terms?.number_of_payments ?? null;
+  const monthly = Number(
+    terms?.monthly_payment ?? (Number.isFinite(financed) && Number(term) > 0 ? financed / Number(term) : Number.NaN),
+  );
+
+  return {
+    price: printedPrice(Number.isFinite(price) ? price : null),
+    downPayment: printedPrice(Number.isFinite(down) ? down : null),
+    financed: printedPrice(Number.isFinite(financed) ? financed : null),
+    monthly: printedPrice(Number.isFinite(monthly) ? monthly : null),
+    term: term === null || String(term).trim() === "" ? PAPER_BLANK : `${term} months`,
+    firstDue: printedDate(terms?.first_due_date ?? null),
+  };
+}
+
+function financingLines(financing: PaperFinancing): string {
+  return [
+    `Total contract price: ${financing.price}`,
+    `Initial Downpayment: ${financing.downPayment}`,
+    `Amount financed: ${financing.financed}`,
+    `Monthly installment: ${financing.monthly}`,
+    `Term: ${financing.term}`,
+    `First installment due: ${financing.firstDue}`,
+  ].join("\n");
 }
 
 function printed(value: unknown): string {

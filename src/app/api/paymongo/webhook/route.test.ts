@@ -8,7 +8,7 @@ const { notify, confirm, db } = vi.hoisted(() => {
   const from = (table: string) => {
     const answer = () => Promise.resolve({ data: rows[table] ?? null, error: null });
     const builder: Record<string, unknown> = {};
-    for (const step of ["select", "eq", "is"]) builder[step] = () => builder;
+    for (const step of ["select", "eq", "is", "in"]) builder[step] = () => builder;
     builder.update = (payload: unknown) => {
       writes.push({ table, op: "update", payload });
       return builder;
@@ -68,15 +68,38 @@ describe("PayMongo webhook", () => {
       {
         table: "payment_records",
         op: "update",
-        payload: expect.objectContaining({
-          paymongo_payment_id: "pay_1",
-          verified_by: buyer,
-          paid_at: expect.any(String),
-        }),
+        payload: expect.objectContaining({ paymongo_payment_id: "pay_1", paid_at: expect.any(String) }),
+      },
+      {
+        table: "payment_records",
+        op: "update",
+        payload: { verified_by: buyer },
       },
     ]);
     expect(confirm).toHaveBeenCalledWith(expect.anything(), "tx1");
     expect(notify).toHaveBeenCalledWith(expect.anything(), { role: "head_accountant" }, expect.anything());
+  });
+
+  it("leaves an online installment for the Sales Manager to approve", async () => {
+    db.rows.payment_records = [
+      { id: "p3", transaction_id: "tx1", recorded_by: buyer, payment_kind: "installment", amount: 1500 },
+    ];
+    const response = await post(event());
+
+    expect(response.status).toBe(200);
+    expect(db.writes).toEqual([
+      {
+        table: "payment_records",
+        op: "update",
+        payload: expect.objectContaining({ paymongo_payment_id: "pay_1", paid_at: expect.any(String) }),
+      },
+    ]);
+    expect(db.writes.some((write) => "verified_by" in (write.payload as object))).toBe(false);
+    expect(notify).toHaveBeenCalledWith(
+      expect.anything(),
+      { role: "sales_manager" },
+      expect.objectContaining({ kind: "installment_awaiting_approval" }),
+    );
   });
 
   it("changes nothing when the rows are already paid", async () => {

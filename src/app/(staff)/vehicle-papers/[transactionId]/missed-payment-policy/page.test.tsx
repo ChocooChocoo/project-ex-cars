@@ -25,7 +25,7 @@ it("guards the printable fixed policy for CEO, Head Accountant and Sales Manager
   expect(requireRole).toHaveBeenCalledWith(["ceo", "head_accountant", "sales_manager"]);
   expect(element.type).toBe(view);
   expect(element.props.paper.title).toBe("MISSED PAYMENT POLICY");
-  expect(element.props.paper.paragraphs[0]).toContain("4 consecutive missed monthly payments");
+  expect(element.props.paper.paragraphs.join("\n")).toContain("Four (4) consecutive missed monthly payments");
 });
 
 it("404s for an unknown transaction", async () => {

@@ -18,7 +18,7 @@ import {
   verifyPayment,
   verifyTransactionDocument,
 } from "@/app/(staff)/transactions/actions";
-import { rejectPayment } from "@/app/(staff)/transactions/payment-review-actions";
+import { approveOnlineInstallment, rejectPayment } from "@/app/(staff)/transactions/payment-review-actions";
 import {
   contractTemplate,
   financedTotal,
@@ -73,7 +73,12 @@ export function StaffTransactionDetail({
   readonly sellFlow?: SellFlowData | null;
   readonly carBuyers?: CarBuyerRow[];
   readonly delivery?: { fieldCase: Record<string, unknown> | null; team: DeliveryTeam } | null;
-  readonly financing?: { hasRecoveryCase: boolean; threadId?: string | null; markupPct: number } | null;
+  readonly financing?: {
+    hasRecoveryCase: boolean;
+    recoveryInProgress: boolean;
+    threadId?: string | null;
+    markupPct: number;
+  } | null;
   readonly meetup?: {
     fieldCase: Record<string, unknown> | null;
     informants: { id: string; full_name: string | null }[];
@@ -245,6 +250,15 @@ export function StaffTransactionDetail({
     }
   }
 
+  async function onApproveOnlinePayment(paymentId: string) {
+    const result = await approveOnlineInstallment(paymentId);
+    if ("error" in result) toast.error(result.error);
+    else {
+      toast.success("Online installment approved for Head Accountant verification.");
+      router.refresh();
+    }
+  }
+
   async function onWaiveInstallment(installmentId: string) {
     const result = await markInstallmentWaived(installmentId);
     if (result.error) toast.error(result.error);
@@ -259,12 +273,13 @@ export function StaffTransactionDetail({
     fd.set("transaction_id", id);
     fd.set("installment_id", installmentId);
     fd.set("amount", amount);
-    fd.set("method", "bank_transfer");
+    // T07 CR1: the Sales Manager records the cash installment; the Head Accountant verifies it.
+    fd.set("method", "cash");
     fd.set("settlement_date", new Date().toISOString().slice(0, 10));
     const result = await recordPayment(fd);
     if (result.error) toast.error(result.error);
     else {
-      toast.success("Installment payment recorded for verification.");
+      toast.success("Cash installment recorded for Head Accountant verification.");
       router.refresh();
     }
   }
@@ -400,6 +415,7 @@ export function StaffTransactionDetail({
           terms={paymentTerms}
           account={installmentAccount}
           hasRecoveryCase={financing.hasRecoveryCase}
+          recoveryInProgress={financing.recoveryInProgress}
           userRole={userRole}
           threadId={financing.threadId ?? null}
           arrangementKind={(purchaseDetails?.arrangement_kind as string | undefined) ?? "gce_visit"}
@@ -483,8 +499,10 @@ export function StaffTransactionDetail({
       <TransactionPaymentsTableV1
         payments={payments}
         canReview={userRole === "ceo" || userRole === "head_accountant"}
+        canApproveOnline={userRole === "ceo" || userRole === "sales_manager"}
         onVerifyPayment={onVerifyPayment}
         onRejectPayment={onRejectPayment}
+        onApproveOnlinePayment={onApproveOnlinePayment}
       />
     </div>
   );

@@ -50,6 +50,7 @@ export function FinancingPanel({
   terms,
   account,
   hasRecoveryCase,
+  recoveryInProgress,
   userRole,
   arrangementKind = "gce_visit",
   signingReported = false,
@@ -65,6 +66,7 @@ export function FinancingPanel({
   readonly terms: Row | null;
   readonly account: Row | null;
   readonly hasRecoveryCase: boolean;
+  readonly recoveryInProgress: boolean;
   readonly userRole: string;
   readonly arrangementKind?: string;
   readonly signingReported?: boolean;
@@ -401,7 +403,7 @@ export function FinancingPanel({
               <Fact label="Remaining" value={formatCurrency(Math.max(0, financed - paid))} />
               <Fact label="Missed installments" value={String(missed)} />
             </dl>
-            {userRole === "head_accountant" && hasRecoveryCase && flowStatus !== "repossessed" ? (
+            {userRole === "head_accountant" && hasRecoveryCase && recoveryInProgress && flowStatus !== "repossessed" ? (
               <Button
                 size="sm"
                 variant="destructive"

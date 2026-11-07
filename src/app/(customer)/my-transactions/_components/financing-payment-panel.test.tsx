@@ -1,16 +1,15 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { submitFinancingPayment, submitAdvancedPayment, refresh, success, error } = vi.hoisted(() => ({
-  submitFinancingPayment: vi.fn(),
-  submitAdvancedPayment: vi.fn(),
+const { startInstallmentCheckout, refresh, success, error } = vi.hoisted(() => ({
+  startInstallmentCheckout: vi.fn(),
   refresh: vi.fn(),
   success: vi.fn(),
   error: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
 vi.mock("sonner", () => ({ toast: { success, error } }));
-vi.mock("../actions", () => ({ submitFinancingPayment, submitAdvancedPayment }));
+vi.mock("../actions", () => ({ startInstallmentCheckout }));
 
 import { FinancingPaymentPanel } from "./financing-payment-panel";
 
@@ -23,61 +22,53 @@ const props = { transactionId: "tx-1", account: { state: "active", installments 
 
 beforeEach(() => {
   vi.clearAllMocks();
-  submitFinancingPayment.mockResolvedValue({ success: true });
-  submitAdvancedPayment.mockResolvedValue({ success: true });
+  startInstallmentCheckout.mockResolvedValue({ success: true });
 });
 
 describe("financing payment panel", () => {
-  it("disables resubmission while waiting and closes dialogs with Escape", async () => {
-    let complete: (value: { success: true }) => void = () => undefined;
-    submitFinancingPayment.mockImplementationOnce(
-      () =>
-        new Promise<{ success: true }>((resolve) => {
-          complete = resolve;
-        }),
-    );
+  it("opens the PayMongo dialog and closes it with Escape", () => {
     render(<FinancingPaymentPanel {...props} />);
     fireEvent.click(screen.getByRole("button", { name: "Payment" }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Payment" }));
-    fireEvent.submit(screen.getByRole("form", { name: "Payment" }));
-    expect(screen.getByRole("button", { name: "Submitting…" })).toBeDisabled();
-    complete({ success: true });
-    await waitFor(() => expect(refresh).toHaveBeenCalled());
   });
 
-  it("shows paid count and the next installment; submits cash for accountant verification", async () => {
+  it("starts a PayMongo checkout for the next installment", async () => {
     render(<FinancingPaymentPanel {...props} />);
     expect(screen.getByText("Paid 1 of 3")).toBeInTheDocument();
     expect(screen.getByText(/Next due: 2026-11-15/)).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole("button", { name: "Payment" }));
-    fireEvent.submit(screen.getByRole("form", { name: "Payment" }));
-    await waitFor(() => expect(submitFinancingPayment).toHaveBeenCalled());
-    const fd = submitFinancingPayment.mock.calls[0][0] as FormData;
-    expect(fd.get("method")).toBe("cash");
-    expect(refresh).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Pay online" }));
+
+    await waitFor(() => expect(startInstallmentCheckout).toHaveBeenCalled());
+    const fd = startInstallmentCheckout.mock.calls[0][0] as FormData;
+    expect(fd.get("transaction_id")).toBe("tx-1");
+    expect(fd.get("advanced")).toBeNull();
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
   });
 
-  it("selects multiple whole installments and shows their total", async () => {
+  it("selects multiple whole installments and sends them to PayMongo", async () => {
     render(<FinancingPaymentPanel {...props} />);
     fireEvent.click(screen.getByRole("button", { name: "Advanced Payment" }));
     fireEvent.click(screen.getByRole("checkbox", { name: /Installment 2/ }));
     fireEvent.click(screen.getByRole("checkbox", { name: /Installment 3/ }));
     expect(screen.getByText(/Selected total:.*2,000/)).toBeInTheDocument();
-    fireEvent.submit(screen.getByRole("form", { name: "Advanced Payment" }));
-    await waitFor(() => expect(submitAdvancedPayment).toHaveBeenCalled());
-    expect((submitAdvancedPayment.mock.calls[0][0] as FormData).getAll("installment_ids")).toEqual(["next", "future"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Pay online" }));
+    await waitFor(() => expect(startInstallmentCheckout).toHaveBeenCalled());
+    const fd = startInstallmentCheckout.mock.calls[0][0] as FormData;
+    expect(fd.get("advanced")).toBe("yes");
+    expect(fd.getAll("installment_ids")).toEqual(["next", "future"]);
   });
 
-  it("requires proof for bank transfer and displays action errors without refreshing", async () => {
-    submitFinancingPayment.mockResolvedValue({ error: "Upload proof" });
+  it("shows the action error without refreshing", async () => {
+    startInstallmentCheckout.mockResolvedValue({ error: "PayMongo is down" });
     render(<FinancingPaymentPanel {...props} />);
     fireEvent.click(screen.getByRole("button", { name: "Payment" }));
-    fireEvent.change(screen.getByLabelText("Payment method"), { target: { value: "bank_transfer" } });
-    expect(screen.getByLabelText(/Payment proof/)).toBeRequired();
-    fireEvent.submit(screen.getByRole("form", { name: "Payment" }));
-    await waitFor(() => expect(error).toHaveBeenCalledWith("Upload proof"));
+    fireEvent.click(screen.getByRole("button", { name: "Pay online" }));
+    await waitFor(() => expect(error).toHaveBeenCalledWith("PayMongo is down"));
     expect(refresh).not.toHaveBeenCalled();
   });
 

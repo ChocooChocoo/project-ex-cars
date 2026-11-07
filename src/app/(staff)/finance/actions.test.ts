@@ -54,6 +54,7 @@ vi.mock("@/lib/supabase/admin", () => ({
       update: (row: Record<string, unknown>) => {
         const entry = { row, filters: [] as [string, unknown][] };
         if (table === "vehicles") vehicleUpdates.push(entry);
+        if (table === "reconditioning_fund_requests") sessionWrites.push(table);
         const chain = {
           eq: (column: string, value: unknown) => {
             entry.filters.push([column, value]);
@@ -109,6 +110,18 @@ describe("advanceDisbursement: seller paid", () => {
     expect(completePurchase).toHaveBeenCalledTimes(1);
   });
 
+  it("moves a submitted reconditioning request to approved", async () => {
+    requestStatus = "submitted";
+    purchaseTransactionId = null;
+    const fd = new FormData();
+    fd.set("disbursement_id", disbursementId);
+    fd.set("event_kind", "approved");
+
+    await expect(advanceDisbursement(fd)).resolves.toEqual({ success: true });
+    expect(sessionWrites).toContain("disbursement_requests");
+    expect(sessionWrites).toContain("disbursement_events");
+  });
+
   it("reports a rolled-back database operation without sending application notifications", async () => {
     completePurchase.mockResolvedValue({ error: { message: "Vehicle update failed" } });
     await expect(advanceDisbursement(paidForm())).resolves.toEqual({ error: "Vehicle update failed" });
@@ -129,7 +142,7 @@ describe("advanceDisbursement: seller paid", () => {
     purchaseTransactionId = null;
     await expect(advanceDisbursement(paidForm())).resolves.toEqual({ success: true });
     expect(completePurchase).not.toHaveBeenCalled();
-    expect(sessionWrites).toEqual(["disbursement_requests", "disbursement_events"]);
+    expect(sessionWrites).toEqual(["disbursement_requests", "disbursement_events", "reconditioning_fund_requests"]);
   });
 
   it("still refuses repeated paid events on ordinary disbursements", async () => {

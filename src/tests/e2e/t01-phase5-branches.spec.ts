@@ -144,11 +144,17 @@ test.describe
 
       await claimPayAndSell(page, id, 100_000, "FIN-POTENTIAL");
 
-      // The single installment is paid; the financing completes.
+      // T07 CR1: the Sales Manager records the cash installment; the Head Accountant verifies it.
+      await signInAs(page, "sales_manager@gce.local");
+      await open(page, `/sales_manager/transactions/${id}`);
+      await page.getByRole("button", { name: "Record payment" }).first().click();
+      await expect(page.getByText("Cash installment recorded for Head Accountant verification.")).toBeVisible();
+
       await signInAs(page, "head_accountant@gce.local");
       await open(page, `/head_accountant/transactions/${id}`);
-      await page.getByRole("button", { name: "Record paid" }).click();
-      await expect(page.getByText("Installment recorded as paid.")).toBeVisible();
+      await page.getByRole("button", { name: "Verify", exact: true }).first().click();
+      await page.getByRole("alertdialog").getByRole("button", { name: "Verify", exact: true }).click();
+      await expect(page.getByText("Payment verified.")).toBeVisible();
       expect((await flow(id))?.flow_status).toBe("financing_completed");
     });
 

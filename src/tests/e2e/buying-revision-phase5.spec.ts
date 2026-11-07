@@ -3,6 +3,7 @@ import { type Page, test } from "@playwright/test";
 import {
   approveAsSalesManager,
   buyerRequest,
+  buyerSignsContract,
   ceoConfirms,
   db,
   expect,
@@ -147,6 +148,7 @@ test.describe
       await expect(page.getByText("Purchase Claim recorded.")).toBeVisible();
       await page.getByRole("button", { name: "Start from the pre-made contract" }).click();
       await page.getByRole("button", { name: "Send for approval" }).click();
+      await page.getByRole("alertdialog").getByRole("button", { name: "Send for approval", exact: true }).click();
       await expect(page.getByText("Contract sent to the Head Accountant.")).toBeVisible();
 
       // Not signed yet: Pay is refused and nothing is recorded.
@@ -159,13 +161,10 @@ test.describe
       await signInAs(page, "head_accountant@gce.local");
       await open(page, `/head_accountant/transactions/${id}`);
       await page.getByRole("button", { name: "Approve contract" }).click();
+      await page.getByRole("alertdialog").getByRole("button", { name: "Approve", exact: true }).click();
       await expect(page.getByText("Contract approved. The buyer can sign it.")).toBeVisible();
 
-      await signInAs(page, "customer@gce.local");
-      await open(page, `/my-transactions/${id}`);
-      await page.getByLabel("Type your full name to sign").fill("Maria Santos");
-      await page.getByRole("button", { name: "Sign contract" }).click();
-      await expect(page.getByText("Contract signed.")).toBeVisible();
+      await buyerSignsContract(page, id);
       await page.waitForLoadState("networkidle");
       await payOnline(page);
       expect(await paymentRows(id)).toEqual([
