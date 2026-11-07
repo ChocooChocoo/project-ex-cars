@@ -1,15 +1,45 @@
 import { describe, expect, it } from "vitest";
 
 import { GCE_SELLER } from "../transactions/buy-flow";
-import { deedOfSale, missedPaymentPolicy, PAPER_BLANK, paperSale, policyWarranty } from "./templates";
+import { deedOfSale, missedPaymentPolicy, PAPER_BLANK, paperFinancing, paperSale, policyWarranty } from "./templates";
 
-it("prints only the fixed missed payment policy", () => {
-  expect(missedPaymentPolicy()).toEqual({
-    title: "MISSED PAYMENT POLICY",
-    paragraphs: [
-      "After 4 consecutive missed monthly payments, GCE will tow and take back the car. The Head Accountant gives this policy to the client at delivery.",
-    ],
-  });
+const policyRow = {
+  opened_at: "2026-10-31T02:00:00.000Z",
+  completed_at: null,
+  purchase_details: { final_price: 500000 },
+  profiles: { full_name: "Maria Santos", address: "12 Mabini St, Batangas City" },
+  vehicles: { make: "Toyota", model: "Vios", year: 2022, exterior_color: "Pearl White" },
+  payment_terms: {
+    total_amount: 500000,
+    down_payment: 50000,
+    duration_months: 24,
+    monthly_payment: 18750,
+    first_due_date: "2026-12-01",
+  },
+  installment_accounts: { opening_balance: 450000 },
+};
+
+it("fills the missed payment policy with the client, the car and the money", () => {
+  const salerow = paperSale(policyRow);
+  const paper = missedPaymentPolicy(salerow, paperFinancing(policyRow));
+  const text = [paper.title, ...paper.paragraphs].join("\n");
+
+  expect(paper.title).toBe("MISSED PAYMENT POLICY");
+  expect(text).toContain("Maria Santos");
+  expect(text).toContain("12 Mabini St, Batangas City");
+  expect(text).toContain("Make: Toyota");
+  expect(text).toContain("Model: Vios");
+  expect(text).toContain("Amount financed: PHP 450,000.00");
+  expect(text).toContain("Monthly installment: PHP 18,750.00");
+  expect(text).toContain("Term: 24 months");
+  expect(text).toContain("Four (4) consecutive missed monthly payments");
+  expect(text).toContain("Signature over printed name");
+});
+
+it("keeps a blank line where the financing record is missing", () => {
+  const financing = paperFinancing({ ...saleRow, payment_terms: null, installment_accounts: null });
+  expect(financing.downPayment).toBe(PAPER_BLANK);
+  expect(financing.term).toBe(PAPER_BLANK);
 });
 
 const saleRow = {

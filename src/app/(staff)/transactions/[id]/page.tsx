@@ -133,14 +133,16 @@ export default async function TransactionDetailPage({ params }: { readonly param
   const isFinancing =
     (Array.isArray(purchaseRow) ? purchaseRow[0] : purchaseRow)?.payment_method === "financing" &&
     (transaction as Record<string, unknown>).transaction_kind === "buy";
-  const { count: recoveryCases } = isFinancing
+  const { data: recoveryRows } = isFinancing
     ? await supabase
         .from("field_cases")
-        .select("id", { count: "exact", head: true })
+        .select("state")
         .eq("transaction_id", id)
         .eq("case_kind", "recovery")
         .neq("state", "cancelled")
-    : { count: 0 };
+    : { data: [] };
+  const hasRecoveryCase = (recoveryRows ?? []).length > 0;
+  const recoveryInProgress = (recoveryRows ?? []).some((row) => row.state === "in_progress");
 
   // Financing is agreed in chat: the request's own thread with the buyer.
   const { data: financingThread } = isFinancing
@@ -219,7 +221,8 @@ export default async function TransactionDetailPage({ params }: { readonly param
         financing={
           isFinancing
             ? {
-                hasRecoveryCase: (recoveryCases ?? 0) > 0,
+                hasRecoveryCase,
+                recoveryInProgress,
                 threadId: (financingThread as { id: string } | null)?.id ?? null,
                 markupPct: await getFinancingMarkupPct(),
               }

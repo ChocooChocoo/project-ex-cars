@@ -210,13 +210,18 @@ export function ContractCard({
               State the contract length and that GCE takes back the vehicle if it is not paid for.
             </p>
             <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                disabled={busy || !body.trim()}
-                onClick={() => send(saveContract, { body, submit: "1" }, "Contract sent to the Head Accountant.")}
-              >
-                Send for approval
-              </Button>
+              <ConfirmDialog
+                action="approve"
+                title="Are you sure you want to send this contract for approval?"
+                description="The Head Accountant reviews it before the buyer can read and sign."
+                confirmLabel="Send for approval"
+                onConfirm={() => send(saveContract, { body, submit: "1" }, "Contract sent to the Head Accountant.")}
+                trigger={
+                  <Button size="sm" disabled={busy || !body.trim()}>
+                    Send for approval
+                  </Button>
+                }
+              />
               <Button
                 size="sm"
                 variant="outline"

@@ -80,6 +80,7 @@ export async function advanceRecovery(form: FormData) {
       .update({ state: "repossessed" })
       .eq("purchase_transaction_id", fieldCase.transaction_id);
     if (accountError) return { error: accountError.message };
+    await admin.from("transactions").update({ flow_status: "repossessed" }).eq("id", fieldCase.transaction_id);
     await admin.from("notifications").insert({
       recipient_id: mechanicId,
       kind: "reconditioning",

@@ -22,18 +22,21 @@ const base = {
   proof_url: "https://example.test/deposit-slip.jpg",
 };
 
-function renderTable(payments: Record<string, unknown>[], canReview = true) {
+function renderTable(payments: Record<string, unknown>[], canReview = true, canApproveOnline = false) {
   const onVerifyPayment = vi.fn().mockResolvedValue(undefined);
   const onRejectPayment = vi.fn().mockResolvedValue(undefined);
+  const onApproveOnlinePayment = vi.fn().mockResolvedValue(undefined);
   render(
     <TransactionPaymentsTableV1
       payments={payments}
       canReview={canReview}
+      canApproveOnline={canApproveOnline}
       onVerifyPayment={onVerifyPayment}
       onRejectPayment={onRejectPayment}
+      onApproveOnlinePayment={onApproveOnlinePayment}
     />,
   );
-  return { onVerifyPayment, onRejectPayment };
+  return { onVerifyPayment, onRejectPayment, onApproveOnlinePayment };
 }
 
 describe("TransactionPaymentsTableV1 (T03 HA2, HA3)", () => {
@@ -96,6 +99,49 @@ describe("TransactionPaymentsTableV1 (T03 HA2, HA3)", () => {
 
     expect(screen.queryByRole("button", { name: "Verify" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Reject" })).not.toBeInTheDocument();
+  });
+
+  it("sends an online installment through Sales Manager approval first (T07 CR1)", () => {
+    const { onApproveOnlinePayment } = renderTable(
+      [
+        {
+          ...base,
+          payment_kind: "installment",
+          method: "paymongo",
+          paymongo_payment_id: "pay_1",
+          approved_at: null,
+        },
+      ],
+      false,
+      true,
+    );
+
+    expect(screen.getByText("Waiting for Sales Manager")).toBeInTheDocument();
+    const approve = screen.getByRole("button", { name: "Approve" });
+    fireEvent.click(approve);
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Approve" }));
+    expect(onApproveOnlinePayment).toHaveBeenCalledWith("p1");
+    expect(screen.queryByRole("button", { name: "Verify" })).not.toBeInTheDocument();
+  });
+
+  it("hands an approved online installment to the Head Accountant", () => {
+    renderTable(
+      [
+        {
+          ...base,
+          payment_kind: "installment",
+          method: "paymongo",
+          paymongo_payment_id: "pay_1",
+          approved_at: "2026-11-07T00:00:00.000Z",
+        },
+      ],
+      true,
+      false,
+    );
+
+    expect(screen.getByText("Waiting for Head Accountant")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Verify" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
   });
 
   it("gives Verify and Reject the weight of normal buttons (T05)", () => {

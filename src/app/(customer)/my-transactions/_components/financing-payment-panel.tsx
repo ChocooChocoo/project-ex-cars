@@ -9,8 +9,6 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   advancedPaymentTotal,
   nextUnpaidInstallment,
@@ -19,7 +17,7 @@ import {
 } from "@/lib/transactions/financing-payments";
 import { formatCurrency } from "@/lib/utils";
 
-import { submitAdvancedPayment, submitFinancingPayment } from "../actions";
+import { startInstallmentCheckout } from "../actions";
 
 type Row = Record<string, unknown>;
 type Installment = Row & { state: unknown; due_date?: unknown; amount_due?: unknown };
@@ -35,7 +33,6 @@ export function FinancingPaymentPanel({
 }) {
   const router = useRouter();
   const [dialog, setDialog] = useState<"payment" | "advanced" | null>(null);
-  const [method, setMethod] = useState("cash");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState("");
@@ -44,41 +41,54 @@ export function FinancingPaymentPanel({
   const next = nextUnpaidInstallment(installments);
   const history = payments.filter((payment) => payment.installment_id);
   const pendingIds = new Set(
-    history.filter((payment) => !payment.verified_by && !payment.rejected_at).map((payment) => payment.installment_id),
+    history
+      .filter((payment) => {
+        if (payment.verified_by || payment.rejected_at) return false;
+        // An online session nobody paid is not a payment waiting for review.
+        if (payment.payment_kind === "installment" && payment.method === "paymongo") {
+          return Boolean(payment.paymongo_payment_id);
+        }
+        return true;
+      })
+      .map((payment) => payment.installment_id),
   );
   const available = unpaid.filter((installment) => !pendingIds.has(installment.id));
   const selected = available.filter((installment) => selectedIds.includes(String(installment.id)));
   const title = dialog === "advanced" ? "Advanced Payment" : "Payment";
 
   function open(value: "payment" | "advanced") {
-    setMethod("cash");
     setSelectedIds([]);
     setFailure("");
     setDialog(value);
   }
 
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function pay(advanced: boolean) {
     if (busy) return;
-    const fd = new FormData(event.currentTarget);
+    const fd = new FormData();
     fd.set("transaction_id", transactionId);
-    for (const id of selectedIds) fd.append("installment_ids", id);
+    if (advanced) {
+      fd.set("advanced", "yes");
+      for (const id of selectedIds) fd.append("installment_ids", id);
+    }
     setBusy(true);
     setFailure("");
     try {
-      const result = await (dialog === "advanced" ? submitAdvancedPayment(fd) : submitFinancingPayment(fd));
+      const result = await startInstallmentCheckout(fd);
       if ("error" in result) {
-        const message = result.error ?? "Could not submit the payment.";
+        const message = result.error ?? "Could not start the payment.";
         setFailure(message);
         toast.error(message);
-      } else {
-        toast.success("Payment submitted for Head Accountant verification.");
-        setDialog(null);
-        router.refresh();
+        return;
       }
+      if ("url" in result && result.url) {
+        window.location.assign(result.url);
+        return;
+      }
+      setDialog(null);
+      router.refresh();
     } catch {
-      setFailure("Could not submit the payment. Try again.");
-      toast.error("Could not submit the payment. Try again.");
+      setFailure("Could not start the payment. Try again.");
+      toast.error("Could not start the payment. Try again.");
     } finally {
       setBusy(false);
     }
@@ -104,8 +114,8 @@ export function FinancingPaymentPanel({
       {account.state === "active" && next ? (
         <>
           <p className="text-muted-foreground text-sm">
-            Submit cash payments or bank-transfer proof here. Payments count only after the Head Accountant verifies
-            them.
+            Pay a bank transfer online through PayMongo. Pay cash at GCE and the Sales Manager records it. A payment
+            counts only after the Head Accountant verifies it.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button className="min-h-11" disabled={pendingIds.has(next.id)} onClick={() => open("payment")}>
@@ -122,7 +132,8 @@ export function FinancingPaymentPanel({
           </div>
           {pendingIds.has(next.id) ? (
             <p className="text-muted-foreground text-sm">
-              Your next installment is awaiting Head Accountant verification.
+              Your next installment is waiting for review. The Sales Manager approves online payments and the Head
+              Accountant verifies them.
             </p>
           ) : null}
         </>
@@ -140,11 +151,25 @@ export function FinancingPaymentPanel({
               >
                 <span>
                   {formatCurrency(Number(payment.amount))} ·{" "}
-                  {payment.method === "bank_transfer" ? "Bank transfer" : "Cash"}
+                  {payment.method === "paymongo"
+                    ? "Bank transfer (PayMongo)"
+                    : payment.method === "bank_transfer"
+                      ? "Bank transfer"
+                      : "Cash"}
                   {payment.settlement_date ? ` · ${String(payment.settlement_date)}` : ""}
                 </span>
                 <Badge variant={payment.rejected_at ? "destructive" : "outline"}>
-                  {payment.rejected_at ? "Rejected" : payment.verified_by ? "Verified" : "Pending verification"}
+                  {payment.rejected_at
+                    ? "Rejected"
+                    : payment.verified_by
+                      ? "Verified"
+                      : payment.payment_kind === "installment" && payment.method === "paymongo"
+                        ? payment.approved_at
+                          ? "Waiting for Head Accountant"
+                          : payment.paymongo_payment_id
+                            ? "Waiting for Sales Manager"
+                            : "Waiting for PayMongo"
+                        : "Pending verification"}
                 </Badge>
                 {payment.rejection_reason ? (
                   <p className="w-full break-words text-destructive">{String(payment.rejection_reason)}</p>
@@ -165,12 +190,12 @@ export function FinancingPaymentPanel({
             <DialogTitle>{title}</DialogTitle>
             <DialogDescription>
               {dialog === "advanced"
-                ? "Select whole unpaid installments to pay ahead."
-                : "Pay your next unpaid installment."}{" "}
-              The Head Accountant verifies your submission.
+                ? "Select whole unpaid installments to pay ahead. "
+                : "Pay your next unpaid installment. "}
+              You are sent to PayMongo for a bank transfer or e-wallet payment.
             </DialogDescription>
           </DialogHeader>
-          <form aria-label={title} onSubmit={submit} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4">
             {dialog === "advanced" ? (
               <fieldset className="flex flex-col gap-2" disabled={busy}>
                 <legend className="mb-2 font-medium text-sm">Unpaid installments</legend>
@@ -191,7 +216,7 @@ export function FinancingPaymentPanel({
                       <span>
                         Installment {String(installment.sequence_no)} · {String(installment.due_date)} ·{" "}
                         {formatCurrency(Number(installment.amount_due))}
-                        {pendingIds.has(id) ? " (Pending verification)" : ""}
+                        {pendingIds.has(id) ? " (Pending review)" : ""}
                       </span>
                     </label>
                   );
@@ -203,37 +228,6 @@ export function FinancingPaymentPanel({
             ) : (
               <p className="text-sm">Amount: {formatCurrency(Number(next?.amount_due ?? 0))}</p>
             )}
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="financing-payment-method">Payment method</Label>
-              <select
-                id="financing-payment-method"
-                name="method"
-                value={method}
-                disabled={busy}
-                onChange={(event) => setMethod(event.target.value)}
-                className="min-h-11 rounded-md border bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring"
-              >
-                <option value="cash">Cash</option>
-                <option value="bank_transfer">Bank transfer</option>
-              </select>
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="financing-payment-proof">
-                Payment proof ({method === "bank_transfer" ? "required" : "optional"})
-              </Label>
-              <Input
-                id="financing-payment-proof"
-                name="proof"
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                required={method === "bank_transfer"}
-                disabled={busy}
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="financing-payment-reference">Reference (optional)</Label>
-              <Input id="financing-payment-reference" name="external_reference" maxLength={100} disabled={busy} />
-            </div>
             {failure ? (
               <p role="alert" className="text-destructive text-sm">
                 {failure}
@@ -241,12 +235,13 @@ export function FinancingPaymentPanel({
             ) : null}
             <Button
               className="min-h-11"
-              type="submit"
+              type="button"
               disabled={busy || (dialog === "advanced" && selected.length === 0)}
+              onClick={() => pay(dialog === "advanced")}
             >
-              {busy ? "Submitting…" : "Submit payment"}
+              {busy ? "Opening PayMongo…" : "Pay online"}
             </Button>
-          </form>
+          </div>
         </DialogContent>
       </Dialog>
     </section>

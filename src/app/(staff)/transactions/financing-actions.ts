@@ -460,12 +460,17 @@ export async function recordVehicleRecovered(formData: FormData): Promise<Financ
 
   const { data: recovery } = await admin
     .from("field_cases")
-    .select("id")
+    .select("id, state")
     .eq("transaction_id", tx.id)
     .eq("case_kind", "recovery")
-    .neq("state", "cancelled")
+    .in("state", ["in_progress", "completed"])
+    .order("created_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
-  if (!recovery) return { error: "Instruct the repossession first." };
+  if (!recovery) {
+    return { error: "The Confidential Informant must start the recovery before the car can be recorded as recovered." };
+  }
+  if (recovery.state === "completed") return { error: "This recovery is already closed." };
 
   await admin
     .from("field_cases")

@@ -93,6 +93,8 @@ export function PayrollRunDetailDialog({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingReview, setPendingReview] = useState<"approved" | "rejected" | null>(null);
+  const [reviewing, setReviewing] = useState<"approved" | "rejected" | null>(null);
+  const [finalizing, setFinalizing] = useState(false);
 
   const load = useCallback(async () => {
     if (!runId) return;
@@ -114,33 +116,71 @@ export function PayrollRunDetailDialog({
   }, [open, load]);
 
   async function submitReview(decision: "approved" | "rejected") {
-    if (!runId) return;
-    const fd = new FormData();
-    fd.set("payroll_run_id", runId);
-    fd.set("decision", decision);
-    const result = await reviewPayrollRun(fd);
-    if ("error" in result) {
-      toast.error(result.error);
-      return;
+    if (!runId || reviewing) return;
+    setReviewing(decision);
+    try {
+      const fd = new FormData();
+      fd.set("payroll_run_id", runId);
+      fd.set("decision", decision);
+      const result = await reviewPayrollRun(fd);
+      if ("error" in result) {
+        toast.error(result.error);
+        return;
+      }
+      // T07 CR1: close the view so the same button cannot be pressed again.
+      toast.success(decision === "approved" ? "Run approved." : "Run rejected and returned to draft.");
+      router.refresh();
+      onOpenChange(false);
+      await load();
+    } finally {
+      setReviewing(null);
     }
-    toast.success(decision === "approved" ? "Run approved." : "Run rejected and returned to draft.");
-    router.refresh();
-    await load();
   }
 
   async function submitFinalize() {
-    if (!runId) return;
-    const fd = new FormData();
-    fd.set("payroll_run_id", runId);
-    const result = await finalizePayrollRun(fd);
-    if ("error" in result) {
-      toast.error(result.error);
-      return;
+    if (!runId || finalizing) return;
+    setFinalizing(true);
+    try {
+      const fd = new FormData();
+      fd.set("payroll_run_id", runId);
+      const result = await finalizePayrollRun(fd);
+      if ("error" in result) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Run finalized. Payslips are now final.");
+      router.refresh();
+      await load();
+    } finally {
+      setFinalizing(false);
     }
-    toast.success("Run finalized. Payslips are now final.");
-    router.refresh();
-    await load();
   }
+
+  // T07 CR1: the reviewer's own step decides whether the buttons are still offered. A Head Accountant
+  // approval leaves the run pending for the CEO, so the same Head Accountant must not see Approve again.
+  const approvedSequence = (sequence: number) =>
+    (run?.payroll_approvals ?? []).some(
+      (approval) => approval.sequence === sequence && approval.decision === "approved",
+    );
+  const requiredSequence = canFinalize ? 1 : 2;
+  const alreadyApproved = approvedSequence(requiredSequence);
+  const headApproved = approvedSequence(1);
+  const canApproveRun = Boolean(
+    run &&
+      canReview &&
+      !alreadyApproved &&
+      !["approved", "finalized", "cancelled"].includes(run.status) &&
+      (requiredSequence === 1
+        ? ["draft", "pending_approval"].includes(run.status)
+        : run.status === "pending_approval" && headApproved),
+  );
+  const canRejectRun = Boolean(
+    run &&
+      canReview &&
+      !alreadyApproved &&
+      run.status === "pending_approval" &&
+      (requiredSequence === 1 || headApproved),
+  );
 
   return (
     <>
@@ -252,19 +292,28 @@ export function PayrollRunDetailDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Close
             </Button>
-            {run && canReview && ["draft", "pending_approval"].includes(run.status) ? (
+            {canApproveRun || canRejectRun ? (
               <>
-                <Button type="button" variant="destructive" onClick={() => setPendingReview("rejected")}>
-                  Reject
-                </Button>
-                <Button type="button" onClick={() => setPendingReview("approved")}>
-                  Approve
-                </Button>
+                {canRejectRun ? (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    disabled={reviewing !== null}
+                    onClick={() => setPendingReview("rejected")}
+                  >
+                    {reviewing === "rejected" ? "Rejecting..." : "Reject"}
+                  </Button>
+                ) : null}
+                {canApproveRun ? (
+                  <Button type="button" disabled={reviewing !== null} onClick={() => setPendingReview("approved")}>
+                    {reviewing === "approved" ? "Approving..." : "Approve"}
+                  </Button>
+                ) : null}
               </>
             ) : null}
             {run && canFinalize && run.status === "approved" ? (
-              <Button type="button" onClick={submitFinalize}>
-                Finalize
+              <Button type="button" disabled={reviewing !== null || finalizing} onClick={submitFinalize}>
+                {finalizing ? "Finalizing..." : "Finalize"}
               </Button>
             ) : null}
           </DialogFooter>

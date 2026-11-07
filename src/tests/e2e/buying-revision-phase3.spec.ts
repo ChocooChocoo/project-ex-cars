@@ -5,6 +5,7 @@ import {
   buyerRequest,
   ceoConfirms,
   db,
+  drawSignature,
   expect,
   futureSlot,
   headAccountantApproves,
@@ -80,6 +81,7 @@ test.describe
       await expect(page.getByLabel("Contract text")).toHaveValue(/PHP 500,000/);
       await page.screenshot({ path: "test-results/phase3-contract-editor-desktop.png", fullPage: true });
       await page.getByRole("button", { name: "Send for approval" }).click();
+      await page.getByRole("alertdialog").getByRole("button", { name: "Send for approval", exact: true }).click();
       await expect(page.getByText("Contract sent to the Head Accountant.")).toBeVisible();
       await expect(page.getByText("Waiting for Head Accountant")).toBeVisible();
 
@@ -102,11 +104,13 @@ test.describe
       await open(page, `/sales_manager/transactions/${id}`);
       await expect(page.getByText("Returned by the Head Accountant: State the 12-month length.")).toBeVisible();
       await page.getByRole("button", { name: "Send for approval" }).click();
+      await page.getByRole("alertdialog").getByRole("button", { name: "Send for approval", exact: true }).click();
       await expect(page.getByText("Contract sent to the Head Accountant.")).toBeVisible();
 
       await signInAs(page, "head_accountant@gce.local");
       await open(page, `/head_accountant/transactions/${id}`);
       await page.getByRole("button", { name: "Approve contract" }).click();
+      await page.getByRole("alertdialog").getByRole("button", { name: "Approve", exact: true }).click();
       await expect(page.getByText("Contract approved. The buyer can sign it.")).toBeVisible();
 
       // The buyer reads and signs.
@@ -117,7 +121,8 @@ test.describe
       await page.setViewportSize({ width: 390, height: 844 });
       await page.screenshot({ path: "test-results/phase3-buyer-sign-mobile.png", fullPage: true });
       await page.setViewportSize({ width: 1280, height: 720 });
-      await page.getByLabel("Type your full name to sign").fill("Maria Santos");
+      await page.getByLabel("Type your full name").fill("Maria Santos");
+      await drawSignature(page);
       await sign.click();
       await expect(page.getByText("Contract signed.")).toBeVisible();
       await expect(page.getByText(/You signed this contract/)).toBeVisible();

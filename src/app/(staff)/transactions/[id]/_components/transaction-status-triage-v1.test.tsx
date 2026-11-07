@@ -92,6 +92,30 @@ describe("TransactionStatusTriageV1 cash-buy rules (T05)", () => {
   });
 });
 
+describe("TransactionStatusTriageV1 delivered cars (T07 CR1)", () => {
+  it("offers no decline or no-show outcomes once the car is delivered", () => {
+    renderTriage({
+      state: "approved",
+      paymentMethod: "financing",
+      visit: { kind: "delivery", schedule: "2026-10-05T02:00:00.000Z", deliveryStatus: "delivered" },
+    });
+
+    expect(screen.queryByText("Declined — Legit")).not.toBeInTheDocument();
+    expect(screen.queryByText("Declined — Not Legit")).not.toBeInTheDocument();
+    expect(screen.queryByText("Buyer unavailable")).not.toBeInTheDocument();
+  });
+
+  it("still offers Buyer unavailable while the team is arriving", () => {
+    renderTriage({
+      state: "approved",
+      paymentMethod: "financing",
+      visit: { kind: "delivery", schedule: "2026-10-05T02:00:00.000Z", deliveryStatus: "arriving" },
+    });
+
+    expect(screen.getByText("Buyer unavailable")).toBeInTheDocument();
+  });
+});
+
 describe("TransactionStatusTriageV1 Head Accountant (T05)", () => {
   it("no longer offers Mark Sold", () => {
     renderTriage({ state: "approved", paymentMethod: "cash", userRole: "head_accountant" });

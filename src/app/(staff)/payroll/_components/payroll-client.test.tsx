@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { type CompensationRow, PayrollClient, type PayrollRunRow } from "./payroll-client";
@@ -87,14 +87,54 @@ describe("PayrollClient template tables", () => {
   });
 
   it("opens the run detail before any approval action", async () => {
-    render(
-      <PayrollClient runs={runs} compensation={[]} employees={[]} canPrepare={false} canReview canFinalize={false} />,
-    );
+    render(<PayrollClient runs={runs} compensation={[]} employees={[]} canPrepare={false} canReview canFinalize />);
 
     fireEvent.click(screen.getByRole("button", { name: "View payroll run details" }));
 
     expect(await screen.findByText("Ada Santos")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Reject" })).toBeInTheDocument();
+  });
+
+  it("approves a payroll run once and hides Approve afterwards", async () => {
+    let resolveReview: ((value: unknown) => void) | undefined;
+    mocks.reviewPayrollRun.mockReturnValue(
+      new Promise((resolve) => {
+        resolveReview = resolve;
+      }),
+    );
+    mocks.getPayrollRunDetail
+      .mockResolvedValueOnce({
+        success: true,
+        run: { ...runs[0], payslips: [], payroll_approvals: [] },
+      })
+      .mockResolvedValue({
+        success: true,
+        run: {
+          ...runs[0],
+          status: "pending_approval",
+          payslips: [],
+          payroll_approvals: [{ id: "a1", sequence: 1, decision: "approved", notes: null }],
+        },
+      });
+
+    render(<PayrollClient runs={runs} compensation={[]} employees={[]} canPrepare={false} canReview canFinalize />);
+
+    fireEvent.click(screen.getByRole("button", { name: "View payroll run details" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
+
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Approve" }));
+
+    expect(within(dialog).getByRole("button", { name: "Saving..." })).toBeDisabled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Saving..." }));
+
+    resolveReview?.({ success: true });
+
+    await waitFor(() => expect(mocks.reviewPayrollRun).toHaveBeenCalledTimes(1));
+    // T07 CR1: the view closes, and the Head Accountant's own step is already approved.
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "View payroll run details" }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument());
   });
 });

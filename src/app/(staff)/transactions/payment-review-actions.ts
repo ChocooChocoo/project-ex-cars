@@ -12,6 +12,89 @@ import { formatCurrency } from "@/lib/utils";
 
 // Same roles as verifyPayment.
 const PAYMENT_REVIEWERS = ["ceo", "head_accountant"];
+// T07 CR1: the Sales Manager approves an online installment before the Head Accountant verifies it.
+const ONLINE_APPROVERS = ["ceo", "sales_manager"];
+
+// A PayMongo installment proves the money arrived, not that the sale team accepted it. The Sales Manager
+// confirms the installment is the one the buyer meant to pay; the Head Accountant then verifies it.
+export async function approveOnlineInstallment(paymentId: string) {
+  const supabase = await createServerSupabaseClient();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+
+  const role = await getCurrentRole();
+  if (!role || !ONLINE_APPROVERS.includes(role)) return { error: "Not authorized" };
+
+  const admin = createAdminClient();
+  const { data: payment } = await admin
+    .from("payment_records")
+    .select(
+      "id, transaction_id, installment_id, payment_kind, method, amount, paymongo_payment_id, approved_at, verified_by, rejected_at",
+    )
+    .eq("id", paymentId)
+    .maybeSingle();
+  if (!payment) return { error: "Payment not found." };
+  if (payment.rejected_at) return { error: "This payment was rejected." };
+  if (payment.verified_by) return { error: "This payment is already verified." };
+  if (payment.approved_at) return { error: "This payment is already approved." };
+  if (payment.payment_kind !== "installment" || payment.method !== "paymongo") {
+    return { error: "Only an online installment needs Sales Manager approval." };
+  }
+  if (!payment.paymongo_payment_id) return { error: "PayMongo has not confirmed this payment yet." };
+
+  const { data: approved, error } = await admin
+    .from("payment_records")
+    .update({ approved_by: user.user.id, approved_at: new Date().toISOString() })
+    .eq("id", paymentId)
+    .is("approved_at", null)
+    .is("verified_by", null)
+    .is("rejected_at", null)
+    .select("id")
+    .maybeSingle();
+  if (error) return { error: error.message };
+  if (!approved) return { error: "This payment is already approved." };
+
+  await notify(
+    admin,
+    { role: "head_accountant" },
+    {
+      kind: "installment_approved",
+      title: "Online installment ready to verify",
+      body: `The Sales Manager approved a ${formatCurrency(Number(payment.amount))} online installment. Verify it to count the payment.`,
+      transactionId: payment.transaction_id as string,
+    },
+  );
+
+  const { data: buyer } = await admin
+    .from("transactions")
+    .select("customer_id")
+    .eq("id", payment.transaction_id)
+    .maybeSingle();
+  if (buyer?.customer_id) {
+    await notify(
+      admin,
+      { userId: buyer.customer_id as string },
+      {
+        kind: "installment_approved",
+        title: "Your online payment is approved",
+        body: `Your ${formatCurrency(Number(payment.amount))} installment payment passed the Sales Manager. The Head Accountant verifies it next.`,
+        transactionId: payment.transaction_id as string,
+      },
+    );
+  }
+
+  await logAuditEvent({
+    actorId: user.user.id,
+    action: "installment_approved",
+    recordKind: "payment_records",
+    recordId: paymentId,
+    summary: `Online installment of PHP ${payment.amount} approved for Head Accountant verification`,
+  });
+
+  revalidatePath(`/dashboard/transactions/${payment.transaction_id}`);
+  revalidatePath(`/my-transactions/${payment.transaction_id}`);
+  return { success: true };
+}
 
 // T03 HA3: a payment waiting for verification can be rejected with a reason. It stays on record as rejected,
 // stops counting toward what was paid, reopens the installment it had closed, and the buyer is told why.

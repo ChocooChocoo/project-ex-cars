@@ -23,7 +23,7 @@ vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn(() => ({ from 
 
 import { installmentStateFor } from "@/lib/transactions/buy-flow";
 
-import { rejectPayment } from "./payment-review-actions";
+import { approveOnlineInstallment, rejectPayment } from "./payment-review-actions";
 
 const userId = "11111111-1111-4111-8111-111111111111";
 const paymentId = "44444444-4444-4444-8444-444444444444";
@@ -142,6 +142,65 @@ describe("rejectPayment (T03 HA3)", () => {
     expect(await rejectPayment(paymentId, "Wrong slip")).toHaveProperty("error");
     expect(calls.some((call) => call.table === "installments")).toBe(false);
     expect(notify).not.toHaveBeenCalled();
+  });
+});
+
+describe("approveOnlineInstallment (T07 CR1)", () => {
+  const online = {
+    ...pending,
+    payment_kind: "installment",
+    installment_id: installmentId,
+    method: "paymongo",
+    paymongo_payment_id: "pay_1",
+    approved_at: null,
+  };
+
+  beforeEach(() => {
+    calls.length = 0;
+    vi.clearAllMocks();
+    authGetUser.mockResolvedValue({ data: { user: { id: userId } } });
+    getCurrentRole.mockResolvedValue("sales_manager");
+  });
+
+  it("refuses roles that do not approve installment payments", async () => {
+    getCurrentRole.mockResolvedValue("head_accountant");
+    await expect(approveOnlineInstallment(paymentId)).resolves.toEqual({ error: "Not authorized" });
+  });
+
+  it("approves only a PayMongo installment", async () => {
+    useRows({ payment_records: { ...online, method: "cash" } });
+    await expect(approveOnlineInstallment(paymentId)).resolves.toEqual({
+      error: "Only an online installment needs Sales Manager approval.",
+    });
+  });
+
+  it("waits for PayMongo to confirm the payment", async () => {
+    useRows({ payment_records: { ...online, paymongo_payment_id: null } });
+    await expect(approveOnlineInstallment(paymentId)).resolves.toEqual({
+      error: "PayMongo has not confirmed this payment yet.",
+    });
+  });
+
+  it("records the approval and tells the Head Accountant", async () => {
+    useRows({ payment_records: online });
+    await expect(approveOnlineInstallment(paymentId)).resolves.toEqual({ success: true });
+
+    const update = calls.find((c) => c.table === "payment_records" && c.op === "update");
+    expect(update?.payload).toMatchObject({ approved_by: userId, approved_at: expect.any(String) });
+    expect(update?.filters).toContainEqual(["approved_at", null]);
+    expect(notify).toHaveBeenCalledWith(
+      expect.anything(),
+      { role: "head_accountant" },
+      expect.objectContaining({ kind: "installment_approved", transactionId }),
+    );
+    expect(logAuditEvent).toHaveBeenCalled();
+  });
+
+  it("refuses a second approval", async () => {
+    useRows({ payment_records: { ...online, approved_at: "2026-11-07T00:00:00.000Z" } });
+    await expect(approveOnlineInstallment(paymentId)).resolves.toEqual({
+      error: "This payment is already approved.",
+    });
   });
 });
 

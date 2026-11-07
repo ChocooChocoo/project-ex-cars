@@ -220,6 +220,7 @@ export async function advanceDisbursement(formData: FormData): Promise<Phase6Act
 
   const nextStatus: Record<string, string> = {
     draft: "approved",
+    submitted: "approved",
     approved: "released",
     released: "received",
     received: "paid",
@@ -258,6 +259,23 @@ export async function advanceDisbursement(formData: FormData): Promise<Phase6Act
     notes: parsed.data.notes || null,
   });
   if (eventError) return { error: eventError.message };
+
+  // Keep the reconditioning ledger on the same step. Non-finance roles cannot read
+  // `disbursement_requests`, so the request's own `state` is what the vehicle page shows.
+  const fundState =
+    parsed.data.event_kind === "approved"
+      ? "approved"
+      : ["released", "received", "paid"].includes(parsed.data.event_kind)
+        ? "released"
+        : parsed.data.event_kind === "rejected"
+          ? "rejected"
+          : null;
+  if (fundState) {
+    await createAdminClient()
+      .from("reconditioning_fund_requests")
+      .update({ state: fundState, updated_at: new Date().toISOString() })
+      .eq("disbursement_id", parsed.data.disbursement_id);
+  }
 
   revalidatePath("/dashboard/finance");
   return { success: true };

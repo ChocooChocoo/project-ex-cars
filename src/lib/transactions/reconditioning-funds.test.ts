@@ -17,6 +17,15 @@ describe("reconditioning funds", () => {
     ).toBe(125000);
   });
 
+  it("falls back to the request's own state when the join is hidden", () => {
+    expect(
+      releasedFundsCents([
+        { amount_cents: 100000, state: "released" },
+        { amount_cents: 50000, state: "submitted" },
+      ]),
+    ).toBe(100000);
+  });
+
   it("falls back to the legacy single disbursement", () => {
     expect(releasedFundsCents([], { status: "released", amount_cents: 90000 })).toBe(90000);
     expect(releasedFundsCents([], { status: "draft", amount_cents: 90000 })).toBe(0);

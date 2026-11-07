@@ -640,14 +640,37 @@ export async function recordPayment(formData: FormData) {
   const installmentId = parsed.data.installment_id || null;
 
   // T05: the Head Accountant verifies the payment. The only row they still record is an installment,
-  // written by the financing "Record paid" button.
+  // written by the financing "Record payment" button.
   if (role === "head_accountant" && !installmentId) {
     return { error: "The Sales Manager records the payment. The Head Accountant verifies it." };
+  }
+  // T07 CR1: cash installments belong to the Sales Manager; the Head Accountant only verifies them.
+  if (installmentId && !["sales_manager", "ceo"].includes(role)) {
+    return { error: "The Sales Manager records the installment. The Head Accountant verifies it." };
   }
 
   let amount = parsed.data.amount;
   let method = parsed.data.method;
   let paymentKind: string | null = installmentId ? "installment" : parsed.data.payment_kind || null;
+
+  // T07 CR1: an installment is always the recorded amount of that installment, paid in cash at GCE.
+  // The client cannot pick the amount or send a bank transfer through this staff path.
+  if (installmentId) {
+    const { data: installment, error: installmentError } = await createAdminClient()
+      .from("installments")
+      .select("id, amount_due, account_id, installment_accounts!inner(purchase_transaction_id)")
+      .eq("id", installmentId)
+      .maybeSingle();
+    if (installmentError) return { error: installmentError.message };
+    if (!installment) return { error: "Installment not found." };
+    const account = Array.isArray(installment.installment_accounts)
+      ? installment.installment_accounts[0]
+      : installment.installment_accounts;
+    if (account?.purchase_transaction_id !== transactionId) return { error: "Installment not found." };
+    amount = Number(installment.amount_due);
+    method = "cash";
+    paymentKind = "installment";
+  }
 
   // Contract first: no money is recorded on a sale that needs a contract until the buyer has signed.
   // A delivery's fee and downpayment come before the day, and an installment only exists after signing.
@@ -741,16 +764,42 @@ export async function verifyPayment(paymentId: string) {
     return { error: "Not authorized" };
   }
 
+  const { data: record, error: readError } = await supabase
+    .from("payment_records")
+    .select("id, method, payment_kind, amount, installment_id, approved_at, verified_by, rejected_at")
+    .eq("id", paymentId)
+    .maybeSingle();
+  if (readError) return { error: readError.message };
+  if (!record) return { error: "Payment not found." };
+  if (record.rejected_at) return { error: "This payment was rejected." };
+  if (record.verified_by) return { error: "This payment is already verified." };
+  // T07 CR1: an online installment goes PayMongo → Sales Manager approval → Head Accountant verification.
+  if (record.payment_kind === "installment" && record.method === "paymongo" && !record.approved_at) {
+    return { error: "The Sales Manager must approve this online payment first." };
+  }
+  if (record.installment_id) {
+    const { data: installment } = await supabase
+      .from("installments")
+      .select("amount_due")
+      .eq("id", record.installment_id)
+      .maybeSingle();
+    if (!installment || Number(installment.amount_due) !== Number(record.amount)) {
+      return { error: "The payment amount does not match the installment." };
+    }
+  }
+
   const { data: payment, error } = await supabase
     .from("payment_records")
     .update({ verified_by: user.user.id })
     .eq("id", paymentId)
     // T03 HA3: a rejected payment cannot be verified afterwards.
     .is("rejected_at", null)
+    .is("verified_by", null)
     .select("transaction_id, installment_id, settlement_date")
     .maybeSingle();
 
   if (error) return { error: error.message };
+  if (!payment) return { error: "This payment is already verified." };
   if (payment) {
     const admin = createAdminClient();
     if (payment.installment_id) {
@@ -760,6 +809,33 @@ export async function verifyPayment(paymentId: string) {
         .eq("id", payment.installment_id);
       if (installmentError) return { error: installmentError.message };
       await closeFinancingIfPaid(admin, payment.transaction_id);
+      const { data: buyer } = await admin
+        .from("transactions")
+        .select("customer_id")
+        .eq("id", payment.transaction_id)
+        .maybeSingle();
+      if (buyer?.customer_id) {
+        await notify(
+          admin,
+          { userId: buyer.customer_id as string },
+          {
+            kind: "installment_verified",
+            title: "Your installment payment is verified",
+            body: "The Head Accountant verified your installment. It now counts toward your financing.",
+            transactionId: payment.transaction_id,
+          },
+        );
+      }
+      await notify(
+        admin,
+        { role: "sales_manager" },
+        {
+          kind: "installment_verified",
+          title: "Installment verified by the Head Accountant",
+          body: "The buyer's installment now counts as paid.",
+          transactionId: payment.transaction_id,
+        },
+      );
     }
     await confirmInitialDownpaymentIfPaid(admin, payment.transaction_id);
     revalidatePath(`/dashboard/transactions/${payment.transaction_id}`);

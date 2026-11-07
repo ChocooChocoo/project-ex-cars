@@ -2,6 +2,7 @@ export const FUNDED_STATUSES = ["released", "received", "paid"] as const;
 
 export type FundRequestLike = {
   amount_cents?: unknown;
+  state?: unknown;
   disbursement_requests?: { status?: unknown } | null;
 };
 
@@ -29,7 +30,7 @@ export function releasedFundsCents(
     return FUNDED_STATUSES.includes(String(fallback?.status ?? "") as never) ? cents(fallback?.amount_cents) : 0;
   }
   return requests.reduce((total, request) => {
-    const status = String(request.disbursement_requests?.status ?? "");
+    const status = String(request.disbursement_requests?.status ?? request.state ?? "");
     return FUNDED_STATUSES.includes(status as never) ? total + cents(request.amount_cents) : total;
   }, 0);
 }

@@ -15,8 +15,7 @@ vi.mock("@/app/(customer)/my-transactions/actions", () => ({
   uploadPurchaseDocument: vi.fn(),
   submitBuyRequest: vi.fn(),
   respondToFinancingOffer: vi.fn(),
-  submitFinancingPayment: vi.fn(),
-  submitAdvancedPayment: vi.fn(),
+  startInstallmentCheckout: vi.fn(),
 }));
 vi.mock("@/app/(customer)/my-transactions/review-actions", () => ({ submitReview: vi.fn() }));
 vi.mock("./transaction-preview", () => ({

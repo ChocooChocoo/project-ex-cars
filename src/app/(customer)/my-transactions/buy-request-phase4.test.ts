@@ -77,7 +77,7 @@ describe("T07 cancellation and reviews", () => {
     await expect(cancelTransaction(cancellation())).resolves.toMatchObject({ error: expect.stringContaining("Agree") });
     expect(db.writes).toHaveLength(0);
   });
-  it("creates unassigned recovery, records consent and alerts all three roles after delivery", async () => {
+  it("creates recovery, records consent and alerts all three roles after delivery", async () => {
     transaction();
     db.rows.viewing_arrangements = [{ schedule: "2020-01-01T00:00:00Z" }];
     await expect(cancelTransaction(cancellation(true))).resolves.toMatchObject({ success: true });
@@ -85,9 +85,8 @@ describe("T07 cancellation and reviews", () => {
       cancellation_towing_ack_by: buyerId,
       cancellation_towing_ack_at: expect.any(String),
     });
-    expect(db.writes).toContainEqual(
-      expect.objectContaining({ table: "vehicles", payload: { listing_state: "repairing" } }),
-    );
+    // T07 CR1: cancelling opens the case but never repossesses the car by itself.
+    expect(db.writes.some((write) => write.table === "vehicles")).toBe(false);
     expect(db.writes).toContainEqual(
       expect.objectContaining({
         table: "field_cases",

@@ -10,7 +10,9 @@ const expect = baseExpect.configure({ timeout: 20_000 });
 // T01 Phase 4 — Cash Purchase: Delivery (GCE Process Flows §4):
 // buyer asks for delivery → Sales Manager approves and sets the fee and downpayment → Head Accountant
 // records and verifies both → delivery team (CI, Head Security) is created → the team moves
-// the status to Delivered → the buyer declines for a legitimate reason, which queues a refund.
+// the status to Arriving → the buyer declines for a legitimate reason, which queues a refund.
+// T07 CR1: declines are recorded before hand-over; a Delivered car offers no decline outcome, so this
+// spec stops at Arriving. Delivered itself is covered by buying-revision-phase3/4.
 // The missed-deadline path needs a deadline in the past, so it is covered by unit tests, not here.
 // Needs migration 00052 applied (the spec lists its own E2E-T01 test car) and active CI and Head Security accounts
 // (the first of each in the worker directory must be the seeded @gce.local account).
@@ -116,7 +118,7 @@ test.describe
       await expect(page.getByText("Mark the car sold after the delivery team reports it delivered.")).toBeVisible();
     });
 
-    test("the team moves the delivery to Delivered", async ({ page }) => {
+    test("the team moves the delivery to Arriving", async ({ page }) => {
       // Buying-flow revision Phase 2: the assigned CI records the papers before dispatch.
       await signInAs(page, "confidential_informant@gce.local");
       await page.goto(`/confidential_informant${fieldCasePath}`);
@@ -125,7 +127,7 @@ test.describe
 
       await signInAs(page, "head_security@gce.local");
       await page.goto(`/head_security${fieldCasePath}`);
-      for (const step of ["Dispatched", "In Transit", "Arriving", "Delivered"]) {
+      for (const step of ["Dispatched", "In Transit", "Arriving"]) {
         await page.getByRole("button", { name: `Mark ${step}` }).click();
         await expect(page.getByText(`Marked ${step}.`)).toBeVisible();
         await page.waitForLoadState("networkidle");

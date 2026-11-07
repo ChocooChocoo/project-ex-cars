@@ -205,6 +205,7 @@ export async function writeAndApproveContract(page: Page, id: string) {
   await open(page, `/sales_manager/transactions/${id}`);
   await page.getByRole("button", { name: "Start from the pre-made contract" }).click();
   await page.getByRole("button", { name: "Send for approval" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Send for approval", exact: true }).click();
   await expect(page.getByText("Contract sent to the Head Accountant.")).toBeVisible();
   await signInAs(page, "head_accountant@gce.local");
   await open(page, `/head_accountant/transactions/${id}`);
@@ -217,18 +218,22 @@ export async function buyerSignsContract(page: Page, id: string) {
   await signInAs(page, "customer@gce.local");
   await open(page, `/my-transactions/${id}`);
   await page.getByLabel("Type your full name").fill("Maria Santos");
-  const pad = page.getByRole("img", { name: /Signature pad/ });
-  await pad.scrollIntoViewIfNeeded();
-  const box = await pad.boundingBox();
-  if (box) {
-    await page.mouse.move(box.x + 30, box.y + 40);
-    await page.mouse.down();
-    await page.mouse.move(box.x + 90, box.y + 80, { steps: 10 });
-    await page.mouse.up();
-  }
+  await drawSignature(page);
   await expect(page.getByRole("button", { name: "Sign contract" })).toBeEnabled();
   await page.getByRole("button", { name: "Sign contract" }).click();
   await expect(page.getByText("Contract signed.")).toBeVisible();
+}
+
+// The signature pad is a canvas: draw a short stroke so the form records a signature.
+export async function drawSignature(page: Page) {
+  const pad = page.getByRole("img", { name: /Signature pad/ });
+  await pad.scrollIntoViewIfNeeded();
+  const box = await pad.boundingBox();
+  if (!box) return;
+  await page.mouse.move(box.x + 30, box.y + 40);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 90, box.y + 80, { steps: 10 });
+  await page.mouse.up();
 }
 
 function testAdmin() {

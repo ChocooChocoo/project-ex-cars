@@ -3,6 +3,7 @@ import { type Page, test } from "@playwright/test";
 import {
   approveAsSalesManager,
   buyerRequest,
+  buyerSignsContract,
   ceoConfirms,
   db,
   expect,
@@ -177,11 +178,7 @@ test.describe
       await expect(page.getByText("In-House Financing", { exact: true })).toBeVisible();
       await expect(complete(page)).toHaveCount(0);
 
-      await signInAs(page, "customer@gce.local");
-      await open(page, `/my-transactions/${id}`);
-      await page.getByLabel("Type your full name to sign").fill("Maria Santos");
-      await page.getByRole("button", { name: "Sign contract" }).click();
-      await expect(page.getByText("Contract signed.")).toBeVisible();
+      await buyerSignsContract(page, id);
 
       await signInAs(page, "confidential_informant@gce.local");
       await open(page, `/confidential_informant${casePath}`);
