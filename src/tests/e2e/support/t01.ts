@@ -10,7 +10,8 @@ export const seedPassword = process.env.SEED_USER_PASSWORD;
 export const png = (name: string) => ({
   name,
   mimeType: "image/png",
-  // Padded to 2 MB, the size of a phone photo: tiny fixtures hid the 1 MB Server Action body limit.
+  // Padded just past the 2 MB upload cap, like a phone photo, so every upload runs the browser shrink
+  // step (src/lib/uploads/compress-image.ts). Storage receives a JPEG under 1 KB.
   buffer: Buffer.concat([
     Buffer.from(
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",

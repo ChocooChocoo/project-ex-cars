@@ -52,12 +52,17 @@ export function RoadmapClassScheduleSection({ schedule, onSelect, canWrite }: Ro
             const styles = SCHEDULE_STATUS_STYLES[entry.status];
 
             return (
-              <button
-                type="button"
+              // A div row, not a button: the edit button inside it cannot be nested in another button.
+              <div
                 key={entry.id}
-                onClick={() => onSelect(entry.id)}
-                className="group grid cursor-pointer grid-cols-1 gap-3 bg-card py-3 text-left transition-colors hover:bg-muted/30 sm:grid-cols-[10rem_1fr_auto] sm:items-center"
+                className="group relative grid grid-cols-1 gap-3 bg-card py-3 text-left transition-colors hover:bg-muted/30 sm:grid-cols-[10rem_1fr_auto] sm:items-center"
               >
+                <button
+                  type="button"
+                  onClick={() => onSelect(entry.id)}
+                  className="absolute inset-0 cursor-pointer rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label={`Open ${entry.title}`}
+                />
                 <div className="flex gap-2">
                   <div className={`w-1 shrink-0 rounded-md ${styles.bar}`} />
                   <div className="text-nowrap text-xs">
@@ -82,14 +87,14 @@ export function RoadmapClassScheduleSection({ schedule, onSelect, canWrite }: Ro
                         e.stopPropagation();
                         router.push(`/roadmap/${entry.id}?edit=true`);
                       }}
-                      className="inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-0 transition-all hover:bg-muted hover:text-foreground group-hover:opacity-100"
+                      className="relative z-10 inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-0 transition-all hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
                       aria-label={`Edit ${entry.title}`}
                     >
                       <Pencil className="size-3.5" />
                     </button>
                   ) : null}
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>

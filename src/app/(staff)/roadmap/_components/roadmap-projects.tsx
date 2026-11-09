@@ -76,12 +76,14 @@ export function RoadmapProjectsSection({ projects, onSelect, onCreate, canWrite 
 
       <div className="grid gap-4 md:grid-cols-3">
         {projects.map((project) => (
-          <button
-            type="button"
-            key={project.id}
-            onClick={() => onSelect(project.id)}
-            className="group cursor-pointer text-left"
-          >
+          // A div wrapper, not a button: the edit button inside the card cannot be nested in another button.
+          <div key={project.id} className="group relative text-left">
+            <button
+              type="button"
+              onClick={() => onSelect(project.id)}
+              className="absolute inset-0 z-10 cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label={`Open ${project.title}`}
+            />
             <Card className="shadow-xs transition-shadow group-hover:ring-2 group-hover:ring-primary/20">
               <CardHeader>
                 <CardTitle>
@@ -102,7 +104,7 @@ export function RoadmapProjectsSection({ projects, onSelect, onCreate, canWrite 
                         e.stopPropagation();
                         router.push(`/roadmap/${project.id}?edit=true`);
                       }}
-                      className="inline-flex size-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                      className="relative z-20 inline-flex size-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                       aria-label={`Edit ${project.title}`}
                     >
                       <Pencil className="size-3.5" />
@@ -123,7 +125,7 @@ export function RoadmapProjectsSection({ projects, onSelect, onCreate, canWrite 
                 <span className="text-muted-foreground">{project.due}</span>
               </CardFooter>
             </Card>
-          </button>
+          </div>
         ))}
       </div>
     </section>
