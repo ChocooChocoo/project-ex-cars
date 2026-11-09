@@ -11,8 +11,9 @@ BEGIN
   ORDER BY (ur.role = 'account_manager') DESC, ur.account_id
   LIMIT 1;
 
+  -- Fresh database: no staff yet, so nothing to backfill (seed-data creates schedules).
   IF v_actor IS NULL THEN
-    RAISE EXCEPTION 'Active staff manager required to attribute the role schedule backfill.';
+    RETURN;
   END IF;
 
   INSERT INTO public.employee_work_schedules (

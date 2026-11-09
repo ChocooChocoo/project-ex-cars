@@ -716,20 +716,32 @@ async function seedInquiries(users, vehicles) {
 
   // Attachments: a few images on messages.
   const attRows = [];
+  const attBufs = [];
   for (let i = 0; i < 8; i++) {
     const msg = messages[i * 3];
     if (!msg) break;
+    const buf = makePng(320, 240, hueToRgb((i * 45) % 360), hueToRgb((i * 45 + 60) % 360));
+    attBufs.push(buf);
     attRows.push({
       message_id: msg.id,
       file_kind: "image",
       storage_path: `messages/${msg.id}/photo.png`,
       original_name: pick(["vehicle-photo.png", "documents.png", "odometer.png", "plate.png"]),
-      file_size: randInt(50000, 900000),
+      file_size: buf.length,
       uploader_id: users.customer,
     });
   }
   const attachments = await insert("message_attachments", attRows);
   log("P3", "message_attachments", attachments.length);
+
+  let attUploaded = 0;
+  for (let i = 0; i < attRows.length; i++) {
+    const { error } = await admin.storage
+      .from("message-attachments")
+      .upload(attRows[i].storage_path, attBufs[i], { contentType: "image/png", upsert: true });
+    if (!error) attUploaded++;
+  }
+  log("P3", "attachment uploads", attUploaded);
 
   // Reports: 3.
   const reportRows = [];
@@ -851,6 +863,7 @@ async function seedTransactions(users, vehicles) {
     payment_method: pick(["cash", "financing", "bank_transfer"]),
     final_price: randInt(500000, 1800000),
     arrangement_kind: pick(["delivery", "meetup", "gce_visit"]),
+    location: pick(["GCE Office, Dasmariñas", "SM Mall of Asia", "Tagaytay", "Bacoor, Cavite"]),
     document_check_state: t.state === "completed" ? "verified" : pick(["pending", "verified"]),
     checked_by: t.state === "completed" ? users.sales_manager : null,
     checked_at: t.state === "completed" ? iso(daysAgo(randInt(1, 9))) : null,
@@ -1293,6 +1306,8 @@ async function seedStaffRecords(users) {
     reqRows.push({
       employee_id: person.id,
       request_kind: kind,
+      leave_reason: kind === "leave" ? "others" : null,
+      overtime_hours: kind === "overtime" ? 2 : null,
       status: pick(["pending", "approved", "rejected"]),
       start_date: dateOnly(startDate),
       end_date: kind === "leave" ? dateOnly(addDays(startDate, leaveDays)) : null,
@@ -1311,6 +1326,7 @@ async function seedStaffRecords(users) {
   reqRows.push({
     employee_id: users.mechanic,
     request_kind: "leave",
+    leave_reason: "others",
     status: "approved",
     start_date: phtDateOnly(now),
     end_date: phtDateOnly(now),
@@ -1903,7 +1919,6 @@ async function main() {
     }
   }
   console.log("");
-
 
   console.log("Seeding vehicles + media...");
   const vehicles = await seedVehicles(users);

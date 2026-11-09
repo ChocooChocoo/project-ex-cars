@@ -15,7 +15,7 @@ describe("T05 role schedule backfill", () => {
     expect(sql).toContain("ON CONFLICT (employee_id) DO UPDATE");
     expect(sql).toContain("ARRAY[1, 2, 3, 4, 5, 6]::SMALLINT[]");
     expect(sql).toContain("'Asia/Manila'");
-    expect(sql).toContain("Active staff manager required");
+    expect(sql).toMatch(/IF v_actor IS NULL THEN\s+RETURN;/);
   });
 
   it("uses exactly the six role hours shared with application and seeds", () => {
