@@ -23,6 +23,7 @@ import {
   TRANSACTION_STATE_LABELS,
 } from "@/lib/transactions/labels";
 import type { TransactionState } from "@/lib/transactions/state-machine";
+import { compressImage } from "@/lib/uploads/compress-image";
 import { formatCurrency } from "@/lib/utils";
 
 export function normalizeConditionItems(value: unknown): string[] {
@@ -177,9 +178,10 @@ export function TransactionDetailSidebarV1({
         : null);
     if (!target || submittingRef.current) return;
     submittingRef.current = true;
-    const proof = proofFileRef.current?.files?.[0];
+    const picked = proofFileRef.current?.files?.[0];
     startPayment(async () => {
       try {
+        const proof = picked ? await compressImage(picked) : undefined;
         const recorded = await onRecordPayment(String(target.amount), target.method, payDate, target.kind, proof);
         if (recorded) {
           setPaymentRecorded(true);

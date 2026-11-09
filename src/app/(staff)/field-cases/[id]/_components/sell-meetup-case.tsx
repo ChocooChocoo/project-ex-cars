@@ -24,6 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { transactionDocumentLabel } from "@/lib/transactions/document-media";
 import { SELL_MEETUP_METHOD_LABELS, type SellMeetupMethod } from "@/lib/transactions/sell-flow";
+import { compressFormFiles } from "@/lib/uploads/compress-image";
 import { formatCurrency } from "@/lib/utils";
 
 type Row = Record<string, unknown>;
@@ -72,7 +73,7 @@ export function SellMeetupCase({
   async function send(action: (fd: FormData) => Promise<Result>, fd: FormData, message: string) {
     fd.set("field_case_id", caseId);
     setBusy(true);
-    const result = await action(fd);
+    const result = await action(await compressFormFiles(fd));
     setBusy(false);
     if ("error" in result) {
       toast.error(result.error);

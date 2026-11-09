@@ -127,7 +127,7 @@ export function PurchaseDocumentChecklist({
       <p className="text-muted-foreground text-sm">
         To buy a car, send GCE <span className="font-medium text-foreground">2 different valid IDs</span> (a photo of
         the front and the back of each) and <span className="font-medium text-foreground">1 proof of billing</span> (a
-        recent utility, internet or phone bill in your name). JPEG, PNG, WebP or PDF, up to 5 MB each. GCE staff check
+        recent utility, internet or phone bill in your name). JPEG, PNG, WebP or PDF, up to 2 MB each. GCE staff check
         every file.
       </p>
       <ol className="grid gap-3 md:grid-cols-3">

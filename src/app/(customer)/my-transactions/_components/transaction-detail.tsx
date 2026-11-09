@@ -79,6 +79,7 @@ import {
 } from "@/lib/transactions/labels";
 import { monthlyInstallment } from "@/lib/transactions/loan-calculator";
 import type { FlowStatus, QueueState, TransactionFlag, TransactionState } from "@/lib/transactions/state-machine";
+import { compressImage } from "@/lib/uploads/compress-image";
 import { cn, formatCurrency } from "@/lib/utils";
 
 import { ContractSign, OnSiteContract } from "./contract-sign";
@@ -321,19 +322,20 @@ export function TransactionDetail({
     kind: docKind,
     idType: docIdType = "",
     side: docIdSide = "front",
-    file,
+    file: picked,
   }: DocumentUpload) {
     if (docKind === "valid_id" && !docIdType) {
       toast.error("Select the ID type.");
       return;
     }
+    const file = await compressImage(picked);
     const ext = DOCUMENT_EXTENSIONS[file.type];
     if (!ext) {
       toast.error("Files must be JPEG, PNG, WebP or PDF.");
       return;
     }
     if (file.size > MAX_DOCUMENT_SIZE) {
-      toast.error("Each file must be 5MB or smaller.");
+      toast.error("Each file must be 2 MB or smaller.");
       return;
     }
     setUploading(true);

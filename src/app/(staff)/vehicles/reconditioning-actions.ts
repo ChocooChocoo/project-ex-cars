@@ -12,6 +12,7 @@ import {
   reconditioningRefundCents,
   releasedFundsCents,
 } from "@/lib/transactions/reconditioning-funds";
+import { MAX_UPLOAD_BYTES } from "@/lib/uploads/compress-image";
 
 type ReconditioningResult = { error: string } | { success: true };
 
@@ -21,7 +22,7 @@ const RECEIPT_TYPES: Record<string, string> = {
   "image/png": "png",
   "image/webp": "webp",
 };
-const MAX_RECEIPT_BYTES = 10 * 1024 * 1024;
+const MAX_RECEIPT_BYTES = MAX_UPLOAD_BYTES;
 
 type FundRequestRow = {
   amount_cents?: unknown;
@@ -232,7 +233,7 @@ export async function requestReconditioningFunds(formData: FormData): Promise<Re
   if (files.length === 0) return { error: "Attach at least one receipt photo." };
   for (const file of files) {
     if (!RECEIPT_TYPES[file.type]) return { error: "Receipts must be JPEG, PNG or WebP photos." };
-    if (file.size > MAX_RECEIPT_BYTES) return { error: "Each receipt must be under 10 MB." };
+    if (file.size > MAX_RECEIPT_BYTES) return { error: "Each receipt must be 2 MB or smaller." };
   }
 
   const admin = createAdminClient();

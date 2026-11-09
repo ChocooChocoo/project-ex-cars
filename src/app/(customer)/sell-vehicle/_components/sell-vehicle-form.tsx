@@ -22,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ACCEPTED_ID_TYPES, ID_LABELS } from "@/lib/auth/roles";
 import { createClient } from "@/lib/supabase/client";
 import { SELL_MEETUP_METHOD_LABELS, SELL_MEETUP_METHODS } from "@/lib/transactions/sell-flow";
+import { compressImage, MAX_UPLOAD_BYTES } from "@/lib/uploads/compress-image";
 import { type SellVehicleFormData, sellVehicleSchema } from "@/lib/validation/transactions";
 import { listedYears, OWNER_NUMBERS, SELL_CONDITIONS } from "@/lib/vehicles/catalog";
 
@@ -33,7 +34,7 @@ export interface ConditionChecklistNode {
 }
 
 export const SELL_PHOTO_MAX_COUNT = 6;
-export const SELL_PHOTO_MAX_SIZE = 5 * 1024 * 1024;
+export const SELL_PHOTO_MAX_SIZE = MAX_UPLOAD_BYTES;
 export const SELL_PHOTO_ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
 
 export function validateSellPhotos(files: File[]): string | null {
@@ -43,7 +44,7 @@ export function validateSellPhotos(files: File[]): string | null {
     if (!(SELL_PHOTO_ACCEPTED_TYPES as readonly string[]).includes(file.type)) {
       return "Photos must be JPEG, PNG, or WebP images.";
     }
-    if (file.size > SELL_PHOTO_MAX_SIZE) return "Each photo must be 5MB or smaller.";
+    if (file.size > SELL_PHOTO_MAX_SIZE) return "Each photo must be 2 MB or smaller.";
   }
   return null;
 }
@@ -117,8 +118,10 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
     }));
   }, [checklistNodes]);
 
-  function handlePhotoChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const picked = Array.from(event.target.files ?? []);
+  async function handlePhotoChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const chosen = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    const picked = await Promise.all(chosen.map(compressImage));
     const combined = [...photos, ...picked];
     const overLimit = combined.length > SELL_PHOTO_MAX_COUNT;
     const next = combined.slice(0, SELL_PHOTO_MAX_COUNT);
@@ -128,7 +131,6 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
     setPhotos(next);
     for (const url of previews) URL.revokeObjectURL(url);
     setPreviews(next.map((file) => URL.createObjectURL(file)));
-    event.target.value = "";
   }
 
   function removePhoto(index: number) {
@@ -155,8 +157,10 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
     syncDeclaredIssues(next, othersChecked, othersText);
   }
 
-  function handleIssuePhotoChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const picked = [...issuePhotos, ...Array.from(event.target.files ?? [])];
+  async function handleIssuePhotoChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const chosen = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    const picked = [...issuePhotos, ...(await Promise.all(chosen.map(compressImage)))];
     const next = picked.slice(0, SELL_PHOTO_MAX_COUNT);
     setIssuePhotos(next);
     setIssuePhotoError(
@@ -164,7 +168,6 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
         ? `You can add at most ${SELL_PHOTO_MAX_COUNT} issue photos.`
         : validateIssuePhotos(next),
     );
-    event.target.value = "";
   }
 
   async function onSubmit(data: SellVehicleFormData) {
@@ -468,7 +471,7 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
                   multiple
                   onChange={handleIssuePhotoChange}
                 />
-                <FieldDescription>JPEG, PNG or WebP, max 5MB each.</FieldDescription>
+                <FieldDescription>JPEG, PNG or WebP, max 2 MB each.</FieldDescription>
                 {issuePhotoError && <FieldError errors={[{ message: issuePhotoError }]} />}
                 {issuePhotos.length > 0 ? (
                   <ul className="flex flex-wrap gap-2" aria-label="Issue photos to upload">
@@ -522,7 +525,7 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
             {errors.meetup_method && <FieldError errors={[{ message: errors.meetup_method.message }]} />}
           </Field>
           <Field data-invalid={!!paperError}>
-            <FieldLabel>Required papers (JPEG/PNG/WebP/PDF, max 5MB each)</FieldLabel>
+            <FieldLabel>Required papers (JPEG/PNG/WebP/PDF, max 2 MB each)</FieldLabel>
             <div className="grid gap-3 sm:grid-cols-2">
               {PAPER_FIELDS.map((paper, index) => (
                 <div key={paper.key} className="flex flex-col gap-1.5">
@@ -533,8 +536,10 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
                     id={`sell-${paper.key}`}
                     type="file"
                     accept={SELL_PAPER_ACCEPT}
-                    onChange={(event) => {
-                      setPapers((prev) => ({ ...prev, [paper.key]: event.target.files?.[0] ?? null }));
+                    onChange={async (event) => {
+                      const chosen = event.target.files?.[0];
+                      const file = chosen ? await compressImage(chosen) : null;
+                      setPapers((prev) => ({ ...prev, [paper.key]: file }));
                       setPaperError(null);
                     }}
                   />
@@ -561,7 +566,7 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
             {paperError && <FieldError errors={[{ message: paperError }]} />}
           </Field>
           <Field data-invalid={!!photoError}>
-            <FieldLabel htmlFor="sell-photos">Vehicle Photos * (1–6 photos, JPEG/PNG/WebP, max 5MB each)</FieldLabel>
+            <FieldLabel htmlFor="sell-photos">Vehicle Photos * (1–6 photos, JPEG/PNG/WebP, max 2 MB each)</FieldLabel>
             <Input
               ref={photoInputRef}
               id="sell-photos"

@@ -54,7 +54,7 @@ const fileFields = {
   attachment_path: `${inquiryId}/abc.jpg`,
   attachment_name: "front.jpg",
   attachment_type: "image/jpeg",
-  attachment_size: String(5 * 1024 * 1024),
+  attachment_size: String(1024 * 1024),
 };
 
 beforeEach(() => {
@@ -63,10 +63,10 @@ beforeEach(() => {
 });
 
 describe("prepareMessageAttachment", () => {
-  it("refuses a file over 10 MB or of another type before touching storage", async () => {
+  it("refuses a file over 2 MB or of another type before touching storage", async () => {
     expect(
-      await prepareMessageAttachment(inquiryId, { name: "big.jpg", type: "image/jpeg", size: 11 * 1024 * 1024 }),
-    ).toEqual({ error: "Files must be 10 MB or smaller." });
+      await prepareMessageAttachment(inquiryId, { name: "big.jpg", type: "image/jpeg", size: 3 * 1024 * 1024 }),
+    ).toEqual({ error: "Files must be 2 MB or smaller." });
     expect(
       await prepareMessageAttachment(inquiryId, { name: "a.exe", type: "application/x-msdownload", size: 10 }),
     ).toEqual({
@@ -103,7 +103,7 @@ describe("sendMessageWithAttachment", () => {
       file_kind: "image",
       storage_path: `${inquiryId}/abc.jpg`,
       original_name: "front.jpg",
-      file_size: 5 * 1024 * 1024,
+      file_size: 1024 * 1024,
       uploader_id: userId,
     });
     expect(result).toMatchObject({

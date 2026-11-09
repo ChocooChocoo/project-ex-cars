@@ -62,6 +62,7 @@ import {
   REQUEST_ATTACHMENTS_BUCKET,
 } from "@/lib/inquiries/attachments";
 import { createClient } from "@/lib/supabase/client";
+import { compressImage } from "@/lib/uploads/compress-image";
 import { LEAVE_REASONS, type LeaveReason, REQUEST_KINDS, type RequestKind } from "@/lib/validation/phase6";
 
 import {
@@ -191,8 +192,10 @@ export function EmployeeRequestsClient({ requests, canReview, canSubmit }: Emplo
     }
   }
 
-  function handleProofChange(event: ChangeEvent<HTMLInputElement>) {
-    const picked = [...proofFiles, ...Array.from(event.target.files ?? [])];
+  async function handleProofChange(event: ChangeEvent<HTMLInputElement>) {
+    const chosen = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    const picked = [...proofFiles, ...(await Promise.all(chosen.map(compressImage)))];
     const next = picked.slice(0, REQUEST_ATTACHMENT_MAX_COUNT);
     const overLimit = picked.length > REQUEST_ATTACHMENT_MAX_COUNT;
     setProofFiles(next);
@@ -201,7 +204,6 @@ export function EmployeeRequestsClient({ requests, canReview, canSubmit }: Emplo
         ? `Attach at most ${REQUEST_ATTACHMENT_MAX_COUNT} files.`
         : (next.map(attachmentError).find((error) => error !== null) ?? null),
     );
-    event.target.value = "";
   }
 
   async function submitReview(decision: "approved" | "rejected") {
@@ -677,7 +679,7 @@ export function EmployeeRequestsClient({ requests, canReview, canSubmit }: Emplo
                 onChange={handleProofChange}
                 aria-invalid={!!proofError}
               />
-              <FieldDescription>JPG, PNG, WebP or PDF, 10 MB each.</FieldDescription>
+              <FieldDescription>JPG, PNG, WebP or PDF, 2 MB each.</FieldDescription>
               {proofError ? <FieldError errors={[{ message: proofError }]} /> : null}
               {proofFiles.length > 0 ? (
                 <ul className="flex flex-wrap gap-2" aria-label="Proof files to upload">

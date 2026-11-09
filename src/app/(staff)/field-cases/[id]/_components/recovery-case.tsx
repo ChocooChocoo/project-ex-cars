@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { compressFormFiles } from "@/lib/uploads/compress-image";
 
 import { ShareLocation } from "./share-location";
 
@@ -54,7 +55,7 @@ export function RecoveryCase({
     fd.set("field_case_id", fieldCase.id);
     setBusy(true);
     try {
-      const result = await action(fd);
+      const result = await action(await compressFormFiles(fd));
       if ("error" in result) toast.error(result.error);
       else {
         router.refresh();

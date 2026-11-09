@@ -1,8 +1,10 @@
+import { MAX_UPLOAD_BYTES } from "@/lib/uploads/compress-image";
+
 const TRANSACTION_DOCUMENTS_BUCKET = "transaction-documents";
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
 
-// Customer uploads go browser -> storage; the bucket enforces the same 5 MB cap (00055).
-export const MAX_DOCUMENT_SIZE = 5 * 1024 * 1024;
+// Customer uploads go browser -> storage; the bucket enforces the same 2 MB cap.
+export const MAX_DOCUMENT_SIZE = MAX_UPLOAD_BYTES;
 export const DOCUMENT_EXTENSIONS: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/png": "png",

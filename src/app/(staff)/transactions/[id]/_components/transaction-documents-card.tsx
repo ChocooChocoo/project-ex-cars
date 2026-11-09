@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ACCEPTED_ID_TYPES, ID_LABELS } from "@/lib/auth/roles";
 import { transactionDocumentLabel } from "@/lib/transactions/document-media";
 import { SELL_PAPER_KINDS } from "@/lib/transactions/sell-flow";
+import { compressImage } from "@/lib/uploads/compress-image";
 
 // T03 C11/SM2: result of the automatic OR/CR and ID check. Advisory only; staff Verify stays the decision.
 const AUTO_CHECK_LABELS: Record<string, string> = {
@@ -66,7 +67,7 @@ export function TransactionDocumentsCard({
       toast.error("Select the ID type.");
       return;
     }
-    await onUploadDocument(docKind, docIdType, file);
+    await onUploadDocument(docKind, docIdType, await compressImage(file));
     if (docFileRef.current) docFileRef.current.value = "";
   }
 

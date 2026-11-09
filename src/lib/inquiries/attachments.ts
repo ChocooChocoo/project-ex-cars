@@ -1,10 +1,11 @@
+import { MAX_UPLOAD_BYTES } from "@/lib/uploads/compress-image";
 // T03 C16: chat attachments go browser -> storage on a signed URL, so the 4 MB Server Action body
 // limit does not apply. The bucket (migration 20261026130000) enforces the same size and types.
 export const MESSAGE_ATTACHMENTS_BUCKET = "message-attachments";
 // T06: staff request proofs follow the chat attachment rules on their own bucket.
 export const REQUEST_ATTACHMENTS_BUCKET = "request-attachments";
 export const REQUEST_ATTACHMENT_MAX_COUNT = 3;
-export const MESSAGE_ATTACHMENT_MAX_SIZE = 10 * 1024 * 1024;
+export const MESSAGE_ATTACHMENT_MAX_SIZE = MAX_UPLOAD_BYTES;
 export const MESSAGE_ATTACHMENT_TYPES: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/png": "png",
@@ -45,7 +46,7 @@ export function attachmentError(file: AttachmentMeta): string | null {
   }
   if (!MESSAGE_ATTACHMENT_TYPES[attachmentMimeType(file)]) return "Attach a JPG, PNG, WebP image or a PDF.";
   if (file.size <= 0) return "This file is empty.";
-  if (file.size > MESSAGE_ATTACHMENT_MAX_SIZE) return "Files must be 10 MB or smaller.";
+  if (file.size > MESSAGE_ATTACHMENT_MAX_SIZE) return "Files must be 2 MB or smaller.";
   if (!file.name.trim() || file.name.length > 200) return "Rename the file to under 200 characters.";
   return null;
 }

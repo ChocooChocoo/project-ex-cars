@@ -5,6 +5,7 @@ import { useRef } from "react";
 import { Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { compressImage } from "@/lib/uploads/compress-image";
 
 export type DutyEvidenceSlot = "before" | "after";
 export type DutyEvidenceUpload = (checkId: string, slot: DutyEvidenceSlot, file: File) => Promise<void>;
@@ -63,7 +64,7 @@ export function DutyEvidenceControl({
             aria-label={uploadLabel}
             onChange={(event) => {
               const file = event.currentTarget.files?.[0];
-              if (file) void onUpload(checkId, slot, file);
+              if (file) void compressImage(file).then((compressed) => onUpload(checkId, slot, compressed));
               event.currentTarget.value = "";
             }}
           />

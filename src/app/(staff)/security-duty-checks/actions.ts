@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getCurrentRole } from "@/app/auth/actions";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { MAX_UPLOAD_BYTES } from "@/lib/uploads/compress-image";
 import { securityDutyCheckSchema, securityDutyCompleteSchema } from "@/lib/validation/phase6";
 
 type Phase6ActionResult = { error: string } | { success: true };
@@ -15,7 +16,7 @@ type UploadResult = { ok: true; path: string } | { ok: false; error: string };
 
 async function uploadEvidence(userId: string, file: File): Promise<UploadResult> {
   if (!file || file.size === 0) return { ok: false, error: "An image file is required." };
-  if (file.size > 5 * 1024 * 1024) return { ok: false, error: "Image must be 5 MB or smaller." };
+  if (file.size > MAX_UPLOAD_BYTES) return { ok: false, error: "Image must be 2 MB or smaller." };
   if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
     return { ok: false, error: "Only JPEG, PNG, or WebP images are allowed." };
   }

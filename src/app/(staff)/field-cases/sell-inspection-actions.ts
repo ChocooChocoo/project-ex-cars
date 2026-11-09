@@ -8,6 +8,7 @@ import { getCurrentRole } from "@/app/auth/actions";
 import { notify } from "@/lib/notifications/notify";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { MAX_UPLOAD_BYTES } from "@/lib/uploads/compress-image";
 import { formatCurrency } from "@/lib/utils";
 
 type FieldActionResult = { error: string } | { success: true };
@@ -18,7 +19,7 @@ const FILE_EXTENSIONS: Record<string, string> = {
   "image/webp": "webp",
   "application/pdf": "pdf",
 };
-const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const MAX_FILE_SIZE = MAX_UPLOAD_BYTES;
 const MAX_INSPECTION_PHOTOS = 10;
 
 interface AssignedCase {
@@ -71,7 +72,7 @@ function fileError(files: File[], allowPdf: boolean): string | null {
     if (!FILE_EXTENSIONS[file.type] || (!allowPdf && file.type === "application/pdf")) {
       return allowPdf ? "Files must be JPEG, PNG, WebP or PDF." : "Photos must be JPEG, PNG or WebP images.";
     }
-    if (file.size > MAX_FILE_SIZE) return "Each file must be 5MB or smaller.";
+    if (file.size > MAX_FILE_SIZE) return "Each file must be 2 MB or smaller.";
   }
   return null;
 }

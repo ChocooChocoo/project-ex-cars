@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { compressImage } from "@/lib/uploads/compress-image";
 import type { VehicleMediaKind } from "@/lib/vehicles/media-kinds";
 
 const PUBLIC_BUCKET_BASE = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/showroom-media`;
@@ -56,7 +57,7 @@ export function VehicleMediaManager({
     const fd = new FormData();
     fd.set("vehicle_id", vehicleId);
     fd.set("media_kind", kind);
-    fd.set("file", file);
+    fd.set("file", await compressImage(file));
     const result = await uploadVehicleMedia(fd);
     setUploading(false);
     if (result.error) {

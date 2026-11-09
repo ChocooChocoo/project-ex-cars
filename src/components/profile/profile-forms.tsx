@@ -31,6 +31,7 @@ import {
 import { Field, FieldDescription, FieldError, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { type AddressValue, emptyAddressValue, sameAddress } from "@/lib/psgc/address";
+import { compressImage, MAX_UPLOAD_BYTES } from "@/lib/uploads/compress-image";
 import { getInitials } from "@/lib/utils";
 
 export interface OwnProfile {
@@ -155,7 +156,7 @@ function ChangeEmailDialog({ currentEmail }: { readonly currentEmail: string }) 
 }
 
 const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const PHOTO_MAX_BYTES = 2 * 1024 * 1024;
+const PHOTO_MAX_BYTES = MAX_UPLOAD_BYTES;
 
 function ProfileHeader({ profile }: { readonly profile: OwnProfile }) {
   const router = useRouter();
@@ -177,10 +178,11 @@ function ProfileHeader({ profile }: { readonly profile: OwnProfile }) {
   }
 
   async function onPick(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
+    const picked = event.target.files?.[0];
     event.target.value = "";
-    if (!file) return;
-    if (!PHOTO_TYPES.includes(file.type)) return setError("Use a JPG, PNG or WebP photo.");
+    if (!picked) return;
+    if (!PHOTO_TYPES.includes(picked.type)) return setError("Use a JPG, PNG or WebP photo.");
+    const file = await compressImage(picked);
     if (file.size > PHOTO_MAX_BYTES) return setError("The photo must be 2 MB or smaller.");
     const fd = new FormData();
     fd.set("avatar", file);

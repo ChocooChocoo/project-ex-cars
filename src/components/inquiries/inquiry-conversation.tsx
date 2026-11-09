@@ -24,6 +24,7 @@ import {
   type SignedAttachment,
 } from "@/lib/inquiries/attachments";
 import { createClient } from "@/lib/supabase/client";
+import { compressImage } from "@/lib/uploads/compress-image";
 import { cn, getInitials } from "@/lib/utils";
 import { censorMessage } from "@/lib/word-filter";
 
@@ -190,7 +191,8 @@ export function InquiryConversation({
     });
   }, [supabase]);
 
-  function pickFile(picked: File | null) {
+  async function pickFile(chosen: File | null) {
+    const picked = chosen ? await compressImage(chosen) : null;
     const error = picked ? attachmentError({ name: picked.name, type: picked.type, size: picked.size }) : null;
     setFileError(error);
     setFile(error ? null : picked);
@@ -452,7 +454,7 @@ export function InquiryConversation({
           ) : null}
         </div>
       ) : (
-        <p className="px-2 text-muted-foreground text-xs">Images (JPG, PNG, WebP) or PDF, up to 10 MB.</p>
+        <p className="px-2 text-muted-foreground text-xs">Images (JPG, PNG, WebP) or PDF, up to 2 MB.</p>
       )}
     </div>
   );

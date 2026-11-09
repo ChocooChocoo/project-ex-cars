@@ -679,7 +679,7 @@ function sellFilesError(files: SellFileMeta[]): string | null {
       return "Photos must be JPEG, PNG, or WebP images.";
     }
     if (!DOCUMENT_EXTENSIONS[file.type]) return "Papers must be JPEG, PNG, WebP or PDF files.";
-    if (file.size <= 0 || file.size > MAX_DOCUMENT_SIZE) return "Each file must be 5MB or smaller.";
+    if (file.size <= 0 || file.size > MAX_DOCUMENT_SIZE) return "Each file must be 2 MB or smaller.";
   }
   return null;
 }

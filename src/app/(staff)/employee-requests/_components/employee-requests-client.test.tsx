@@ -248,7 +248,7 @@ describe("EmployeeRequestsClient", () => {
     expect(proofs.getAttribute("accept")).toContain("application/pdf");
   });
 
-  it("keeps at most three proof files", () => {
+  it("keeps at most three proof files", async () => {
     renderRequests({ canSubmit: true });
 
     fireEvent.click(screen.getByRole("button", { name: "New Request" }));
@@ -258,7 +258,7 @@ describe("EmployeeRequestsClient", () => {
 
     fireEvent.change(proofs, { target: { files } });
 
-    expect(within(dialog).getByText("Attach at most 3 files.")).toBeInTheDocument();
+    expect(await within(dialog).findByText("Attach at most 3 files.")).toBeInTheDocument();
     expect(within(dialog).getAllByRole("listitem")).toHaveLength(3);
   });
 

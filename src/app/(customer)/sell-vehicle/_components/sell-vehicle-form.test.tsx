@@ -151,9 +151,9 @@ describe("validateSellPhotos", () => {
     );
   });
 
-  it("rejects files larger than 5MB", () => {
-    expect(validateSellPhotos([sizedPhoto("big.jpg", "image/jpeg", 6 * 1024 * 1024)])).toBe(
-      "Each photo must be 5MB or smaller.",
+  it("rejects files larger than 2 MB", () => {
+    expect(validateSellPhotos([sizedPhoto("big.jpg", "image/jpeg", 3 * 1024 * 1024)])).toBe(
+      "Each photo must be 2 MB or smaller.",
     );
   });
 });

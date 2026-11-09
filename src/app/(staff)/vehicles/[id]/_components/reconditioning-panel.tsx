@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { partsTotalCents, releasedFundsCents } from "@/lib/transactions/reconditioning-funds";
+import { compressFormFiles } from "@/lib/uploads/compress-image";
 import { formatCurrency } from "@/lib/utils";
 
 type Row = Record<string, unknown>;
@@ -90,7 +91,7 @@ export function ReconditioningPanel({
 
   async function run(action: (fd: FormData) => Promise<Result>, fd: FormData, message: string) {
     setBusy(true);
-    const result = await action(fd);
+    const result = await action(await compressFormFiles(fd));
     setBusy(false);
     if ("error" in result) {
       toast.error(result.error);

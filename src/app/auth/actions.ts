@@ -14,6 +14,7 @@ import { composeAddress, provinceNameFor } from "@/lib/psgc/address";
 import { landingPath } from "@/lib/routing/paths";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase, createServerSupabaseClient } from "@/lib/supabase/server";
+import { MAX_UPLOAD_BYTES } from "@/lib/uploads/compress-image";
 import { emailSchema, fullNameSchema, newPasswordSchema, passwordSchema } from "@/lib/validation/forms";
 import { changePasswordSchema, ownProfileSchema } from "@/lib/validation/profile";
 
@@ -326,46 +327,6 @@ export async function createEmployeeAccount(params: z.input<typeof createEmploye
   return { success: true };
 }
 
-export async function uploadCustomerDocument(formData: FormData) {
-  const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { error: "Not authenticated" };
-  }
-
-  const file = formData.get("file") as File;
-  const documentKind = formData.get("document_kind") as string;
-
-  if (!file || !documentKind) {
-    return { error: "File and document kind are required" };
-  }
-
-  const fileExt = file.name.split(".").pop();
-  const filePath = `${user.id}/${documentKind}-${Date.now()}.${fileExt}`;
-
-  const { error: uploadError } = await supabase.storage.from("customer-documents").upload(filePath, file);
-
-  if (uploadError) {
-    return { error: uploadError.message };
-  }
-
-  const { error: dbError } = await supabase.from("customer_documents").insert({
-    customer_id: user.id,
-    document_kind: documentKind,
-    storage_path: filePath,
-  });
-
-  if (dbError) {
-    return { error: dbError.message };
-  }
-
-  revalidatePath("/profile");
-  return { success: true };
-}
-
 // T03 C15 / T05: the signed-in user's own name, phone and PSGC address. Only these columns are written,
 // on their own row (RLS "Users can update own profile"); the auth display name follows the full name.
 // `profiles.address` is composed from the parts so autofill and delivery keep reading one string.
@@ -433,7 +394,7 @@ export async function changeOwnPassword(formData: FormData): Promise<{ error: st
 
 // Test sheet #4 (C15): own profile photo, stored at avatars/<user id>/ (storage rules allow only that folder).
 const AVATAR_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
-const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+const AVATAR_MAX_BYTES = MAX_UPLOAD_BYTES;
 
 function avatarPath(url: string | null | undefined) {
   const marker = "/storage/v1/object/public/avatars/";

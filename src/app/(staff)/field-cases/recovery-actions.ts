@@ -8,6 +8,7 @@ import { getCurrentRole } from "@/app/auth/actions";
 import { logAuditEvent } from "@/lib/auth/audit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { MAX_UPLOAD_BYTES } from "@/lib/uploads/compress-image";
 
 async function assignedRecovery(id: unknown) {
   const parsed = z.string().uuid().safeParse(id);
@@ -121,9 +122,9 @@ export async function uploadTowEvidence(form: FormData) {
     !(file instanceof File) ||
     !["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
     !file.size ||
-    file.size > 10 * 1024 * 1024
+    file.size > MAX_UPLOAD_BYTES
   )
-    return { error: "Choose a JPEG, PNG or WebP photo under 10 MB." };
+    return { error: "Choose a JPEG, PNG or WebP photo of 2 MB or smaller." };
   const { admin, fieldCase, user } = context;
   const path = `${fieldCase.transaction_id}/tow-${crypto.randomUUID()}`;
   const { error } = await admin.storage.from("transaction-documents").upload(path, file);
