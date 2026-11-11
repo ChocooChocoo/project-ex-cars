@@ -10,7 +10,12 @@ import { authorizeAction } from "@/lib/auth/action-guard";
 import { ACCEPTED_ID_TYPES } from "@/lib/auth/roles";
 import { notify } from "@/lib/notifications/notify";
 import { markCheckoutPaid } from "@/lib/payments/checkout-paid";
-import { createCheckoutSession, retrieveCheckoutSession } from "@/lib/payments/paymongo";
+import {
+  type CheckoutBilling,
+  createCheckoutSession,
+  expireCheckoutSession,
+  retrieveCheckoutSession,
+} from "@/lib/payments/paymongo";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
@@ -27,13 +32,16 @@ import {
   isVisitSlot,
   needsContract,
   onlinePaymentsDue,
+  originalDeliverySchedule,
   paymentAllowedBeforeSigning,
+  rescheduleFee,
   SLOT_RULE_MESSAGE,
 } from "@/lib/transactions/buy-flow";
-import { releaseVisitSlots } from "@/lib/transactions/buy-flow-server";
+import { applyDeliveryReschedule, releaseVisitSlots, reserveVehicle } from "@/lib/transactions/buy-flow-server";
 import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_SIZE } from "@/lib/transactions/document-media";
 import { nextUnpaidInstallment, unpaidInstallments } from "@/lib/transactions/financing-payments";
 import { canCancelScheduled, nextQueueState, reviewDueAt } from "@/lib/transactions/state-machine";
+import { profileAddressColumns, profileAddressSchema } from "@/lib/validation/profile";
 import { buyDetailsSchema, buyTransactionSchema, sellVehicleSchema } from "@/lib/validation/transactions";
 import { autoCheckDocument } from "@/lib/verification/verify-document";
 
@@ -208,6 +216,22 @@ export async function createBuyTransaction(formData: FormData) {
   return { success: true, id: transaction.id };
 }
 
+// T10: a Buying location is a PSGC address, like the profile, and saving it updates the profile too. The
+// one-line location is composed on the server from the parts, never taken from the client.
+async function saveBuyerAddress(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  userId: string,
+  formData: FormData,
+): Promise<{ error: string } | { location: string }> {
+  const parsed = profileAddressSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Choose the region, city and barangay." };
+  const columns = profileAddressColumns(parsed.data);
+  const { error } = await supabase.from("profiles").update(columns).eq("id", userId);
+  if (error) return { error: error.message };
+  revalidatePath("/my-profile");
+  return { location: columns.address };
+}
+
 export async function saveBuyDetails(formData: FormData) {
   const authorization = await authorizeAction(["customer"]);
   if (!authorization.ok) return { error: authorization.message };
@@ -226,7 +250,7 @@ export async function saveBuyDetails(formData: FormData) {
     payment_method: pickedMethod,
     arrangement_kind,
     schedule,
-    location,
+    location: typedLocation,
     notes,
     acknowledge_condition,
     agree_delivery_terms,
@@ -291,6 +315,13 @@ export async function saveBuyDetails(formData: FormData) {
   // T04 P7: every financing request says how long the buyer wants to pay.
   const financing = payment_method === "financing";
   if (financing && !requested_term_months) return { error: "Choose a payment term." };
+
+  let location = typedLocation;
+  if (arrangement_kind === "meetup" || arrangement_kind === "delivery") {
+    const saved = await saveBuyerAddress(supabase, user.user.id, formData);
+    if ("error" in saved) return { error: saved.error };
+    location = saved.location;
+  }
 
   const { error } = await supabase.from("purchase_details").upsert(
     {
@@ -543,7 +574,9 @@ export async function respondToFinancingOffer(formData: FormData) {
 
   const { data: tx } = await supabase
     .from("transactions")
-    .select("id, customer_id, transaction_kind, current_state, flow_status, purchase_details(arrangement_kind)")
+    .select(
+      "id, customer_id, vehicle_id, transaction_kind, current_state, flow_status, purchase_details(arrangement_kind)",
+    )
     .eq("id", parsed.data.transaction_id)
     .maybeSingle();
   if (!tx || tx.customer_id !== user.user.id || tx.transaction_kind !== "buy")
@@ -592,8 +625,10 @@ export async function respondToFinancingOffer(formData: FormData) {
           : `Pick a future ${label} time. ${SLOT_RULE_MESSAGE}`,
     };
   }
-  if (kind !== "gce_visit" && !parsed.data.location) {
-    return { error: kind === "delivery" ? "Enter the delivery address." : "Enter the meet-up location." };
+  if (kind !== "gce_visit") {
+    const saved = await saveBuyerAddress(supabase, user.user.id, formData);
+    if ("error" in saved) return { error: saved.error };
+    parsed.data.location = saved.location;
   }
   // Manila time in every message: the server may run in UTC.
   const when = visit.toLocaleString("en-PH", { timeZone: "Asia/Manila" });
@@ -621,6 +656,8 @@ export async function respondToFinancingOffer(formData: FormData) {
     .from("transactions")
     .update({ flow_status: kind === "delivery" ? "purchase_claim" : "gce_visit_scheduled_dp_pending" })
     .eq("id", tx.id);
+  // A financed delivery is a Purchase Claim at once: the car leaves the showroom now.
+  if (kind === "delivery") await reserveVehicle(admin, tx.vehicle_id);
   await admin.from("transaction_status_history").insert({
     transaction_id: tx.id,
     from_state: tx.current_state,
@@ -651,13 +688,35 @@ const SELL_PHOTO_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const idTypeSchema = z.enum(ACCEPTED_ID_TYPES);
 
-type SellDocumentKind = "sell_photo" | "valid_id" | "orcr" | "deed_of_sale" | "issue_photo";
+type SellDocumentKind =
+  | "sell_photo"
+  | "valid_id"
+  | "official_receipt"
+  | "certificate_of_registration"
+  | "deed_of_sale"
+  | "issue_photo";
 // Photos attached to the offer: recorded verified, outside the papers check.
 const SELL_ATTACHMENT_KINDS: SellDocumentKind[] = ["sell_photo", "issue_photo"];
-// Selling step 1: two valid IDs, the ORCR and the deed of sale are required with every offer.
-const SELL_PAPER_KINDS: SellDocumentKind[] = ["valid_id", "valid_id", "orcr", "deed_of_sale"];
+// Selling step 1 (T10): two valid IDs, each front and back like the buyer's, the OR, the CR and the deed of
+// sale are required with every offer.
+const SELL_PAPER_KINDS: SellDocumentKind[] = [
+  "valid_id",
+  "valid_id",
+  "valid_id",
+  "valid_id",
+  "official_receipt",
+  "certificate_of_registration",
+  "deed_of_sale",
+];
+const SELL_PAPERS_MESSAGE =
+  "Attach both valid IDs (front and back) with their ID types, the OR, the CR and the deed of sale.";
 
-type SellUpload = { path: string; document_kind: SellDocumentKind; id_type: string | null };
+type SellUpload = {
+  path: string;
+  document_kind: SellDocumentKind;
+  id_type: string | null;
+  id_side?: "front" | "back";
+};
 export type SellFileMeta = { kind: SellDocumentKind; type: string; size: number };
 
 const sellPathPrefix = (transactionId: string, kind: SellDocumentKind) =>
@@ -672,7 +731,7 @@ function sellFilesError(files: SellFileMeta[]): string | null {
   if (photos.length > SELL_PHOTO_MAX_COUNT) return `You can upload at most ${SELL_PHOTO_MAX_COUNT} photos.`;
   if (issuePhotos.length > SELL_PHOTO_MAX_COUNT) return `You can upload at most ${SELL_PHOTO_MAX_COUNT} issue photos.`;
   if (papers.length !== SELL_PAPER_KINDS.length || papers.some((f, i) => f.kind !== SELL_PAPER_KINDS[i])) {
-    return "Attach two valid IDs with their ID types, the ORCR and the deed of sale.";
+    return SELL_PAPERS_MESSAGE;
   }
   for (const file of files) {
     if (SELL_ATTACHMENT_KINDS.includes(file.kind) && !SELL_PHOTO_MIME_TYPES.includes(file.type)) {
@@ -722,15 +781,24 @@ function readSellUploads(formData: FormData, transactionId: string): { uploads: 
     if (!path) return { error: "Invalid vehicle photo." };
     uploads.push({ path, document_kind: "sell_photo", id_type: null });
   }
-  for (const n of [1, 2]) {
-    const path = pathOf(formData.get(`id_path_${n}`), "valid_id");
-    const idType = idTypeSchema.safeParse(formData.get(`id_type_${n}`));
-    if (!path || !idType.success) return { error: "Two valid IDs, each with its ID type, are required." };
-    uploads.push({ path, document_kind: "valid_id", id_type: idType.data });
+  const idTypes = [1, 2].map((n) => idTypeSchema.safeParse(formData.get(`id_type_${n}`)));
+  if (idTypes.some((idType) => !idType.success)) return { error: "Choose the type of both valid IDs." };
+  if (idTypes[0].data === idTypes[1].data) return { error: "Use two different valid IDs." };
+  for (const [index, n] of [1, 2].entries()) {
+    for (const side of ["front", "back"] as const) {
+      const path = pathOf(formData.get(`id_${side}_path_${n}`), "valid_id");
+      if (!path) return { error: SELL_PAPERS_MESSAGE };
+      uploads.push({ path, document_kind: "valid_id", id_type: idTypes[index].data ?? null, id_side: side });
+    }
   }
-  const orcr = pathOf(formData.get("orcr_path"), "orcr");
-  if (!orcr) return { error: "The ORCR is required." };
-  uploads.push({ path: orcr, document_kind: "orcr", id_type: null });
+  for (const [kind, label] of [
+    ["official_receipt", "The OR (Official Receipt) is required."],
+    ["certificate_of_registration", "The CR (Certificate of Registration) is required."],
+  ] as const) {
+    const path = pathOf(formData.get(`${kind}_path`), kind);
+    if (!path) return { error: label };
+    uploads.push({ path, document_kind: kind, id_type: null });
+  }
   const deed = pathOf(formData.get("deed_of_sale_path"), "deed_of_sale");
   if (!deed) return { error: "The deed of sale is required." };
   uploads.push({ path: deed, document_kind: "deed_of_sale", id_type: null });
@@ -843,6 +911,7 @@ export async function submitSellVehicle(formData: FormData) {
       transaction_id: transaction.id,
       document_kind: upload.document_kind,
       id_type: upload.id_type,
+      id_side: upload.id_side ?? null,
       storage_path: upload.path,
       uploader_id: user.user.id,
       verification_state: SELL_ATTACHMENT_KINDS.includes(upload.document_kind) ? "verified" : "pending",
@@ -900,13 +969,127 @@ export async function submitSellVehicle(formData: FormData) {
     reason: "Sell transaction created",
   });
 
-  // T03 C11: advisory OR/CR auto-check after the response is sent; the Marketing Specialist still verifies.
-  const orcr = uploads.find((upload) => upload.document_kind === "orcr");
-  if (orcr) after(() => autoCheckDocument(transaction.id, orcr.path, "orcr"));
+  // T03 C11 / T10: advisory auto-check of the OR, the CR and each ID's front after the response is sent; the
+  // Marketing Specialist still verifies. Before T10 only the OR/CR was sent to the checker.
+  for (const upload of uploads) {
+    if (upload.document_kind === "official_receipt" || upload.document_kind === "certificate_of_registration") {
+      after(() => autoCheckDocument(transaction.id, upload.path, "orcr"));
+    } else if (upload.document_kind === "valid_id" && upload.id_side === "front") {
+      after(() => autoCheckDocument(transaction.id, upload.path, "valid_id", upload.id_type));
+    }
+  }
 
   revalidatePath("/my-transactions");
   revalidatePath("/dashboard/transactions");
   return { success: true, id: transaction.id };
+}
+
+// T10: the buyer re-schedules their own delivery. More than 24 hours before the original delivery it is
+// free and applies at once. Inside 24 hours the buyer acknowledges the fee, the new time and address wait,
+// and PayMongo collects 50% of the original delivery fee; the Head Accountant's verification applies it.
+export async function requestDeliveryReschedule(
+  formData: FormData,
+): Promise<{ error: string } | { success: true; url?: string }> {
+  const authorization = await authorizeAction(["customer"]);
+  if (!authorization.ok) return { error: authorization.message };
+  const supabase = await createServerSupabaseClient();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+
+  const id = z.string().uuid().safeParse(formData.get("transaction_id"));
+  if (!id.success) return { error: "Transaction not found." };
+  const schedule = new Date(String(formData.get("schedule") ?? ""));
+  if (Number.isNaN(schedule.getTime()) || schedule.getTime() <= Date.now()) {
+    return { error: "Pick a future date and time." };
+  }
+  if (!isBusinessSlot(schedule)) return { error: SLOT_RULE_MESSAGE };
+
+  const admin = createAdminClient();
+  const { data: tx } = await admin
+    .from("transactions")
+    .select(
+      "id, customer_id, current_state, opened_at, purchase_details(arrangement_kind, delivery_fee, reschedule_pending_at), viewing_arrangements(arrangement_kind, schedule, created_at), field_cases(case_kind, delivery_status, state)",
+    )
+    .eq("id", id.data)
+    .maybeSingle();
+  const details = Array.isArray(tx?.purchase_details) ? tx.purchase_details[0] : tx?.purchase_details;
+  if (
+    !tx ||
+    tx.customer_id !== user.user.id ||
+    tx.current_state !== "approved" ||
+    details?.arrangement_kind !== "delivery"
+  ) {
+    return { error: "Delivery not found." };
+  }
+  const delivered = (tx.field_cases ?? []).some(
+    (row) => row.case_kind === "delivery" && row.state !== "cancelled" && row.delivery_status === "delivered",
+  );
+  if (delivered) return { error: "The car is already delivered." };
+  if (details.reschedule_pending_at) return { error: "A re-schedule is already waiting for its fee to be verified." };
+  if (!isDeliveryDate(schedule, new Date(String(tx.opened_at)))) return { error: DELIVERY_LEAD_MESSAGE };
+  const original = originalDeliverySchedule(tx.viewing_arrangements ?? []);
+  if (!original) return { error: "This delivery has no date yet." };
+
+  const fee = rescheduleFee(new Date(original), Number(details.delivery_fee ?? 0));
+  if (fee > 0 && formData.get("acknowledge_fee") !== "yes") {
+    return { error: "Acknowledge the re-scheduling fee first." };
+  }
+  const saved = await saveBuyerAddress(supabase, user.user.id, formData);
+  if ("error" in saved) return { error: saved.error };
+
+  if (fee === 0) {
+    const error = await applyDeliveryReschedule(
+      admin,
+      { id: tx.id, current_state: tx.current_state },
+      { schedule: schedule.toISOString(), location: saved.location, fee: 0 },
+      user.user.id,
+    );
+    if (error) return { error };
+    revalidatePath(`/my-transactions/${tx.id}`);
+    revalidatePath(`/dashboard/transactions/${tx.id}`);
+    return { success: true };
+  }
+
+  const secretKey = process.env.PAYMONGO_SECRET_KEY;
+  if (!secretKey) return { error: "Online payment is not set up yet." };
+  const origin = (await headers()).get("origin") ?? process.env.NEXT_PUBLIC_SITE_URL ?? "";
+  let session: { id: string; checkoutUrl: string };
+  try {
+    session = await createCheckoutSession(secretKey, {
+      lineItems: [{ name: "Delivery re-scheduling fee (50% of the delivery fee)", amount: fee }],
+      referenceNumber: tx.id,
+      billing: await buyerBilling(admin, user.user),
+      successUrl: `${origin}/my-transactions/${tx.id}?paid=1`,
+      cancelUrl: `${origin}/my-transactions/${tx.id}?cancelled=1`,
+    });
+  } catch (error) {
+    return { error: `PayMongo could not start the payment: ${(error as Error).message}` };
+  }
+  const { error } = await admin.from("payment_records").insert({
+    transaction_id: tx.id,
+    amount: fee,
+    method: "paymongo",
+    payment_kind: "reschedule_fee",
+    recorded_by: user.user.id,
+    settlement_date: new Date().toISOString().slice(0, 10),
+    paymongo_checkout_id: session.id,
+  });
+  if (error) return { error: error.message };
+  await admin
+    .from("purchase_details")
+    .update({ reschedule_pending_at: schedule.toISOString(), reschedule_pending_location: saved.location })
+    .eq("transaction_id", tx.id);
+  revalidatePath(`/my-transactions/${tx.id}`);
+  return { success: true, url: session.checkoutUrl };
+}
+
+// T10: name, email and (when saved) phone for PayMongo's billing form, so the phone is never required.
+async function buyerBilling(
+  admin: ReturnType<typeof createAdminClient>,
+  user: { id: string; email?: string | null },
+): Promise<CheckoutBilling> {
+  const { data: profile } = await admin.from("profiles").select("full_name, phone").eq("id", user.id).maybeSingle();
+  return { name: profile?.full_name, email: user.email, phone: profile?.phone };
 }
 
 // The buyer pays what is due online (a delivery's fee and downpayment, or a financing downpayment) on a
@@ -995,7 +1178,11 @@ export async function startOnlinePayment(
     rows = rows.filter((row) => row.paymongo_checkout_id !== checkoutId);
   }
 
-  const sent = new Set(rows.map((row) => row.payment_kind));
+  // A verified balance part does not block the next part (T10: large balances are paid in parts).
+  const sent = new Set(
+    rows.filter((row) => !(row.payment_kind === "balance" && row.verified_by)).map((row) => row.payment_kind),
+  );
+  const balanceParts = rows.filter((row) => row.payment_kind === "balance" && !row.rejected_at).length;
   const todo = due.filter((payment) => !sent.has(payment.kind));
   if (todo.length === 0) return { error: "Nothing is left to pay online." };
   if (
@@ -1012,6 +1199,7 @@ export async function startOnlinePayment(
     session = await createCheckoutSession(secretKey, {
       lineItems: todo.map((payment) => ({ name: payment.label, amount: payment.amount })),
       referenceNumber: tx.id,
+      billing: await buyerBilling(admin, user.user),
       successUrl: `${origin}/my-transactions/${tx.id}?paid=1`,
       cancelUrl: `${origin}/my-transactions/${tx.id}?cancelled=1`,
     });
@@ -1026,6 +1214,7 @@ export async function startOnlinePayment(
       amount: payment.amount,
       method: "paymongo",
       payment_kind: payment.kind,
+      part_no: payment.kind === "balance" ? balanceParts + 1 : 1,
       recorded_by: user.user.id,
       settlement_date: today,
       paymongo_checkout_id: session.id,
@@ -1075,36 +1264,6 @@ export async function startInstallmentCheckout(formData: FormData) {
   if (accountError) return { error: accountError.message };
   if (account?.state !== "active") return { error: "This financing account is not active." };
 
-  // Reuse an open PayMongo session instead of blocking the buyer behind a checkout they abandoned.
-  const { data: liveRows, error: liveError } = await admin
-    .from("payment_records")
-    .select("installment_id, paymongo_checkout_id, paid_at")
-    .eq("transaction_id", tx.id)
-    .eq("payment_kind", "installment")
-    .is("rejected_at", null);
-  if (liveError) return { error: liveError.message };
-  const waiting = (liveRows ?? []).find((row) => row.paymongo_checkout_id && !row.paid_at);
-  if (waiting) {
-    const checkoutId = String(waiting.paymongo_checkout_id);
-    try {
-      const session = await retrieveCheckoutSession(secretKey, checkoutId);
-      if (session.paidPaymentId) {
-        await markCheckoutPaid(admin, checkoutId, session.paidPaymentId);
-        return { error: "Your payment is already received. Refresh the page to see it." };
-      }
-      if (session.status === "active") return { success: true, url: session.checkoutUrl };
-    } catch {
-      // An unreadable session is treated as expired and replaced below.
-    }
-    await admin
-      .from("payment_records")
-      .delete()
-      .eq("paymongo_checkout_id", checkoutId)
-      .is("paid_at", null)
-      .is("verified_by", null)
-      .is("rejected_at", null);
-  }
-
   const unpaid = unpaidInstallments(account.installments ?? []);
   let selected = unpaid.slice(0, 1);
   if (formData.get("advanced") === "yes") {
@@ -1120,6 +1279,51 @@ export async function startInstallmentCheckout(formData: FormData) {
   }
   if (selected.length === 0) return { error: "No unpaid installments remain." };
   if (selected.some((installment) => installment.account_id !== account.id)) return { error: "Installment not found." };
+
+  // An open PayMongo session is reused only for the same installments. A session for other installments
+  // (an abandoned Advanced Payment) is expired and its unpaid rows removed, so it never sits in the history
+  // or captures a later payment.
+  const { data: liveRows, error: liveError } = await admin
+    .from("payment_records")
+    .select("installment_id, paymongo_checkout_id, paid_at")
+    .eq("transaction_id", tx.id)
+    .eq("payment_kind", "installment")
+    .is("rejected_at", null);
+  if (liveError) return { error: liveError.message };
+  const openSessions = new Set(
+    (liveRows ?? [])
+      .filter((row) => row.paymongo_checkout_id && !row.paid_at)
+      .map((row) => String(row.paymongo_checkout_id)),
+  );
+  const wanted = selected
+    .map((installment) => String(installment.id))
+    .sort()
+    .join(",");
+  for (const checkoutId of openSessions) {
+    const covers = (liveRows ?? [])
+      .filter((row) => row.paymongo_checkout_id === checkoutId)
+      .map((row) => String(row.installment_id))
+      .sort()
+      .join(",");
+    try {
+      const session = await retrieveCheckoutSession(secretKey, checkoutId);
+      if (session.paidPaymentId) {
+        await markCheckoutPaid(admin, checkoutId, session.paidPaymentId);
+        return { error: "Your payment is already received. Refresh the page to see it." };
+      }
+      if (session.status === "active" && covers === wanted) return { success: true, url: session.checkoutUrl };
+      if (session.status === "active") await expireCheckoutSession(secretKey, checkoutId);
+    } catch {
+      // An unreadable session is treated as expired and replaced below.
+    }
+    await admin
+      .from("payment_records")
+      .delete()
+      .eq("paymongo_checkout_id", checkoutId)
+      .is("paid_at", null)
+      .is("verified_by", null)
+      .is("rejected_at", null);
+  }
 
   const { data: existing, error: existingError } = await admin
     .from("payment_records")
@@ -1144,6 +1348,7 @@ export async function startInstallmentCheckout(formData: FormData) {
         amount: Number(installment.amount_due),
       })),
       referenceNumber: tx.id,
+      billing: await buyerBilling(admin, user.user),
       successUrl: `${origin}/my-transactions/${tx.id}?paid=1`,
       cancelUrl: `${origin}/my-transactions/${tx.id}?cancelled=1`,
     });

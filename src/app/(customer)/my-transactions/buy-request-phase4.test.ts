@@ -27,7 +27,11 @@ const { getUser, notify, db } = vi.hoisted(() => {
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/notifications/notify", () => ({ notify }));
-vi.mock("@/lib/transactions/buy-flow-server", () => ({ releaseVisitSlots: vi.fn() }));
+vi.mock("@/lib/transactions/buy-flow-server", () => ({
+  releaseVehicle: vi.fn(),
+  releaseVisitSlots: vi.fn(),
+  reserveVehicle: vi.fn(),
+}));
 vi.mock("@/lib/supabase/server", () => ({
   createServerSupabase: vi.fn(async () => ({
     auth: { getUser },
@@ -45,10 +49,24 @@ const transactionId = "22222222-2222-4222-8222-222222222222";
 // Tuesday 8 March 2033, 10:00 AM in Manila.
 const slot = "2033-03-08T02:00:00.000Z";
 
+// T10: a meet-up or delivery location is a PSGC address, saved back to the profile.
+const psgcAddress = {
+  address_line: "12 Mabini St",
+  region_code: "040000000",
+  region_name: "CALABARZON",
+  province_code: "043400000",
+  province_name: "Laguna",
+  city_code: "043405000",
+  city_name: "City of Calamba",
+  barangay_code: "043405001",
+  barangay_name: "Bagong Kalsada",
+};
+
 function details(fields: Record<string, string>) {
   const fd = new FormData();
   fd.set("transaction_id", transactionId);
   fd.set("acknowledge_condition", "yes");
+  for (const [key, value] of Object.entries(psgcAddress)) fd.set(key, value);
   for (const [key, value] of Object.entries(fields)) fd.set(key, value);
   return fd;
 }
@@ -198,11 +216,36 @@ describe("saveBuyDetails", () => {
   });
 
   const delivery = { payment_method: "cash", arrangement_kind: "delivery", schedule: slot, location: "12 Mabini St" };
-  it.each(["meetup", "delivery"])("rejects saving blank %s locations", async (arrangement_kind) => {
+  it.each(["meetup", "delivery"])("rejects saving a %s without a barangay", async (arrangement_kind) => {
     await expect(
-      saveBuyDetails(details({ payment_method: "cash", arrangement_kind, location: "  " })),
-    ).resolves.toEqual({ error: "Enter a location for meet-up or delivery." });
+      saveBuyDetails(
+        details({
+          payment_method: "cash",
+          arrangement_kind,
+          agree_delivery_terms: "yes",
+          location: "typed",
+          barangay_code: "",
+        }),
+      ),
+    ).resolves.toEqual({ error: "Choose your barangay." });
     expect(saved()).toBeUndefined();
+  });
+
+  it("saves the meet-up address to the profile and composes the location on the server", async () => {
+    await expect(
+      saveBuyDetails(
+        details({ payment_method: "cash", arrangement_kind: "meetup", schedule: slot, location: "typed" }),
+      ),
+    ).resolves.toMatchObject({ success: true });
+    expect(db.writes).toContainEqual(
+      expect.objectContaining({
+        table: "profiles",
+        payload: expect.objectContaining({ region_code: "040000000", barangay_code: "043405001" }),
+      }),
+    );
+    expect(saved()).toMatchObject({
+      location: "12 Mabini St, Bagong Kalsada, City of Calamba, Laguna, CALABARZON",
+    });
   });
 
   it("refuses a delivery until the buyer agrees to the delivery terms", async () => {

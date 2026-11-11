@@ -38,7 +38,9 @@ vi.mock("@/lib/auth/audit", () => ({ logAuditEvent: vi.fn() }));
 vi.mock("@/lib/notifications/notify", () => ({ notify }));
 vi.mock("@/lib/transactions/buy-flow-server", () => ({
   finalizeBuySale: vi.fn(),
+  notifyInformantIfPaidInFull: vi.fn(),
   recordStandingEvent: vi.fn(),
+  releaseVehicle: vi.fn(),
   releaseVisitSlots: vi.fn(),
 }));
 vi.mock("@/lib/supabase/server", () => ({
@@ -192,6 +194,12 @@ describe("approving a Bank Transfer Meet Halfway request", () => {
       { userId: "buyer-1" },
       expect.objectContaining({ title: "Downpayment due" }),
     );
+    // T10: the team waits for the verified downpayment, so the approval opens no field case.
+    expect(db.writes.some((write) => write.table === "field_cases")).toBe(false);
+  });
+
+  it("approves with the downpayment alone; no team is needed yet (T10)", async () => {
+    await expect(approve({ downpayment_amount: "50000" })).resolves.toEqual({ success: true });
   });
 });
 

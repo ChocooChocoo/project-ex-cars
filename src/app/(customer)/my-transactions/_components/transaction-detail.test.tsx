@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { cancelTransaction, removePurchaseDocument, saveBuyDetails } from "@/app/(customer)/my-transactions/actions";
+import type { ProfileAutoFill } from "@/lib/autofill";
 
 import { TransactionDetail } from "./transaction-detail";
 
@@ -102,7 +103,11 @@ describe("T07 customer transaction controls", () => {
     expect(screen.getByRole("button", { name: "Advanced Payment" })).toBeEnabled();
   });
 
-  function detail(tx: Record<string, unknown>, paymentTerms: Record<string, unknown> | null = null) {
+  function detail(
+    tx: Record<string, unknown>,
+    paymentTerms: Record<string, unknown> | null = null,
+    autofill: ProfileAutoFill | null = null,
+  ) {
     return render(
       <TransactionDetail
         transaction={{ ...transaction, ...tx }}
@@ -112,7 +117,7 @@ describe("T07 customer transaction controls", () => {
         installmentAccount={null}
         paymentTerms={paymentTerms}
         viewingArrangements={[]}
-        autofill={null}
+        autofill={autofill}
         delivery={null}
         review={null}
       />,
@@ -139,16 +144,24 @@ describe("T07 customer transaction controls", () => {
     expect(screen.getByLabelText("Payment term")).toHaveTextContent("1 year");
     expect(screen.queryByLabelText("Payment Method")).not.toBeInTheDocument();
   });
-  it("requires location inline and blocks saving until entered", () => {
+  it("requires a PSGC location and blocks saving until one is chosen", () => {
     detail({ current_state: "pending", purchase_details: { arrangement_kind: "meetup" } });
-    expect(screen.getByText("Enter a location for meet-up or delivery.")).toBeInTheDocument();
+    expect(screen.getByText("Choose the region, city and barangay for the meet-up or delivery.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save Details" })).toBeDisabled();
-    fireEvent.change(screen.getByLabelText("Location *"), { target: { value: "Calamba" } });
-    expect(screen.getByRole("button", { name: "Save Details" })).toBeEnabled();
   });
-  it("loads the saved location instead of losing it on reload", () => {
-    detail({ current_state: "pending", purchase_details: { arrangement_kind: "meetup", location: "Saved address" } });
-    expect(screen.getByLabelText("Location *")).toHaveValue("Saved address");
+  it("starts the location from the profile address (T10)", () => {
+    detail({ current_state: "pending", purchase_details: { arrangement_kind: "meetup" } }, null, {
+      full_name: "Ana",
+      email: "ana@gce.test",
+      phone: null,
+      address: "Bagong Kalsada, City of Calamba, Laguna, CALABARZON",
+      address_line: null,
+      region_code: "040000000",
+      province_code: "043400000",
+      city_code: "043405000",
+      barangay_code: "043405001",
+    });
+    expect(screen.queryByText("Choose the region, city and barangay for the meet-up or delivery.")).toBeNull();
   });
   it("requires agreement before cancelling active financing and sends consent", async () => {
     vi.mocked(cancelTransaction).mockResolvedValue({ success: true });

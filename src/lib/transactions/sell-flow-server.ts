@@ -66,6 +66,29 @@ export async function moveSellTransaction(
     actor_id: actorId,
     reason,
   });
+
+  // T10: an offer that ends unpaid (CEO rejected the revised ceiling, the seller refused, not profitable)
+  // sends every released peso back: the requester records the return and the Head Accountant confirms it.
+  if (toState === "rejected" || toState === "cancelled") {
+    const { data: funds } = await admin
+      .from("disbursement_requests")
+      .select("requested_by, amount_cents")
+      .eq("purchase_transaction_id", tx.id)
+      .in("status", ["released", "received"])
+      .is("returned_at", null);
+    for (const fund of funds ?? []) {
+      await notify(
+        admin,
+        { userId: fund.requested_by as string },
+        {
+          kind: "purchase_funds_return",
+          title: "Return the released funds",
+          body: `The seller's offer ended without a purchase. Return the ₱${(Number(fund.amount_cents) / 100).toLocaleString("en-PH")} released to you and record it on the field case.`,
+          transactionId: tx.id,
+        },
+      );
+    }
+  }
   return null;
 }
 

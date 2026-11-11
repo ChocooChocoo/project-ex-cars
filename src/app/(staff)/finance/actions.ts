@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { getCurrentRole } from "@/app/auth/actions";
+import { notify } from "@/lib/notifications/notify";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { disbursementEventSchema, disbursementRequestSchema, financialEntrySchema } from "@/lib/validation/phase6";
@@ -110,9 +111,61 @@ export async function createDisbursementRequest(formData: FormData): Promise<Pha
 
 const purchaseFundSchema = z.object({
   transaction_id: z.string().uuid(),
-  amount_cents: z.coerce.number().int().min(1),
+  amount_cents: z.coerce.number().int().min(1).optional(),
+  travel_cents: z.coerce.number().int().min(0).optional(),
   notes: z.string().max(1000).optional().or(z.literal("")),
 });
+
+// T10 Selling: after the price is agreed, the person who will pay the seller requests the funds. GCE Visit: the
+// Marketing Specialist asks for the agreed price. Meet Halfway: the assigned Confidential Informant asks for the
+// agreed price plus the estimated travel budget, in one request. The Head Accountant releases it before the
+// inspection; the requester pays the seller once the car is cleared and returns any excess.
+async function sellFundRequest(
+  admin: ReturnType<typeof createAdminClient>,
+  role: string,
+  userId: string,
+  transactionId: string,
+  travelCents: number,
+): Promise<{ error: string } | { amountCents: number; fieldCaseId: string; purpose: string }> {
+  const { data: tx } = await admin
+    .from("transactions")
+    .select("id, current_state, sell_details(agreed_price, meetup_method)")
+    .eq("id", transactionId)
+    .maybeSingle();
+  const sell = (Array.isArray(tx?.sell_details) ? tx.sell_details[0] : tx?.sell_details) as {
+    agreed_price: number | null;
+    meetup_method: string | null;
+  } | null;
+  if (tx?.current_state !== "approved" || sell?.agreed_price == null) {
+    return { error: "Request the funds after the price is agreed with the seller." };
+  }
+  const { data: fieldCase } = await admin
+    .from("field_cases")
+    .select("id, assigned_confidential_informant")
+    .eq("transaction_id", tx.id)
+    .eq("case_kind", "acquisition")
+    .neq("state", "cancelled")
+    .maybeSingle();
+  if (!fieldCase) return { error: "Create the field case first." };
+
+  const halfway = sell.meetup_method !== "gce_visit";
+  if (halfway && (role !== "confidential_informant" || fieldCase.assigned_confidential_informant !== userId)) {
+    return { error: "On a Meet Halfway, the assigned Confidential Informant requests the funds." };
+  }
+  if (!halfway && role !== "marketing_specialist") {
+    return { error: "On a GCE Visit, the Marketing Specialist requests the funds." };
+  }
+  const priceCents = Math.round(Number(sell.agreed_price) * 100);
+  const travel = halfway ? travelCents : 0;
+  const peso = (cents: number) => `₱${(cents / 100).toLocaleString("en-PH")}`;
+  return {
+    amountCents: priceCents + travel,
+    fieldCaseId: fieldCase.id,
+    purpose: halfway
+      ? `Car payment ${peso(priceCents)} plus estimated travel ${peso(travel)} (Meet Halfway)`
+      : `Car payment ${peso(priceCents)} (GCE Visit)`,
+  };
+}
 
 export async function requestPurchaseFunds(formData: FormData): Promise<Phase6ActionResult> {
   const supabase = await createServerSupabaseClient();
@@ -120,7 +173,7 @@ export async function requestPurchaseFunds(formData: FormData): Promise<Phase6Ac
   if (!user.user) return { error: "Not authenticated" };
 
   const role = await getCurrentRole();
-  if (!role || !["ceo", "account_manager"].includes(role)) {
+  if (!role || !["ceo", "account_manager", "marketing_specialist", "confidential_informant"].includes(role)) {
     return { error: "Not authorized to request purchase funds" };
   }
 
@@ -129,51 +182,93 @@ export async function requestPurchaseFunds(formData: FormData): Promise<Phase6Ac
     return { error: parsed.error.issues[0]?.message ?? "Invalid fund request." };
   }
 
-  const { data: tx } = await supabase
+  const admin = createAdminClient();
+  const { data: kind } = await admin
     .from("transactions")
-    .select("id, transaction_kind, current_state, sell_details(agreed_price, cleared_for_payment_at)")
+    .select("transaction_kind")
     .eq("id", parsed.data.transaction_id)
     .maybeSingle();
-  if (!tx) return { error: "Transaction not found." };
+  if (!kind) return { error: "Transaction not found." };
 
-  // Selling step 10: pay a seller only once the inspection or the seller's answer cleared the car,
-  // and only the agreed price.
-  if (tx.transaction_kind === "sell") {
-    const sell = (Array.isArray(tx.sell_details) ? tx.sell_details[0] : tx.sell_details) as {
-      agreed_price: number | null;
-      cleared_for_payment_at: string | null;
-    } | null;
-    if (tx.current_state !== "approved" || !sell?.cleared_for_payment_at || sell.agreed_price === null) {
-      return { error: "This seller's car is not cleared for payment yet." };
-    }
-    if (Math.round(Number(sell.agreed_price) * 100) !== parsed.data.amount_cents) {
-      return { error: `Request exactly the agreed price of ₱${Number(sell.agreed_price).toLocaleString()}.` };
-    }
+  let insert: Record<string, unknown>;
+  if (kind.transaction_kind === "sell") {
+    const sell = await sellFundRequest(
+      admin,
+      role,
+      user.user.id,
+      parsed.data.transaction_id,
+      parsed.data.travel_cents ?? 0,
+    );
+    if ("error" in sell) return sell;
+    insert = {
+      amount_cents: sell.amountCents,
+      field_case_id: sell.fieldCaseId,
+      purpose: sell.purpose,
+      status: "submitted",
+    };
+  } else {
+    if (!["ceo", "account_manager"].includes(role)) return { error: "Not authorized to request purchase funds" };
+    if (!parsed.data.amount_cents) return { error: "Enter the amount." };
+    insert = {
+      amount_cents: parsed.data.amount_cents,
+      purpose: `Release of funds for car purchase (transaction ${parsed.data.transaction_id})`,
+      status: "draft",
+    };
   }
 
-  const { data: request, error } = await supabase
+  const { data: request, error } = await admin
     .from("disbursement_requests")
     .insert({
       title: "Car purchase fund",
-      amount_cents: Math.round(parsed.data.amount_cents),
-      purpose: `Release of funds for car purchase (transaction ${parsed.data.transaction_id})`,
-      status: "draft",
       requested_by: user.user.id,
       notes: parsed.data.notes || null,
       purchase_transaction_id: parsed.data.transaction_id,
+      ...insert,
     })
-    .select()
+    .select("id")
     .single();
-  if (error) return { error: error.message };
+  if (error) {
+    return { error: error.code === "23505" ? "The funds for this car are already requested." : error.message };
+  }
 
-  await supabase.from("disbursement_events").insert({
+  await admin.from("disbursement_events").insert({
     disbursement_id: request.id,
     event_kind: "submitted",
     actor_id: user.user.id,
     notes: "Purchase fund request created — awaiting Head Accountant release.",
   });
+  await notify(
+    admin,
+    { role: "head_accountant" },
+    {
+      kind: "purchase_funds_requested",
+      title: "Car purchase funds requested",
+      body: `${String(insert.purpose)}. Review and release it in Finance.`,
+      transactionId: parsed.data.transaction_id,
+    },
+  );
 
   revalidatePath("/dashboard/finance");
+  revalidatePath(`/dashboard/transactions/${parsed.data.transaction_id}`);
+  return { success: true };
+}
+
+// T10: the requester (or the Head Accountant) records that the seller was paid, once the car is cleared.
+export async function recordSellerPaid(formData: FormData): Promise<Phase6ActionResult> {
+  const supabase = await createServerSupabaseClient();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+  const id = z.string().uuid().safeParse(formData.get("disbursement_id"));
+  if (!id.success) return { error: "Fund request not found." };
+
+  const { error } = await supabase.rpc("complete_purchase_disbursement", {
+    p_disbursement_id: id.data,
+    p_notes: "Seller paid by the fund requester",
+  });
+  if (error) return { error: error.message };
+  revalidatePath("/dashboard/finance");
+  revalidatePath("/dashboard/transactions");
+  revalidatePath("/dashboard/field-cases");
   return { success: true };
 }
 

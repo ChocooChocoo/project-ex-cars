@@ -21,6 +21,7 @@ import {
 import { submitReview } from "@/app/(customer)/my-transactions/review-actions";
 import { LiveLocationMap } from "@/components/live-location-map";
 import { LoanCalculator } from "@/components/loan-calculator";
+import { AddressFields } from "@/components/profile/address-fields";
 import { RejectReasonDialog } from "@/components/reject-reason-dialog";
 import { TransactionImagePreview } from "@/components/transaction-image-preview";
 import { TransactionStatusBadge } from "@/components/transaction-status-badge";
@@ -41,12 +42,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import type { ProfileAutoFill } from "@/lib/autofill";
+import { type AddressValue, composeAddress, emptyAddressValue, provinceNameFor } from "@/lib/psgc/address";
 import { createClient } from "@/lib/supabase/client";
 import {
   activeBuyerIds,
@@ -64,6 +65,7 @@ import {
   isQueuedRequest,
   needsContract,
   onlinePaymentsDue,
+  originalDeliverySchedule,
   PAPERS_STATUS_LABELS,
   type PapersStatus,
   paidTowardPrice,
@@ -71,6 +73,7 @@ import {
 } from "@/lib/transactions/buy-flow";
 import { deliveryArea, deliveryFeeRangeLabel, downPaymentFor } from "@/lib/transactions/delivery-fee";
 import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_SIZE, transactionDocumentLabel } from "@/lib/transactions/document-media";
+import { isOpenCheckout } from "@/lib/transactions/financing-payments";
 import {
   arrangementKindLabel,
   paymentMethodLabel,
@@ -78,11 +81,13 @@ import {
   transactionKindLabel,
 } from "@/lib/transactions/labels";
 import { monthlyInstallment } from "@/lib/transactions/loan-calculator";
+import { CUSTOMER_SELL_STATUS_LABELS, sellerSafeNote } from "@/lib/transactions/sell-flow";
 import type { FlowStatus, QueueState, TransactionFlag, TransactionState } from "@/lib/transactions/state-machine";
 import { compressImage } from "@/lib/uploads/compress-image";
 import { cn, formatCurrency } from "@/lib/utils";
 
 import { ContractSign, OnSiteContract } from "./contract-sign";
+import { DeliveryReschedule } from "./delivery-reschedule";
 import { FinancingPaymentPanel } from "./financing-payment-panel";
 import { OnlinePayment } from "./online-payment";
 import { type DocumentUpload, PurchaseDocumentChecklist } from "./purchase-document-checklist";
@@ -247,9 +252,14 @@ export function TransactionDetail({
   const state = localState ?? ((transaction.current_state ?? "pending") as TransactionState);
   // T03 C14: why GCE stopped the transaction: the latest history reason for that state, else the review notes.
   // A rejection always offers the modal; a cancellation only when a reason was recorded.
+  const latestReason = [...history].reverse().find((entry) => entry.to_state === state && entry.reason)?.reason as
+    | string
+    | undefined;
+  // T10: a seller never sees internal reasons (ceilings, the CEO's decision, the profitability note).
   const recordedReason =
-    ([...history].reverse().find((entry) => entry.to_state === state && entry.reason)?.reason as string | undefined) ??
-    ((sellDetails?.review_notes as string | null | undefined) || null);
+    kind === "sell"
+      ? sellerSafeNote(latestReason)
+      : (latestReason ?? ((sellDetails?.review_notes as string | null | undefined) || null));
   const stoppedReason =
     state === "rejected"
       ? (recordedReason ?? "GCE did not record a reason. Contact support for details.")
@@ -385,9 +395,21 @@ export function TransactionDetail({
   const [schedule, setSchedule] = useState("");
   // The date half of the slot: a date without an hour cannot be saved.
   const [scheduleDate, setScheduleDate] = useState("");
-  const [location, setLocation] = useState((purchaseDetails?.location as string | null) ?? autofill?.address ?? "");
+  // T10: the meet-up or delivery address is a PSGC address like the profile's; it starts from the profile, and
+  // saving it updates the profile.
+  const [address, setAddress] = useState<AddressValue>(() => ({
+    ...emptyAddressValue(),
+    address_line: autofill?.address_line ?? "",
+    region_code: autofill?.region_code ?? "",
+    province_code: autofill?.province_code ?? "",
+    city_code: autofill?.city_code ?? "",
+    barangay_code: autofill?.barangay_code ?? "",
+  }));
+  const location = composeAddress({ ...address, province_name: provinceNameFor(address) });
   const locationRequired = arrangementKind === "meetup" || arrangementKind === "delivery";
-  const locationMissing = locationRequired && !location.trim();
+  // T10: the re-scheduling window is measured from the first delivery time the buyer booked.
+  const originalDelivery = originalDeliverySchedule(viewingArrangements);
+  const locationMissing = locationRequired && !address.barangay_code;
   const savedLocationMissing =
     ["meetup", "delivery"].includes(String(purchaseDetails?.arrangement_kind)) &&
     !String(purchaseDetails?.location ?? "").trim();
@@ -432,6 +454,7 @@ export function TransactionDetail({
     fd.set("decision", decision);
     if (visitAt) fd.set("schedule", visitAt);
     fd.set("location", location);
+    for (const [key, value] of Object.entries(address)) fd.set(key, value);
     const result = await respondToFinancingOffer(fd);
     setResponding(false);
     if (result.error) toast.error(result.error);
@@ -493,6 +516,7 @@ export function TransactionDetail({
     // Already a Manila ISO slot, or "" until an hour is picked.
     fd.set("schedule", schedule);
     fd.set("location", location);
+    for (const [key, value] of Object.entries(address)) fd.set(key, value);
     fd.set("notes", notes);
     if (acknowledge) fd.set("acknowledge_condition", "yes");
     if (agreeDeliveryTerms) fd.set("agree_delivery_terms", "yes");
@@ -875,19 +899,15 @@ export function TransactionDetail({
                 {/* T04 P2: a GCE Visit happens at GCE, so it asks for no location. */}
                 {arrangementKind === "gce_visit" ? null : (
                   <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="location">Location{locationRequired ? " *" : ""}</Label>
-                    <Input
-                      id="location"
-                      required={locationRequired}
-                      aria-invalid={locationMissing}
-                      aria-describedby={locationMissing ? "location-error" : undefined}
-                      value={location}
-                      onChange={(e) => setLocation(e.target.value)}
-                      placeholder="Address or meeting point"
+                    <p className="font-medium text-sm">Location{locationRequired ? " *" : ""}</p>
+                    <AddressFields
+                      value={address}
+                      onChange={setAddress}
+                      storedAddress={autofill?.address ?? undefined}
                     />
                     {locationMissing ? (
                       <p id="location-error" className="text-destructive text-sm">
-                        Enter a location for meet-up or delivery.
+                        Choose the region, city and barangay for the meet-up or delivery.
                       </p>
                     ) : null}
                   </div>
@@ -1013,10 +1033,14 @@ export function TransactionDetail({
                   />
                   {offerKind !== "gce_visit" ? (
                     <>
-                      <Label htmlFor="financing-location">
+                      <p className="font-medium text-sm">
                         {financedDelivery ? "Delivery address" : "Meet-up location (Calabarzon)"}
-                      </Label>
-                      <Input id="financing-location" value={location} onChange={(e) => setLocation(e.target.value)} />
+                      </p>
+                      <AddressFields
+                        value={address}
+                        onChange={setAddress}
+                        storedAddress={autofill?.address ?? undefined}
+                      />
                     </>
                   ) : null}
                   {offerKind === "gce_visit" && takenSlots.length > 0 ? (
@@ -1110,6 +1134,15 @@ export function TransactionDetail({
                       : ""}
                   </p>
                 ) : null}
+                {state === "approved" && delivery?.status !== "delivered" && originalDelivery ? (
+                  <DeliveryReschedule
+                    transactionId={id}
+                    originalSchedule={originalDelivery}
+                    deliveryFee={Number(purchaseDetails.delivery_fee ?? 0)}
+                    pendingAt={(purchaseDetails.reschedule_pending_at as string | null) ?? null}
+                    autofill={autofill}
+                  />
+                ) : null}
               </section>
               <Separator />
             </>
@@ -1144,7 +1177,8 @@ export function TransactionDetail({
               <div className="flex flex-col gap-0">
                 {history.map((entry, index) => {
                   const toState = entry.to_state as string;
-                  const reason = entry.reason as string | null;
+                  // T10: a seller sees the high-level status and only the notes meant for them.
+                  const reason = kind === "sell" ? sellerSafeNote(entry.reason) : (entry.reason as string | null);
                   const changedAt = entry.changed_at as string;
                   return (
                     <div key={entry.id as string} className="flex gap-3">
@@ -1153,7 +1187,11 @@ export function TransactionDetail({
                         {index < history.length - 1 && <div className="w-px flex-1 bg-border" />}
                       </div>
                       <div className="pb-5">
-                        <p className="font-medium text-sm capitalize">{toState.replace(/_/g, " ")}</p>
+                        <p className="font-medium text-sm capitalize">
+                          {kind === "sell"
+                            ? (CUSTOMER_SELL_STATUS_LABELS[toState] ?? "Updated")
+                            : toState.replace(/_/g, " ")}
+                        </p>
                         {reason && <p className="text-muted-foreground text-xs">{reason}</p>}
                         <p className="text-muted-foreground text-xs">
                           {format(new Date(changedAt), "MMM d, yyyy 'at' h:mm a")}
@@ -1304,30 +1342,32 @@ export function TransactionDetail({
 
           <section className="flex flex-col gap-3">
             <h2 className="font-medium tracking-tight">Financial Summary</h2>
-            {payments.length > 0 && (
+            {payments.some((p) => !isOpenCheckout(p)) && (
               <div className="flex flex-col gap-2">
-                {payments.map((p) =>
-                  // T03 HA3: a payment GCE did not accept stays visible, with the reason, and is not counted.
-                  p.rejected_at ? (
-                    <div key={p.id as string} className="flex flex-col gap-1 text-sm">
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">
-                          {paymentMethodLabel(p.method as string)} ·{" "}
-                          <span className="text-destructive">Not accepted</span>
-                        </span>
-                        <span className="font-medium text-muted-foreground line-through">
-                          {formatCurrency(Number(p.amount))}
-                        </span>
+                {payments
+                  .filter((p) => !isOpenCheckout(p))
+                  .map((p) =>
+                    // T03 HA3: a payment GCE did not accept stays visible, with the reason, and is not counted.
+                    p.rejected_at ? (
+                      <div key={p.id as string} className="flex flex-col gap-1 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">
+                            {paymentMethodLabel(p.method as string)} ·{" "}
+                            <span className="text-destructive">Not accepted</span>
+                          </span>
+                          <span className="font-medium text-muted-foreground line-through">
+                            {formatCurrency(Number(p.amount))}
+                          </span>
+                        </div>
+                        <p className="text-muted-foreground text-xs">Reason: {String(p.rejection_reason ?? "")}</p>
                       </div>
-                      <p className="text-muted-foreground text-xs">Reason: {String(p.rejection_reason ?? "")}</p>
-                    </div>
-                  ) : (
-                    <div key={p.id as string} className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">{paymentMethodLabel(p.method as string)}</span>
-                      <span className="font-medium">{formatCurrency(Number(p.amount))}</span>
-                    </div>
-                  ),
-                )}
+                    ) : (
+                      <div key={p.id as string} className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">{paymentMethodLabel(p.method as string)}</span>
+                        <span className="font-medium">{formatCurrency(Number(p.amount))}</span>
+                      </div>
+                    ),
+                  )}
               </div>
             )}
 

@@ -124,6 +124,7 @@ export default async function FinancePage() {
         canVerify={!isInformant && ["ceo", "head_accountant"].includes(role)}
         canRequest={["ceo", "account_manager", "confidential_informant"].includes(role)}
         canAdvance={!isInformant && ["ceo", "head_accountant"].includes(role)}
+        canConfirmReturn={role === "head_accountant"}
         canRequestPurchaseFunds={!isInformant && ["ceo", "account_manager"].includes(role)}
         isInformant={isInformant}
       />

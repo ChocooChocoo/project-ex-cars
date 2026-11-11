@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   advancedPaymentTotal,
   canMarkFinancingSold,
+  isOpenCheckout,
   nextUnpaidInstallment,
   paidInstallmentCount,
+  paymentPurposeLabel,
   unpaidInstallments,
 } from "./financing-payments";
 
@@ -36,5 +38,21 @@ describe("financing payments", () => {
     expect(canMarkFinancingSold(installments)).toBe(false);
     expect(canMarkFinancingSold(installments.filter((i) => ["paid", "waived"].includes(i.state)))).toBe(true);
     expect(nextUnpaidInstallment([])).toBeNull();
+  });
+});
+
+describe("payment history helpers", () => {
+  it("treats an unpaid PayMongo session as no payment", () => {
+    expect(isOpenCheckout({ paymongo_checkout_id: "cs_1" })).toBe(true);
+    expect(isOpenCheckout({ paymongo_checkout_id: "cs_1", paymongo_payment_id: "pay_1" })).toBe(false);
+    expect(isOpenCheckout({ method: "cash" })).toBe(false);
+  });
+
+  it("names the installment a row pays", () => {
+    const installments = [{ id: "i1", sequence_no: 1, due_date: "2026-12-10" }];
+    expect(paymentPurposeLabel({ installment_id: "i1" }, installments, String)).toBe("Installment #1 (due 2026-12-10)");
+    expect(paymentPurposeLabel({ payment_kind: "downpayment" }, installments, (kind) => `K:${kind}`)).toBe(
+      "K:downpayment",
+    );
   });
 });

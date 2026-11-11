@@ -72,6 +72,8 @@ export interface PriceProposalRow {
   proposal_kind?: string;
   transaction_id?: string | null;
   vehicles: { make: string | null; model: string | null; year: number | null } | null;
+  /** T10: what GCE paid the seller, shown next to the intended selling price. */
+  acquisition_price?: number | null;
 }
 
 type Decision = "approved" | "rejected";
@@ -106,6 +108,7 @@ export function PendingApprovalsTable({
     null,
   );
   const [submitting, setSubmitting] = React.useState(false);
+  const [setAmount, setSetAmount] = React.useState("");
 
   async function handleDecision() {
     if (!decisionTarget) return;
@@ -115,6 +118,7 @@ export function PendingApprovalsTable({
     fd.set("proposal_id", proposal.id);
     fd.set("decision", decision);
     fd.set("vehicle_id", proposal.vehicle_id);
+    if (decision === "approved" && setAmount) fd.set("set_amount", setAmount);
     const result = await approvePrice(fd);
     setSubmitting(false);
     if (result.error) {
@@ -123,6 +127,7 @@ export function PendingApprovalsTable({
     }
     toast.success(decision === "approved" ? "Price proposal approved." : "Price proposal rejected.");
     setDecisionTarget(null);
+    setSetAmount("");
     router.refresh();
   }
 
@@ -192,7 +197,16 @@ export function PendingApprovalsTable({
     {
       accessorKey: "proposed_amount",
       header: "Proposed Price",
-      cell: ({ row }) => <span className="font-medium text-sm">₱{row.original.proposed_amount.toLocaleString()}</span>,
+      cell: ({ row }) => (
+        <div className="grid gap-0.5">
+          <span className="font-medium text-sm">₱{row.original.proposed_amount.toLocaleString()}</span>
+          {row.original.acquisition_price ? (
+            <span className="text-muted-foreground text-xs">
+              Bought at ₱{Number(row.original.acquisition_price).toLocaleString()}
+            </span>
+          ) : null}
+        </div>
+      ),
     },
     {
       accessorKey: "notes",
@@ -491,6 +505,24 @@ export function PendingApprovalsTable({
                 : null}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {decisionTarget?.decision === "approved" ? (
+            <div className="flex flex-col gap-1.5">
+              {decisionTarget.proposal.acquisition_price ? (
+                <p className="text-muted-foreground text-sm">
+                  Acquisition price ₱{Number(decisionTarget.proposal.acquisition_price).toLocaleString()} · intended
+                  selling price ₱{decisionTarget.proposal.proposed_amount.toLocaleString()}
+                </p>
+              ) : null}
+              <Label htmlFor="ceo-set-price">Or type a different price (optional)</Label>
+              <Input
+                id="ceo-set-price"
+                type="number"
+                min="1"
+                value={setAmount}
+                onChange={(e) => setSetAmount(e.target.value)}
+              />
+            </div>
+          ) : null}
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction

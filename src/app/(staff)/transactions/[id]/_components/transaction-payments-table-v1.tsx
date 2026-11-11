@@ -20,13 +20,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { isOpenCheckout, paymentPurposeLabel } from "@/lib/transactions/financing-payments";
 import { paymentKindLabel, paymentMethodLabel } from "@/lib/transactions/labels";
 import { formatCurrency } from "@/lib/utils";
 
 type PaymentRow = Record<string, unknown>;
 
 export function TransactionPaymentsTableV1({
-  payments,
+  payments: allPayments,
+  installments = [],
   canReview,
   canApproveOnline,
   onVerifyPayment,
@@ -34,6 +36,8 @@ export function TransactionPaymentsTableV1({
   onApproveOnlinePayment,
 }: {
   readonly payments: Record<string, unknown>[];
+  /** Names the installment each row pays, so an Advanced Payment's rows do not read as a double payment. */
+  readonly installments?: Record<string, unknown>[];
   /** CEO and Head Accountant: may verify or reject (same roles as the server actions). */
   readonly canReview: boolean;
   /** Sales Manager and CEO: approve a PayMongo installment before the Head Accountant verifies it. */
@@ -42,6 +46,8 @@ export function TransactionPaymentsTableV1({
   readonly onRejectPayment: (paymentId: string, reason: string) => Promise<void>;
   readonly onApproveOnlinePayment: (paymentId: string) => Promise<void>;
 }) {
+  // An unpaid PayMongo session is not a payment: it never shows here or in the counts.
+  const payments = allPayments.filter((payment) => !isOpenCheckout(payment));
   // T03 HA3: a rejected payment stays listed but never counts.
   const counted = payments.filter((p) => !p.rejected_at);
   const totalPaid = counted
@@ -68,7 +74,7 @@ export function TransactionPaymentsTableV1({
       header: () => <span className="text-xs">For</span>,
       enableSorting: false,
       cell: ({ row }: { row: { original: PaymentRow } }) => (
-        <span className="text-xs">{paymentKindLabel(row.original.payment_kind as string | null)}</span>
+        <span className="text-xs">{paymentPurposeLabel(row.original, installments, paymentKindLabel)}</span>
       ),
     },
     {

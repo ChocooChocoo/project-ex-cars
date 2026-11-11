@@ -45,6 +45,7 @@ type Job = Row & {
     part_name: string;
     replacement_brand: string;
     estimated_cost_cents: number;
+    photo_url?: string | null;
   }>;
   reconditioning_fund_requests?: FundRequest[];
   disbursement_requests?: { status?: string | null; amount_cents?: unknown } | null;
@@ -52,7 +53,13 @@ type Job = Row & {
   refunded_at?: string | null;
 };
 
-type PartInput = { id: string; part_name: string; replacement_brand: string; estimated_cost: string };
+type PartInput = {
+  id: string;
+  part_name: string;
+  replacement_brand: string;
+  estimated_cost: string;
+  photo?: File | null;
+};
 
 const EMPTY_PART = { part_name: "", replacement_brand: "", estimated_cost: "" };
 const newPart = (): PartInput => ({ id: crypto.randomUUID(), ...EMPTY_PART });
@@ -110,7 +117,7 @@ export function ReconditioningPanel({
     return run(action, fd, message);
   }
 
-  function setPart(index: number, key: keyof PartInput, value: string) {
+  function setPart(index: number, key: keyof PartInput, value: string | File | null) {
     setParts((prev) => prev.map((part, i) => (i === index ? { ...part, [key]: value } : part)));
   }
 
@@ -118,7 +125,9 @@ export function ReconditioningPanel({
     const fd = new FormData();
     fd.set("job_id", String(job.id));
     fd.set("status_report", form.status_report ?? "");
-    fd.set("parts", JSON.stringify(parts));
+    fd.set("parts", JSON.stringify(parts.map(({ photo: _photo, ...part }) => part)));
+    // T10: one photo per part row, in the same order as the parts.
+    for (const [index, part] of parts.entries()) if (part.photo) fd.set(`part_photo_${index}`, part.photo);
     return run(submitReconditioningReport, fd, "Report sent; fund request raised.");
   }
 
@@ -174,6 +183,7 @@ export function ReconditioningPanel({
             <table className="w-full text-left text-sm">
               <thead className="bg-muted/50 text-muted-foreground text-xs">
                 <tr>
+                  <th className="px-3 py-2 font-medium">Photo</th>
                   <th className="px-3 py-2 font-medium">Part</th>
                   <th className="px-3 py-2 font-medium">Replacement brand</th>
                   <th className="px-3 py-2 text-right font-medium">Estimate</th>
@@ -182,6 +192,20 @@ export function ReconditioningPanel({
               <tbody>
                 {storedParts.map((part) => (
                   <tr key={part.id} className="border-t">
+                    <td className="px-3 py-2">
+                      {part.photo_url ? (
+                        <a
+                          href={part.photo_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-primary text-xs underline underline-offset-4"
+                        >
+                          View photo
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">—</span>
+                      )}
+                    </td>
                     <td className="px-3 py-2">{part.part_name}</td>
                     <td className="px-3 py-2">{part.replacement_brand}</td>
                     <td className="px-3 py-2 text-right tabular-nums">
@@ -250,7 +274,13 @@ export function ReconditioningPanel({
             <div className="flex flex-col gap-2">
               <p className="font-medium">Parts to repair or replace</p>
               {parts.map((part, index) => (
-                <div key={part.id} className="grid gap-2 sm:grid-cols-[1fr_1fr_130px_auto]">
+                <div key={part.id} className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr_130px_auto]">
+                  <Input
+                    aria-label={`Part ${index + 1} photo`}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={(e) => setPart(index, "photo", e.target.files?.[0] ?? null)}
+                  />
                   <Input
                     aria-label={`Part ${index + 1} name`}
                     placeholder="Part name"

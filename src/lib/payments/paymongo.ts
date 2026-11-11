@@ -9,6 +9,19 @@ const METHODS = ["card", "gcash", "paymaya", "dob"];
 const MAX_AGE_SECONDS = 300;
 
 export type CheckoutLine = { name: string; amount: number };
+export type CheckoutBilling = { name?: string | null; email?: string | null; phone?: string | null };
+
+// T10: the buyer's name and email are sent so PayMongo does not ask for them; the phone goes only when the
+// profile has one. PayMongo treats billing fields as optional, so a buyer without a phone can still pay.
+export function billingFor(input: CheckoutBilling | undefined): Record<string, string> | undefined {
+  if (!input) return undefined;
+  const billing = Object.fromEntries(
+    Object.entries(input)
+      .map(([key, value]) => [key, value?.trim() ?? ""])
+      .filter(([, value]) => value !== ""),
+  );
+  return Object.keys(billing).length > 0 ? billing : undefined;
+}
 
 function headers(secretKey: string) {
   return {
@@ -27,7 +40,13 @@ async function send(url: string, init: RequestInit) {
 
 export async function createCheckoutSession(
   secretKey: string,
-  input: { lineItems: CheckoutLine[]; referenceNumber: string; successUrl: string; cancelUrl: string },
+  input: {
+    lineItems: CheckoutLine[];
+    referenceNumber: string;
+    successUrl: string;
+    cancelUrl: string;
+    billing?: CheckoutBilling;
+  },
 ): Promise<{ id: string; checkoutUrl: string }> {
   const json = await send(API, {
     method: "POST",
@@ -42,6 +61,7 @@ export async function createCheckoutSession(
             quantity: 1,
           })),
           payment_method_types: METHODS,
+          billing: billingFor(input.billing),
           reference_number: input.referenceNumber,
           success_url: input.successUrl,
           cancel_url: input.cancelUrl,
@@ -69,6 +89,12 @@ export async function retrieveCheckoutSession(
     checkoutUrl: attributes.checkout_url,
     paidPaymentId: paid?.id ?? null,
   };
+}
+
+// Closes an unpaid session so an abandoned checkout cannot be paid later for amounts nobody expects.
+// A session that is already expired or paid answers with an error, which callers ignore.
+export async function expireCheckoutSession(secretKey: string, id: string): Promise<void> {
+  await send(`${API}/${id}/expire`, { method: "POST", headers: headers(secretKey) }).catch(() => undefined);
 }
 
 // Paymongo-Signature is "t=<unix>,te=<test sig>,li=<live sig>"; each signature is HMAC-SHA256 of

@@ -10,6 +10,7 @@ import { getFinancingMarkupPct } from "@/lib/settings/financing";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { addWorkingDays, DOWNPAYMENT_WORKING_DAYS, financedTotal } from "@/lib/transactions/buy-flow";
+import { reserveVehicle } from "@/lib/transactions/buy-flow-server";
 import { downPaymentFor } from "@/lib/transactions/delivery-fee";
 import { loadFinancing, openFinancingAccount } from "@/lib/transactions/financing-server";
 import { monthlyInstallment } from "@/lib/transactions/loan-calculator";
@@ -427,6 +428,7 @@ export async function completeFinancingAgreement(formData: FormData): Promise<Fi
   const error = await openFinancingAccount(admin, tx.terms);
   if (error) return { error };
   await admin.from("transactions").update({ flow_status: "financing_active" }).eq("id", tx.id);
+  await reserveVehicle(admin, tx.vehicle_id);
   await history(admin, tx, who.userId, "Financing agreement completed; account active");
   await notify(
     admin,

@@ -30,6 +30,22 @@ export default async function VehiclesPage() {
           .order("created_at", { ascending: false })
       : { data: [] };
 
+  // T10: show what GCE paid the seller next to each proposed selling price.
+  const proposalVehicleIds = [...new Set((proposals ?? []).map((row) => String(row.vehicle_id)))];
+  const { data: acquisitions } = proposalVehicleIds.length
+    ? await supabase
+        .from("transactions")
+        .select("vehicle_id, sell_details(agreed_price)")
+        .eq("transaction_kind", "sell")
+        .eq("current_state", "completed")
+        .in("vehicle_id", proposalVehicleIds)
+    : { data: [] };
+  const acquisitionByVehicle = new Map<string, number>();
+  for (const row of acquisitions ?? []) {
+    const sell = Array.isArray(row.sell_details) ? row.sell_details[0] : row.sell_details;
+    if (sell?.agreed_price != null) acquisitionByVehicle.set(String(row.vehicle_id), Number(sell.agreed_price));
+  }
+
   const { data: reconditioningJobs } =
     role === "marketing_specialist"
       ? await supabase
@@ -56,7 +72,12 @@ export default async function VehiclesPage() {
         </div>
       </div>
       <VehicleOperations
-        proposals={(proposals as unknown as PriceProposalRow[]) ?? []}
+        proposals={
+          ((proposals ?? []) as unknown as PriceProposalRow[]).map((row) => ({
+            ...row,
+            acquisition_price: acquisitionByVehicle.get(row.vehicle_id) ?? null,
+          })) ?? []
+        }
         vehicles={(vehicles as Record<string, unknown>[]) ?? []}
         canManage={canManage}
         canView={isCeo}

@@ -11,10 +11,13 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   advancedPaymentTotal,
+  isOpenCheckout,
   nextUnpaidInstallment,
   paidInstallmentCount,
+  paymentPurposeLabel,
   unpaidInstallments,
 } from "@/lib/transactions/financing-payments";
+import { paymentKindLabel } from "@/lib/transactions/labels";
 import { formatCurrency } from "@/lib/utils";
 
 import { startInstallmentCheckout } from "../actions";
@@ -39,10 +42,12 @@ export function FinancingPaymentPanel({
   const installments = (account.installments ?? []) as Installment[];
   const unpaid = unpaidInstallments(installments);
   const next = nextUnpaidInstallment(installments);
-  const history = payments.filter((payment) => payment.installment_id);
+  // Every payment the buyer made (downpayment, delivery fee, installments), never an unpaid PayMongo session.
+  const history = payments.filter((payment) => !isOpenCheckout(payment));
   const pendingIds = new Set(
     history
       .filter((payment) => {
+        if (!payment.installment_id) return false;
         if (payment.verified_by || payment.rejected_at) return false;
         // An online session nobody paid is not a payment waiting for review.
         if (payment.payment_kind === "installment" && payment.method === "paymongo") {
@@ -141,7 +146,7 @@ export function FinancingPaymentPanel({
       <div className="flex flex-col gap-2">
         <h3 className="font-medium text-sm">Payment history</h3>
         {history.length === 0 ? (
-          <p className="text-muted-foreground text-sm">No installment payments submitted yet.</p>
+          <p className="text-muted-foreground text-sm">No payments yet.</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {history.map((payment) => (
@@ -150,6 +155,7 @@ export function FinancingPaymentPanel({
                 className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm"
               >
                 <span>
+                  {paymentPurposeLabel(payment, installments, paymentKindLabel)} ·{" "}
                   {formatCurrency(Number(payment.amount))} ·{" "}
                   {payment.method === "paymongo"
                     ? "Bank transfer (PayMongo)"

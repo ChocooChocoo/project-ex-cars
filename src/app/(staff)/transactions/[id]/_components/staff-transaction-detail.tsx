@@ -26,6 +26,7 @@ import {
   isHalfwayCashRequest,
   needsContract,
   type PapersStatus,
+  upfrontPaymentsCleared,
 } from "@/lib/transactions/buy-flow";
 import type { TransactionState } from "@/lib/transactions/state-machine";
 
@@ -187,24 +188,6 @@ export function StaffTransactionDetail({
     toast.success("Payment recorded.");
     router.refresh();
     return true;
-  }
-
-  async function onUploadDocument(documentKind: string, idType: string, file: File) {
-    const fd = new FormData();
-    fd.set("transaction_id", id);
-    fd.set("document_kind", documentKind);
-    fd.set("id_type", idType);
-    fd.set("file", file);
-    const result = await recordPaperwork(fd);
-    if (result.error) toast.error(result.error);
-    else {
-      toast.success(
-        documentKind === "valid_id"
-          ? "Valid ID uploaded. Verify it below."
-          : "Proof of billing uploaded. Verify it below.",
-      );
-      router.refresh();
-    }
   }
 
   async function onVerifyDocument(documentId: string) {
@@ -402,7 +385,6 @@ export function StaffTransactionDetail({
         kind={kind}
         userRole={userRole}
         documents={documents}
-        onUploadDocument={onUploadDocument}
         onVerifyDocument={onVerifyDocument}
         onRejectDocument={onRejectDocument}
       />
@@ -439,7 +421,12 @@ export function StaffTransactionDetail({
           fieldCase={meetup.fieldCase}
           waitingFor={
             cashMeetup
-              ? null
+              ? upfrontPaymentsCleared(
+                  purchaseDetails ?? null,
+                  payments as { payment_kind: unknown; amount: unknown; verified_by: unknown }[],
+                )
+                ? null
+                : "Available once the buyer's downpayment is paid and verified."
               : !["approved", "signed"].includes(String(handover.contract_state ?? ""))
                 ? "Available once the Head Accountant approves the contract."
                 : liveVisit
@@ -498,6 +485,7 @@ export function StaffTransactionDetail({
 
       <TransactionPaymentsTableV1
         payments={payments}
+        installments={(installmentAccount?.installments as Record<string, unknown>[] | undefined) ?? []}
         canReview={userRole === "ceo" || userRole === "head_accountant"}
         canApproveOnline={userRole === "ceo" || userRole === "sales_manager"}
         onVerifyPayment={onVerifyPayment}

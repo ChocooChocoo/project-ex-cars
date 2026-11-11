@@ -10,13 +10,12 @@ import { z } from "zod";
 import { ROLE_WORK_SCHEDULES } from "@/lib/attendance/role-schedules";
 import { authorizeAction } from "@/lib/auth/action-guard";
 import { EMPLOYEE_ROLES, ROLE_LABELS } from "@/lib/auth/roles";
-import { composeAddress, provinceNameFor } from "@/lib/psgc/address";
 import { landingPath } from "@/lib/routing/paths";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase, createServerSupabaseClient } from "@/lib/supabase/server";
 import { MAX_UPLOAD_BYTES } from "@/lib/uploads/compress-image";
 import { emailSchema, fullNameSchema, newPasswordSchema, passwordSchema } from "@/lib/validation/forms";
-import { changePasswordSchema, ownProfileSchema } from "@/lib/validation/profile";
+import { changePasswordSchema, ownProfileSchema, profileAddressColumns } from "@/lib/validation/profile";
 
 export async function signIn(formData: FormData) {
   const supabase = await createServerSupabaseClient();
@@ -343,18 +342,7 @@ export async function updateOwnProfile(formData: FormData): Promise<{ error: str
     .update({
       full_name: parsed.data.full_name,
       phone: parsed.data.phone || null,
-      address: composeAddress({
-        address_line: parsed.data.address_line,
-        barangay_name: parsed.data.barangay_name,
-        city_name: parsed.data.city_name,
-        province_name: provinceNameFor(parsed.data),
-        region_name: parsed.data.region_name,
-      }),
-      address_line: parsed.data.address_line || null,
-      region_code: parsed.data.region_code,
-      province_code: parsed.data.province_code || null,
-      city_code: parsed.data.city_code,
-      barangay_code: parsed.data.barangay_code,
+      ...profileAddressColumns(parsed.data),
     })
     .eq("id", user.user.id);
   if (error) return { error: error.message };

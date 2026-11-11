@@ -36,7 +36,6 @@ import {
   recordBuyerMet,
   recordContractCopy,
   releasePapersToCi,
-  reportCashReceived,
   reportSigning,
   requestPapersRelease,
   reviewContract,
@@ -66,8 +65,8 @@ function sale(arrangement: string, overrides: Record<string, unknown> = {}) {
     customer_id: "buyer-1",
     current_state: "approved",
     transaction_kind: "buy",
-    purchase_details: { arrangement_kind: arrangement, payment_method: "cash" },
-    payment_records: [{ verified_by: "accountant-1" }],
+    purchase_details: { arrangement_kind: arrangement, payment_method: "cash", final_price: 500000 },
+    payment_records: [{ payment_kind: "full", amount: 500000, verified_by: "accountant-1" }],
     ...overrides,
   };
 }
@@ -185,14 +184,14 @@ describe("papers at a meet-up or delivery", () => {
     papers(null);
     await expect(handPapersToBuyer(form())).resolves.toEqual({ error: "Record the papers as released first." });
 
-    handover({ papers_status: "released_to_ci", contract_state: "signed", cash_reported_at: at });
+    handover({ papers_status: "released_to_ci", contract_state: "signed" });
     await expect(handPapersToBuyer(form())).resolves.toEqual({ success: true });
     expect(papersWrite()).toMatchObject({ papers_status: "handed_over" });
   });
 
   it("refuses to hand the papers over before the contract is signed", async () => {
     sale("delivery");
-    handover({ papers_status: "released_to_ci", cash_reported_at: at });
+    handover({ papers_status: "released_to_ci" });
 
     await expect(handPapersToBuyer(form())).resolves.toEqual({
       error: "The buyer must sign the contract before the papers are handed over.",
@@ -200,12 +199,14 @@ describe("papers at a meet-up or delivery", () => {
     expect(papersWrite()).toBeUndefined();
   });
 
-  it("refuses to hand the papers over before the cash is reported", async () => {
-    sale("delivery");
+  it("refuses to hand the papers over before the full payment is verified (T10)", async () => {
+    sale("delivery", {
+      payment_records: [{ payment_kind: "downpayment", amount: 100000, verified_by: "accountant-1" }],
+    });
     handover({ papers_status: "released_to_ci", contract_state: "signed" });
 
     await expect(handPapersToBuyer(form())).resolves.toEqual({
-      error: "Report the cash received before the papers are handed over.",
+      error: "Wait for the Head Accountant to verify the buyer's full payment before handing over the papers.",
     });
   });
 
@@ -399,22 +400,5 @@ describe("contract in the field", () => {
     expect(papersWrite()).toMatchObject({ mechanic_copy_at: expect.any(String) });
     expect(papersWrite()).not.toHaveProperty("ci_copy_at");
     expect(notify).not.toHaveBeenCalled();
-  });
-
-  it("reports the cash only after signing, and only where cash is collected", async () => {
-    sale("delivery");
-    await expect(reportCashReceived(form())).resolves.toEqual({
-      error: "The buyer must sign the contract before the cash is reported.",
-    });
-
-    handover({ contract_state: "signed" });
-    await expect(reportCashReceived(form())).resolves.toEqual({ success: true });
-    expect(papersWrite()).toMatchObject({ cash_reported_at: expect.any(String) });
-    expect(notify).toHaveBeenCalledWith(expect.anything(), { role: "sales_manager" }, expect.anything());
-
-    sale("delivery", { purchase_details: { arrangement_kind: "delivery", payment_method: "financing" } });
-    await expect(reportCashReceived(form())).resolves.toEqual({
-      error: "Nothing is collected in the field on a financed sale.",
-    });
   });
 });

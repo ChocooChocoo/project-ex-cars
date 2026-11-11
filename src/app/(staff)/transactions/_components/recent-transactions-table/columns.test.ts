@@ -32,7 +32,13 @@ describe("transactionActionsFor (T05)", () => {
     ]);
   });
 
-  it("keeps the CEO's Cancel on a CASH buy", () => {
-    expect(transactionActionsFor(row(), "ceo")).toEqual(["under_review", "cancelled"]);
+  it("T10: gives the CEO no Approve or Cancel in the row menu", () => {
+    expect(transactionActionsFor(row(), "ceo")).toEqual(["under_review"]);
+    expect(transactionActionsFor(row({ state: "under_review" }), "ceo")).not.toContain("approved");
+  });
+
+  it("T10: offers only View on a sell offer", () => {
+    expect(transactionActionsFor(row({ kind: "sell" }), "ceo")).toEqual([]);
+    expect(transactionActionsFor(row({ kind: "sell" }), "sales_manager")).toEqual([]);
   });
 });

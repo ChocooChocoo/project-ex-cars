@@ -264,6 +264,17 @@ export async function approvePrice(formData: FormData) {
 
   // Purchase and revised ceilings decide a sell offer, not a listing (D3).
   const isCeiling = (CEILING_PROPOSAL_KINDS as readonly string[]).includes(proposal.proposal_kind);
+  // T10: instead of approving or rejecting, the CEO may type the price. For a ceiling it is the limit the
+  // Marketing Specialist negotiates within; for a selling price it is the price the car is posted at. The
+  // Marketing Specialist's figure stays in the decision notes.
+  const setPrice = formData.get("ceiling_amount") ?? formData.get("set_amount");
+  let ceilingNote: string | null = null;
+  if (decision === "approved" && setPrice !== null && setPrice !== "") {
+    const amount = Number(setPrice);
+    if (!Number.isFinite(amount) || amount <= 0) return { error: "Enter the price." };
+    ceilingNote = `CEO set the ${isCeiling ? "ceiling" : "price"} to ₱${amount.toLocaleString()} (proposed ₱${Number(proposal.proposed_amount).toLocaleString()}).`;
+    proposal.proposed_amount = amount;
+  }
   if (isCeiling) {
     const ceilingError = await applyCeilingDecision(admin, proposal, decision as "approved" | "rejected", user.user.id);
     if (ceilingError) return { error: ceilingError };
@@ -276,7 +287,8 @@ export async function approvePrice(formData: FormData) {
       decision,
       decider_id: user.user.id,
       decision_date: new Date().toISOString(),
-      decision_notes: decisionNotes,
+      decision_notes: [ceilingNote, decisionNotes].filter(Boolean).join(" ") || null,
+      ...(ceilingNote ? { proposed_amount: proposal.proposed_amount } : {}),
     })
     .eq("id", proposalId)
     .eq("decision", "pending");

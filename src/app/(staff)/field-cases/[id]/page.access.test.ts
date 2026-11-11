@@ -5,7 +5,7 @@ const { getUser, getCurrentRole, db, DeliveryCase, BuyerMeetupCase } = vi.hoiste
   const from = (table: string) => {
     const answer = () => Promise.resolve({ data: rows[table] ?? null, error: null });
     const builder: Record<string, unknown> = {};
-    for (const step of ["select", "eq", "in"]) builder[step] = () => builder;
+    for (const step of ["select", "eq", "in", "order", "limit"]) builder[step] = () => builder;
     builder.maybeSingle = answer;
     // biome-ignore lint/suspicious/noThenProperty: the Supabase builder is awaited directly.
     builder.then = (resolve: (value: unknown) => unknown) => answer().then(resolve);
@@ -35,6 +35,8 @@ vi.mock("@/lib/transactions/document-media", () => ({ withSignedTransactionDocum
 vi.mock("./_components/delivery-case", () => ({ DeliveryCase }));
 vi.mock("./_components/buyer-meetup-case", () => ({ BuyerMeetupCase }));
 vi.mock("./_components/sell-meetup-case", () => ({ SellMeetupCase: vi.fn() }));
+vi.mock("./_components/field-budget-card", () => ({ FieldBudgetCard: vi.fn() }));
+vi.mock("./_components/field-expenses-card", () => ({ FieldExpensesCard: vi.fn() }));
 
 import FieldCasePage from "./page";
 
@@ -56,11 +58,13 @@ function caseRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
+type Element = { type: unknown; props: Record<string, unknown> };
+
+// T10: delivery and buyer meet-up pages wrap the case with its budget and expenses; return the case itself.
 async function load() {
-  return (await FieldCasePage({ params: Promise.resolve({ id: caseId }) })) as unknown as {
-    type: unknown;
-    props: Record<string, unknown>;
-  };
+  const page = (await FieldCasePage({ params: Promise.resolve({ id: caseId }) })) as unknown as Element;
+  if (page.type !== "div") return page;
+  return (page.props.children as Element[])[0];
 }
 
 beforeEach(() => {

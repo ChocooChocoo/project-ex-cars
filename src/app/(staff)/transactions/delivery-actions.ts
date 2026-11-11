@@ -10,12 +10,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
   addWorkingDays,
-  DELIVERY_LEAD_MESSAGE,
   DOWNPAYMENT_WORKING_DAYS,
   deliveryBalanceNote,
-  isBusinessSlot,
-  isDeliveryDate,
-  SLOT_RULE_MESSAGE,
+  upfrontPaymentsCleared,
   verifiedPaid,
 } from "@/lib/transactions/buy-flow";
 import { releaseVisitSlots } from "@/lib/transactions/buy-flow-server";
@@ -27,7 +24,6 @@ import {
   feeWithinRange,
 } from "@/lib/transactions/delivery-fee";
 import { bookedMeetup, meetupTeamError, openMeetupCase } from "@/lib/transactions/meetup-server";
-import { canCancelScheduled } from "@/lib/transactions/state-machine";
 
 type DeliveryActionResult = { error: string } | { success: true };
 type Admin = ReturnType<typeof createAdminClient>;
@@ -228,8 +224,9 @@ export async function createDeliveryFieldCase(formData: FormData): Promise<Deliv
     return { error: "Set the delivery terms first." };
   }
   if (tx.fieldCase) return { error: "A delivery field case already exists." };
-  if (verifiedPaid(tx.payments, "delivery_fee") < Number(tx.details.delivery_fee ?? 0)) {
-    return { error: "The Head Accountant must verify the delivery fee first." };
+  // T10: no field case before the buyer has paid the delivery fee and the downpayment.
+  if (!upfrontPaymentsCleared(tx.details, tx.payments)) {
+    return { error: "The buyer must pay the delivery fee and the downpayment, verified, first." };
   }
   if (!tx.arrangement) return { error: "The request has no delivery date." };
 
@@ -293,7 +290,7 @@ export async function createMeetupFieldCase(formData: FormData): Promise<Deliver
   const { data: tx } = await admin
     .from("transactions")
     .select(
-      "id, customer_id, vehicle_id, current_state, transaction_kind, purchase_details(payment_method, arrangement_kind), sale_handovers(contract_state)",
+      "id, customer_id, vehicle_id, current_state, transaction_kind, purchase_details(payment_method, arrangement_kind, downpayment_amount, delivery_fee), sale_handovers(contract_state), payment_records(payment_kind, amount, verified_by)",
     )
     .eq("id", parsed.data.transaction_id)
     .maybeSingle();
@@ -306,6 +303,10 @@ export async function createMeetupFieldCase(formData: FormData): Promise<Deliver
     if (!["approved", "signed"].includes(handover?.contract_state ?? "")) {
       return { error: "The Head Accountant must approve the contract first." };
     }
+  }
+  // T10: a Bank Transfer meet-up's downpayment is paid and verified before the team goes out.
+  if (!upfrontPaymentsCleared(details, tx.payment_records ?? [])) {
+    return { error: "The buyer must pay the downpayment, verified, first." };
   }
   const meetup = await bookedMeetup(admin, tx.id);
   if (!meetup) return { error: "The buyer has not booked the meet-up yet." };
@@ -330,66 +331,6 @@ export async function createMeetupFieldCase(formData: FormData): Promise<Deliver
     actor.userId,
   );
   if (error) return { error };
-  return done(tx.id);
-}
-
-// §4 step 7c: the buyer asked in advance (5 hours or more) for a new date or address; a fee applies,
-// recorded by the Head Accountant as a reschedule_fee payment.
-export async function rescheduleDelivery(formData: FormData): Promise<DeliveryActionResult> {
-  const actor = await salesManager();
-  if ("error" in actor) return actor;
-  const parsed = z
-    .object({
-      schedule: z.string().min(1, "Set the new delivery date and time."),
-      location: z.string().trim().min(1, "Set the delivery address.").max(500),
-      fee: z.coerce.number().min(0, "The fee cannot be negative."),
-    })
-    .safeParse(Object.fromEntries(formData));
-  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid reschedule." };
-  const schedule = new Date(parsed.data.schedule);
-  if (Number.isNaN(schedule.getTime()) || schedule.getTime() <= Date.now()) return { error: "Pick a future date." };
-  if (!isBusinessSlot(schedule)) return { error: SLOT_RULE_MESSAGE };
-
-  const admin = createAdminClient();
-  const tx = await loadDelivery(admin, formData.get("transaction_id"));
-  if (!tx?.arrangement) return { error: "Delivery request not found." };
-  if (!isDeliveryDate(schedule, new Date(tx.opened_at))) return { error: DELIVERY_LEAD_MESSAGE };
-  if (tx.current_state !== "approved") return { error: "Only an approved delivery can be rescheduled." };
-  if (!canCancelScheduled(tx.arrangement.schedule)) {
-    return { error: "A change must be asked 5 hours or more before the scheduled delivery." };
-  }
-
-  await admin.from("viewing_arrangements").update({ confirmation_state: "cancelled" }).eq("id", tx.arrangement.id);
-  const { error } = await admin.from("viewing_arrangements").insert({
-    purchase_transaction_id: tx.id,
-    arrangement_kind: "delivery",
-    schedule: schedule.toISOString(),
-    location: parsed.data.location,
-  });
-  if (error) return { error: error.message };
-  if (tx.fieldCase) {
-    await admin
-      .from("field_cases")
-      .update({ schedule: schedule.toISOString(), location: parsed.data.location })
-      .eq("id", tx.fieldCase.id);
-  }
-
-  await history(
-    admin,
-    tx,
-    actor.userId,
-    `Delivery moved to ${schedule.toLocaleString("en-PH", { timeZone: "Asia/Manila" })} at ${parsed.data.location}; fee ${peso(parsed.data.fee)}`,
-  );
-  await notify(
-    admin,
-    { userId: tx.customer_id },
-    {
-      kind: "delivery_rescheduled",
-      title: "Your delivery was rescheduled",
-      body: `New delivery: ${schedule.toLocaleString("en-PH", { timeZone: "Asia/Manila" })} at ${parsed.data.location}.${parsed.data.fee > 0 ? ` Pay the ${peso(parsed.data.fee)} rescheduling fee.` : ""}`,
-      transactionId: tx.id,
-    },
-  );
   return done(tx.id);
 }
 

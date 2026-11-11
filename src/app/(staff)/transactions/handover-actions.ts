@@ -15,6 +15,7 @@ import {
   PAPERS_STATUS_LABELS,
   type PapersStatus,
   signsInApp,
+  verifiedTowardPrice,
 } from "@/lib/transactions/buy-flow";
 
 // Vehicle papers custody (buying-flow revision, "Papers release"). The Confidential Informant keeps a
@@ -44,7 +45,7 @@ async function loadSale(admin: Admin, transactionId: unknown) {
   const { data: tx } = await admin
     .from("transactions")
     .select(
-      "id, customer_id, current_state, transaction_kind, purchase_details(arrangement_kind, payment_method), payment_records(verified_by)",
+      "id, customer_id, current_state, transaction_kind, purchase_details(arrangement_kind, payment_method, final_price), payment_records(payment_kind, amount, verified_by, rejected_at)",
     )
     .eq("id", id.data)
     .maybeSingle();
@@ -55,9 +56,13 @@ async function loadSale(admin: Admin, transactionId: unknown) {
     id: tx.id as string,
     customerId: tx.customer_id as string,
     state: tx.current_state as string,
-    details: details as { arrangement_kind?: unknown; payment_method?: unknown } | null,
+    details: details as { arrangement_kind?: unknown; payment_method?: unknown; final_price?: unknown } | null,
     field: isFieldArrangement(details),
     paymentChecked: ((tx.payment_records ?? []) as { verified_by: unknown }[]).some((p) => p.verified_by),
+    // T10: verified toward the car price; a cash or Bank Transfer buyer's papers wait for the full amount.
+    paidInFull:
+      verifiedTowardPrice(tx.payment_records ?? []) >=
+      Number((details as { final_price?: unknown } | null)?.final_price ?? 0),
     papers: (handover?.papers_status as PapersStatus | null | undefined) ?? null,
     handover: (handover ?? {}) as Record<string, unknown>,
   };
@@ -239,7 +244,7 @@ export async function releasePapersToCi(formData: FormData): Promise<HandoverRes
 }
 
 // Meet-up or delivery: the assigned CI hands the papers to the buyer, after the contract is signed and,
-// where the buyer pays in cash or by bank transfer, after the money is reported.
+// where the buyer pays in cash or by bank transfer, after the Head Accountant verifies the full payment.
 export async function handPapersToBuyer(formData: FormData): Promise<HandoverResult> {
   const who = await actor();
   if ("error" in who) return who;
@@ -254,8 +259,8 @@ export async function handPapersToBuyer(formData: FormData): Promise<HandoverRes
   if (sale.handover.contract_state !== "signed") {
     return { error: "The buyer must sign the contract before the papers are handed over." };
   }
-  if (isDirectPayment(sale.details) && !sale.handover.cash_reported_at) {
-    return { error: "Report the cash received before the papers are handed over." };
+  if (isDirectPayment(sale.details) && !sale.paidInFull) {
+    return { error: "Wait for the Head Accountant to verify the buyer's full payment before handing over the papers." };
   }
 
   const error = await setPapers(admin, sale, who.userId, "handed_over", who.userId);
@@ -494,41 +499,5 @@ export async function recordContractCopy(formData: FormData): Promise<HandoverRe
       },
     );
   }
-  return { success: true };
-}
-
-// Meet-up or delivery paid in cash or by bank transfer: the team reports the money to the Sales Manager.
-export async function reportCashReceived(formData: FormData): Promise<HandoverResult> {
-  const who = await actor();
-  if ("error" in who) return who;
-
-  const admin = createAdminClient();
-  const sale = await loadSale(admin, formData.get("transaction_id"));
-  if (!sale) return { error: NOT_FOUND };
-  const member = await assignedMember(admin, sale, who);
-  if (typeof member !== "string") return member;
-  if (!isDirectPayment(sale.details)) return { error: "Nothing is collected in the field on a financed sale." };
-  if (sale.handover.contract_state !== "signed") {
-    return { error: "The buyer must sign the contract before the cash is reported." };
-  }
-
-  const error = await setHandover(
-    admin,
-    sale,
-    who.userId,
-    { cash_reported_at: new Date().toISOString() },
-    "Cash received in the field",
-  );
-  if (error) return { error };
-  await notify(
-    admin,
-    { role: "sales_manager" },
-    {
-      kind: "cash_reported",
-      title: "Cash received from the buyer",
-      body: "The field team received the buyer's payment. Record it on the request.",
-      transactionId: sale.id,
-    },
-  );
   return { success: true };
 }

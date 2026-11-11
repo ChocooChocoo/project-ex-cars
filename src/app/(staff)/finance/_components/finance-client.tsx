@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { Banknote, Check, ChevronRight, Plus, Send, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { confirmBudgetReturn } from "@/app/(staff)/field-cases/budget-actions";
 import {
   advanceDisbursement,
   createDisbursementRequest,
@@ -64,6 +65,11 @@ export interface DisbursementRow {
   requested_by: string;
   purchase_transaction_id: string | null;
   created_at: string;
+  /** T10: a Confidential Informant's field budget, with the excess returned after the trip. */
+  field_case_id?: string | null;
+  returned_cents?: number | null;
+  returned_at?: string | null;
+  return_confirmed_at?: string | null;
 }
 
 export interface PurchaseTransactionRow {
@@ -82,6 +88,8 @@ interface FinanceClientProps {
   canAdvance: boolean;
   canRequestPurchaseFunds: boolean;
   isInformant: boolean;
+  /** T10: the Head Accountant confirms a field budget's returned excess. */
+  canConfirmReturn?: boolean;
 }
 
 const ENTRY_LABELS: Record<FinancialEntryKind, string> = {
@@ -279,15 +287,21 @@ function DisbursementDetail({
   onReasonChange,
   busy,
   onAdvance,
+  canConfirmReturn = false,
+  onConfirmReturn,
 }: {
   readonly row: DisbursementRow;
+  readonly canConfirmReturn?: boolean;
+  readonly onConfirmReturn?: () => void;
   readonly canAdvance: boolean;
   readonly reason: string;
   readonly onReasonChange: (value: string) => void;
   readonly busy: boolean;
   readonly onAdvance: (eventKind: string, notes?: string) => void;
 }) {
-  const flow = DISBURSEMENT_FLOW[row.status];
+  // A field budget ends at release: the Confidential Informant spends it and returns the excess.
+  const fieldBudgetOut = Boolean(row.field_case_id) && ["released", "received", "paid"].includes(row.status);
+  const flow = fieldBudgetOut ? undefined : DISBURSEMENT_FLOW[row.status];
   const canReject = canAdvance && (row.status === "draft" || row.status === "submitted");
 
   return (
@@ -313,6 +327,15 @@ function DisbursementDetail({
             {row.purpose}
           </dd>
         </div>
+        {row.returned_at ? (
+          <div className="flex flex-col gap-1">
+            <dt className="text-muted-foreground">Excess returned</dt>
+            <dd>
+              {formatCurrency(Number(row.returned_cents ?? 0) / 100)} ·{" "}
+              {row.return_confirmed_at ? "confirmed" : "waiting for your confirmation"}
+            </dd>
+          </div>
+        ) : null}
         {row.notes ? (
           <div className="flex flex-col gap-1">
             <dt className="text-muted-foreground">Notes</dt>
@@ -337,6 +360,14 @@ function DisbursementDetail({
 
       {!canAdvance && row.status === "draft" ? (
         <p className="text-muted-foreground text-sm">Awaiting approval by finance roles.</p>
+      ) : null}
+
+      {canConfirmReturn && row.returned_at && !row.return_confirmed_at ? (
+        <DialogFooter>
+          <Button disabled={busy} onClick={onConfirmReturn}>
+            Confirm excess received
+          </Button>
+        </DialogFooter>
       ) : null}
 
       {canAdvance && flow?.next ? (
@@ -370,6 +401,7 @@ export function FinanceClient({
   canAdvance,
   canRequestPurchaseFunds,
   isInformant,
+  canConfirmReturn = false,
 }: FinanceClientProps) {
   const router = useRouter();
   const [entryOpen, setEntryOpen] = useState(false);
@@ -461,6 +493,21 @@ export function FinanceClient({
     setFundTransactionId("");
     setFundAmount("");
     setFundNotes("");
+    router.refresh();
+  }
+
+  async function confirmReturn(disbursementId: string) {
+    const fd = new FormData();
+    fd.set("disbursement_id", disbursementId);
+    setAdvancing(true);
+    const result = await confirmBudgetReturn(fd);
+    setAdvancing(false);
+    if ("error" in result) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success("Return confirmed.");
+    setDetail(null);
     router.refresh();
   }
 
@@ -671,6 +718,8 @@ export function FinanceClient({
               onReasonChange={setRejectReason}
               busy={advancing}
               onAdvance={(eventKind, notes) => advance(detail.id, eventKind, notes)}
+              canConfirmReturn={canConfirmReturn}
+              onConfirmReturn={() => confirmReturn(detail.id)}
             />
           ) : null}
         </DialogContent>

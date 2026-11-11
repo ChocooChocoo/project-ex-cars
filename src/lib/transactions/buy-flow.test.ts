@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   addWorkingDays,
+  balancePart,
   buyerIdsComplete,
   canRecordNoShow,
   contractReadyForSale,
@@ -30,12 +31,16 @@ import {
   nextDuePayment,
   nextStanding,
   onlinePaymentsDue,
+  originalDeliverySchedule,
+  PAYMONGO_MAX_AMOUNT,
   paidTowardPrice,
   papersReadyForSale,
   paymentAllowedBeforeSigning,
+  rescheduleFee,
   signsInApp,
   slotFromParts,
   slotHours,
+  upfrontPaymentsCleared,
   verifiedPaid,
 } from "./buy-flow";
 import { canTransition } from "./state-machine";
@@ -743,5 +748,59 @@ describe("contract", () => {
     expect(text).toContain("24 monthly payments");
     expect(text).toContain("2026-11-15");
     expect(text).toMatch(/take back the vehicle/i);
+  });
+});
+
+describe("upfrontPaymentsCleared (T10)", () => {
+  const paid = (payment_kind: string, amount: number, verified_by: string | null = "ha") => ({
+    payment_kind,
+    amount,
+    verified_by,
+  });
+  it("needs the delivery fee and the downpayment verified", () => {
+    const details = { delivery_fee: 1000, downpayment_amount: 5000 };
+    expect(upfrontPaymentsCleared(details, [paid("delivery_fee", 1000)])).toBe(false);
+    expect(upfrontPaymentsCleared(details, [paid("delivery_fee", 1000), paid("downpayment", 5000, null)])).toBe(false);
+    expect(upfrontPaymentsCleared(details, [paid("delivery_fee", 1000), paid("downpayment", 5000)])).toBe(true);
+  });
+  it("passes when nothing is due upfront", () => {
+    expect(upfrontPaymentsCleared({ delivery_fee: 0, downpayment_amount: null }, [])).toBe(true);
+    expect(upfrontPaymentsCleared(null, [])).toBe(true);
+  });
+});
+
+describe("delivery re-scheduling fee (T10)", () => {
+  const delivery = new Date("2030-01-10T10:00:00+08:00");
+  it("is free more than 24 hours before the original delivery", () => {
+    expect(rescheduleFee(delivery, 3000, new Date("2030-01-09T09:59:00+08:00"))).toBe(0);
+  });
+  it("costs half the original delivery fee inside 24 hours", () => {
+    expect(rescheduleFee(delivery, 3000, new Date("2030-01-09T10:00:00+08:00"))).toBe(1500);
+    expect(rescheduleFee(delivery, 2999, new Date("2030-01-10T09:00:00+08:00"))).toBe(1499.5);
+  });
+  it("measures from the first delivery booked", () => {
+    expect(
+      originalDeliverySchedule([
+        { arrangement_kind: "delivery", schedule: "2030-01-12", created_at: "2029-12-20" },
+        { arrangement_kind: "gce_visit", schedule: "2029-12-01", created_at: "2029-11-01" },
+        { arrangement_kind: "delivery", schedule: "2030-01-10", created_at: "2029-12-01" },
+      ]),
+    ).toBe("2030-01-10");
+  });
+});
+
+describe("balancePart (T10 PayMongo limit)", () => {
+  it("pays a balance under the limit in one go", () => {
+    expect(balancePart(PAYMONGO_MAX_AMOUNT)).toEqual({
+      kind: "balance",
+      label: "Balance",
+      amount: PAYMONGO_MAX_AMOUNT,
+    });
+  });
+  it("splits a larger balance into parts at the limit", () => {
+    const first = balancePart(1_500_000);
+    expect(first.amount).toBe(PAYMONGO_MAX_AMOUNT);
+    expect(first.label).toContain("501,000");
+    expect(balancePart(1_500_000 - first.amount)).toMatchObject({ label: "Balance", amount: 501_000 });
   });
 });

@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createCheckoutSession, readPaidCheckout, retrieveCheckoutSession, verifyWebhookSignature } from "./paymongo";
+import {
+  billingFor,
+  createCheckoutSession,
+  readPaidCheckout,
+  retrieveCheckoutSession,
+  verifyWebhookSignature,
+} from "./paymongo";
 import { createHmac } from "node:crypto";
 
 const SECRET = "whsk_test_secret";
@@ -121,5 +127,16 @@ describe("readPaidCheckout", () => {
 
   it("ignores other events", () => {
     expect(readPaidCheckout({ data: { attributes: { type: "payment.failed", data: session } } })).toBeNull();
+  });
+});
+
+describe("billingFor", () => {
+  it("drops empty fields so a missing phone is never sent", () => {
+    expect(billingFor({ name: " Ana ", email: "ana@gce.test", phone: "" })).toEqual({
+      name: "Ana",
+      email: "ana@gce.test",
+    });
+    expect(billingFor({ name: null, email: undefined, phone: "  " })).toBeUndefined();
+    expect(billingFor(undefined)).toBeUndefined();
   });
 });

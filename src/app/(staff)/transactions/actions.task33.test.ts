@@ -145,25 +145,15 @@ describe("Task 33 transaction paperwork actions", () => {
     });
   });
 
-  it("allows Head Accountant to upload proof-of-billing paperwork", async () => {
-    const form = paperworkForm({ document_kind: "proof_of_billing" });
-    const file = new File(["contents"], "billing.pdf", { type: "application/pdf" });
-    form.set("file", file);
+  it.each(["valid_id", "proof_of_billing"])("refuses a staff upload of the buyer's %s", async (documentKind) => {
+    const form = paperworkForm({ document_kind: documentKind });
+    form.set("file", new File(["contents"], "doc.pdf", { type: "application/pdf" }));
 
-    await expect(recordPaperwork(form)).resolves.toEqual({ success: true });
-    expect(storageUpload).toHaveBeenCalledWith(
-      expect.stringMatching(new RegExp(`^${transactionId}/proof_of_billing-`)),
-      file,
-    );
-    expect(documentInsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        transaction_id: transactionId,
-        document_kind: "proof_of_billing",
-        storage_path: expect.stringMatching(new RegExp(`^${transactionId}/proof_of_billing-`)),
-        uploader_id: userId,
-        verification_state: "pending",
-      }),
-    );
+    await expect(recordPaperwork(form)).resolves.toEqual({
+      error: "The buyer uploads the valid ID and proof of billing. Staff verify them.",
+    });
+    expect(storageUpload).not.toHaveBeenCalled();
+    expect(documentInsert).not.toHaveBeenCalled();
   });
 
   it("rejects paperwork with an invalid transaction id before upload", async () => {
@@ -172,18 +162,6 @@ describe("Task 33 transaction paperwork actions", () => {
 
     await expect(recordPaperwork(form)).resolves.toEqual({ error: expect.stringMatching(/invalid|transaction/i) });
     expect(storageUpload).not.toHaveBeenCalled();
-  });
-
-  it("rejects prerequisite paperwork for a non-buy transaction before upload", async () => {
-    transactionLookupReturns("sell");
-    const form = paperworkForm({ document_kind: "valid_id" });
-    form.set("file", new File(["contents"], "id.jpg", { type: "image/jpeg" }));
-
-    await expect(recordPaperwork(form)).resolves.toEqual({
-      error: "Valid IDs and proof of billing can only be recorded for purchases.",
-    });
-    expect(storageUpload).not.toHaveBeenCalled();
-    expect(documentInsert).not.toHaveBeenCalled();
   });
 
   it("still accepts non-prerequisite paperwork on a sell transaction", async () => {
@@ -202,15 +180,13 @@ describe("Task 33 transaction paperwork actions", () => {
 
   it("removes the uploaded object when the document insert fails", async () => {
     documentInsert.mockResolvedValue({ error: { message: "new row violates row-level security policy" } });
-    const form = paperworkForm({ document_kind: "proof_of_billing" });
-    form.set("file", new File(["contents"], "billing.pdf", { type: "application/pdf" }));
+    const form = paperworkForm({ document_kind: "invoice" });
+    form.set("file", new File(["contents"], "invoice.pdf", { type: "application/pdf" }));
 
     await expect(recordPaperwork(form)).resolves.toEqual({
       error: "new row violates row-level security policy",
     });
-    expect(storageRemove).toHaveBeenCalledWith([
-      expect.stringMatching(new RegExp(`^${transactionId}/proof_of_billing-`)),
-    ]);
+    expect(storageRemove).toHaveBeenCalledWith([expect.stringMatching(new RegExp(`^${transactionId}/invoice-`))]);
   });
 
   it("recomputes a rejected document state after proof of billing is rejected", async () => {

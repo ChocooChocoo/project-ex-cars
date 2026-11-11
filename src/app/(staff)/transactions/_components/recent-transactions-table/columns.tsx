@@ -31,8 +31,12 @@ export const TRANSACTION_ACTION_LABELS: Record<TransactionState, string> = {
   cancelled: "Cancel",
 };
 
+// T10: a sell offer moves only through the sell steps on its page, so its row offers just View. The CEO's
+// row menu has no Approve or Cancel; the CEO decides on the transaction page.
 export function transactionActionsFor(row: TransactionRow, userRole: string): TransactionState[] {
-  return getAllowedTransitions(row.state as TransactionState, userRole);
+  if (row.kind === "sell") return [];
+  const allowed = getAllowedTransitions(row.state as TransactionState, userRole);
+  return userRole === "ceo" ? allowed.filter((to) => to !== "approved" && to !== "cancelled") : allowed;
 }
 
 function kindIcon(kind: string) {
@@ -184,7 +188,7 @@ export function createTransactionColumns(
               <DropdownMenuItem asChild>
                 <Link href={`/dashboard/transactions/${id}`}>
                   <Eye className="mr-2 size-4" />
-                  View Details
+                  View
                 </Link>
               </DropdownMenuItem>
               {allowed.length > 0 ? <DropdownMenuSeparator /> : null}

@@ -61,7 +61,8 @@ export default async function VehiclePapersPage() {
       .from("transaction_documents")
       .select("id, transaction_id, document_kind, storage_path")
       .in("transaction_id", sellTransactionIds)
-      .eq("document_kind", "orcr")
+      // T10: the CR (or the OR, or the old combined ORCR) stands in for the registration paper.
+      .in("document_kind", ["orcr", "certificate_of_registration", "official_receipt"])
       .order("upload_date", { ascending: true });
 
     const signedDocuments = await withSignedTransactionDocumentUrls(

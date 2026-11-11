@@ -12,12 +12,10 @@ import {
   cancelUnpaidDelivery,
   createDeliveryFieldCase,
   relayDeliveryDelay,
-  rescheduleDelivery,
   setDeliveryTerms,
 } from "@/app/(staff)/transactions/delivery-actions";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DeliveryLastSeen } from "@/components/delivery-last-seen";
-import { SlotPicker } from "@/components/transactions/slot-picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,9 +23,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  DELIVERY_LEAD_DAYS,
   DELIVERY_STATUS_LABELS,
   type DeliveryStatus,
+  upfrontPaymentsCleared,
   verifiedPaid,
 } from "@/lib/transactions/buy-flow";
 import { deliveryArea, deliveryFeeRangeLabel, downPaymentFor } from "@/lib/transactions/delivery-fee";
@@ -92,6 +90,8 @@ export function DeliveryPanel({
   const fee = Number(purchaseDetails?.delivery_fee ?? 0);
   const downpayment = Number(purchaseDetails?.downpayment_amount ?? 0);
   const feePaid = verifiedPaid(paymentRows, "delivery_fee");
+  // T10: the team goes out only after the delivery fee and the downpayment are both verified.
+  const upfrontPaid = upfrontPaymentsCleared(purchaseDetails ?? null, paymentRows);
   const downpaymentPaid = verifiedPaid(paymentRows, "downpayment");
   const dueAt = purchaseDetails?.downpayment_due_at as string | null;
   const termsSet = Boolean(dueAt);
@@ -270,11 +270,11 @@ export function DeliveryPanel({
         {canManage && termsSet && !fieldCase ? (
           <section className="flex flex-col gap-2 rounded-md border p-3">
             <p className="font-medium">Delivery team</p>
-            {feePaid < fee ? (
+            {upfrontPaid ? null : (
               <p className="text-muted-foreground text-xs">
-                Available once the Head Accountant verifies the delivery fee.
+                Available once the buyer's delivery fee and downpayment are paid and verified.
               </p>
-            ) : null}
+            )}
             <div className="grid gap-2 sm:grid-cols-3">
               <PersonSelect
                 label="Confidential Informant"
@@ -292,7 +292,7 @@ export function DeliveryPanel({
             <Button
               size="sm"
               className="self-start"
-              disabled={busy || feePaid < fee}
+              disabled={busy || !upfrontPaid}
               onClick={() =>
                 submit(
                   createDeliveryFieldCase,
@@ -339,51 +339,6 @@ export function DeliveryPanel({
                 </Button>
               ) : null}
             </div>
-          </section>
-        ) : null}
-
-        {canManage && termsSet && status !== "delivered" ? (
-          <section className="flex flex-col gap-2 rounded-md border p-3">
-            <p className="font-medium">Reschedule or redirect (asked 5+ hours ahead)</p>
-            <SlotPicker
-              id="new-schedule"
-              label="New date and time"
-              value={form.schedule ?? ""}
-              onChange={set("schedule")}
-              minDays={DELIVERY_LEAD_DAYS}
-            />
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="new-address" className="text-xs">
-                  Address
-                </Label>
-                <Input
-                  id="new-address"
-                  value={form.location ?? String(arrangement?.location ?? "")}
-                  onChange={(e) => set("location")(e.target.value)}
-                />
-              </div>
-              <MoneyInput id="reschedule-fee" label="Fee (₱)" value={form.fee} onChange={set("fee")} />
-            </div>
-            <Button
-              size="sm"
-              variant="outline"
-              className="self-start"
-              disabled={busy || !form.schedule}
-              onClick={() =>
-                submit(
-                  rescheduleDelivery,
-                  {
-                    schedule: form.schedule ?? "",
-                    location: form.location ?? String(arrangement?.location ?? ""),
-                    fee: form.fee ?? "0",
-                  },
-                  "Delivery rescheduled.",
-                )
-              }
-            >
-              Reschedule
-            </Button>
           </section>
         ) : null}
       </CardContent>

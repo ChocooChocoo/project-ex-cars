@@ -1,22 +1,13 @@
 "use client";
 
-import { useRef, useState } from "react";
-
-import { toast } from "sonner";
-
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { RejectReasonDialog } from "@/components/reject-reason-dialog";
 import { TransactionImagePreview } from "@/components/transaction-image-preview";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ACCEPTED_ID_TYPES, ID_LABELS } from "@/lib/auth/roles";
 import { transactionDocumentLabel } from "@/lib/transactions/document-media";
 import { SELL_PAPER_KINDS } from "@/lib/transactions/sell-flow";
-import { compressImage } from "@/lib/uploads/compress-image";
 
 // T03 C11/SM2: result of the automatic OR/CR and ID check. Advisory only; staff Verify stays the decision.
 const AUTO_CHECK_LABELS: Record<string, string> = {
@@ -31,22 +22,15 @@ export function TransactionDocumentsCard({
   kind,
   userRole,
   documents,
-  onUploadDocument,
   onVerifyDocument,
   onRejectDocument,
 }: {
   readonly kind: string;
   readonly userRole: string;
   readonly documents: Record<string, unknown>[];
-  readonly onUploadDocument: (documentKind: string, idType: string, file: File) => Promise<void>;
   readonly onVerifyDocument: (documentId: string) => Promise<void>;
   readonly onRejectDocument: (documentId: string, reason: string) => Promise<void>;
 }) {
-  const [docKind, setDocKind] = useState("valid_id");
-  const [docIdType, setDocIdType] = useState("");
-  const docFileRef = useRef<HTMLInputElement>(null);
-
-  const isCeo = userRole === "ceo";
   // Same rules as the server guard in verifyTransactionDocument: the Marketing Specialist checks a seller's
   // papers, the Sales Manager a buyer's IDs and proof of billing, the Head Accountant everything else.
   const canVerify = (documentKind: unknown) =>
@@ -56,20 +40,6 @@ export function TransactionDocumentsCard({
         (userRole === "sales_manager" &&
           kind === "buy" &&
           ["valid_id", "proof_of_billing"].includes(String(documentKind)));
-
-  async function handleUpload() {
-    const file = docFileRef.current?.files?.[0];
-    if (!file) {
-      toast.error("Select a file to upload.");
-      return;
-    }
-    if (docKind === "valid_id" && !docIdType) {
-      toast.error("Select the ID type.");
-      return;
-    }
-    await onUploadDocument(docKind, docIdType, await compressImage(file));
-    if (docFileRef.current) docFileRef.current.value = "";
-  }
 
   return (
     <Card className="min-w-0 shadow-xs">
@@ -85,66 +55,7 @@ export function TransactionDocumentsCard({
         </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        {/* T05: the buyer sends their own IDs and proof of billing; the Sales Manager only verifies them. */}
-        {kind === "buy" && !isCeo && userRole !== "sales_manager" && (
-          <div className="flex flex-wrap items-end gap-2 rounded-md border bg-muted/20 p-3">
-            <div className="flex min-w-40 flex-col gap-1.5">
-              <Label htmlFor="doc-kind" className="text-xs">
-                Document
-              </Label>
-              <Select
-                value={docKind}
-                onValueChange={(v) => {
-                  setDocKind(v);
-                  if (v !== "valid_id") setDocIdType("");
-                }}
-              >
-                <SelectTrigger id="doc-kind" className="h-8 w-full text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="valid_id">Valid ID</SelectItem>
-                  <SelectItem value="proof_of_billing">Proof of Billing</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {docKind === "valid_id" ? (
-              <div className="flex min-w-40 flex-col gap-1.5">
-                <Label htmlFor="doc-id-type" className="text-xs">
-                  ID type
-                </Label>
-                <Select value={docIdType} onValueChange={setDocIdType}>
-                  <SelectTrigger id="doc-id-type" className="h-8 w-full text-xs">
-                    <SelectValue placeholder="ID type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ACCEPTED_ID_TYPES.map((t) => (
-                      <SelectItem key={t} value={t}>
-                        {ID_LABELS[t]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : null}
-            <div className="flex min-w-48 flex-1 flex-col gap-1.5">
-              <Label htmlFor="doc-file" className="text-xs">
-                File
-              </Label>
-              <Input
-                id="doc-file"
-                ref={docFileRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp,application/pdf"
-                className="h-8 w-full text-xs"
-              />
-            </div>
-            <Button size="sm" className="h-8" onClick={handleUpload}>
-              Upload
-            </Button>
-          </div>
-        )}
-
+        {/* T10: only the buyer uploads IDs and proof of billing; staff verify them here. */}
         {documents.length === 0 ? (
           <p className="text-muted-foreground text-sm">No documents.</p>
         ) : (

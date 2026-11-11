@@ -85,6 +85,19 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
         >;
       })
     | null;
+  // T10: each reconditioning part carries a photo in the same private bucket.
+  const parts = (reconditioningJob as { reconditioning_parts?: Array<Record<string, unknown>> } | null)
+    ?.reconditioning_parts;
+  if (parts?.length) {
+    const admin = createAdminClient();
+    for (const part of parts) {
+      if (!part.photo_path) continue;
+      const { data } = await admin.storage
+        .from("reconditioning-receipts")
+        .createSignedUrl(String(part.photo_path), 3600);
+      part.photo_url = data?.signedUrl ?? null;
+    }
+  }
   if (reconditioningJob?.reconditioning_fund_requests?.length) {
     const admin = createAdminClient();
     for (const request of reconditioningJob.reconditioning_fund_requests) {

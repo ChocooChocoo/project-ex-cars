@@ -6,7 +6,6 @@ vi.mock("@/app/(staff)/transactions/delivery-actions", () => ({
   cancelUnpaidDelivery: vi.fn(),
   createDeliveryFieldCase: vi.fn(),
   relayDeliveryDelay: vi.fn(),
-  rescheduleDelivery: vi.fn(),
   setDeliveryTerms: vi.fn(),
 }));
 

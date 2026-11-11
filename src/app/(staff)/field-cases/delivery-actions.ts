@@ -14,6 +14,7 @@ import {
   deliveryBalanceNote,
   nextDeliveryStatus,
   verifiedPaid,
+  verifiedTowardPrice,
 } from "@/lib/transactions/buy-flow";
 
 type DeliveryFieldResult = { error: string } | { success: true };
@@ -79,7 +80,7 @@ export async function advanceDeliveryStatus(formData: FormData): Promise<Deliver
   const { data: tx } = await admin
     .from("transactions")
     .select(
-      "id, customer_id, current_state, purchase_details(downpayment_amount, payment_method), payment_records(payment_kind, amount, verified_by)",
+      "id, customer_id, current_state, purchase_details(downpayment_amount, payment_method, final_price), payment_records(payment_kind, amount, verified_by, rejected_at)",
     )
     .eq("id", fieldCase.transaction_id)
     .maybeSingle();
@@ -99,6 +100,16 @@ export async function advanceDeliveryStatus(formData: FormData): Promise<Deliver
     if (handover?.papers_status !== "released_to_ci") {
       return { error: "The Confidential Informant must record the vehicle papers as released before dispatch." };
     }
+  }
+
+  // T10: a Bank Transfer buyer pays the balance in the app; the car counts as delivered only after the Head
+  // Accountant has verified the full payment.
+  if (
+    next === "delivered" &&
+    details?.payment_method === "bank_transfer" &&
+    verifiedTowardPrice(tx.payment_records ?? []) < Number(details.final_price ?? 0)
+  ) {
+    return { error: "Wait for the Head Accountant to verify the buyer's bank transfer before marking it delivered." };
   }
 
   const { error } = await admin

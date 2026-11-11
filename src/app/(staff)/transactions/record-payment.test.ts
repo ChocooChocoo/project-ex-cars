@@ -44,7 +44,9 @@ vi.mock("@/lib/auth/audit", () => ({ logAuditEvent: audit }));
 vi.mock("@/lib/notifications/notify", () => ({ notify: vi.fn() }));
 vi.mock("@/lib/transactions/buy-flow-server", () => ({
   finalizeBuySale: vi.fn(),
+  notifyInformantIfPaidInFull: vi.fn(),
   recordStandingEvent: vi.fn(),
+  releaseVehicle: vi.fn(),
   releaseVisitSlots: vi.fn(),
 }));
 vi.mock("@/lib/transactions/financing-server", () => ({

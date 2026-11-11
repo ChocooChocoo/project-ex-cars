@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { composeAddress, provinceNameFor } from "@/lib/psgc/address";
 import { fullNameSchema, newPasswordSchema, phoneSchema } from "@/lib/validation/forms";
 
 const PSGC_CODE = /^\d{9}$/;
@@ -39,6 +40,29 @@ export const ownProfileSchema = z.object({
 });
 
 export type OwnProfileData = z.infer<typeof ownProfileSchema>;
+
+// T10: the address half of the profile. The Buying form sends the same PSGC fields, and a saved Buying
+// location is written back to the profile.
+export const profileAddressSchema = ownProfileSchema.omit({ full_name: true, phone: true });
+export type ProfileAddressData = z.infer<typeof profileAddressSchema>;
+
+/** The profile columns for an address, with `address` composed so autofill and delivery read one string. */
+export function profileAddressColumns(data: ProfileAddressData) {
+  return {
+    address: composeAddress({
+      address_line: data.address_line,
+      barangay_name: data.barangay_name,
+      city_name: data.city_name,
+      province_name: provinceNameFor(data),
+      region_name: data.region_name,
+    }),
+    address_line: data.address_line || null,
+    region_code: data.region_code,
+    province_code: data.province_code || null,
+    city_code: data.city_code,
+    barangay_code: data.barangay_code,
+  };
+}
 
 export const changePasswordSchema = z
   .object({

@@ -64,12 +64,35 @@ const YEARS = listedYears();
 
 export const SELL_PAPER_ACCEPT = "image/jpeg,image/png,image/webp,application/pdf";
 
-const PAPER_FIELDS = [
-  { key: "id_file_1", label: "Valid ID #1 *", kind: "valid_id", pathKey: "id_path_1" },
-  { key: "id_file_2", label: "Valid ID #2 *", kind: "valid_id", pathKey: "id_path_2" },
-  { key: "orcr_file", label: "ORCR *", kind: "orcr", pathKey: "orcr_path" },
+// T10: each valid ID is sent front and back, like the buyer's; the OR and the CR are separate papers.
+const ID_FIELDS = [1, 2].flatMap((n) =>
+  (["front", "back"] as const).map((side) => ({
+    key: `id_${side}_${n}`,
+    n,
+    side,
+    label: side === "front" ? "Front" : "Back",
+    kind: "valid_id" as const,
+    pathKey: `id_${side}_path_${n}`,
+  })),
+);
+const OTHER_PAPER_FIELDS = [
+  {
+    key: "official_receipt_file",
+    label: "Official Receipt (OR) *",
+    kind: "official_receipt",
+    pathKey: "official_receipt_path",
+  },
+  {
+    key: "certificate_of_registration_file",
+    label: "Certificate of Registration (CR) *",
+    kind: "certificate_of_registration",
+    pathKey: "certificate_of_registration_path",
+  },
   { key: "deed_of_sale_file", label: "Deed of Sale *", kind: "deed_of_sale", pathKey: "deed_of_sale_path" },
 ] as const;
+const PAPER_FIELDS = [...ID_FIELDS, ...OTHER_PAPER_FIELDS];
+const PAPERS_MESSAGE =
+  "Attach both valid IDs (front and back) with their ID types, the OR, the CR and the deed of sale.";
 
 export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNodes?: ConditionChecklistNode[] }) {
   const router = useRouter();
@@ -179,9 +202,13 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
     }
     const missingPaper = PAPER_FIELDS.find((field) => !papers[field.key]);
     if (missingPaper || !idTypes.id_type_1 || !idTypes.id_type_2) {
-      const message = "Attach two valid IDs with their ID types, the ORCR and the deed of sale.";
-      setPaperError(message);
-      toast.error(message);
+      setPaperError(PAPERS_MESSAGE);
+      toast.error(PAPERS_MESSAGE);
+      return;
+    }
+    if (idTypes.id_type_1 === idTypes.id_type_2) {
+      setPaperError("Use two different valid IDs.");
+      toast.error("Use two different valid IDs.");
       return;
     }
     const hasIssues = data.has_known_issues === "yes";
@@ -526,43 +553,57 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
           </Field>
           <Field data-invalid={!!paperError}>
             <FieldLabel>Required papers (JPEG/PNG/WebP/PDF, max 2 MB each)</FieldLabel>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {PAPER_FIELDS.map((paper, index) => (
-                <div key={paper.key} className="flex flex-col gap-1.5">
-                  <label htmlFor={`sell-${paper.key}`} className="text-sm">
-                    {paper.label}
-                  </label>
-                  <Input
-                    id={`sell-${paper.key}`}
-                    type="file"
-                    accept={SELL_PAPER_ACCEPT}
-                    onChange={async (event) => {
-                      const chosen = event.target.files?.[0];
-                      const file = chosen ? await compressImage(chosen) : null;
-                      setPapers((prev) => ({ ...prev, [paper.key]: file }));
-                      setPaperError(null);
-                    }}
-                  />
-                  {index < 2 ? (
+            <ul className="grid gap-3 sm:grid-cols-2">
+              {[1, 2].map((n) => {
+                const idType = idTypes[`id_type_${n}`] ?? "";
+                const otherType = idTypes[`id_type_${n === 1 ? 2 : 1}`];
+                return (
+                  <li key={n} className="flex flex-col gap-3 rounded-lg border p-3">
+                    <p className="font-medium text-sm">Valid ID #{n} *</p>
                     <Select
-                      value={idTypes[`id_type_${index + 1}`] ?? ""}
-                      onValueChange={(value) => setIdTypes((prev) => ({ ...prev, [`id_type_${index + 1}`]: value }))}
+                      value={idType}
+                      onValueChange={(value) => setIdTypes((prev) => ({ ...prev, [`id_type_${n}`]: value }))}
                     >
-                      <SelectTrigger aria-label={`ID type #${index + 1}`}>
+                      <SelectTrigger aria-label={`ID type #${n}`}>
                         <SelectValue placeholder="ID type" />
                       </SelectTrigger>
                       <SelectContent>
-                        {ACCEPTED_ID_TYPES.map((idType) => (
-                          <SelectItem key={idType} value={idType}>
-                            {ID_LABELS[idType]}
+                        {ACCEPTED_ID_TYPES.filter((type) => type !== otherType).map((type) => (
+                          <SelectItem key={type} value={type}>
+                            {ID_LABELS[type]}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                  ) : null}
-                </div>
+                    {ID_FIELDS.filter((field) => field.n === n).map((field) => (
+                      <PaperInput
+                        key={field.key}
+                        id={`sell-${field.key}`}
+                        label={`${field.label} of ID #${n}`}
+                        disabled={!idType}
+                        onFile={(file) => {
+                          setPapers((prev) => ({ ...prev, [field.key]: file }));
+                          setPaperError(null);
+                        }}
+                      />
+                    ))}
+                    {idType ? null : <p className="text-muted-foreground text-xs">Choose the ID type first.</p>}
+                  </li>
+                );
+              })}
+              {OTHER_PAPER_FIELDS.map((paper) => (
+                <li key={paper.key} className="flex flex-col gap-3 rounded-lg border p-3">
+                  <PaperInput
+                    id={`sell-${paper.key}`}
+                    label={paper.label}
+                    onFile={(file) => {
+                      setPapers((prev) => ({ ...prev, [paper.key]: file }));
+                      setPaperError(null);
+                    }}
+                  />
+                </li>
               ))}
-            </div>
+            </ul>
             {paperError && <FieldError errors={[{ message: paperError }]} />}
           </Field>
           <Field data-invalid={!!photoError}>
@@ -609,5 +650,36 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
         </form>
       </CardContent>
     </Card>
+  );
+}
+
+// One paper upload, shrunk in the browser like every upload (2 MB cap).
+function PaperInput({
+  id,
+  label,
+  disabled = false,
+  onFile,
+}: {
+  readonly id: string;
+  readonly label: string;
+  readonly disabled?: boolean;
+  readonly onFile: (file: File | null) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className="text-sm">
+        {label}
+      </label>
+      <Input
+        id={id}
+        type="file"
+        accept={SELL_PAPER_ACCEPT}
+        disabled={disabled}
+        onChange={async (event) => {
+          const chosen = event.target.files?.[0];
+          onFile(chosen ? await compressImage(chosen) : null);
+        }}
+      />
+    </div>
   );
 }

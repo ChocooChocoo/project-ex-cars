@@ -25,7 +25,11 @@ const { getUser, getCurrentRole, db, notify, rpc } = vi.hoisted(() => {
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/app/auth/actions", () => ({ getCurrentRole }));
 vi.mock("@/lib/notifications/notify", () => ({ notify }));
-vi.mock("@/lib/transactions/buy-flow-server", () => ({ releaseVisitSlots: vi.fn() }));
+vi.mock("@/lib/transactions/buy-flow-server", () => ({
+  releaseVehicle: vi.fn(),
+  releaseVisitSlots: vi.fn(),
+  reserveVehicle: vi.fn(),
+}));
 vi.mock("@/lib/supabase/server", () => ({
   createServerSupabaseClient: vi.fn(async () => ({ auth: { getUser }, rpc })),
 }));
@@ -67,7 +71,10 @@ beforeEach(() => {
       delivery_fee: 1000,
       downpayment_amount: 5000,
     },
-    payment_records: [{ payment_kind: "delivery_fee", amount: 1000, verified_by: "accountant-1" }],
+    payment_records: [
+      { payment_kind: "delivery_fee", amount: 1000, verified_by: "accountant-1" },
+      { payment_kind: "downpayment", amount: 5000, verified_by: "accountant-1" },
+    ],
     viewing_arrangements: [
       {
         id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",

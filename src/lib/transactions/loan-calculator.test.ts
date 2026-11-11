@@ -9,23 +9,16 @@ describe("T06 loan calculator", () => {
   });
 
   it("prices every term with GCE's markup and checks the income", () => {
-    const loan = computeLoan({
-      price: 1_000_000,
-      markupPct: 10,
-      monthlyIncome: 100_000,
-      registration: 5_000,
-      docsStamp: 1_500,
-    });
+    const loan = computeLoan({ price: 1_000_000, markupPct: 10, monthlyIncome: 100_000 });
     expect(loan.total).toBe(1_100_000);
     expect(loan.downPayment).toBe(100_000);
     expect(loan.financed).toBe(1_000_000);
-    expect(loan.cashOut).toBe(106_500);
     expect(loan.terms.find((t) => t.months === 36)).toEqual({ months: 36, monthly: 27_778, eligible: true });
     expect(loan.terms.find((t) => t.months === 24)?.eligible).toBe(false);
   });
 
   it("marks nothing eligible without an income", () => {
-    const loan = computeLoan({ price: 500_000, markupPct: 10, monthlyIncome: 0, registration: 0, docsStamp: 0 });
+    const loan = computeLoan({ price: 500_000, markupPct: 10, monthlyIncome: 0 });
     expect(loan.terms.every((t) => !t.eligible)).toBe(true);
   });
 });

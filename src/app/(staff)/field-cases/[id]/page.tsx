@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 
 import { getCurrentRole } from "@/app/auth/actions";
+import { PurchaseFundsCard } from "@/components/transactions/purchase-funds-card";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import type { PapersStatus } from "@/lib/transactions/buy-flow";
@@ -8,6 +9,8 @@ import { withSignedTransactionDocumentUrls } from "@/lib/transactions/document-m
 
 import { BuyerMeetupCase } from "./_components/buyer-meetup-case";
 import { DeliveryCase } from "./_components/delivery-case";
+import { FieldBudgetCard } from "./_components/field-budget-card";
+import { FieldExpensesCard } from "./_components/field-expenses-card";
 import { RecoveryCase } from "./_components/recovery-case";
 import { SellMeetupCase } from "./_components/sell-meetup-case";
 
@@ -21,6 +24,25 @@ const OVERSEERS: Record<string, string[]> = {
 const FIELD_TEAM = ["confidential_informant", "mechanic", "head_security"];
 // Any Confidential Informant may read a delivery or a meet-up; only the assigned team acts on it.
 const CI_OPEN_CASES = ["delivery", "buyer_meetup"];
+
+// T10: the Confidential Informant's budget and logged expenses on a delivery or buyer meet-up.
+async function loadFieldMoney(admin: ReturnType<typeof createAdminClient>, fieldCaseId: string) {
+  const [{ data: budget }, { data: expenses }] = await Promise.all([
+    admin
+      .from("disbursement_requests")
+      .select("id, status, amount_cents, returned_cents, returned_at, return_confirmed_at")
+      .eq("field_case_id", fieldCaseId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("field_case_expenses")
+      .select("id, amount, description, submitted_by, submitted_at, reimbursed_at")
+      .eq("field_case_id", fieldCaseId)
+      .order("submitted_at", { ascending: true }),
+  ]);
+  return { budget: budget as Record<string, unknown> | null, expenses: (expenses ?? []) as Record<string, unknown>[] };
+}
 
 // Selling steps 5–6 and 11, Delivery steps 7–7b: the case pack for the field team.
 // The field roles cannot read transactions under RLS (Task 32 kept it that way), so the pack is read
@@ -112,19 +134,32 @@ export default async function FieldCasePage({ params }: { readonly params: Promi
       .eq("id", fieldCase.transaction_id)
       .maybeSingle();
     if (!transaction) notFound();
+    const money = await loadFieldMoney(admin, fieldCase.id);
+    const isInformant = role === "confidential_informant" && fieldCase.assigned_confidential_informant === user.id;
+    const open = !["completed", "cancelled"].includes(fieldCase.state) && transaction.current_state === "approved";
     return (
-      <BuyerMeetupCase
-        fieldCase={fieldCase}
-        transaction={transaction as Record<string, unknown>}
-        papersStatus={papersStatus}
-        handover={handover ?? {}}
-        member={transaction.current_state === "approved" ? member : null}
-        canRecordPapers={
-          role === "confidential_informant" &&
-          fieldCase.assigned_confidential_informant === user.id &&
-          transaction.current_state === "approved"
-        }
-      />
+      <div className="flex flex-col gap-4">
+        <BuyerMeetupCase
+          fieldCase={fieldCase}
+          transaction={transaction as Record<string, unknown>}
+          papersStatus={papersStatus}
+          handover={handover ?? {}}
+          member={transaction.current_state === "approved" ? member : null}
+          canRecordPapers={
+            role === "confidential_informant" &&
+            fieldCase.assigned_confidential_informant === user.id &&
+            transaction.current_state === "approved"
+          }
+        />
+        <FieldBudgetCard
+          fieldCaseId={fieldCase.id}
+          budget={money.budget}
+          expenses={money.expenses}
+          isInformant={isInformant}
+          open={open}
+        />
+        <FieldExpensesCard fieldCaseId={fieldCase.id} expenses={money.expenses} canFile={isInformant && open} />
+      </div>
     );
   }
 
@@ -137,16 +172,29 @@ export default async function FieldCasePage({ params }: { readonly params: Promi
       .eq("id", fieldCase.transaction_id)
       .maybeSingle();
     if (!transaction) notFound();
+    const money = await loadFieldMoney(admin, fieldCase.id);
+    const isInformant = role === "confidential_informant" && fieldCase.assigned_confidential_informant === user.id;
+    const open = !["completed", "cancelled"].includes(fieldCase.state) && transaction.current_state === "approved";
     return (
-      <DeliveryCase
-        fieldCase={fieldCase}
-        transaction={transaction as Record<string, unknown>}
-        papersStatus={papersStatus}
-        handover={handover ?? {}}
-        member={transaction.current_state === "approved" ? member : null}
-        userRole={role}
-        userId={user.id}
-      />
+      <div className="flex flex-col gap-4">
+        <DeliveryCase
+          fieldCase={fieldCase}
+          transaction={transaction as Record<string, unknown>}
+          papersStatus={papersStatus}
+          handover={handover ?? {}}
+          member={transaction.current_state === "approved" ? member : null}
+          userRole={role}
+          userId={user.id}
+        />
+        <FieldBudgetCard
+          fieldCaseId={fieldCase.id}
+          budget={money.budget}
+          expenses={money.expenses}
+          isInformant={isInformant}
+          open={open}
+        />
+        <FieldExpensesCard fieldCaseId={fieldCase.id} expenses={money.expenses} canFile={isInformant && open} />
+      </div>
     );
   }
 
@@ -162,7 +210,16 @@ export default async function FieldCasePage({ params }: { readonly params: Promi
       .from("transaction_documents")
       .select("id, document_kind, id_type, verification_state, storage_path")
       .eq("transaction_id", fieldCase.transaction_id)
-      .in("document_kind", ["sell_photo", "valid_id", "orcr", "deed_of_sale", "inspection_photo", "expense_proof"]),
+      .in("document_kind", [
+        "sell_photo",
+        "valid_id",
+        "orcr",
+        "official_receipt",
+        "certificate_of_registration",
+        "deed_of_sale",
+        "inspection_photo",
+        "expense_proof",
+      ]),
     admin
       .from("field_case_expenses")
       .select("id, amount, description, submitted_by, submitted_at, reimbursed_at")
@@ -174,15 +231,43 @@ export default async function FieldCasePage({ params }: { readonly params: Promi
   const signedDocuments = await withSignedTransactionDocumentUrls(admin.storage, documents ?? []);
   const sellDetails = Array.isArray(transaction.sell_details) ? transaction.sell_details[0] : transaction.sell_details;
 
+  // T10: on a Meet Halfway the Confidential Informant requests the car payment and travel from here.
+  const { data: fund } = await admin
+    .from("disbursement_requests")
+    .select("id, status, amount_cents, purpose, requested_by, returned_cents, returned_at, return_confirmed_at")
+    .eq("purchase_transaction_id", fieldCase.transaction_id)
+    .neq("status", "rejected")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const sell = (sellDetails as Record<string, unknown> | null) ?? null;
+  const halfway = sell?.meetup_method !== "gce_visit";
+  const isInformant = role === "confidential_informant" && fieldCase.assigned_confidential_informant === user.id;
+
   return (
-    <SellMeetupCase
-      fieldCase={fieldCase}
-      transaction={transaction as Record<string, unknown>}
-      sellDetails={(sellDetails as Record<string, unknown> | null) ?? null}
-      documents={signedDocuments}
-      expenses={expenses ?? []}
-      userRole={role}
-      userId={user.id}
-    />
+    <div className="flex flex-col gap-4">
+      <SellMeetupCase
+        fieldCase={fieldCase}
+        transaction={transaction as Record<string, unknown>}
+        sellDetails={sell}
+        documents={signedDocuments}
+        expenses={expenses ?? []}
+        userRole={role}
+        userId={user.id}
+      />
+      {halfway && (isInformant || fund) ? (
+        <PurchaseFundsCard
+          transactionId={String(fieldCase.transaction_id)}
+          fieldCaseId={fieldCase.id}
+          fund={(fund as Record<string, unknown> | null) ?? null}
+          agreedPrice={Number(sell?.agreed_price ?? 0)}
+          halfway
+          expenses={expenses ?? []}
+          canRequest={isInformant && transaction.current_state === "approved"}
+          isRequester={Boolean(fund && fund.requested_by === user.id)}
+          cleared={Boolean(sell?.cleared_for_payment_at)}
+        />
+      ) : null}
+    </div>
   );
 }

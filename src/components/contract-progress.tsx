@@ -1,11 +1,6 @@
 import { format } from "date-fns";
 
-import {
-  isDirectPayment,
-  isFieldArrangement,
-  isHalfwayCashRequest,
-  missingContractCopies,
-} from "@/lib/transactions/buy-flow";
+import { isFieldArrangement, isHalfwayCashRequest, missingContractCopies } from "@/lib/transactions/buy-flow";
 
 type Row = Record<string, unknown>;
 
@@ -24,9 +19,6 @@ export function ContractProgress({ details, handover }: { readonly details: Row 
       : []),
     ...(isHalfwayCashRequest(details)
       ? ([["Signed copy kept by the Mechanic", handover.mechanic_copy_at]] as [string, unknown][])
-      : []),
-    ...(field && isDirectPayment(details)
-      ? ([["Payment reported to the Sales Manager", handover.cash_reported_at]] as [string, unknown][])
       : []),
   ];
   const missing = handover.contract_state === "signed" ? missingContractCopies(details, handover) : [];

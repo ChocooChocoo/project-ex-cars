@@ -165,7 +165,17 @@ export default async function TransactionDetailPage({ params }: { readonly param
 
   // T01 Selling: ceilings, the field inspection, the issue report, expenses and the negotiation thread.
   const isSell = (transaction as Record<string, unknown>).transaction_kind === "sell";
-  const [{ data: proposals }, { data: fieldCase }, { data: issueReport }, { data: expenses }, { data: thread }] = isSell
+  const [
+    { data: proposals },
+    { data: fieldCase },
+    { data: issueReport },
+    { data: expenses },
+    { data: thread },
+    { data: fund },
+    {
+      data: { user: viewer },
+    },
+  ] = isSell
     ? await Promise.all([
         supabase
           .from("vehicle_price_proposals")
@@ -180,8 +190,26 @@ export default async function TransactionDetailPage({ params }: { readonly param
           .eq("field_cases.transaction_id", id)
           .order("submitted_at", { ascending: true }),
         supabase.from("inquiries").select("id").eq("transaction_id", id).maybeSingle(),
+        // T10: the car's purchase funds (readable by finance roles and by the requester).
+        supabase
+          .from("disbursement_requests")
+          .select("id, status, amount_cents, purpose, requested_by, returned_cents, returned_at, return_confirmed_at")
+          .eq("purchase_transaction_id", id)
+          .neq("status", "rejected")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase.auth.getUser(),
       ])
-    : [{ data: null }, { data: null }, { data: null }, { data: null }, { data: null }];
+    : [
+        { data: null },
+        { data: null },
+        { data: null },
+        { data: null },
+        { data: null },
+        { data: null },
+        { data: { user: null } },
+      ];
 
   // Task 32: resolve sell condition_items ids to display names for staff.
   // sell_details is a UNIQUE-per-transaction row; the relation may still come
@@ -247,6 +275,8 @@ export default async function TransactionDetailPage({ params }: { readonly param
                 expenses: (expenses as Record<string, unknown>[] | null) ?? [],
                 threadId: (thread as { id: string } | null)?.id ?? null,
                 mechanics,
+                fund: fund as Record<string, unknown> | null,
+                fundIsMine: Boolean(fund && viewer && (fund as { requested_by: string }).requested_by === viewer.id),
               }
             : null
         }

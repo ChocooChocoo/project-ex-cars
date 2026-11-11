@@ -12,8 +12,8 @@ import { formatCurrency } from "@/lib/utils";
 const peso = (n: number) => formatCurrency(n, { noDecimals: true });
 const amount = (value: string) => Math.max(0, Number(value) || 0);
 
-// T06: GCE financing loan calculator, after Motortrade's: income, price, downpayment, registration and docs
-// stamp in; the monthly payment for each term and a loan eligibility estimate out.
+// T06: GCE financing loan calculator, after Motortrade's: income, price and downpayment in; the monthly
+// payment for each term and a loan eligibility estimate out. T10: no registration or docs stamp.
 export function LoanCalculator({
   price,
   markupPct,
@@ -25,20 +25,7 @@ export function LoanCalculator({
 }) {
   const id = useId();
   const [income, setIncome] = useState("");
-  const [registration, setRegistration] = useState("");
-  const [docsStamp, setDocsStamp] = useState("");
-  const loan = computeLoan({
-    price,
-    markupPct,
-    monthlyIncome: amount(income),
-    registration: amount(registration),
-    docsStamp: amount(docsStamp),
-  });
-  const fields = [
-    { key: "income", label: "Estimated monthly income (₱)", value: income, set: setIncome },
-    { key: "registration", label: "Registration (₱)", value: registration, set: setRegistration },
-    { key: "docs", label: "Docs stamp (₱)", value: docsStamp, set: setDocsStamp },
-  ];
+  const loan = computeLoan({ price, markupPct, monthlyIncome: amount(income) });
 
   return (
     <section aria-labelledby={`${id}-title`} className="flex flex-col gap-3 rounded-md border p-3">
@@ -50,22 +37,18 @@ export function LoanCalculator({
           Vehicle price {peso(price)} · Downpayment {peso(loan.downPayment)} (10%) · Financing adds {markupPct}%.
         </p>
       </div>
-      <div className="grid gap-2 sm:grid-cols-3">
-        {fields.map((field) => (
-          <div key={field.key} className="flex flex-col gap-1.5">
-            <Label htmlFor={`${id}-${field.key}`} className="text-xs">
-              {field.label}
-            </Label>
-            <Input
-              id={`${id}-${field.key}`}
-              type="number"
-              inputMode="decimal"
-              min={0}
-              value={field.value}
-              onChange={(event) => field.set(event.target.value)}
-            />
-          </div>
-        ))}
+      <div className="flex max-w-xs flex-col gap-1.5">
+        <Label htmlFor={`${id}-income`} className="text-xs">
+          Estimated monthly income (₱)
+        </Label>
+        <Input
+          id={`${id}-income`}
+          type="number"
+          inputMode="decimal"
+          min={0}
+          value={income}
+          onChange={(event) => setIncome(event.target.value)}
+        />
       </div>
       <Table>
         <TableHeader>
@@ -92,9 +75,9 @@ export function LoanCalculator({
         </TableBody>
       </Table>
       <p className="text-muted-foreground text-xs">
-        Cash needed upfront: {peso(loan.cashOut)} (downpayment, registration and docs stamp). Financed balance:{" "}
-        {peso(loan.financed)}. "Likely" means the payment is at most {AFFORDABLE_INCOME_SHARE * 100}% of your income.
-        This is an estimate; GCE confirms the final terms.
+        Cash needed upfront: {peso(loan.downPayment)} (downpayment). Financed balance: {peso(loan.financed)}. "Likely"
+        means the payment is at most {AFFORDABLE_INCOME_SHARE * 100}% of your income. This is an estimate; GCE confirms
+        the final terms.
       </p>
     </section>
   );

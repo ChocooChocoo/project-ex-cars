@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { paymentMethodLabel, TRANSACTION_STATE_LABELS, transactionKindLabel } from "@/lib/transactions/labels";
+import { SELL_PAPER_KINDS, sellPapersVerified } from "@/lib/transactions/sell-flow";
 import type { TransactionState } from "@/lib/transactions/state-machine";
 import { cn, formatCurrency } from "@/lib/utils";
 
@@ -39,6 +40,7 @@ export function deriveApprovalStages(args: {
   readonly documents?: Record<string, unknown>[];
 }): ApprovalStage[] {
   const { state, vehicles, purchaseDetails, history, documents } = args;
+  if (args.kind === "sell") return deriveSellStages(state, documents ?? []);
   const historyEntries = history ?? [];
 
   const hasProcessedHistory = historyEntries.some(
@@ -79,6 +81,30 @@ export function deriveApprovalStages(args: {
     { key: "sold", label: "Sold", owner: "Mark Sold to This Buyer" },
   ] as const;
 
+  return defs.map((def, index) => ({
+    ...def,
+    status: dones[index] ? "done" : firstTodo === index ? "current" : "todo",
+  }));
+}
+
+// T10: a sell offer is handled by the Marketing Specialist, the CEO and the Head Accountant; the Sales Manager
+// has no part in it, so its steps name the role that does each one.
+export function deriveSellStages(state: TransactionState, documents: Record<string, unknown>[]): ApprovalStage[] {
+  const papers = documents.filter((doc) => (SELL_PAPER_KINDS as readonly unknown[]).includes(doc.document_kind));
+  const beyondReview = ["under_review", "approved", "completed"].includes(state);
+  const dones = [
+    beyondReview || state === "rejected" || papers.some((doc) => doc.verification_state !== "pending"),
+    beyondReview || sellPapersVerified(papers as { document_kind: unknown; verification_state: unknown }[]),
+    ["approved", "completed"].includes(state),
+    state === "completed",
+  ];
+  const firstTodo = dones.findIndex((done) => !done);
+  const defs = [
+    { key: "processed", label: "Processed", owner: "Marketing Specialist" },
+    { key: "verified", label: "Verified", owner: "Marketing Specialist" },
+    { key: "approved", label: "Ceiling approved", owner: "CEO" },
+    { key: "sold", label: "Bought and paid", owner: "Head Accountant" },
+  ] as const;
   return defs.map((def, index) => ({
     ...def,
     status: dones[index] ? "done" : firstTodo === index ? "current" : "todo",
@@ -150,7 +176,11 @@ export function TransactionOverviewV1({
       <Card className="shadow-xs">
         <CardHeader className="px-4">
           <CardTitle>Approval flow</CardTitle>
-          <CardDescription>Processed (Sales) → Verified → Approved (Sales Manager) → Sold</CardDescription>
+          <CardDescription>
+            {kind === "sell"
+              ? "Processed → Verified (Marketing Specialist) → Ceiling approved (CEO) → Bought and paid (Head Accountant)"
+              : "Processed (Sales) → Verified → Approved (Sales Manager) → Sold"}
+          </CardDescription>
         </CardHeader>
         <CardContent className="px-4">
           <ol className="grid grid-cols-1 gap-2 sm:grid-cols-4">

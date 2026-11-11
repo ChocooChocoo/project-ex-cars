@@ -37,7 +37,8 @@ function done(transactionId: string): SellActionResult {
 
 const peso = (amount: unknown) => `₱${Number(amount).toLocaleString()}`;
 
-// Selling step 2: a failed check flags the offer for follow-up or rejects it outright.
+// Selling step 2: a failed check rejects the offer. T10: the "Flag" outcome was removed; the action keeps its
+// name so existing callers and tests stay put.
 export async function flagSellSubmission(formData: FormData): Promise<SellActionResult> {
   const actor = await marketingSpecialist();
   if ("error" in actor) return actor;
@@ -45,7 +46,7 @@ export async function flagSellSubmission(formData: FormData): Promise<SellAction
   const parsed = z
     .object({
       transaction_id: transactionIdSchema,
-      outcome: z.enum(["flag", "reject"]),
+      outcome: z.literal("reject", { message: "Only rejecting is available." }),
       reason: z.string().trim().min(1, "Give the reason.").max(1000),
     })
     .safeParse(Object.fromEntries(formData));
@@ -54,15 +55,14 @@ export async function flagSellSubmission(formData: FormData): Promise<SellAction
   const admin = createAdminClient();
   const tx = await loadSellTransaction(admin, parsed.data.transaction_id);
   if (!tx) return { error: "Sell transaction not found." };
-  if (tx.current_state !== "pending") return { error: "Only a submitted offer awaiting verification can be flagged." };
+  if (tx.current_state !== "pending") return { error: "Only a submitted offer awaiting verification can be rejected." };
 
-  const reject = parsed.data.outcome === "reject";
   const error = await moveSellTransaction(
     admin,
     tx,
     actor.userId,
-    reject ? { current_state: "rejected" } : { flag: "flagged" },
-    `${reject ? "Rejected" : "Flagged"} at verification: ${parsed.data.reason}`,
+    { current_state: "rejected" },
+    `Rejected at verification: ${parsed.data.reason}`,
   );
   if (error) return { error };
 
@@ -70,18 +70,18 @@ export async function flagSellSubmission(formData: FormData): Promise<SellAction
     admin,
     { userId: tx.customer_id },
     {
-      kind: reject ? "sell_offer_rejected" : "sell_offer_flagged",
-      title: reject ? "Your vehicle offer was rejected" : "Your vehicle offer needs attention",
+      kind: "sell_offer_rejected",
+      title: "Your vehicle offer was rejected",
       body: parsed.data.reason,
       transactionId: tx.id,
     },
   );
   await logAuditEvent({
     actorId: actor.userId,
-    action: reject ? "sell_rejected" : "sell_flagged",
+    action: "sell_rejected",
     recordKind: "transactions",
     recordId: tx.id,
-    summary: `Sell offer ${tx.id} ${reject ? "rejected" : "flagged"} at verification`,
+    summary: `Sell offer ${tx.id} rejected at verification`,
   });
   return done(tx.id);
 }
@@ -107,10 +107,12 @@ export async function proposePurchaseCeiling(formData: FormData): Promise<SellAc
 
   const { data: documents } = await admin
     .from("transaction_documents")
-    .select("document_kind, verification_state")
+    .select("document_kind, verification_state, id_type, id_side")
     .eq("transaction_id", tx.id);
   if (!sellPapersVerified(documents ?? [])) {
-    return { error: "Verify two valid IDs, the ORCR and the deed of sale before proposing a ceiling." };
+    return {
+      error: "Verify both valid IDs (front and back), the OR, the CR and the deed of sale before proposing a ceiling.",
+    };
   }
 
   const { error: proposalError } = await admin.from("vehicle_price_proposals").insert({
@@ -166,8 +168,8 @@ export async function recordAgreedPrice(formData: FormData): Promise<SellActionR
     .object({
       transaction_id: transactionIdSchema,
       agreed_price: money,
-      informant_id: z.string().uuid("Choose a Confidential Informant."),
-      mechanic_id: z.string().uuid().optional().or(z.literal("")),
+      informant_id: z.string().uuid().optional().or(z.literal("")),
+      mechanic_id: z.string().uuid("Choose the Mechanic who inspects the car."),
       schedule: z.string().min(1, "Set the meet-up date and time."),
       location: z.string().trim().min(1, "Set the meet-up location.").max(500),
     })
@@ -204,11 +206,17 @@ export async function recordAgreedPrice(formData: FormData): Promise<SellActionR
   const { data: workers } = await supabase.rpc("list_field_case_workers");
   const directory = (workers as { account_id: string; role: string }[] | null) ?? [];
   const isWorker = (id: string, role: string) => directory.some((w) => w.account_id === id && w.role === role);
-  if (!isWorker(parsed.data.informant_id, "confidential_informant")) {
-    return { error: "The selected user is not an active Confidential Informant." };
+  // T10: a GCE Visit needs only the Mechanic on the visit day; Meet Halfway sends a Confidential Informant too.
+  const method = tx.sell?.meetup_method as keyof typeof SELL_MEETUP_METHOD_LABELS | undefined;
+  const informantId = method === "gce_visit" ? null : parsed.data.informant_id || null;
+  if (method !== "gce_visit") {
+    if (!informantId) return { error: "Choose a Confidential Informant for the Meet Halfway." };
+    if (!isWorker(informantId, "confidential_informant")) {
+      return { error: "The selected user is not an active Confidential Informant." };
+    }
   }
-  const mechanicId = parsed.data.mechanic_id || null;
-  if (mechanicId && !isWorker(mechanicId, "mechanic")) return { error: "The selected user is not an active mechanic." };
+  const mechanicId = parsed.data.mechanic_id;
+  if (!isWorker(mechanicId, "mechanic")) return { error: "The selected user is not an active mechanic." };
 
   const { error: priceError } = await admin
     .from("sell_details")
@@ -216,14 +224,13 @@ export async function recordAgreedPrice(formData: FormData): Promise<SellActionR
     .eq("transaction_id", tx.id);
   if (priceError) return { error: priceError.message };
 
-  const method = tx.sell?.meetup_method as keyof typeof SELL_MEETUP_METHOD_LABELS | undefined;
   const { data: fieldCase, error: caseError } = await admin
     .from("field_cases")
     .insert({
       transaction_id: tx.id,
       vehicle_id: tx.vehicle_id,
       case_kind: "acquisition",
-      assigned_confidential_informant: parsed.data.informant_id,
+      assigned_confidential_informant: informantId,
       mechanic_id: mechanicId,
       schedule: schedule.toISOString(),
       location: parsed.data.location,
@@ -241,7 +248,7 @@ export async function recordAgreedPrice(formData: FormData): Promise<SellActionR
     actor_id: actor.userId,
     reason: `Price agreed at ${peso(parsed.data.agreed_price)}; acquisition field case created`,
   });
-  for (const workerId of [parsed.data.informant_id, mechanicId]) {
+  for (const workerId of [informantId, mechanicId]) {
     if (!workerId) continue;
     await notify(
       admin,
@@ -446,7 +453,7 @@ export async function recordSellerResponse(formData: FormData): Promise<SellActi
         {
           kind: "sell_ready_for_payment",
           title: "Seller's car cleared for payment",
-          body: `The seller agreed to ${peso(report.recalculated_price)}. Request the purchase funds in Finance.`,
+          body: `The seller agreed to ${peso(report.recalculated_price)}. Pay the seller from the released funds and return the excess.`,
           transactionId: tx.id,
         },
       );

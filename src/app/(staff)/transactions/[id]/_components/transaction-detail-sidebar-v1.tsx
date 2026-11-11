@@ -282,7 +282,12 @@ export function TransactionDetailSidebarV1({
                       >
                         {inst.state as string}
                       </Badge>
-                      {inst.state !== "paid" && inst.state !== "waived" && canRecordCash && onRecordInstallmentPaid ? (
+                      {inst.state !== "paid" &&
+                      inst.state !== "waived" &&
+                      canRecordCash &&
+                      onRecordInstallmentPaid &&
+                      // A payment already waiting for review is not recorded a second time.
+                      !payments.some((payment) => payment.installment_id === inst.id && !payment.rejected_at) ? (
                         <Button
                           variant="outline"
                           size="sm"
@@ -400,7 +405,6 @@ export function TransactionDetailSidebarV1({
                             <SelectItem value="delivery_fee">Delivery fee</SelectItem>
                             <SelectItem value="downpayment">Downpayment</SelectItem>
                             <SelectItem value="balance">Balance on delivery</SelectItem>
-                            <SelectItem value="reschedule_fee">Reschedule / redirect fee</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>

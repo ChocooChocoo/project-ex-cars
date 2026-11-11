@@ -59,5 +59,7 @@ export function transactionDocumentLabel(documentKind: unknown): string {
   const label = typeof documentKind === "string" ? documentKind.replace(/_/g, " ") : "document";
   if (label === "valid id") return "Valid ID";
   if (label === "orcr") return "ORCR";
+  if (label === "official receipt") return "Official Receipt (OR)";
+  if (label === "certificate of registration") return "Certificate of Registration (CR)";
   return label.charAt(0).toUpperCase() + label.slice(1);
 }

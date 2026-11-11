@@ -18,6 +18,7 @@ import {
 import { approvePrice } from "@/app/(staff)/vehicles/actions";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { TransactionStatusBadge } from "@/components/transaction-status-badge";
+import { PurchaseFundsCard } from "@/components/transactions/purchase-funds-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -46,15 +47,23 @@ export interface SellFlowData {
   readonly expenses: Row[];
   readonly threadId: string | null;
   readonly mechanics: Person[];
+  /** T10: the car's purchase funds and whether the viewer requested them. */
+  readonly fund?: Row | null;
+  readonly fundIsMine?: boolean;
 }
 
 // Next step for each stage, so every viewer sees where the offer stands (GCE Process Flows §1).
 function stageGuidance(state: TransactionState, data: SellFlowData, sell: Row | undefined): string {
-  if (state === "pending") return "Step 2: the Marketing Specialist verifies the IDs, ORCR and deed of sale.";
+  if (state === "pending") return "Step 2: the Marketing Specialist verifies the IDs, OR, CR and deed of sale.";
   if (state === "under_review") return "Waiting for the CEO to decide the proposed ceiling (7-day window).";
   if (state === "approved") {
-    if (sell?.cleared_for_payment_at) return "Cleared for payment. Request the purchase funds in Finance.";
+    if (sell?.cleared_for_payment_at) return "Cleared for payment. The fund requester pays the seller.";
     if (!data.fieldCase) return "Step 5: negotiate in the chat within the ceiling, then record the agreed price.";
+    if (!data.fund) {
+      return sell?.meetup_method === "gce_visit"
+        ? "Step 6: the Marketing Specialist requests the car payment from the Head Accountant."
+        : "Step 6: the Confidential Informant requests the car payment and travel budget on the field case.";
+    }
     if (!data.fieldCase.inspection_outcome) return "Step 6: the field team meets the seller and inspects the car.";
     if (!data.issueReport) return "Step 7: the Marketing Specialist files the Inspection Issue Report.";
     return "Step 9: the Mechanic presents the revised price; record the seller's answer.";
@@ -208,23 +217,15 @@ export function SellFlowPanel({
             >
               Propose ceiling to CEO
             </Button>
-            <Field label="Reason (flag or reject)" htmlFor="flag-reason">
+            <Field label="Reason for rejecting" htmlFor="reject-reason">
               <Textarea
-                id="flag-reason"
+                id="reject-reason"
                 rows={2}
                 value={form.reason ?? ""}
                 onChange={(e) => set("reason")(e.target.value)}
               />
             </Field>
             <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={busy}
-                onClick={() => submit(flagSellSubmission, { outcome: "flag", reason: form.reason }, "Offer flagged.")}
-              >
-                Flag
-              </Button>
               <ConfirmDialog
                 action="reject"
                 description="The seller's offer is closed."
@@ -277,6 +278,39 @@ export function SellFlowPanel({
                 />
               ))}
             </div>
+            {/* T10: a third choice, the CEO sets the ceiling the Marketing Specialist must follow. */}
+            <div className="flex flex-wrap items-end gap-2">
+              <Field label="Or set the ceiling yourself (₱)" htmlFor="ceo-ceiling">
+                <Input
+                  id="ceo-ceiling"
+                  type="number"
+                  min="1"
+                  value={form.ceo_ceiling ?? ""}
+                  onChange={(e) => set("ceo_ceiling")(e.target.value)}
+                />
+              </Field>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy || !(Number(form.ceo_ceiling) > 0)}
+                onClick={async () => {
+                  setBusy(true);
+                  const fd = new FormData();
+                  fd.set("proposal_id", pendingProposal.id as string);
+                  fd.set("decision", "approved");
+                  fd.set("ceiling_amount", form.ceo_ceiling ?? "");
+                  const result = await approvePrice(fd);
+                  setBusy(false);
+                  if (result.error) toast.error(result.error);
+                  else {
+                    toast.success("Ceiling set. The Marketing Specialist negotiates within it.");
+                    router.refresh();
+                  }
+                }}
+              >
+                Set price
+              </Button>
+            </div>
           </section>
         ) : null}
 
@@ -311,14 +345,16 @@ export function SellFlowPanel({
                   onChange={(e) => set("location")(e.target.value)}
                 />
               </Field>
+              {method === "gce_visit" ? null : (
+                <PersonSelect
+                  label="Confidential Informant"
+                  people={informants}
+                  value={form.informant_id}
+                  onChange={set("informant_id")}
+                />
+              )}
               <PersonSelect
-                label="Confidential Informant"
-                people={informants}
-                value={form.informant_id}
-                onChange={set("informant_id")}
-              />
-              <PersonSelect
-                label="Mechanic (optional)"
+                label={method === "gce_visit" ? "Mechanic for the visit day" : "Mechanic"}
                 people={data.mechanics}
                 value={form.mechanic_id}
                 onChange={set("mechanic_id")}
@@ -345,6 +381,20 @@ export function SellFlowPanel({
               Create field case
             </Button>
           </section>
+        ) : null}
+
+        {fieldCase && (state === "approved" || state === "completed" || data.fund) ? (
+          <PurchaseFundsCard
+            transactionId={id}
+            fieldCaseId={String(fieldCase.id)}
+            fund={data.fund ?? null}
+            agreedPrice={Number(sellDetails?.agreed_price ?? 0)}
+            halfway={method !== "gce_visit"}
+            expenses={data.expenses}
+            canRequest={isMs && method === "gce_visit" && state === "approved"}
+            isRequester={Boolean(data.fundIsMine)}
+            cleared={Boolean(sellDetails?.cleared_for_payment_at)}
+          />
         ) : null}
 
         {fieldCase ? (

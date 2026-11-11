@@ -10,7 +10,6 @@ import { toast } from "sonner";
 
 import {
   confirmFieldCheck,
-  fileFieldExpense,
   recordFieldPrice,
   reportInspection,
 } from "@/app/(staff)/field-cases/sell-inspection-actions";
@@ -26,6 +25,8 @@ import { transactionDocumentLabel } from "@/lib/transactions/document-media";
 import { SELL_MEETUP_METHOD_LABELS, type SellMeetupMethod } from "@/lib/transactions/sell-flow";
 import { compressFormFiles } from "@/lib/uploads/compress-image";
 import { formatCurrency } from "@/lib/utils";
+
+import { FieldExpensesCard } from "./field-expenses-card";
 
 type Row = Record<string, unknown>;
 type Result = { error: string } | { success: true };
@@ -52,13 +53,10 @@ export function SellMeetupCase({
   const [outcome, setOutcome] = useState("");
   const [issue, setIssue] = useState("");
   const [estimate, setEstimate] = useState("");
-  const [amount, setAmount] = useState("");
-  const [description, setDescription] = useState("");
   const [priceStatus, setPriceStatus] = useState("");
   const [updatedPrice, setUpdatedPrice] = useState("");
   const [discount, setDiscount] = useState("");
   const photosRef = useRef<HTMLInputElement>(null);
-  const proofRef = useRef<HTMLInputElement>(null);
 
   const caseId = fieldCase.id as string;
   const isAssigned = fieldCase.assigned_confidential_informant === userId || fieldCase.mechanic_id === userId;
@@ -109,19 +107,6 @@ export function SellMeetupCase({
     }
     toast.success(priceStatus === "negotiated" ? "Confirmed price kept." : "Price updated. The office was notified.");
     router.refresh();
-  }
-
-  async function submitExpense() {
-    const fd = new FormData();
-    fd.set("amount", amount);
-    fd.set("description", description);
-    const proof = proofRef.current?.files?.[0];
-    if (proof) fd.set("proof", proof);
-    if (await send(fileFieldExpense, fd, "Expense filed.")) {
-      setAmount("");
-      setDescription("");
-      if (proofRef.current) proofRef.current.value = "";
-    }
   }
 
   return (
@@ -202,7 +187,7 @@ export function SellMeetupCase({
                 <span>Seller identity</span>
                 {fieldCase.identity_confirmed_at ? (
                   <Badge>Confirmed</Badge>
-                ) : isInformant && open ? (
+                ) : (isInformant || (isMechanic && !fieldCase.assigned_confidential_informant)) && open ? (
                   <Button size="sm" disabled={busy} onClick={() => check("identity")}>
                     Confirm identity
                   </Button>
@@ -366,59 +351,13 @@ export function SellMeetupCase({
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Meet-up expenses</CardTitle>
-              <CardDescription>
-                Required from each field worker, whether or not GCE bought the car. Attach a proof for each.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-2 text-sm">
-              {expenses.map((expense) => (
-                <div
-                  key={expense.id as string}
-                  className="flex items-center justify-between gap-2 rounded-md border px-2.5 py-1.5"
-                >
-                  <span>
-                    {String(expense.description)} · {formatCurrency(Number(expense.amount))}
-                  </span>
-                  <span className="text-muted-foreground text-xs">
-                    {expense.reimbursed_at ? "Reimbursed" : "Awaiting reimbursement"}
-                  </span>
-                </div>
-              ))}
-              {expenses.length === 0 ? <p className="text-muted-foreground">No expenses filed yet.</p> : null}
-              {isAssigned && open ? (
-                <div className="flex flex-col gap-2 pt-2">
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input
-                      type="number"
-                      min="0"
-                      placeholder="Amount (₱)"
-                      aria-label="Expense amount"
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                    />
-                    <Input
-                      placeholder="e.g. Fuel and toll"
-                      aria-label="Expense description"
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                    />
-                  </div>
-                  <Input
-                    ref={proofRef}
-                    type="file"
-                    aria-label="Proof of expense"
-                    accept="image/jpeg,image/png,image/webp,application/pdf"
-                  />
-                  <Button size="sm" className="self-start" disabled={busy} onClick={submitExpense}>
-                    File expense
-                  </Button>
-                </div>
-              ) : null}
-            </CardContent>
-          </Card>
+          <FieldExpensesCard
+            fieldCaseId={caseId}
+            expenses={expenses}
+            canFile={isAssigned && open}
+            title="Meet-up expenses"
+            description="Required from each field worker, whether or not GCE bought the car. Attach a proof for each."
+          />
         </div>
       </div>
     </div>

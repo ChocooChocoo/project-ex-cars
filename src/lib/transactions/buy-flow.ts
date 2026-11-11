@@ -225,6 +225,37 @@ export function verifiedPaid(payments: PaymentLike[], kind: string): number {
   return payments.filter((p) => p.payment_kind === kind && p.verified_by).reduce((sum, p) => sum + Number(p.amount), 0);
 }
 
+// T10: re-scheduling a delivery is free until 24 hours before the original delivery time; after that it
+// costs half the original delivery fee, paid through PayMongo.
+export const RESCHEDULE_FREE_HOURS = 24;
+
+export function rescheduleFee(originalSchedule: Date, deliveryFee: number, now: Date = new Date()): number {
+  const hoursLeft = (originalSchedule.getTime() - now.getTime()) / 3_600_000;
+  return hoursLeft > RESCHEDULE_FREE_HOURS ? 0 : Math.round(deliveryFee * 50) / 100;
+}
+
+/** The first delivery time the buyer booked: the oldest delivery arrangement, cancelled or not. */
+export function originalDeliverySchedule(
+  arrangements: readonly { arrangement_kind?: unknown; schedule?: unknown; created_at?: unknown }[],
+): string | null {
+  const deliveries = arrangements
+    .filter((row) => row.arrangement_kind === "delivery" && row.schedule)
+    .sort((a, b) => String(a.created_at ?? "").localeCompare(String(b.created_at ?? "")));
+  return deliveries[0] ? String(deliveries[0].schedule) : null;
+}
+
+// T10: a buy's field case opens only after the buyer's upfront payments (delivery fee and downpayment,
+// whichever apply) are verified. A payment of 0 needs nothing.
+export function upfrontPaymentsCleared(
+  details: { delivery_fee?: unknown; downpayment_amount?: unknown } | null,
+  payments: PaymentLike[],
+): boolean {
+  return (
+    verifiedPaid(payments, "delivery_fee") >= Number(details?.delivery_fee ?? 0) &&
+    verifiedPaid(payments, "downpayment") >= Number(details?.downpayment_amount ?? 0)
+  );
+}
+
 // What the buyer has paid toward the car itself. The delivery and reschedule fees are charged on top
 // of the car price, so they do not reduce it.
 // A payment the Head Accountant rejected (T03 HA3) never counts.
@@ -412,11 +443,26 @@ type OnlinePaymentContext = {
 };
 
 // Money the buyer has already paid toward the car and GCE has confirmed. A rejected payment never counts.
-function verifiedTowardPrice(payments: NonNullable<OnlinePaymentContext["payments"]>): number {
+// T10: a Bank Transfer car is marked delivered, and its papers handed over, only once this covers the price.
+export function verifiedTowardPrice(payments: NonNullable<OnlinePaymentContext["payments"]>): number {
   return payments
     .filter((p) => p.verified_by && !p.rejected_at)
     .filter((p) => p.payment_kind !== "delivery_fee" && p.payment_kind !== "reschedule_fee")
     .reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
+}
+
+// T10: PayMongo refuses a single payment of ₱999,999 or more. A larger balance is paid in parts of at most
+// this much; after each verified part the next one is due. Lower it if PayMongo's limit changes.
+export const PAYMONGO_MAX_AMOUNT = 999_000;
+
+export function balancePart(remaining: number): OnlinePayment {
+  if (remaining <= PAYMONGO_MAX_AMOUNT) return { kind: "balance", label: "Balance", amount: remaining };
+  const left = remaining - PAYMONGO_MAX_AMOUNT;
+  return {
+    kind: "balance",
+    label: `Balance, part payment (₱${left.toLocaleString("en-PH")} left after this)`,
+    amount: PAYMONGO_MAX_AMOUNT,
+  };
 }
 
 // What the buyer pays online: a delivery's fee and downpayment once its terms are set, or the Initial
@@ -434,7 +480,7 @@ export function onlinePaymentsDue(
     if (!needsContract(details) || context.contract_state === "signed") {
       const remaining =
         Number(context.final_price ?? details.final_price ?? 0) - verifiedTowardPrice(context.payments ?? []);
-      return remaining > 0 ? [{ kind: "balance" as const, label: "Balance", amount: remaining }] : [];
+      return remaining > 0 ? [balancePart(remaining)] : [];
     }
     // Before signing, only what the arrangement allows: a delivery's fee and downpayment, or a meet-up's
     // downpayment.

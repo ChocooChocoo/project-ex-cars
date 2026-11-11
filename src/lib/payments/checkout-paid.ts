@@ -2,6 +2,7 @@ import { revalidatePath } from "next/cache";
 
 import { notify } from "@/lib/notifications/notify";
 import type { createAdminClient } from "@/lib/supabase/admin";
+import { notifyInformantIfPaidInFull } from "@/lib/transactions/buy-flow-server";
 import { confirmInitialDownpaymentIfPaid } from "@/lib/transactions/financing-server";
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -20,22 +21,21 @@ type PaidRow = {
 // T07 CR1: an installment is not self-verifying. PayMongo only proves the money arrived; the Sales Manager
 // approves it and the Head Accountant verifies it. Downpayments and one-off payments keep the old rule.
 export async function markCheckoutPaid(admin: Admin, checkoutId: string, paymentId: string | null): Promise<boolean> {
+  // One conditional update claims the rows. When the webhook and Pay race, only one caller gets rows back,
+  // so the notifications below go out once.
   const { data: rows } = await admin
-    .from("payment_records")
-    .select("id, transaction_id, recorded_by, payment_kind, amount")
-    .eq("paymongo_checkout_id", checkoutId)
-    .is("paid_at", null);
-  const unpaid = (rows ?? []) as PaidRow[];
-  if (unpaid.length === 0) return false;
-
-  await admin
     .from("payment_records")
     .update({ paid_at: new Date().toISOString(), paymongo_payment_id: paymentId })
     .eq("paymongo_checkout_id", checkoutId)
-    .is("paid_at", null);
+    .is("paid_at", null)
+    .select("id, transaction_id, recorded_by, payment_kind, amount");
+  const unpaid = (rows ?? []) as PaidRow[];
+  if (unpaid.length === 0) return false;
 
   const installments = unpaid.filter((row) => row.payment_kind === "installment");
-  const settled = unpaid.filter((row) => row.payment_kind !== "installment");
+  // T10: a re-scheduling fee applies the new delivery time only after the Head Accountant verifies it.
+  const rescheduleFees = unpaid.filter((row) => row.payment_kind === "reschedule_fee");
+  const settled = unpaid.filter((row) => !["installment", "reschedule_fee"].includes(String(row.payment_kind)));
 
   // Verified by PayMongo itself, as before. Installments wait for the two staff approvals instead.
   if (settled.length > 0) {
@@ -50,6 +50,7 @@ export async function markCheckoutPaid(admin: Admin, checkoutId: string, payment
 
   const transactionId = unpaid[0].transaction_id;
   await confirmInitialDownpaymentIfPaid(admin, transactionId);
+  if (settled.length > 0) await notifyInformantIfPaidInFull(admin, transactionId);
 
   if (settled.length > 0) {
     const total = settled.reduce((sum, row) => sum + Number(row.amount), 0);
@@ -65,6 +66,19 @@ export async function markCheckoutPaid(admin: Admin, checkoutId: string, payment
         },
       );
     }
+  }
+
+  if (rescheduleFees.length > 0) {
+    await notify(
+      admin,
+      { role: "head_accountant" },
+      {
+        kind: "reschedule_fee_paid",
+        title: "Re-scheduling fee paid on PayMongo",
+        body: "The buyer paid the delivery re-scheduling fee. Verify it to send the new schedule to the team.",
+        transactionId: unpaid[0].transaction_id,
+      },
+    );
   }
 
   if (installments.length > 0) {

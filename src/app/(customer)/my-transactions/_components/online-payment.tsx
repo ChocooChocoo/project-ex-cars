@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import type { OnlinePayment as Due } from "@/lib/transactions/buy-flow";
 import { formatCurrency } from "@/lib/utils";
 
-type PaymentRow = { payment_kind?: unknown; verified_by?: unknown };
+type PaymentRow = { payment_kind?: unknown; verified_by?: unknown; rejected_at?: unknown };
 
 // What the buyer pays on PayMongo Checkout, and where each payment stands: not paid, waiting for PayMongo
 // to confirm, or paid. PayMongo's webhook marks a payment paid.
@@ -28,7 +28,9 @@ export function OnlinePayment({
   const router = useRouter();
   const returned = useSearchParams();
   const [busy, setBusy] = useState(false);
-  const rowFor = (kind: string) => payments.find((p) => p.payment_kind === kind);
+  // A balance paid in parts (T10): only the part still open counts; a verified earlier part is history.
+  const rowFor = (kind: string) =>
+    payments.find((p) => p.payment_kind === kind && (kind !== "balance" || (!p.verified_by && !p.rejected_at)));
   // Not paid yet: never started, or started on a Checkout the buyer left. Pay reopens or replaces it.
   const unpaid = due.filter((payment) => !rowFor(payment.kind)?.verified_by);
 

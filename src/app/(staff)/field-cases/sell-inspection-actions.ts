@@ -121,7 +121,9 @@ export async function confirmFieldCheck(formData: FormData): Promise<FieldAction
   const check = formData.get("check");
   const { fieldCase, role, userId } = context;
 
-  if (check === "identity" && role !== "confidential_informant") {
+  // T10: a GCE Visit has no Confidential Informant, so the Mechanic confirms the seller's identity there.
+  const identityRole = fieldCase.assigned_confidential_informant ? "confidential_informant" : "mechanic";
+  if (check === "identity" && role !== identityRole) {
     return { error: "The Confidential Informant confirms the seller's identity." };
   }
   if (check === "plate" && role !== "mechanic") return { error: "The Mechanic confirms the plate and chassis." };
@@ -207,7 +209,7 @@ export async function reportInspection(formData: FormData): Promise<FieldActionR
         title: issueFound ? "Inspection found an issue" : "Seller's car cleared for payment",
         body: issueFound
           ? "The Mechanic found an issue at the seller meet-up. Create the Inspection Issue Report."
-          : "The inspection found no issues. Request the purchase funds in Finance.",
+          : "The inspection found no issues. The fund requester can now pay the seller from the released funds.",
         transactionId: fieldCase.transaction_id,
       },
     );

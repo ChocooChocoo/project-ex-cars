@@ -6,22 +6,17 @@ import { useRouter } from "next/navigation";
 
 import { toast } from "sonner";
 
-import {
-  recordBuyerMet,
-  recordContractCopy,
-  reportCashReceived,
-  reportSigning,
-} from "@/app/(staff)/transactions/handover-actions";
+import { recordBuyerMet, recordContractCopy, reportSigning } from "@/app/(staff)/transactions/handover-actions";
 import { ContractProgress } from "@/components/contract-progress";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { isDirectPayment, isHalfwayCashRequest, signsInApp } from "@/lib/transactions/buy-flow";
+import { isHalfwayCashRequest, signsInApp } from "@/lib/transactions/buy-flow";
 
 type Row = Record<string, unknown>;
 type Result = { error: string } | { success: true };
 
-// Meet-up or delivery day: the team records the buyer met, the signing, the signed copies they keep and
-// the money, in that order. Each button appears only for the person who may press it, when it is due.
+// Meet-up or delivery day: the team records the buyer met, the signing and the signed copies they keep, in
+// that order. T10: no payment is recorded in the field; the buyer pays in the app or at GCE. Each button appears only for the person who may press it, when it is due.
 export function ContractCard({
   transactionId,
   details,
@@ -56,7 +51,7 @@ export function ContractCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Contract and payment</CardTitle>
+        <CardTitle>Contract</CardTitle>
         <CardDescription>
           The buyer signs before any money changes hands and before the papers are handed over.
         </CardDescription>
@@ -86,16 +81,6 @@ export function ContractCard({
                 onClick={() => send(recordContractCopy, "Your signed copy is recorded.")}
               >
                 Record my signed copy
-              </Button>
-            ) : null}
-            {isDirectPayment(details) && signed && !handover.cash_reported_at ? (
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={busy}
-                onClick={() => send(reportCashReceived, "Payment reported to the Sales Manager.")}
-              >
-                Report payment received
               </Button>
             ) : null}
           </div>

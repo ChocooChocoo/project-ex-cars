@@ -171,6 +171,15 @@ describe("saveBuyDetails schedule rules", () => {
     form.set("schedule", schedule);
     form.set("location", "SM Calamba parking");
     form.set("acknowledge_condition", "yes");
+    for (const [key, value] of Object.entries({
+      region_code: "040000000",
+      region_name: "CALABARZON",
+      city_code: "043405000",
+      city_name: "City of Calamba",
+      barangay_code: "043405001",
+      barangay_name: "Bagong Kalsada",
+    }))
+      form.set(key, value);
     return form;
   }
 

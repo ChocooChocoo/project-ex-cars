@@ -55,7 +55,9 @@ export function MeetupTeamPanel({
   const downpaymentRequired = paymentMethod === "bank_transfer";
   const downpayment = Number(pick.downpayment_amount ?? 0);
   const downpaymentReady = !downpaymentRequired || (Number.isFinite(downpayment) && downpayment > 0);
-  const complete = Boolean(pick.informant_id && pick.mechanic_id) && downpaymentReady;
+  // T10: a Bank Transfer meet-up is approved with its downpayment only; the team follows once it is paid.
+  const downpaymentOnly = mode === "approval" && downpaymentRequired;
+  const complete = downpaymentOnly ? downpaymentReady : Boolean(pick.informant_id && pick.mechanic_id);
   const received = (at: unknown) => (at ? `received ${format(new Date(at as string), "MMM d, h:mm a")}` : "not yet");
 
   async function assign() {
@@ -78,9 +80,11 @@ export function MeetupTeamPanel({
       <CardHeader>
         <CardTitle>Meet-up team</CardTitle>
         <CardDescription>
-          {mode === "approval"
-            ? "Choose who meets the buyer. Approving creates their field case and sends them the command."
-            : "A Confidential Informant and a Mechanic meet the buyer. The Confidential Informant carries the papers."}
+          {downpaymentOnly
+            ? "Set the downpayment the buyer pays online. The team is assigned once the payment is verified."
+            : mode === "approval"
+              ? "Choose who meets the buyer. Approving creates their field case and sends them the command."
+              : "A Confidential Informant and a Mechanic meet the buyer. The Confidential Informant carries the papers."}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3 text-sm">
@@ -102,7 +106,7 @@ export function MeetupTeamPanel({
           </>
         ) : (
           <>
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className={downpaymentOnly ? "hidden" : "grid gap-2 sm:grid-cols-2"}>
               <PersonSelect
                 label="Confidential Informant"
                 people={informants}
@@ -136,11 +140,13 @@ export function MeetupTeamPanel({
             ) : null}
             {mode === "approval" ? (
               <p className="text-muted-foreground text-xs">
-                {complete
-                  ? "Team chosen. Approve the request to send the command."
-                  : downpaymentReady
-                    ? "The request cannot be approved until both are chosen."
-                    : "Enter the downpayment the buyer pays before the meet-up."}
+                {downpaymentOnly
+                  ? complete
+                    ? "Approve the request. The buyer then pays the downpayment through PayMongo."
+                    : "Enter the downpayment the buyer pays before the meet-up."
+                  : complete
+                    ? "Team chosen. Approve the request to send the command."
+                    : "The request cannot be approved until both are chosen."}
               </p>
             ) : (
               <>

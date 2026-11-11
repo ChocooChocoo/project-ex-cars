@@ -126,18 +126,36 @@ export async function submitReconditioningReport(formData: FormData): Promise<Re
     return { error: "Only the assigned Mechanic can report on this car." };
   }
 
+  // T10: every row of the parts table carries a photo of the part to repair or replace.
+  const photos = parsed.data.parts.map((_, index) => formData.get(`part_photo_${index}`));
+  if (photos.some((photo) => !(photo instanceof File) || photo.size === 0)) {
+    return { error: "Add a photo of every part." };
+  }
+  const photoFiles = photos as File[];
+  if (photoFiles.some((photo) => !RECEIPT_TYPES[photo.type] || photo.size > MAX_RECEIPT_BYTES)) {
+    return { error: "Part photos must be JPEG, PNG or WebP images of 2 MB or less." };
+  }
+
   const admin = createAdminClient();
   const totalCents = partsTotalCents(parsed.data.parts);
   const summary = parsed.data.parts.map((part) => `${part.part_name} (${part.replacement_brand})`).join(", ");
+  const photoPaths: string[] = [];
+  for (const [index, photo] of photoFiles.entries()) {
+    const path = `parts/${job.id}/${index}-${Date.now()}.${RECEIPT_TYPES[photo.type]}`;
+    const { error: uploadError } = await admin.storage.from("reconditioning-receipts").upload(path, photo);
+    if (uploadError) return { error: uploadError.message };
+    photoPaths.push(path);
+  }
 
   const { error: deletePartsError } = await admin.from("reconditioning_parts").delete().eq("job_id", job.id);
   if (deletePartsError) return { error: deletePartsError.message };
   const { error: partsError } = await admin.from("reconditioning_parts").insert(
-    parsed.data.parts.map((part) => ({
+    parsed.data.parts.map((part, index) => ({
       job_id: job.id,
       part_name: part.part_name,
       replacement_brand: part.replacement_brand,
       estimated_cost_cents: Math.round(part.estimated_cost * 100),
+      photo_path: photoPaths[index],
     })),
   );
   if (partsError) return { error: partsError.message };
@@ -147,7 +165,7 @@ export async function submitReconditioningReport(formData: FormData): Promise<Re
     .insert({
       title: "Reconditioning fund",
       amount_cents: totalCents,
-      purpose: `Repair and reconditioning of a repossessed car: ${summary.slice(0, 200)}`,
+      purpose: `Repair and reconditioning: ${summary.slice(0, 200)}`,
       status: "submitted",
       requested_by: who.userId,
     })
@@ -184,7 +202,7 @@ export async function submitReconditioningReport(formData: FormData): Promise<Re
   await notifyRole(
     "head_accountant",
     "Reconditioning fund request",
-    `The Mechanic estimates ${peso(totalCents / 100)} to restore a repossessed car. Release it from Finance.`,
+    `The Mechanic estimates ${peso(totalCents / 100)} to recondition a car. Review the parts table and release it from Finance.`,
     transactionReference(job),
   );
   return done(job.vehicle_id);

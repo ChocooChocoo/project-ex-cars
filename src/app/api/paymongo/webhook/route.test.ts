@@ -22,6 +22,7 @@ const { notify, confirm, db } = vi.hoisted(() => {
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/notifications/notify", () => ({ notify }));
+vi.mock("@/lib/transactions/buy-flow-server", () => ({ notifyInformantIfPaidInFull: vi.fn() }));
 vi.mock("@/lib/transactions/financing-server", () => ({ confirmInitialDownpaymentIfPaid: confirm }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn(() => ({ from: db.from })) }));
 
@@ -107,8 +108,10 @@ describe("PayMongo webhook", () => {
     const response = await post(event());
 
     expect(response.status).toBe(200);
-    expect(db.writes).toEqual([]);
+    // Only the conditional claim runs; it matches no unpaid row, so nothing is verified or announced.
+    expect(db.writes).toHaveLength(1);
     expect(notify).not.toHaveBeenCalled();
+    expect(confirm).not.toHaveBeenCalled();
   });
 
   it("refuses a request PayMongo did not sign", async () => {

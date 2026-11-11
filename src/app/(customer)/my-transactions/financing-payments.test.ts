@@ -1,42 +1,44 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { db, authorizeAction, createCheckoutSession, retrieveCheckoutSession, markCheckoutPaid } = vi.hoisted(() => {
-  const rows: Record<string, unknown> = {};
-  const writes: { table: string; payload: unknown }[] = [];
-  const errors = { insert: null as { code?: string; message: string } | null };
-  const from = (table: string) => {
-    let inserting = false;
-    const answer = () => Promise.resolve({ data: rows[table] ?? null, error: inserting ? errors.insert : null });
-    const builder: Record<string, unknown> = {};
-    for (const step of ["select", "eq", "in", "is"]) builder[step] = () => builder;
-    builder.insert = (payload: unknown) => {
-      inserting = true;
-      writes.push({ table, payload });
+const { db, authorizeAction, createCheckoutSession, retrieveCheckoutSession, expireCheckoutSession, markCheckoutPaid } =
+  vi.hoisted(() => {
+    const rows: Record<string, unknown> = {};
+    const writes: { table: string; payload: unknown }[] = [];
+    const errors = { insert: null as { code?: string; message: string } | null };
+    const from = (table: string) => {
+      let inserting = false;
+      const answer = () => Promise.resolve({ data: rows[table] ?? null, error: inserting ? errors.insert : null });
+      const builder: Record<string, unknown> = {};
+      for (const step of ["select", "eq", "in", "is"]) builder[step] = () => builder;
+      builder.insert = (payload: unknown) => {
+        inserting = true;
+        writes.push({ table, payload });
+        return builder;
+      };
+      builder.delete = () => {
+        writes.push({ table, payload: { op: "delete" } });
+        rows[table] = [];
+        return builder;
+      };
+      builder.maybeSingle = answer;
+      // biome-ignore lint/suspicious/noThenProperty: Supabase queries are awaitable.
+      builder.then = (resolve: (value: unknown) => unknown) => answer().then(resolve);
       return builder;
     };
-    builder.delete = () => {
-      writes.push({ table, payload: { op: "delete" } });
-      rows[table] = [];
-      return builder;
+    return {
+      db: { rows, writes, errors, from },
+      authorizeAction: vi.fn(),
+      createCheckoutSession: vi.fn(),
+      retrieveCheckoutSession: vi.fn(),
+      expireCheckoutSession: vi.fn(),
+      markCheckoutPaid: vi.fn(),
     };
-    builder.maybeSingle = answer;
-    // biome-ignore lint/suspicious/noThenProperty: Supabase queries are awaitable.
-    builder.then = (resolve: (value: unknown) => unknown) => answer().then(resolve);
-    return builder;
-  };
-  return {
-    db: { rows, writes, errors, from },
-    authorizeAction: vi.fn(),
-    createCheckoutSession: vi.fn(),
-    retrieveCheckoutSession: vi.fn(),
-    markCheckoutPaid: vi.fn(),
-  };
-});
+  });
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/headers", () => ({ headers: async () => new Map([["origin", "https://gce.test"]]) }));
 vi.mock("@/lib/auth/action-guard", () => ({ authorizeAction }));
-vi.mock("@/lib/payments/paymongo", () => ({ createCheckoutSession, retrieveCheckoutSession }));
+vi.mock("@/lib/payments/paymongo", () => ({ createCheckoutSession, retrieveCheckoutSession, expireCheckoutSession }));
 vi.mock("@/lib/payments/checkout-paid", () => ({ markCheckoutPaid }));
 vi.mock("@/lib/supabase/server", () => ({
   createServerSupabaseClient: vi.fn(async () => ({
@@ -201,5 +203,23 @@ describe("customer financing checkout", () => {
     await expect(startInstallmentCheckout(form())).resolves.toMatchObject({ success: true });
     expect(db.writes.some((write) => (write.payload as { op?: string })?.op === "delete")).toBe(true);
     expect(createCheckoutSession).toHaveBeenCalled();
+  });
+
+  it("expires an active session for other installments instead of reopening it", async () => {
+    db.rows.payment_records = [
+      { installment_id: futureId, paymongo_checkout_id: "cs_old", paid_at: null, rejected_at: null },
+    ];
+    retrieveCheckoutSession.mockResolvedValue({
+      id: "cs_old",
+      status: "active",
+      checkoutUrl: "https://paymongo.test/cs_old",
+      paidPaymentId: null,
+    });
+    await expect(startInstallmentCheckout(form())).resolves.toEqual({
+      success: true,
+      url: "https://paymongo.test/cs_1",
+    });
+    expect(expireCheckoutSession).toHaveBeenCalledWith("sk_test_123", "cs_old");
+    expect(db.writes.some((write) => (write.payload as { op?: string })?.op === "delete")).toBe(true);
   });
 });

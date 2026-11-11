@@ -35,7 +35,9 @@ vi.mock("@/lib/auth/audit", () => ({ logAuditEvent: vi.fn() }));
 vi.mock("@/lib/notifications/notify", () => ({ notify }));
 vi.mock("@/lib/transactions/buy-flow-server", () => ({
   finalizeBuySale: vi.fn(),
+  notifyInformantIfPaidInFull: vi.fn(),
   recordStandingEvent: vi.fn(),
+  releaseVehicle: vi.fn(),
   releaseVisitSlots: vi.fn(),
 }));
 vi.mock("@/lib/supabase/server", () => ({
@@ -165,7 +167,7 @@ describe("the Sales Manager cannot add a buyer's documents", () => {
 
   it.each(["valid_id", "proof_of_billing"])("refuses %s", async (documentKind) => {
     await expect(paperwork(documentKind)).resolves.toEqual({
-      error: "The buyer uploads the valid ID and proof of billing. The Sales Manager verifies them.",
+      error: "The buyer uploads the valid ID and proof of billing. Staff verify them.",
     });
     expect(storageUpload).not.toHaveBeenCalled();
     expect(db.writes.some((write) => write.table === "transaction_documents")).toBe(false);
@@ -175,9 +177,9 @@ describe("the Sales Manager cannot add a buyer's documents", () => {
     await expect(paperwork("invoice")).resolves.toEqual({ success: true });
   });
 
-  it("keeps the Head Accountant's upload", async () => {
+  it("refuses the Head Accountant's upload too", async () => {
     getCurrentRole.mockResolvedValue("head_accountant");
 
-    await expect(paperwork("proof_of_billing")).resolves.toEqual({ success: true });
+    await expect(paperwork("proof_of_billing")).resolves.toHaveProperty("error");
   });
 });

@@ -95,7 +95,7 @@ export const sidebarItems: NavGroup[] = [
       },
       {
         id: "financing",
-        title: "Financing",
+        title: "Sold Inventory",
         url: "/financing",
         icon: Banknote,
       },

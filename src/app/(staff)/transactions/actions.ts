@@ -24,9 +24,17 @@ import {
   nextDuePayment,
   papersReadyForSale,
   paymentAllowedBeforeSigning,
+  upfrontPaymentsCleared,
   verifiedPaid,
 } from "@/lib/transactions/buy-flow";
-import { finalizeBuySale, recordStandingEvent, releaseVisitSlots } from "@/lib/transactions/buy-flow-server";
+import {
+  applyDeliveryReschedule,
+  finalizeBuySale,
+  notifyInformantIfPaidInFull,
+  recordStandingEvent,
+  releaseVehicle,
+  releaseVisitSlots,
+} from "@/lib/transactions/buy-flow-server";
 import { closeFinancingIfPaid, confirmInitialDownpaymentIfPaid } from "@/lib/transactions/financing-server";
 import { bookedMeetup, meetupTeamError, openMeetupCase } from "@/lib/transactions/meetup-server";
 import { consecutiveMissedPayments } from "@/lib/transactions/recovery";
@@ -122,20 +130,13 @@ export async function transitionTransaction(formData: FormData) {
     informantId: string;
     mechanicId: string;
     meetup: { schedule: string; location: string | null };
-    downpayment: number | null;
   } | null = null;
+  // Test 7 / T10: a Bank Transfer meet-up collects a downpayment online first. The approval sets the amount;
+  // the team is assigned only after the payment is verified (createMeetupFieldCase).
+  let meetupDownpayment: number | null = null;
   if (toState === "approved" && tx.transaction_kind === "buy" && isHalfwayCashRequest(purchase ?? null)) {
-    const picked = z
-      .object({ informant_id: z.string().uuid(), mechanic_id: z.string().uuid() })
-      .safeParse({ informant_id: formData.get("informant_id"), mechanic_id: formData.get("mechanic_id") });
-    if (!picked.success) return { error: "Choose a Confidential Informant and a Mechanic before approving." };
-    const teamError = await meetupTeamError(supabase, picked.data.informant_id, picked.data.mechanic_id);
-    if (teamError) return { error: teamError };
     const meetup = await bookedMeetup(admin, id);
     if (!meetup) return { error: "The buyer has not booked the meet-up yet." };
-    // Test 7: a Bank Transfer meet-up collects a downpayment online before the meet-up, so the Sales
-    // Manager sets it with the approval. A cash meet-up is paid in person and needs none.
-    let downpayment: number | null = null;
     if (purchase?.payment_method === "bank_transfer") {
       const parsedDownpayment = z.coerce
         .number()
@@ -144,14 +145,17 @@ export async function transitionTransaction(formData: FormData) {
       if (!parsedDownpayment.success) {
         return { error: parsedDownpayment.error.issues[0]?.message ?? "Enter the meet-up downpayment." };
       }
-      downpayment = parsedDownpayment.data;
+      meetupDownpayment = parsedDownpayment.data;
+    } else {
+      // A cash meet-up is paid in person, so its team is named and sent with the approval.
+      const picked = z
+        .object({ informant_id: z.string().uuid(), mechanic_id: z.string().uuid() })
+        .safeParse({ informant_id: formData.get("informant_id"), mechanic_id: formData.get("mechanic_id") });
+      if (!picked.success) return { error: "Choose a Confidential Informant and a Mechanic before approving." };
+      const teamError = await meetupTeamError(supabase, picked.data.informant_id, picked.data.mechanic_id);
+      if (teamError) return { error: teamError };
+      meetupTeam = { informantId: picked.data.informant_id, mechanicId: picked.data.mechanic_id, meetup };
     }
-    meetupTeam = {
-      informantId: picked.data.informant_id,
-      mechanicId: picked.data.mechanic_id,
-      meetup,
-      downpayment,
-    };
   }
 
   // The front and back of two valid IDs + proof of billing must be verified before a purchase completes (G16).
@@ -281,11 +285,11 @@ export async function transitionTransaction(formData: FormData) {
 
   // Test 7: the meet-up downpayment the buyer pays online through PayMongo. The approval stores the
   // amount and a due date, and onlinePaymentsDue turns it into the Pay button before signing.
-  if (meetupTeam?.downpayment) {
+  if (meetupDownpayment) {
     const due = addWorkingDays(new Date(), DOWNPAYMENT_WORKING_DAYS);
     await admin
       .from("purchase_details")
-      .update({ downpayment_amount: meetupTeam.downpayment, downpayment_due_at: due.toISOString() })
+      .update({ downpayment_amount: meetupDownpayment, downpayment_due_at: due.toISOString() })
       .eq("transaction_id", id);
     await notify(
       admin,
@@ -293,7 +297,7 @@ export async function transitionTransaction(formData: FormData) {
       {
         kind: "buy_downpayment_due",
         title: "Downpayment due",
-        body: `Pay the downpayment of ₱${meetupTeam.downpayment.toLocaleString("en-PH")} through PayMongo before ${due.toLocaleDateString("en-PH", { timeZone: "Asia/Manila" })}.`,
+        body: `Pay the downpayment of ₱${meetupDownpayment.toLocaleString("en-PH")} through PayMongo before ${due.toLocaleDateString("en-PH", { timeZone: "Asia/Manila" })}.`,
         transactionId: id,
       },
     );
@@ -303,7 +307,10 @@ export async function transitionTransaction(formData: FormData) {
     if (toState === "completed") {
       await finalizeBuySale(admin, { id, vehicle_id: tx.vehicle_id }, user.user.id, { keepFlowStatus: financing });
     }
-    if (toState === "rejected" || toState === "cancelled") await releaseVisitSlots(admin, id);
+    if (toState === "rejected" || toState === "cancelled") {
+      await releaseVisitSlots(admin, id);
+      await releaseVehicle(admin, { vehicle_id: tx.vehicle_id, flow_status: tx.flow_status });
+    }
     if (toState === "approved" || toState === "rejected") {
       await notify(
         admin,
@@ -795,7 +802,7 @@ export async function verifyPayment(paymentId: string) {
     // T03 HA3: a rejected payment cannot be verified afterwards.
     .is("rejected_at", null)
     .is("verified_by", null)
-    .select("transaction_id, installment_id, settlement_date")
+    .select("transaction_id, installment_id, settlement_date, payment_kind, amount")
     .maybeSingle();
 
   if (error) return { error: error.message };
@@ -838,6 +845,28 @@ export async function verifyPayment(paymentId: string) {
       );
     }
     await confirmInitialDownpaymentIfPaid(admin, payment.transaction_id);
+    await notifyInformantIfPaidInFull(admin, payment.transaction_id);
+    // T10: a verified re-scheduling fee releases the buyer's new delivery time to the team.
+    if (payment.payment_kind === "reschedule_fee") {
+      const { data: pending } = await admin
+        .from("purchase_details")
+        .select("reschedule_pending_at, reschedule_pending_location")
+        .eq("transaction_id", payment.transaction_id)
+        .maybeSingle();
+      if (pending?.reschedule_pending_at && pending.reschedule_pending_location) {
+        const rescheduleError = await applyDeliveryReschedule(
+          admin,
+          { id: payment.transaction_id, current_state: "approved" },
+          {
+            schedule: pending.reschedule_pending_at,
+            location: pending.reschedule_pending_location,
+            fee: Number(payment.amount),
+          },
+          user.user.id,
+        );
+        if (rescheduleError) return { error: rescheduleError };
+      }
+    }
     revalidatePath(`/dashboard/transactions/${payment.transaction_id}`);
     revalidatePath(`/my-transactions/${payment.transaction_id}`);
   }
@@ -865,25 +894,19 @@ export async function recordPaperwork(formData: FormData) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid paperwork." };
   }
 
-  // T05: the buyer sends their own valid ID and proof of billing; the Sales Manager verifies them but no
-  // longer adds them. Invoices and receipts stay with the Sales Manager.
-  if (
-    role === "sales_manager" &&
-    (parsed.data.document_kind === "valid_id" || parsed.data.document_kind === "proof_of_billing")
-  ) {
-    return { error: "The buyer uploads the valid ID and proof of billing. The Sales Manager verifies them." };
+  // T05/T10: the buyer sends their own valid ID and proof of billing; staff only verify them. Invoices and
+  // receipts stay with the Sales Manager.
+  if (parsed.data.document_kind === "valid_id" || parsed.data.document_kind === "proof_of_billing") {
+    return { error: "The buyer uploads the valid ID and proof of billing. Staff verify them." };
   }
 
   const transactionId = parsed.data.transaction_id;
   const documentKind = parsed.data.document_kind;
-  const idType = parsed.data.id_type || null;
   const fileEntry = formData.get("file");
   if (fileEntry !== null && !(fileEntry instanceof File)) {
     return { error: "Select a valid file to upload." };
   }
   const file = fileEntry instanceof File ? fileEntry : null;
-  const requiresVerification = documentKind === "valid_id" || documentKind === "proof_of_billing";
-  if (requiresVerification && !file?.size) return { error: "Select a file to upload." };
   if (file && file.size === 0) return { error: "Select a file to upload." };
 
   const { data: transaction } = await supabase
@@ -892,9 +915,6 @@ export async function recordPaperwork(formData: FormData) {
     .eq("id", transactionId)
     .maybeSingle();
   if (!transaction) return { error: "Transaction not found." };
-  if (requiresVerification && transaction.transaction_kind !== "buy") {
-    return { error: "Valid IDs and proof of billing can only be recorded for purchases." };
-  }
 
   let storagePath: string | null = null;
 
@@ -905,15 +925,13 @@ export async function recordPaperwork(formData: FormData) {
     if (uploadError) return { error: uploadError.message };
   }
 
-  // Valid IDs and proof of billing require staff verification before the sale is
-  // considered document-complete; other paperwork uploads are trusted.
+  // Staff paperwork (invoices, receipts) is trusted; the buyer's own documents never come through here.
   const { error } = await supabase.from("transaction_documents").insert({
     transaction_id: transactionId,
     document_kind: documentKind,
-    id_type: idType,
     storage_path: storagePath,
     uploader_id: user.user.id,
-    verification_state: requiresVerification ? "pending" : "verified",
+    verification_state: "verified",
   });
 
   // The metadata row is what makes the upload visible, so drop the object again
@@ -1193,6 +1211,19 @@ export async function createFieldCase(formData: FormData) {
   }
   const location = parsed.data.location || null;
   const notes = parsed.data.notes || null;
+
+  // T10: a buy's delivery or meet-up case waits for the buyer's verified delivery fee and downpayment.
+  if (transactionId && (caseKind === "delivery" || caseKind === "buyer_meetup")) {
+    const { data: buy } = await supabase
+      .from("transactions")
+      .select("purchase_details(delivery_fee, downpayment_amount), payment_records(payment_kind, amount, verified_by)")
+      .eq("id", transactionId)
+      .maybeSingle();
+    const details = Array.isArray(buy?.purchase_details) ? buy.purchase_details[0] : buy?.purchase_details;
+    if (buy && !upfrontPaymentsCleared(details ?? null, buy.payment_records ?? [])) {
+      return { error: "The buyer must pay the delivery fee and the downpayment, verified, first." };
+    }
+  }
 
   const { data: fieldCase, error } = await supabase
     .from("field_cases")

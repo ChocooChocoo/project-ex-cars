@@ -27,7 +27,6 @@ function renderCard(
       kind="buy"
       userRole="sales_manager"
       documents={documents}
-      onUploadDocument={noop}
       onVerifyDocument={noop}
       onRejectDocument={noop}
       {...overrides}
@@ -88,16 +87,11 @@ describe("TransactionDocumentsCard (T03 SM1, HA1, HA3)", () => {
     await waitFor(() => expect(onRejectDocument).toHaveBeenCalledWith("id-1", "Blurred photo"));
   });
 
-  it("hides the upload form from the Sales Manager, who only verifies the buyer's documents", () => {
-    renderCard([], { userRole: "sales_manager" });
+  it.each(["sales_manager", "head_accountant", "ceo"])("offers no document upload to the %s", (userRole) => {
+    renderCard([], { userRole });
 
     expect(screen.queryByLabelText("Document")).not.toBeInTheDocument();
-  });
-
-  it("still lets the Head Accountant upload a buyer's document", () => {
-    renderCard([], { userRole: "head_accountant" });
-
-    expect(screen.getByLabelText("Document")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Upload" })).not.toBeInTheDocument();
   });
 
   it("does not offer verification to a role that cannot verify the document", () => {

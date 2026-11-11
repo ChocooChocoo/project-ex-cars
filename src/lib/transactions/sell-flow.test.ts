@@ -1,11 +1,29 @@
 import { describe, expect, it } from "vitest";
 
-import { approvedCeiling, sellPapersVerified } from "./sell-flow";
+import { approvedCeiling, sellerSafeNote, sellPapersVerified } from "./sell-flow";
 import { reviewDueAt } from "./state-machine";
 
 const doc = (document_kind: string, verification_state = "verified") => ({ document_kind, verification_state });
 
 describe("sellPapersVerified", () => {
+  const id = (id_type: string, id_side: string, verification_state = "verified") => ({
+    document_kind: "valid_id",
+    verification_state,
+    id_type,
+    id_side,
+  });
+  const fullIds = [id("passport", "front"), id("passport", "back"), id("umid", "front"), id("umid", "back")];
+
+  it("T10: needs both IDs front and back, the OR, the CR and the deed", () => {
+    const papers = [...fullIds, doc("official_receipt"), doc("certificate_of_registration"), doc("deed_of_sale")];
+    expect(sellPapersVerified(papers)).toBe(true);
+    expect(sellPapersVerified(papers.filter((paper) => paper.document_kind !== "certificate_of_registration"))).toBe(
+      false,
+    );
+    expect(sellPapersVerified([...papers.slice(1)])).toBe(false);
+    expect(sellPapersVerified([...fullIds.slice(0, 3), id("umid", "back", "pending"), ...papers.slice(4)])).toBe(false);
+  });
+
   it("needs two verified IDs, a verified ORCR and a verified deed of sale", () => {
     expect(sellPapersVerified([doc("valid_id"), doc("valid_id"), doc("orcr"), doc("deed_of_sale")])).toBe(true);
   });
@@ -50,5 +68,18 @@ describe("approvedCeiling", () => {
 describe("reviewDueAt", () => {
   it("opens a 7-day window", () => {
     expect(reviewDueAt(new Date("2026-09-30T12:00:00Z"))).toBe("2026-10-07T12:00:00.000Z");
+  });
+});
+
+describe("sellerSafeNote (T10)", () => {
+  it("shows the seller only the notes meant for them", () => {
+    expect(sellerSafeNote("Rejected at verification: The ORCR is blurred")).toBe("The ORCR is blurred");
+    expect(sellerSafeNote("Price agreed at ₱500,000; acquisition field case created")).toContain("Price agreed");
+  });
+  it("hides ceilings, CEO decisions and the staff-only profitability note", () => {
+    expect(sellerSafeNote("Purchase ceiling of ₱480,000 proposed to the CEO")).toBeNull();
+    expect(sellerSafeNote("Purchase ceiling of ₱480,000 rejected by the CEO")).toBeNull();
+    expect(sellerSafeNote("Cancelled: not profitable after inspection. Margin too thin")).toBeNull();
+    expect(sellerSafeNote(null)).toBeNull();
   });
 });
