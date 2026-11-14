@@ -18,10 +18,10 @@ describe("SellSubmissionsList", () => {
 
     expect(screen.getByText("Honda Walkthrough Civic (2019)")).toBeInTheDocument();
     expect(screen.getByText("1 photo")).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: /photo 1/ })).toHaveAttribute(
-      "src",
-      "https://storage.test/signed/sell-photo.jpg?token=x",
-    );
+    const thumbnail = screen.getByRole("img", { name: /photo 1/ });
+    const thumbnailUrl = new URL(thumbnail.getAttribute("src") ?? "", window.location.origin);
+    expect(thumbnailUrl.pathname).toBe("/api/transaction-thumbnail");
+    expect(thumbnailUrl.searchParams.get("src")).toBe("https://storage.test/signed/sell-photo.jpg?token=x");
     expect(screen.getByText("Exterior scratches")).toBeInTheDocument();
     expect(screen.getByText(/#11111111/)).toBeInTheDocument();
   });

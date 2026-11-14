@@ -251,10 +251,10 @@ describe("TransactionDetail document previews", () => {
       },
     ]);
 
-    expect(screen.getByRole("img", { name: "Valid ID preview" })).toHaveAttribute(
-      "src",
-      "https://storage.test/signed/passport.jpg",
-    );
+    const thumbnail = screen.getByRole("img", { name: "Valid ID preview" });
+    const thumbnailUrl = new URL(thumbnail.getAttribute("src") ?? "", window.location.origin);
+    expect(thumbnailUrl.pathname).toBe("/api/transaction-thumbnail");
+    expect(thumbnailUrl.searchParams.get("src")).toBe("https://storage.test/signed/passport.jpg");
     expect(screen.queryByText(/private\/customer\/passport\.jpg/)).not.toBeInTheDocument();
   });
 

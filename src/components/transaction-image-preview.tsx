@@ -19,32 +19,46 @@ export function TransactionImagePreview({
   /** Size of the clickable thumbnail; tables pass a small one. */
   readonly triggerClassName?: string;
 }) {
-  const [failed, setFailed] = useState(false);
-
-  if (failed) {
-    return <p className="text-muted-foreground text-xs">Preview unavailable</p>;
-  }
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
 
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
         aria-label={`Open ${alt} in a larger view`}
         className={`relative block shrink-0 cursor-zoom-in overflow-hidden rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 ${triggerClassName}`}
       >
-        <Image
-          src={src}
-          alt={alt}
-          fill
-          unoptimized
-          sizes="(max-width: 768px) 100vw, 28rem"
-          className={className ?? "object-contain"}
-          onError={() => setFailed(true)}
-        />
+        {failedSrc === src ? (
+          <span className="text-muted-foreground text-xs">Preview unavailable</span>
+        ) : (
+          <Image
+            src={`/api/transaction-thumbnail?src=${encodeURIComponent(src)}`}
+            alt={alt}
+            fill
+            // The thumbnail endpoint resizes privately; Next's public image cache must not retain signed documents.
+            unoptimized
+            loading="lazy"
+            decoding="async"
+            className={className ?? "object-contain"}
+            onError={() => setFailedSrc(src)}
+          />
+        )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-4xl">
         <DialogTitle className="sr-only">{alt}</DialogTitle>
         <div className="relative h-[min(80vh,48rem)] w-full">
-          <Image src={src} alt={alt} fill unoptimized sizes="100vw" className="object-contain" />
+          {open ? (
+            <Image
+              src={src}
+              alt={alt}
+              fill
+              unoptimized
+              loading="eager"
+              decoding="async"
+              sizes="100vw"
+              className="object-contain"
+            />
+          ) : null}
         </div>
       </DialogContent>
     </Dialog>

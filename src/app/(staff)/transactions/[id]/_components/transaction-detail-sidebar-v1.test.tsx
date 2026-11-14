@@ -62,10 +62,10 @@ describe("TransactionDetailSidebarV1 private media", () => {
       },
     ]);
 
-    expect(screen.getByRole("img", { name: "Sell vehicle attachment" })).toHaveAttribute(
-      "src",
-      "https://storage.test/signed/exterior.webp",
-    );
+    const thumbnail = screen.getByRole("img", { name: "Sell vehicle attachment" });
+    const thumbnailUrl = new URL(thumbnail.getAttribute("src") ?? "", window.location.origin);
+    expect(thumbnailUrl.pathname).toBe("/api/transaction-thumbnail");
+    expect(thumbnailUrl.searchParams.get("src")).toBe("https://storage.test/signed/exterior.webp");
     expect(screen.queryByText(/private\/sell|private\/docs/)).not.toBeInTheDocument();
   });
 
