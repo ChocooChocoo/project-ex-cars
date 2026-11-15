@@ -13,7 +13,6 @@ import {
   proposeFinancingTerms,
   recordVehicleRecovered,
   recordVisitDecision,
-  reviewFinancingTerms,
 } from "@/app/(staff)/transactions/financing-actions";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Badge } from "@/components/ui/badge";
@@ -32,7 +31,7 @@ type Row = Record<string, unknown>;
 type Result = { error: string } | { success: true };
 
 const TERMS_STATE_LABELS: Record<string, string> = {
-  proposed: "Waiting for the Head Accountant",
+  proposed: "Waiting for the CEO",
   ha_approved: "Waiting for the CEO",
   returned: "Returned for revision",
   approved: "Confirmed",
@@ -139,8 +138,7 @@ export function FinancingPanel({
       <CardHeader>
         <CardTitle>In-House Financing</CardTitle>
         <CardDescription>
-          The Sales Manager proposes the terms, the Head Accountant reviews them, the CEO confirms, and the buyer
-          decides.{" "}
+          The Sales Manager proposes the terms, the CEO confirms, and the buyer decides.{" "}
           {meetup
             ? "A meet-up takes no downpayment."
             : delivery
@@ -273,11 +271,11 @@ export function FinancingPanel({
                     delivery_fee: free ? "0" : form.delivery_fee,
                     first_due_date: form.first_due_date,
                   },
-                  "Terms sent to the Head Accountant.",
+                  "Terms sent to the CEO for confirmation.",
                 )
               }
             >
-              Send to Head Accountant
+              Send to CEO
             </Button>
             {termsReady ? null : (
               <p className="text-muted-foreground text-xs">Fill in every field to send the terms.</p>
@@ -285,32 +283,21 @@ export function FinancingPanel({
           </section>
         ) : null}
 
-        {(userRole === "head_accountant" && termsState === "proposed") ||
-        (userRole === "ceo" && termsState === "ha_approved") ? (
+        {userRole === "ceo" && ["proposed", "ha_approved"].includes(termsState ?? "") ? (
           <section className="flex flex-col gap-2 rounded-md border p-3">
-            <p className="font-medium">{userRole === "ceo" ? "Confirm the financing" : "Review the financing"}</p>
+            <p className="font-medium">Confirm the financing</p>
             <Field id="fin-return-reason" label="Reason, if returning" value={form.reason} onChange={set("reason")} />
             <div className="flex flex-wrap gap-2">
               <ConfirmDialog
                 action="approve"
-                confirmLabel={userRole === "ceo" ? "Confirm" : "Approve"}
-                description={
-                  userRole === "ceo"
-                    ? "The buyer is notified of the financing offer."
-                    : "The terms go to the CEO for confirmation."
-                }
+                confirmLabel="Confirm"
+                description="The buyer is notified of the financing offer."
                 onConfirm={() =>
-                  userRole === "ceo"
-                    ? submit(
-                        confirmFinancingTerms,
-                        { decision: "confirm" },
-                        "Financing confirmed; the buyer is notified.",
-                      )
-                    : submit(reviewFinancingTerms, { decision: "approve" }, "Terms sent to the CEO.")
+                  submit(confirmFinancingTerms, { decision: "confirm" }, "Financing confirmed; the buyer is notified.")
                 }
                 trigger={
                   <Button size="sm" disabled={busy}>
-                    {userRole === "ceo" ? "Confirm" : "Approve"}
+                    Confirm
                   </Button>
                 }
               />
@@ -321,7 +308,7 @@ export function FinancingPanel({
                 confirmLabel="Return for revision"
                 onConfirm={() =>
                   submit(
-                    userRole === "ceo" ? confirmFinancingTerms : reviewFinancingTerms,
+                    confirmFinancingTerms,
                     { decision: "return", reason: form.reason },
                     "Terms returned to the Sales Manager.",
                   )
@@ -367,8 +354,8 @@ export function FinancingPanel({
 
         {flowStatus === "purchase_claim" ? (
           <p className="text-muted-foreground text-xs">
-            Record the Initial Downpayment under Record payment, with "Payment for: Downpayment". The Head Accountant
-            then verifies it.
+            The Sales Manager records the Initial Downpayment in the Record payment box beside this page, with
+            &quot;Payment for: Downpayment&quot;. The Head Accountant then verifies it.
           </p>
         ) : null}
 

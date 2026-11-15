@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { getProfileAutoFill } from "@/lib/autofill";
-import { getFinancingMarkupPct } from "@/lib/settings/financing";
+import { getFinancingMarkupPct, markupFor } from "@/lib/settings/financing";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { withSignedTransactionDocumentUrls } from "@/lib/transactions/document-media";
@@ -17,7 +17,7 @@ export default async function MyTransactionDetailPage({ params }: { readonly par
   const { data: transaction } = await supabase
     .from("transactions")
     .select(
-      "*, vehicles(make, model, year, stock_code, current_price), purchase_details(*), sell_details(*), sale_handovers(papers_status, contract_state, contract_body, contract_signed_at, signing_method)",
+      "*, vehicles(make, model, year, stock_code, current_price, financing_markup_pct), purchase_details(*), sell_details(*), sale_handovers(papers_status, contract_state, contract_body, contract_signed_at, signing_method)",
     )
     .eq("id", id)
     .eq("customer_id", user.user.id)
@@ -192,7 +192,10 @@ export default async function MyTransactionDetailPage({ params }: { readonly par
             : null
         }
         takenSlots={((takenSlots as { schedule: string }[] | null) ?? []).map((slot) => slot.schedule)}
-        financingMarkupPct={await getFinancingMarkupPct()}
+        financingMarkupPct={markupFor(
+          ((transaction as Record<string, unknown>).vehicles as { financing_markup_pct?: unknown } | null) ?? null,
+          await getFinancingMarkupPct(),
+        )}
         buyerRegionCode={(buyerProfile as { region_code: string | null } | null)?.region_code ?? null}
       />
     </div>

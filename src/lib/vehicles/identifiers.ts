@@ -1,8 +1,16 @@
 // T06: VIN, plate, engine and chassis numbers stay in GCE's records. Showroom pages drop them before the
 // row reaches the browser.
+// T11: the per-car financing markup is GCE's own figure too. The buyer sees the total it produces, never the
+// percentage, so it is stripped from every customer payload alongside the identifiers.
 // ponytail: RLS is per row, so a signed-in user could still read these columns through the API; move them
 // to a staff-only table if that exposure matters.
-export const PRIVATE_VEHICLE_FIELDS = ["vin", "plate_number", "engine_number", "chassis_number"] as const;
+export const PRIVATE_VEHICLE_FIELDS = [
+  "vin",
+  "plate_number",
+  "engine_number",
+  "chassis_number",
+  "financing_markup_pct",
+] as const;
 
 export function withoutIdentifiers<T extends Record<string, unknown>>(
   vehicle: T,

@@ -1,10 +1,23 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { cancelTransaction, removePurchaseDocument, saveBuyDetails } from "@/app/(customer)/my-transactions/actions";
 import type { ProfileAutoFill } from "@/lib/autofill";
 
 import { TransactionDetail } from "./transaction-detail";
+
+// Radix measures the controls it renders; jsdom has no ResizeObserver.
+globalThis.ResizeObserver = class {
+  observe() {
+    // noop
+  }
+  unobserve() {
+    // noop
+  }
+  disconnect() {
+    // noop
+  }
+};
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
@@ -24,6 +37,10 @@ vi.mock("./transaction-preview", () => ({
     <div data-testid="paper">{`${paper.total}/${paper.paid}`}</div>
   ),
 }));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 const transaction = {
   id: "transaction-1",
@@ -142,7 +159,42 @@ describe("T07 customer transaction controls", () => {
     });
     expect(screen.getByLabelText("Payment Option")).toHaveTextContent("Financing");
     expect(screen.getByLabelText("Payment term")).toHaveTextContent("1 year");
-    expect(screen.queryByLabelText("Payment Method")).not.toBeInTheDocument();
+    // T11: the installments are paid in cash or through PayMongo, so the method is asked for financing too.
+    expect(screen.getByLabelText("Payment Method")).toHaveTextContent("PayMongo");
+  });
+  it("T11: keeps the financing pay method saved by the buyer", () => {
+    detail({
+      current_state: "pending",
+      purchase_details: {
+        payment_option: "financing",
+        payment_method: "financing",
+        arrangement_kind: "gce_visit",
+        requested_term_months: 12,
+        financing_pay_method: "cash",
+      },
+    });
+    expect(screen.getByLabelText("Payment Method")).toHaveTextContent("Cash");
+  });
+  it("T11: saves the chosen financing pay method with the details", async () => {
+    HTMLElement.prototype.scrollIntoView = vi.fn();
+    vi.mocked(saveBuyDetails).mockResolvedValue({ success: true });
+    detail({
+      current_state: "pending",
+      purchase_details: {
+        payment_option: "financing",
+        payment_method: "financing",
+        arrangement_kind: "gce_visit",
+        requested_term_months: 12,
+        financing_pay_method: "cash",
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Save Details" }));
+
+    await waitFor(() => expect(saveBuyDetails).toHaveBeenCalled());
+    const fd = vi.mocked(saveBuyDetails).mock.calls.at(-1)?.[0] as FormData;
+    expect(fd.get("financing_pay_method")).toBe("cash");
+    expect(fd.get("payment_method")).toBe("financing");
   });
   it("requires a PSGC location and blocks saving until one is chosen", () => {
     detail({ current_state: "pending", purchase_details: { arrangement_kind: "meetup" } });
@@ -386,5 +438,81 @@ describe("TransactionDetail contract", () => {
     renderApprovedBuy({ payment_method: "cash", arrangement_kind: "gce_visit" }, null);
 
     expect(screen.queryByRole("heading", { name: "Your contract" })).not.toBeInTheDocument();
+  });
+
+  it("T11: offers the signed contract and policy as a copy once it is signed", () => {
+    renderApprovedBuy({ payment_method: "financing", arrangement_kind: "gce_visit" }, "signed");
+
+    expect(screen.getByTestId("signed-copy-link")).toHaveAttribute("href", "/vehicle-papers/transaction-1/contract");
+  });
+
+  it("T11: shows no signed copy before the contract is signed", () => {
+    renderApprovedBuy({ payment_method: "financing", arrangement_kind: "gce_visit" }, "approved");
+
+    expect(screen.queryByTestId("signed-copy-link")).not.toBeInTheDocument();
+  });
+});
+
+describe("TransactionDetail financial summary", () => {
+  function renderFinancing(payments: Record<string, unknown>[]) {
+    render(
+      <TransactionDetail
+        transaction={{
+          ...transaction,
+          purchase_details: { payment_method: "financing", arrangement_kind: "gce_visit" },
+        }}
+        history={[]}
+        documents={[]}
+        payments={payments}
+        installmentAccount={{
+          state: "active",
+          financed_total: 3000,
+          down_payment: 0,
+          opening_balance: 3000,
+          installments: [
+            { id: "1", state: "paid", due_date: "2026-10-15", amount_due: 1000, sequence_no: 1 },
+            { id: "2", state: "due", due_date: "2026-11-15", amount_due: 1000, sequence_no: 2 },
+            { id: "3", state: "upcoming", due_date: "2026-12-15", amount_due: 1000, sequence_no: 3 },
+          ],
+        }}
+        paymentTerms={null}
+        viewingArrangements={[]}
+        autofill={null}
+      />,
+    );
+  }
+
+  it("T11: totals paid to date from the paid installments and leaves the rest as the balance", () => {
+    renderFinancing([{ id: "p1", amount: 1000, method: "cash", verified_by: "ha-1" }]);
+
+    expect(screen.getByText("Paid to date").nextElementSibling).toHaveTextContent("₱1,000");
+    expect(screen.getByText("Remaining balance").nextElementSibling).toHaveTextContent("₱2,000");
+  });
+
+  it("T11: labels a recorded but unverified payment as awaiting confirmation and does not count it", () => {
+    renderFinancing([{ id: "p1", amount: 1000, method: "cash", verified_by: null, rejected_at: null }]);
+
+    const summary = within(screen.getByRole("region", { name: "Financial summary" }));
+    expect(summary.getByText("Awaiting confirmation", { exact: false })).toBeInTheDocument();
+    expect(summary.getByText("Paid to date").nextElementSibling).toHaveTextContent("₱1,000");
+    expect(summary.getByText("Remaining balance").nextElementSibling).toHaveTextContent("₱2,000");
+  });
+
+  it("T11: keeps a rejected payment out of the total and shows why it was refused", () => {
+    renderFinancing([
+      {
+        id: "p1",
+        amount: 1000,
+        method: "cash",
+        verified_by: null,
+        rejected_at: "2026-10-01",
+        rejection_reason: "No slip",
+      },
+    ]);
+
+    const summary = within(screen.getByRole("region", { name: "Financial summary" }));
+    expect(summary.getByText("Not accepted", { exact: false })).toBeInTheDocument();
+    expect(summary.getByText(/No slip/)).toBeInTheDocument();
+    expect(summary.getByText("Paid to date").nextElementSibling).toHaveTextContent("₱1,000");
   });
 });

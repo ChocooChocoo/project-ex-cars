@@ -8,7 +8,6 @@ vi.mock("@/app/(staff)/transactions/financing-actions", () => ({
   proposeFinancingTerms: vi.fn(),
   recordVehicleRecovered: vi.fn(),
   recordVisitDecision: vi.fn(),
-  reviewFinancingTerms: vi.fn(),
 }));
 
 import { MISSED_PAYMENT_POLICY } from "@/lib/transactions/missed-payment-policy";
@@ -35,7 +34,23 @@ it("shows fixed policy without an editable field and allows complete terms to be
   expect(screen.queryByLabelText("Missed payment policy")).not.toBeInTheDocument();
   expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("First installment due"), { target: { value: "2033-12-01" } });
-  expect(screen.getByRole("button", { name: "Send to Head Accountant" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Send to CEO" })).toBeEnabled();
+});
+
+// T11: the Head Accountant no longer reviews the terms; the CEO confirms them straight after the proposal.
+it("no longer gives the Head Accountant a terms review", () => {
+  render(<FinancingPanel {...props} userRole="head_accountant" terms={{ state: "proposed" }} />);
+
+  expect(screen.queryByText("Review the financing")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
+});
+
+it("lets the CEO confirm terms the Sales Manager just proposed", () => {
+  render(<FinancingPanel {...props} userRole="ceo" terms={{ state: "proposed" }} />);
+
+  expect(screen.getByText("Confirm the financing")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Confirm" })).toBeInTheDocument();
+  expect(screen.queryByText("Review the financing")).not.toBeInTheDocument();
 });
 
 it.each(["head_accountant", "ceo"])("links %s to the printable policy instead of stored custom text", (userRole) => {

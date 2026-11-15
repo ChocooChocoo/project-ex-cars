@@ -180,12 +180,120 @@ describe("TransactionDetailSidebarV1 record payment (T05)", () => {
     expect(screen.getByRole("button", { name: "Record Payment" })).toBeDisabled();
   });
 
-  it("shows no Record Payment form for a financing buy", () => {
+  it("shows no Record Payment form for a financing buy before the Initial Downpayment is due", () => {
     renderPayment({
       purchaseDetails: { payment_method: "financing", arrangement_kind: "gce_visit", final_price: 600_000 },
+      flowStatus: "gce_visit_scheduled_dp_pending",
     });
 
     expect(screen.queryByRole("button", { name: "Record Payment" })).not.toBeInTheDocument();
+  });
+});
+
+// T11: the Initial Downpayment of a financing buy is cash at GCE, so the sidebar records it.
+describe("TransactionDetailSidebarV1 financing Initial Downpayment (T11)", () => {
+  function renderFinancing(overrides: Partial<Parameters<typeof TransactionDetailSidebarV1>[0]> = {}) {
+    const onRecordPayment = vi.fn().mockResolvedValue(true);
+    renderSidebar([], {
+      kind: "buy",
+      state: "approved",
+      userRole: "sales_manager",
+      purchaseDetails: {
+        payment_method: "financing",
+        arrangement_kind: "gce_visit",
+        final_price: 600_000,
+        downpayment_amount: 60_000,
+      },
+      paymentTerms: { state: "approved", total_amount: 660_000, down_payment: 60_000 },
+      flowStatus: "purchase_claim",
+      onRecordPayment,
+      ...overrides,
+    });
+    return { onRecordPayment };
+  }
+
+  it("offers the Initial Downpayment form for a financing buy in Purchase Claim", () => {
+    renderFinancing();
+
+    expect(screen.getByRole("button", { name: "Record Initial Downpayment" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Amount (₱)")).toHaveValue("₱60,000.00");
+    expect(screen.getByLabelText("Payment for")).toHaveValue("Downpayment");
+    expect(screen.getByLabelText("Method")).toHaveValue("Cash");
+  });
+
+  it("records the downpayment as a cash downpayment", async () => {
+    const { onRecordPayment } = renderFinancing();
+
+    fireEvent.click(screen.getByRole("button", { name: "Record Initial Downpayment" }));
+
+    await waitFor(() =>
+      expect(screen.getByText("Recorded, waiting for the Head Accountant's check.")).toBeInTheDocument(),
+    );
+    expect(onRecordPayment).toHaveBeenCalledWith("60000", "cash", expect.any(String), "downpayment", undefined);
+  });
+
+  it("hides the form once the downpayment is verified", () => {
+    renderFinancing({
+      payments: [{ payment_kind: "downpayment", amount: 60_000, verified_by: "accountant-1", rejected_at: null }],
+    });
+
+    expect(screen.queryByText("Initial Downpayment")).not.toBeInTheDocument();
+  });
+});
+
+// T11: the Sales Manager can settle the upcoming installments in one advance payment.
+describe("TransactionDetailSidebarV1 advance payment (T11)", () => {
+  const account = {
+    installments: [
+      { id: "1", state: "paid", sequence_no: 1, due_date: "2026-10-15", amount_due: 1000 },
+      { id: "2", state: "upcoming", sequence_no: 2, due_date: "2099-12-15", amount_due: 2000 },
+      { id: "3", state: "upcoming", sequence_no: 3, due_date: "2099-11-15", amount_due: 3000 },
+    ],
+  };
+
+  function renderSchedule(userRole: string, onRecordAdvancePayment = vi.fn().mockResolvedValue(undefined)) {
+    renderSidebar([], {
+      kind: "buy",
+      state: "approved",
+      userRole,
+      installmentAccount: account,
+      purchaseDetails: { payment_method: "financing", arrangement_kind: "gce_visit", final_price: 600_000 },
+      onRecordAdvancePayment,
+    });
+    return { onRecordAdvancePayment };
+  }
+
+  it("offers the Sales Manager the unpaid upcoming installments", async () => {
+    const { onRecordAdvancePayment } = renderSchedule("sales_manager");
+
+    fireEvent.click(screen.getByRole("button", { name: "Record advance payment" }));
+    fireEvent.click(screen.getByLabelText(/#2/));
+    fireEvent.click(screen.getByLabelText(/#3/));
+    fireEvent.click(screen.getByRole("button", { name: "Pay 2 in advance" }));
+
+    await waitFor(() => expect(onRecordAdvancePayment).toHaveBeenCalledWith(["2", "3"]));
+  });
+
+  it("hides the control from the Head Accountant", () => {
+    renderSchedule("head_accountant");
+
+    expect(screen.queryByRole("button", { name: "Record advance payment" })).not.toBeInTheDocument();
+  });
+
+  it("shows what the payments on record say about each installment", () => {
+    renderSidebar([], {
+      kind: "buy",
+      state: "approved",
+      userRole: "sales_manager",
+      installmentAccount: account,
+      payments: [
+        { installment_id: "2", amount: 2000, verified_by: "accountant-1", rejected_at: null },
+        { installment_id: "3", amount: 3000, verified_by: null, rejected_at: null },
+      ],
+    });
+
+    expect(screen.getByText("Confirmed")).toBeInTheDocument();
+    expect(screen.getByText("Recorded, waiting for confirmation")).toBeInTheDocument();
   });
 });
 

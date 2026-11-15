@@ -159,22 +159,24 @@ export async function approveAsSalesManager(page: Page, transactionId: string) {
   await page.waitForLoadState("networkidle");
 }
 
-// §6 steps 6–10: the Sales Manager proposes terms, the Head Accountant approves, the CEO confirms.
+// T11: the Head Accountant no longer reviews the terms, so they go straight to the CEO.
 export async function proposeTerms(page: Page, months: number, price: number, downpayment: number) {
   await page.getByLabel("Payment duration (months)").fill(String(months));
   await page.getByLabel("Total with financing (₱)").fill(String(price));
   await page.getByLabel("Initial Downpayment (₱)").fill(String(downpayment));
   await page.getByLabel("Monthly payment (₱)").fill(String(Math.ceil((price - downpayment) / months)));
   await page.getByLabel("First installment due").fill("2033-12-01");
-  await page.getByRole("button", { name: "Send to Head Accountant" }).click();
-  await expect(page.getByText("Terms sent to the Head Accountant.")).toBeVisible();
+  await page.getByRole("button", { name: "Send to CEO" }).click();
+  await expect(page.getByText("Terms sent to the CEO for confirmation.")).toBeVisible();
 }
 
+// T11 removed the Head Accountant's review: the Sales Manager's terms now wait for the CEO directly. The step
+// is kept so the T01/T10 specs still read in their original order; it only confirms the terms are in review.
 export async function headAccountantApproves(page: Page, id: string) {
   await signInAs(page, "head_accountant@gce.local");
   await open(page, `/head_accountant/transactions/${id}`);
-  await page.getByRole("button", { name: "Approve", exact: true }).click();
-  await expect(page.getByText("Terms sent to the CEO.")).toBeVisible();
+  await expect(page.getByText("Review the financing")).toHaveCount(0);
+  await expect(page.getByText("Waiting for the CEO")).toBeVisible();
 }
 
 export async function ceoConfirms(page: Page, id: string) {

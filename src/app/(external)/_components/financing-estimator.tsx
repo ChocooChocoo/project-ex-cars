@@ -7,30 +7,25 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Separator } from "@/components/ui/separator";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { DEFAULT_FINANCING_MARKUP_PCT, FINANCING_TERM_MONTHS, financedTotal } from "@/lib/transactions/buy-flow";
+import { FINANCING_TERM_MONTHS } from "@/lib/transactions/buy-flow";
 import { formatCurrency } from "@/lib/utils";
 
-type Car = { id: string; label: string; price: number };
+// T11: the car carries its finished financed total, computed on the server with the car's own markup. The
+// percentage stays there: this component never sees it, so it cannot print it.
+type Car = { id: string; label: string; price: number; total: number };
 
 const TERM_LABEL: Record<number, string> = { 6: "6 mo", 12: "1 yr", 24: "2 yrs", 36: "3 yrs", 60: "5 yrs" };
 
 const peso = (amount: number) => formatCurrency(amount, { noDecimals: true });
 
-// Financing at GCE adds a flat markup to the car's price, for every term (buy-flow.ts financedTotal).
-export function FinancingEstimator({
-  cars,
-  markupPct = DEFAULT_FINANCING_MARKUP_PCT,
-}: {
-  readonly cars: Car[];
-  readonly markupPct?: number;
-}) {
+export function FinancingEstimator({ cars }: { readonly cars: Car[] }) {
   const ids = useId();
   const [carId, setCarId] = useState(cars[0].id);
   const [months, setMonths] = useState("12");
 
   const car = cars.find((c) => c.id === carId);
   if (!car) return null;
-  const total = financedTotal(car.price, markupPct);
+  const total = car.total;
 
   return (
     <Card>

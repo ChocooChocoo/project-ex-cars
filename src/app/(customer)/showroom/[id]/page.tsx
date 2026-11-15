@@ -45,9 +45,6 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
           <CardContent className="flex flex-col gap-4">
             <div>
               <span className="font-bold text-3xl">₱{((v.current_price as number) ?? 0).toLocaleString()}</span>
-              <Badge variant="secondary" className="ml-2 capitalize">
-                {(v.pricing_type as string) ?? "negotiable"}
-              </Badge>
             </div>
             {(v.offer_details as string) ? (
               <Badge variant="outline" className="w-fit text-green-700">

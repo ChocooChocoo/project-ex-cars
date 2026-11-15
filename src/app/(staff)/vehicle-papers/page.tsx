@@ -1,8 +1,8 @@
 import { getCurrentRole } from "@/app/auth/actions";
 import { requireRole } from "@/lib/auth/guards";
 import type { GceRole } from "@/lib/auth/roles";
+import { previousOwnerDocuments } from "@/lib/papers/previous-owner-documents";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { withSignedTransactionDocumentUrls } from "@/lib/transactions/document-media";
 import {
   type VehiclePaperRecord,
   type VehiclePaperSource,
@@ -33,53 +33,17 @@ export default async function VehiclePapersPage() {
 
   const records: VehiclePaperRecord[] = ((handovers as VehiclePaperSource[] | null) ?? []).map(vehiclePaperRecord);
 
-  // The OR/CR is the original GCE kept when it bought the car, so it hangs on the car's sell
-  // transaction, not on the purchase. The earliest sell row for the car is the one GCE bought.
+  // The OR/CR is the original GCE kept when it bought the car, so it hangs on the car's sell transaction,
+  // not on the purchase. T11: the same lookup the field case uses, so both screens show one set of papers.
   const orcrByVehicle = new Map<string, string>();
-  const sellTransactionByVehicle = new Map<string, string>();
   const vehicleIds = [...new Set(records.map((record) => record.vehicleId).filter((id): id is string => Boolean(id)))];
-
-  if (vehicleIds.length > 0) {
-    const { data: sellTransactions } = await admin
-      .from("transactions")
-      .select("id, vehicle_id, opened_at")
-      .in("vehicle_id", vehicleIds)
-      .eq("transaction_kind", "sell")
-      .order("opened_at", { ascending: true });
-
-    for (const transaction of sellTransactions ?? []) {
-      const vehicleId = transaction.vehicle_id as string | null;
-      if (vehicleId && !sellTransactionByVehicle.has(vehicleId)) {
-        sellTransactionByVehicle.set(vehicleId, transaction.id as string);
-      }
-    }
-  }
-
-  const sellTransactionIds = [...new Set(sellTransactionByVehicle.values())];
-  if (sellTransactionIds.length > 0) {
-    const { data: documents } = await admin
-      .from("transaction_documents")
-      .select("id, transaction_id, document_kind, storage_path")
-      .in("transaction_id", sellTransactionIds)
-      // T10: the CR (or the OR, or the old combined ORCR) stands in for the registration paper.
-      .in("document_kind", ["orcr", "certificate_of_registration", "official_receipt"])
-      .order("upload_date", { ascending: true });
-
-    const signedDocuments = await withSignedTransactionDocumentUrls(
-      admin.storage,
-      (documents as Record<string, unknown>[] | null) ?? [],
-    );
-    const orcrBySellTransaction = new Map<string, string>();
-    for (const document of signedDocuments) {
-      const sellTransactionId = String(document.transaction_id);
-      if (document.signed_url && !orcrBySellTransaction.has(sellTransactionId)) {
-        orcrBySellTransaction.set(sellTransactionId, document.signed_url);
-      }
-    }
-    for (const [vehicleId, sellTransactionId] of sellTransactionByVehicle) {
-      const signedUrl = orcrBySellTransaction.get(sellTransactionId);
-      if (signedUrl) orcrByVehicle.set(vehicleId, signedUrl);
-    }
+  const papersByVehicle = await Promise.all(
+    vehicleIds.map(async (vehicleId) => [vehicleId, await previousOwnerDocuments(admin, vehicleId)] as const),
+  );
+  for (const [vehicleId, documents] of papersByVehicle) {
+    // The CR (or the OR, or the old combined ORCR) stands in for the registration paper; the deed is separate.
+    const registration = documents.find((document) => document.signed_url && document.document_kind !== "deed_of_sale");
+    if (registration?.signed_url) orcrByVehicle.set(vehicleId, registration.signed_url);
   }
 
   const tableRows: VehiclePaperRow[] = records.map((record) => ({

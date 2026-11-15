@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import { GCE_SELLER } from "../transactions/buy-flow";
-import { deedOfSale, missedPaymentPolicy, PAPER_BLANK, paperFinancing, paperSale, policyWarranty } from "./templates";
+import {
+  contract,
+  deedOfSale,
+  missedPaymentPolicy,
+  PAPER_BLANK,
+  paperFinancing,
+  paperSale,
+  policyWarranty,
+} from "./templates";
 
 const policyRow = {
   opened_at: "2026-10-31T02:00:00.000Z",
@@ -121,5 +129,53 @@ describe("policy and warranty fill", () => {
       policyWarranty(paperSale({ ...saleRow, vehicles: { ...saleRow.vehicles, warranty_details: null } })),
     );
     expect(text).toContain(`Warranty: ${PAPER_BLANK}`);
+  });
+});
+
+describe("contract fill", () => {
+  const signatures = { buyer: "22222222-2222-4222-8222-222222222222/signature-buyer-1.png", ci: null };
+
+  it("prints the contract body with the buyer, the car and the price", () => {
+    const text = textOf(contract(paperSale(saleRow), "The buyer pays in 24 monthly installments.", signatures));
+
+    expect(text).toContain("CONTRACT");
+    expect(text).toContain("The buyer pays in 24 monthly installments.");
+    expect(text).toContain("Maria Santos");
+    expect(text).toContain("Make: Toyota");
+    expect(text).toContain("PHP 500,000.00");
+    expect(text).toContain(GCE_SELLER);
+  });
+
+  it("names the buyer and the Confidential Informant in the signature block", () => {
+    const text = textOf(contract(paperSale(saleRow), null, signatures));
+
+    expect(text).toContain("Buyer: Maria Santos");
+    expect(text).toContain("Confidential Informant");
+    expect(text).toContain(`Signature image: ${signatures.buyer}`);
+    expect(text).toContain(`Signature image: ${PAPER_BLANK}`);
+  });
+
+  it("prints the blank line note when GCE has no contract body yet", () => {
+    const text = textOf(contract(paperSale(saleRow), null, signatures));
+
+    expect(text).toContain(`TERMS\n${PAPER_BLANK}`);
+    expect(text).toContain("GCE has not recorded the contract terms yet.");
+  });
+});
+
+describe("missed payment policy signatures", () => {
+  it("appends the buyer and CI signature lines when they are recorded", () => {
+    const signatures = { buyer: "tx/signature-buyer-1.png", ci: "tx/signature-ci-1.png" };
+    const text = textOf(missedPaymentPolicy(paperSale(policyRow), paperFinancing(policyRow), signatures));
+
+    expect(text).toContain("SIGNED BY");
+    expect(text).toContain("Signature image: tx/signature-buyer-1.png");
+    expect(text).toContain("Signature image: tx/signature-ci-1.png");
+  });
+
+  it("keeps the paper unchanged when no signatures are passed", () => {
+    const text = textOf(missedPaymentPolicy(paperSale(policyRow), paperFinancing(policyRow)));
+
+    expect(text).not.toContain("SIGNED BY");
   });
 });

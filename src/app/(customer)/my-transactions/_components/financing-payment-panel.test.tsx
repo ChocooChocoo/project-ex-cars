@@ -99,4 +99,32 @@ describe("financing payment panel", () => {
     expect(screen.getByText("No installment schedule yet.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Payment" })).not.toBeInTheDocument();
   });
+
+  // T11: a cash-financed buyer pays at GCE, so staff record the payment and there is no PayMongo flow.
+  it("T11: sends a cash-financed buyer to GCE with no PayMongo buttons or dialog", () => {
+    render(<FinancingPaymentPanel {...props} payMethod="cash" />);
+
+    expect(
+      screen.getByText("Pay at GCE. The Sales Manager records each payment and the Head Accountant confirms it."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Payment" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Advanced Payment" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Pay a bank transfer online through PayMongo/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("T11: keeps the payment history and its pending labels for a cash-financed buyer", () => {
+    render(
+      <FinancingPaymentPanel
+        {...props}
+        payMethod="cash"
+        payments={[
+          { id: "p1", installment_id: "next", amount: 1000, method: "cash", verified_by: null, rejected_at: null },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Payment history")).toBeInTheDocument();
+    expect(screen.getByText("Pending verification")).toBeInTheDocument();
+  });
 });

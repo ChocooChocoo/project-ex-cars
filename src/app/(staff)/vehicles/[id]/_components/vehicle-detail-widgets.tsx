@@ -29,7 +29,7 @@ export interface VehicleDetail {
   engine: string | null;
   description: string | null;
   current_price: number | null;
-  pricing_type: string | null;
+  financing_markup_pct: number | string | null;
   warranty_details: string | null;
   offer_details: string | null;
   listing_state: string | null;
@@ -41,7 +41,6 @@ interface MetricCard {
   label: string;
   value: string;
   icon: typeof Car;
-  badge?: { label: string; variant: "default" | "secondary" | "outline" | "destructive" };
   caption: string;
 }
 
@@ -60,7 +59,6 @@ export function VehicleMetricCards({ vehicle }: { readonly vehicle: VehicleDetai
       label: "Listed Price",
       value: vehicle.current_price ? `₱${vehicle.current_price.toLocaleString()}` : "Price TBA",
       icon: PhilippinePeso,
-      badge: vehicle.pricing_type ? { label: vehicle.pricing_type, variant: "secondary" } : undefined,
       caption: "As shown to customers",
     },
     {
@@ -102,16 +100,9 @@ export function VehicleMetricCards({ vehicle }: { readonly vehicle: VehicleDetai
               <CardDescription>{card.label}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-medium text-3xl capitalize tabular-nums leading-none tracking-tight">
-                  {card.value}
-                </span>
-                {card.badge ? (
-                  <Badge variant={card.badge.variant} className="capitalize">
-                    {card.badge.label}
-                  </Badge>
-                ) : null}
-              </div>
+              <span className="font-medium text-3xl capitalize tabular-nums leading-none tracking-tight">
+                {card.value}
+              </span>
               <p className="text-muted-foreground text-sm">{card.caption}</p>
             </CardContent>
           </Card>
@@ -132,7 +123,11 @@ export function VehiclePurchaseCard({ vehicle }: { readonly vehicle: VehicleDeta
     { label: "Exterior Color", value: vehicle.exterior_color ?? "—" },
     { label: "Interior Color", value: vehicle.interior_color ?? "—" },
     { label: "Stock Code", value: vehicle.stock_code ?? "—" },
-    { label: "VIN", value: vehicle.vin ?? "—" },
+    // T11: GCE's own figure, shown here because this page is staff-only. Customers see the total it produces.
+    {
+      label: "Financing markup",
+      value: vehicle.financing_markup_pct == null ? "GCE default" : `${vehicle.financing_markup_pct}%`,
+    },
   ];
 
   return (
@@ -155,9 +150,6 @@ export function VehiclePurchaseCard({ vehicle }: { readonly vehicle: VehicleDeta
           ) : (
             <span className="font-bold text-3xl">Price TBA</span>
           )}
-          <Badge variant="secondary" className="ml-2 capitalize">
-            {vehicle.pricing_type ?? "negotiable"}
-          </Badge>
         </div>
         {vehicle.offer_details ? (
           <Badge variant="outline" className="w-fit text-green-700">

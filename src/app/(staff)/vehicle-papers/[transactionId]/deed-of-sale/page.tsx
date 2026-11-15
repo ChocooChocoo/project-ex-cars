@@ -1,21 +1,22 @@
 import { notFound } from "next/navigation";
 
-import { requireRole } from "@/lib/auth/guards";
-import type { GceRole } from "@/lib/auth/roles";
 import { deedOfSale, paperSale, type TransactionPaperSource } from "@/lib/papers/templates";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { PaperDocumentView } from "../../_components/paper-document-view";
+import { requirePaperReader } from "../../_lib/paper-access";
 
-const VEHICLE_PAPERS_ROLES: GceRole[] = ["confidential_informant", "ceo"];
+// T11: the Deed of Sale for one sold car. The Confidential Informant prints it for the buyer; the buyer
+// keeps their own copy, so they may open it too.
+const DEED_ROLES = ["confidential_informant", "ceo", "head_accountant", "sales_manager"] as const;
 
 /**
  * The Deed of Sale for one sold car, filled in from the transaction on record. The buyer is the
  * transaction's own customer, so the deed never names an earlier or later buyer of the same car.
  */
 export default async function DeedOfSalePage({ params }: { readonly params: Promise<{ transactionId: string }> }) {
-  await requireRole(VEHICLE_PAPERS_ROLES);
   const { transactionId } = await params;
+  await requirePaperReader(transactionId, [...DEED_ROLES]);
   const admin = createAdminClient();
 
   const { data } = await admin

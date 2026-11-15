@@ -109,19 +109,6 @@ export function createColumns(
       },
     },
     {
-      accessorKey: "pricing_type",
-      header: "Type",
-      filterFn: "equalsString",
-      cell: ({ row }) => {
-        const type = row.getValue("pricing_type") as string;
-        return (
-          <Badge variant="outline" className="px-1.5 text-muted-foreground capitalize">
-            {type}
-          </Badge>
-        );
-      },
-    },
-    {
       accessorKey: "listing_state",
       header: "Status",
       filterFn: "equalsString",

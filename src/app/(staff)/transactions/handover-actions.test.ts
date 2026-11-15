@@ -1,14 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { getUser, getCurrentRole, notify, db } = vi.hoisted(() => {
+const { getUser, getCurrentRole, notify, db, storage } = vi.hoisted(() => {
   // A minimal stand-in for the Supabase query builder: every read of a table answers with the row
   // set for it, and every write is recorded.
   const rows: Record<string, unknown> = {};
+  const errors: Record<string, { message: string } | undefined> = {};
   const writes: { table: string; op: string; payload: Record<string, unknown> }[] = [];
   const from = (table: string) => {
-    const answer = () => Promise.resolve({ data: rows[table] ?? null, error: null });
+    const answer = () => Promise.resolve({ data: rows[table] ?? null, error: errors[table] ?? null });
     const builder: Record<string, unknown> = {};
-    for (const step of ["select", "eq", "neq", "in", "order", "limit"]) builder[step] = () => builder;
+    for (const step of ["select", "eq", "neq", "in", "order", "limit", "not"]) builder[step] = () => builder;
     for (const op of ["insert", "upsert", "update"]) {
       builder[op] = (payload: Record<string, unknown>) => {
         writes.push({ table, op, payload });
@@ -20,14 +21,26 @@ const { getUser, getCurrentRole, notify, db } = vi.hoisted(() => {
     builder.then = (resolve: (value: unknown) => unknown) => answer().then(resolve);
     return builder;
   };
-  return { getUser: vi.fn(), getCurrentRole: vi.fn(), notify: vi.fn(), db: { rows, writes, from } };
+  const storage = { upload: vi.fn(), remove: vi.fn(), createSignedUrl: vi.fn() };
+  return {
+    getUser: vi.fn(),
+    getCurrentRole: vi.fn(),
+    notify: vi.fn(),
+    db: { rows, errors, writes, from },
+    storage,
+  };
 });
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/app/auth/actions", () => ({ getCurrentRole }));
 vi.mock("@/lib/notifications/notify", () => ({ notify }));
 vi.mock("@/lib/supabase/server", () => ({ createServerSupabaseClient: vi.fn(async () => ({ auth: { getUser } })) }));
-vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn(() => ({ from: db.from })) }));
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: vi.fn(() => ({
+    from: db.from,
+    storage: { from: () => storage },
+  })),
+}));
 
 import {
   approvePapersRelease,
@@ -35,11 +48,13 @@ import {
   receivePapers,
   recordBuyerMet,
   recordContractCopy,
+  recordFieldSignatures,
   releasePapersToCi,
   reportSigning,
   requestPapersRelease,
   reviewContract,
   saveContract,
+  uploadFieldDocument,
 } from "./handover-actions";
 
 const userId = "11111111-1111-4111-8111-111111111111";
@@ -48,7 +63,7 @@ const CI_ONLY = "Only the Confidential Informant handles the vehicle papers.";
 
 const at = "2026-10-14T02:00:00.000Z";
 
-function form(fields: Record<string, string> = {}) {
+function form(fields: Record<string, string | File> = {}) {
   const fd = new FormData();
   fd.set("transaction_id", transactionId);
   for (const [key, value] of Object.entries(fields)) fd.set(key, value);
@@ -80,10 +95,14 @@ const papersWrite = () => db.writes.find((write) => write.table === "sale_handov
 beforeEach(() => {
   vi.clearAllMocks();
   for (const table of Object.keys(db.rows)) delete db.rows[table];
+  for (const table of Object.keys(db.errors)) delete db.errors[table];
   db.writes.length = 0;
   getUser.mockResolvedValue({ data: { user: { id: userId } } });
   getCurrentRole.mockResolvedValue("sales_manager");
   db.rows.field_cases = { id: "case-1", assigned_confidential_informant: userId };
+  storage.upload.mockResolvedValue({ error: null });
+  storage.remove.mockResolvedValue({ error: null });
+  storage.createSignedUrl.mockResolvedValue({ data: { signedUrl: "https://example.test/doc" }, error: null });
 });
 
 describe("papers release at a GCE visit", () => {
@@ -400,5 +419,151 @@ describe("contract in the field", () => {
     expect(papersWrite()).toMatchObject({ mechanic_copy_at: expect.any(String) });
     expect(papersWrite()).not.toHaveProperty("ci_copy_at");
     expect(notify).not.toHaveBeenCalled();
+  });
+});
+
+function file(name = "orcr.pdf", type = "application/pdf", size = 6) {
+  return new File([new Uint8Array(size)], name, { type });
+}
+
+function documentForm(fields: { kind?: string; note?: string; file?: File } = {}) {
+  const fd = form({ document_kind: fields.kind ?? "orcr", note: fields.note ?? "" });
+  if (fields.file !== undefined) fd.set("file", fields.file);
+  return fd;
+}
+
+describe("documents the CI adds at a field case", () => {
+  beforeEach(() => getCurrentRole.mockResolvedValue("confidential_informant"));
+
+  it("uploads the paper into the transaction folder and records it as pending", async () => {
+    sale("delivery");
+
+    await expect(
+      uploadFieldDocument(documentForm({ kind: "official_receipt", note: "OR from the first owner", file: file() })),
+    ).resolves.toEqual({ success: true });
+
+    const [path, uploaded] = storage.upload.mock.calls[0] as [string, File];
+    expect(path.startsWith(`${transactionId}/ci-doc-`)).toBe(true);
+    expect(path.endsWith(".pdf")).toBe(true);
+    expect(uploaded.size).toBe(6);
+    expect(db.writes.find((write) => write.table === "transaction_documents")?.payload).toMatchObject({
+      transaction_id: transactionId,
+      document_kind: "official_receipt",
+      storage_path: path,
+      uploader_id: userId,
+      verification_state: "pending",
+      note: "OR from the first owner",
+    });
+    expect(db.writes.some((write) => write.table === "transaction_status_history")).toBe(true);
+  });
+
+  it("names the file by its real extension and accepts a photo", async () => {
+    sale("delivery");
+
+    await expect(uploadFieldDocument(documentForm({ file: file("photo.png", "image/png") }))).resolves.toEqual({
+      success: true,
+    });
+    expect((storage.upload.mock.calls[0] as [string])[0].endsWith(".png")).toBe(true);
+  });
+
+  it("refuses a document the CI cannot file", async () => {
+    sale("delivery");
+
+    await expect(uploadFieldDocument(documentForm({ kind: "inspection_photo", file: file() }))).resolves.toEqual({
+      error: expect.stringContaining("Invalid option"),
+    });
+    await expect(uploadFieldDocument(documentForm())).resolves.toEqual({ error: "Attach the document." });
+    await expect(uploadFieldDocument(documentForm({ file: file("notes.txt", "text/plain") }))).resolves.toEqual({
+      error: "Documents must be a JPEG, PNG, WebP image or a PDF.",
+    });
+    await expect(
+      uploadFieldDocument(documentForm({ file: file("big.pdf", "application/pdf", 2 * 1024 * 1024 + 1) })),
+    ).resolves.toEqual({ error: "The document must be 2 MB or smaller." });
+    expect(storage.upload).not.toHaveBeenCalled();
+  });
+
+  it("removes the uploaded object when the document row cannot be written", async () => {
+    sale("delivery");
+    db.errors.transaction_documents = { message: "permission denied" };
+
+    await expect(uploadFieldDocument(documentForm({ file: file() }))).resolves.toEqual({ error: "permission denied" });
+    expect(storage.remove).toHaveBeenCalledWith([expect.stringContaining(`${transactionId}/ci-doc-`)]);
+  });
+
+  it("refuses a role that does not carry the papers, and a CI who is not assigned", async () => {
+    sale("delivery");
+    getCurrentRole.mockResolvedValue("mechanic");
+    await expect(uploadFieldDocument(documentForm({ file: file() }))).resolves.toEqual({ error: CI_ONLY });
+
+    getCurrentRole.mockResolvedValue("confidential_informant");
+    db.rows.field_cases = { id: "case-1", assigned_confidential_informant: "someone-else" };
+    await expect(uploadFieldDocument(documentForm({ file: file() }))).resolves.toEqual({
+      error: "Only the Confidential Informant assigned to this field case can do this.",
+    });
+    expect(storage.upload).not.toHaveBeenCalled();
+  });
+});
+
+describe("contract signed in the field", () => {
+  // T11: both PNGs travel in the form and the server stores them (the CI has no upload policy on the bucket).
+  const pngFile = (name: string) => new File([new Uint8Array([137, 80, 78, 71])], name, { type: "image/png" });
+  const signed = () =>
+    form({ buyer_signature: pngFile("signature-buyer.png"), ci_signature: pngFile("signature-ci.png") });
+
+  beforeEach(() => getCurrentRole.mockResolvedValue("confidential_informant"));
+
+  it("uploads both signatures and records an in-app signing", async () => {
+    sale("delivery");
+
+    await expect(recordFieldSignatures(signed())).resolves.toEqual({ success: true });
+    expect(storage.upload).toHaveBeenCalledTimes(2);
+    expect(papersWrite()).toMatchObject({
+      signature_path: expect.stringMatching(new RegExp(`^${transactionId}/signature-buyer-\\d+\\.png$`)),
+      ci_signature_path: expect.stringMatching(new RegExp(`^${transactionId}/signature-ci-\\d+\\.png$`)),
+      contract_state: "signed",
+      contract_signed_at: expect.any(String),
+      signing_method: "in_app",
+    });
+    expect(notify).toHaveBeenCalledWith(
+      expect.anything(),
+      { role: "sales_manager" },
+      expect.objectContaining({ kind: "contract_signed", title: "Contract signed in the field" }),
+    );
+  });
+
+  it("asks for both signatures", async () => {
+    sale("delivery");
+
+    await expect(recordFieldSignatures(form({ buyer_signature: pngFile("buyer.png") }))).resolves.toEqual({
+      error: "Draw both signatures.",
+    });
+    // An empty blob is not a signature.
+    const empty = new File([], "empty.png", { type: "image/png" });
+    await expect(
+      recordFieldSignatures(form({ buyer_signature: empty, ci_signature: pngFile("ci.png") })),
+    ).resolves.toEqual({ error: "Draw both signatures." });
+    // Only PNG is accepted.
+    await expect(
+      recordFieldSignatures(
+        form({
+          buyer_signature: new File([new Uint8Array([1])], "a.jpg", { type: "image/jpeg" }),
+          ci_signature: pngFile("ci.png"),
+        }),
+      ),
+    ).resolves.toEqual({ error: "The signatures must be PNG images." });
+    expect(papersWrite()).toBeUndefined();
+  });
+
+  it("refuses a role that does not sign, and a CI who is not assigned", async () => {
+    sale("delivery");
+    getCurrentRole.mockResolvedValue("mechanic");
+    await expect(recordFieldSignatures(signed())).resolves.toEqual({ error: CI_ONLY });
+
+    getCurrentRole.mockResolvedValue("confidential_informant");
+    db.rows.field_cases = { id: "case-1", assigned_confidential_informant: "someone-else" };
+    await expect(recordFieldSignatures(signed())).resolves.toEqual({
+      error: "Only the Confidential Informant assigned to this field case can do this.",
+    });
+    expect(papersWrite()).toBeUndefined();
   });
 });

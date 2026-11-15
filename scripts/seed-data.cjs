@@ -355,7 +355,6 @@ async function seedVehicles(users) {
               : state === "draft"
                 ? null
                 : pricePool[i],
-      pricing_type: i % 3 === 0 ? "fixed" : "negotiable",
       warranty_details: i % 2 === 0 ? "6-month powertrain warranty" : "1-year limited warranty",
       offer_details: i % 4 === 0 ? "Free 1-year comprehensive insurance" : null,
       listing_state: state,

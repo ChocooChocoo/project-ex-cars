@@ -6,7 +6,7 @@ import { z } from "zod";
 
 import { getCurrentRole } from "@/app/auth/actions";
 import { notify } from "@/lib/notifications/notify";
-import { getFinancingMarkupPct } from "@/lib/settings/financing";
+import { getFinancingMarkupPct, markupFor } from "@/lib/settings/financing";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { addWorkingDays, DOWNPAYMENT_WORKING_DAYS, financedTotal } from "@/lib/transactions/buy-flow";
@@ -51,6 +51,11 @@ function arrangementKind(tx: { purchase_details: unknown }): string | null {
   return purchase(tx)?.arrangement_kind ?? null;
 }
 
+// T11: the car's own financing markup, when GCE set one on the posting.
+function vehicleOf(tx: { vehicles?: unknown }) {
+  return (Array.isArray(tx.vehicles) ? tx.vehicles[0] : tx.vehicles) as { financing_markup_pct?: unknown } | null;
+}
+
 function done(transactionId: string): FinancingResult {
   revalidatePath("/dashboard/transactions");
   revalidatePath(`/dashboard/transactions/${transactionId}`);
@@ -88,8 +93,10 @@ export async function proposeFinancingTerms(formData: FormData): Promise<Financi
   if (tx.current_state !== "approved") return { error: "Approve the request before proposing terms." };
   if (tx.terms && !["returned"].includes(tx.terms.state)) return { error: "Terms are already in review." };
 
+  // T11: the car's own markup wins; `markupFor` falls back to the global rate when it has none.
   const totalAmount =
-    parsed.data.total_amount || financedTotal(Number(purchase(tx)?.final_price ?? 0), await getFinancingMarkupPct());
+    parsed.data.total_amount ||
+    financedTotal(Number(purchase(tx)?.final_price ?? 0), markupFor(vehicleOf(tx), await getFinancingMarkupPct()));
   if (!totalAmount) return { error: "Enter the vehicle price." };
 
   // A meet-up takes no downpayment. A delivery's fee is approved with the terms.
@@ -137,11 +144,11 @@ export async function proposeFinancingTerms(formData: FormData): Promise<Financi
   );
   await notify(
     admin,
-    { role: "head_accountant" },
+    { role: "ceo" },
     {
       kind: "financing_terms_proposed",
-      title: "Financing terms to review",
-      body: `${durationMonths} months on ${peso(totalAmount)}, Initial Downpayment ${peso(downPayment)}.`,
+      title: "Financing terms to confirm",
+      body: `${durationMonths} months on ${peso(totalAmount)}, Initial Downpayment ${peso(downPayment)}. Confirm them so the buyer can decide.`,
       transactionId: tx.id,
     },
   );
@@ -212,7 +219,11 @@ export async function confirmFinancingTerms(formData: FormData): Promise<Financi
 
   const admin = createAdminClient();
   const tx = await loadFinancing(admin, formData.get("transaction_id"));
-  if (tx?.terms?.state !== "ha_approved") return { error: "No reviewed terms to confirm." };
+  // T11: the Head Accountant no longer reviews the terms, so the CEO confirms them straight after the Sales
+  // Manager proposes them. Rows left in ha_approved by the old review step stay confirmable.
+  if (!tx?.terms || !["proposed", "ha_approved"].includes(tx.terms.state)) {
+    return { error: "No financing terms to confirm." };
+  }
 
   if (parsed.data.decision === "return") {
     await admin

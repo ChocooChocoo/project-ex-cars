@@ -100,17 +100,11 @@ test.describe
 
       await page.locator("#fin-price").fill("500000");
       await page.locator("#fin-first-due").fill("2032-12-01");
-      await page.getByRole("button", { name: "Send to Head Accountant" }).click();
-      await expect(page.getByText("Terms sent to the Head Accountant.")).toBeVisible();
+      await page.getByRole("button", { name: "Send to CEO" }).click();
+      await expect(page.getByText("Terms sent to the CEO for confirmation.")).toBeVisible();
     });
 
-    test("Head Accountant approves and the CEO confirms", async ({ page }) => {
-      await signInAs(page, "head_accountant@gce.local");
-      await page.goto(`/head_accountant/transactions/${txId}`);
-      await page.getByRole("button", { name: "Approve", exact: true }).click();
-      await page.getByRole("alertdialog").getByRole("button", { name: "Approve", exact: true }).click();
-      await expect(page.getByText("Terms sent to the CEO.")).toBeVisible();
-
+    test("the CEO confirms the terms (T11: no Head Accountant review)", async ({ page }) => {
       await signInAs(page, "ceo@gce.local");
       await page.goto(`/ceo/transactions/${txId}`);
       await page.getByRole("button", { name: "Confirm", exact: true }).click();

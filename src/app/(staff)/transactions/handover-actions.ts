@@ -17,6 +17,8 @@ import {
   signsInApp,
   verifiedTowardPrice,
 } from "@/lib/transactions/buy-flow";
+import { DOCUMENT_EXTENSIONS, transactionDocumentLabel } from "@/lib/transactions/document-media";
+import { MAX_UPLOAD_BYTES } from "@/lib/uploads/compress-image";
 
 // Vehicle papers custody (buying-flow revision, "Papers release"). The Confidential Informant keeps a
 // car's papers. At a GCE visit the Sales Manager requests them, the CI hands them over and the Sales
@@ -499,5 +501,146 @@ export async function recordContractCopy(formData: FormData): Promise<HandoverRe
       },
     );
   }
+  return { success: true };
+}
+
+// T11: the papers the Confidential Informant may add to a sale at the field case. The registration papers
+// the CI carries, and a plain sale document for anything else.
+const FIELD_DOCUMENT_KINDS = [
+  "orcr",
+  "official_receipt",
+  "certificate_of_registration",
+  "deed_of_sale",
+  "sale_document",
+  "other",
+] as const;
+
+const fieldDocumentSchema = z.object({
+  document_kind: z.enum(FIELD_DOCUMENT_KINDS),
+  note: z.string().trim().max(500, "Keep the note under 500 characters.").optional(),
+});
+
+// Meet-up or delivery: the assigned CI files a paper against the sale. The file lands in the transaction's
+// own storage folder (`{transactionId}/ci-doc-*`), so the buyer can read it through the same prefix rule.
+export async function uploadFieldDocument(formData: FormData): Promise<HandoverResult> {
+  const who = await actor();
+  if ("error" in who) return who;
+  if (who.role !== "confidential_informant") return { error: CI_ONLY };
+
+  const admin = createAdminClient();
+  const sale = await loadSale(admin, formData.get("transaction_id"));
+  if (!sale) return { error: NOT_FOUND };
+  const refusal = await assignedInformant(admin, sale, who.userId);
+  if (refusal) return { error: refusal };
+
+  const parsed = fieldDocumentSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Choose the kind of document." };
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) return { error: "Attach the document." };
+  const extension = DOCUMENT_EXTENSIONS[file.type];
+  if (!extension) return { error: "Documents must be a JPEG, PNG, WebP image or a PDF." };
+  if (file.size > MAX_UPLOAD_BYTES) return { error: "The document must be 2 MB or smaller." };
+
+  const path = `${sale.id}/ci-doc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`;
+  const { error: uploadError } = await admin.storage.from("transaction-documents").upload(path, file);
+  if (uploadError) return { error: uploadError.message };
+
+  const { error } = await admin.from("transaction_documents").insert({
+    transaction_id: sale.id,
+    document_kind: parsed.data.document_kind,
+    storage_path: path,
+    uploader_id: who.userId,
+    verification_state: "pending",
+    note: parsed.data.note && parsed.data.note !== "" ? parsed.data.note : null,
+  });
+  if (error) {
+    await admin.storage.from("transaction-documents").remove([path]);
+    return { error: error.message };
+  }
+
+  await admin.from("transaction_status_history").insert({
+    transaction_id: sale.id,
+    from_state: sale.state,
+    to_state: sale.state,
+    actor_id: who.userId,
+    reason: `Document added by the Confidential Informant: ${transactionDocumentLabel(parsed.data.document_kind)}`,
+  });
+  revalidatePath("/dashboard/field-cases");
+  revalidatePath("/vehicle-papers");
+  revalidatePath(`/my-transactions/${sale.id}`);
+  return { success: true };
+}
+
+// T11: the buyer and the Confidential Informant sign the sale contract on the device in the field.
+// The two PNGs arrive as files and are uploaded here with the service role: the Confidential Informant has no
+// INSERT policy on the transaction-documents bucket (only customers, the Sales Manager, the CEO, the Account
+// Manager and the Head Accountant do), so a browser-side upload answers 400.
+export async function recordFieldSignatures(formData: FormData): Promise<HandoverResult> {
+  const who = await actor();
+  if ("error" in who) return who;
+  if (who.role !== "confidential_informant") return { error: CI_ONLY };
+
+  const admin = createAdminClient();
+  const sale = await loadSale(admin, formData.get("transaction_id"));
+  if (!sale) return { error: NOT_FOUND };
+  const refusal = await assignedInformant(admin, sale, who.userId);
+  if (refusal) return { error: refusal };
+
+  const buyerFile = formData.get("buyer_signature");
+  const ciFile = formData.get("ci_signature");
+  if (!(buyerFile instanceof File) || !(ciFile instanceof File)) return { error: "Draw both signatures." };
+  for (const file of [buyerFile, ciFile]) {
+    if (file.size === 0) return { error: "Draw both signatures." };
+    if (file.size > MAX_UPLOAD_BYTES) return { error: "Each signature must be 2 MB or smaller." };
+    if (file.type !== "image/png") return { error: "The signatures must be PNG images." };
+  }
+
+  const stamp = Date.now();
+  const buyerPath = `${sale.id}/signature-buyer-${stamp}.png`;
+  const ciPath = `${sale.id}/signature-ci-${stamp}.png`;
+  const bucket = admin.storage.from("transaction-documents");
+  const uploaded: string[] = [];
+  for (const [path, file] of [
+    [buyerPath, buyerFile],
+    [ciPath, ciFile],
+  ] as const) {
+    const { error: uploadError } = await bucket.upload(path, file, { contentType: "image/png", upsert: false });
+    if (uploadError) {
+      if (uploaded.length > 0) await bucket.remove(uploaded);
+      return { error: uploadError.message };
+    }
+    uploaded.push(path);
+  }
+
+  const now = new Date().toISOString();
+  const error = await setHandover(
+    admin,
+    sale,
+    who.userId,
+    {
+      signature_path: buyerPath,
+      ci_signature_path: ciPath,
+      contract_state: "signed",
+      contract_signed_at: now,
+      signing_method: "in_app",
+    },
+    "Contract signed in the field by the buyer and the Confidential Informant",
+  );
+  if (error) {
+    await bucket.remove(uploaded);
+    return { error };
+  }
+
+  await notify(
+    admin,
+    { role: "sales_manager" },
+    {
+      kind: "contract_signed",
+      title: "Contract signed in the field",
+      body: "The buyer and the Confidential Informant signed the contract on the device.",
+      transactionId: sale.id,
+    },
+  );
   return { success: true };
 }

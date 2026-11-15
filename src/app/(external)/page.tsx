@@ -6,8 +6,9 @@ import { ArrowRight, Building2, Car, MapPin, Truck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { getFinancingMarkupPct } from "@/lib/settings/financing";
+import { getFinancingMarkupPct, markupFor } from "@/lib/settings/financing";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { financedTotal } from "@/lib/transactions/buy-flow";
 import { cn, formatCurrency } from "@/lib/utils";
 import { getPublishedReviews } from "@/server/customer-reviews";
 
@@ -65,7 +66,9 @@ export default async function LandingPage() {
   const markupPct = await getFinancingMarkupPct();
   const { data: vehicles } = await supabase
     .from("vehicles")
-    .select("id, make, model, year, current_price, stock_code")
+    // T11: the per-car markup is read here so the estimate is right, but only the finished total is handed to
+    // the client component: the percentage itself is GCE's figure and never reaches the browser.
+    .select("id, make, model, year, current_price, stock_code, financing_markup_pct")
     .eq("listing_state", "available")
     .order("posted_at", { ascending: false })
     .limit(5);
@@ -263,21 +266,27 @@ export default async function LandingPage() {
                   Pay in full, or in monthly terms
                 </h2>
                 <p className="max-w-prose text-muted-foreground">
-                  Full payment works by cash or bank transfer through PayMongo. Financing with GCE adds {markupPct}% to
-                  the car's price, the same for every term.
+                  Full payment works by cash or bank transfer through PayMongo. Financing with GCE spreads the car's
+                  total over the term you pick; the estimator below shows the exact amount you would repay.
                 </p>
               </Reveal>
               <Reveal className="flex flex-wrap gap-2" delay={0.08}>
                 <Badge variant="secondary">Cash</Badge>
                 <Badge variant="secondary">Bank Transfer (via PayMongo)</Badge>
-                <Badge>Financing +{markupPct}%</Badge>
+                <Badge>Financing</Badge>
               </Reveal>
             </div>
             {cars.length > 0 ? (
               <Reveal delay={0.1}>
                 <FinancingEstimator
-                  markupPct={markupPct}
-                  cars={cars.map((c) => ({ id: c.id, label: carName(c), price: Number(c.current_price) }))}
+                  cars={cars.map((c) => ({
+                    id: c.id,
+                    label: carName(c),
+                    price: Number(c.current_price),
+                    // T11: the car's own markup is applied here, on the server, so the browser only ever
+                    // receives the finished total.
+                    total: financedTotal(Number(c.current_price), markupFor(c, markupPct)),
+                  }))}
                 />
               </Reveal>
             ) : null}

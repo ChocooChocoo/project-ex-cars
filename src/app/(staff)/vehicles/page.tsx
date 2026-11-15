@@ -1,6 +1,7 @@
 import { getCurrentRole } from "@/app/auth/actions";
 import { requireRole } from "@/lib/auth/guards";
 import { STAFF_ROLES } from "@/lib/auth/roles";
+import { getFinancingMarkupPct } from "@/lib/settings/financing";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 import type { PriceProposalRow } from "./_components/price-approvals";
@@ -12,6 +13,8 @@ export default async function VehiclesPage() {
   const role = (await getCurrentRole()) ?? null;
 
   const { data: vehicles } = await supabase.from("vehicles").select("*").order("created_at", { ascending: false });
+  // T11: the global markup is the fallback for a car that has no financing_markup_pct of its own.
+  const defaultMarkupPct = await getFinancingMarkupPct();
 
   const isCeo = role === "ceo";
   const isHeadAccountant = role === "head_accountant";
@@ -84,6 +87,7 @@ export default async function VehiclesPage() {
         isHeadAccountant={isHeadAccountant}
         userRole={role}
         reconditioningByVehicle={reconditioningByVehicle}
+        defaultMarkupPct={defaultMarkupPct}
       />
     </div>
   );

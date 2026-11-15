@@ -14,6 +14,7 @@ import {
   priceProposalSchema,
   vehicleSchema,
 } from "@/lib/validation/vehicles";
+import { withoutIdentifiers } from "@/lib/vehicles/identifiers";
 import { isVehicleMediaKind } from "@/lib/vehicles/media-kinds";
 import { nextStockCode } from "@/lib/vehicles/stock-code";
 
@@ -63,7 +64,11 @@ export async function createVehicle(formData: FormData) {
         engine: data.engine || null,
         description: data.description || null,
         current_price: data.current_price ?? null,
-        pricing_type: data.pricing_type || "negotiable",
+        // T11: blank means "use GCE's global markup", stored as NULL.
+        financing_markup_pct:
+          data.financing_markup_pct === "" || data.financing_markup_pct === undefined
+            ? null
+            : data.financing_markup_pct,
         warranty_details: data.warranty_details || null,
         offer_details: data.offer_details || null,
       })
@@ -120,7 +125,9 @@ export async function updateVehicle(formData: FormData) {
       engine: data.engine || null,
       description: data.description || null,
       current_price: data.current_price ?? null,
-      pricing_type: data.pricing_type || "negotiable",
+      // T11: blank means "use GCE's global markup", stored as NULL.
+      financing_markup_pct:
+        data.financing_markup_pct === "" || data.financing_markup_pct === undefined ? null : data.financing_markup_pct,
       warranty_details: data.warranty_details || null,
       offer_details: data.offer_details || null,
     })
@@ -453,9 +460,12 @@ export async function getFavourites() {
 
   if (!data) return [];
 
+  // T11: `vehicles(*)` hands back every column, and this list is rendered for the customer, so drop GCE's
+  // private fields (identifiers and the per-car financing markup) before the rows leave the server.
   return data
     .map((row) => row.vehicles as unknown as Record<string, unknown> | null)
-    .filter((v): v is Record<string, unknown> => v !== null);
+    .filter((v): v is Record<string, unknown> => v !== null)
+    .map(withoutIdentifiers);
 }
 
 export async function createInspection(formData: FormData) {

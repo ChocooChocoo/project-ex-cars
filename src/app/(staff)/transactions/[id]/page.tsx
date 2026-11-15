@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getCurrentRole } from "@/app/auth/actions";
 import { requireRole } from "@/lib/auth/guards";
 import { TRANSACTION_VIEWER_ROLES } from "@/lib/auth/roles";
-import { getFinancingMarkupPct } from "@/lib/settings/financing";
+import { getFinancingMarkupPct, markupFor } from "@/lib/settings/financing";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { withSignedTransactionDocumentUrls } from "@/lib/transactions/document-media";
 
@@ -21,7 +21,7 @@ export default async function TransactionDetailPage({ params }: { readonly param
   const { data: transaction } = await supabase
     .from("transactions")
     .select(
-      "*, vehicles(make, model, year, stock_code, listing_state, condition, mileage), profiles(full_name, region_code), purchase_details(*), sell_details(*), sale_handovers(*)",
+      "*, vehicles(make, model, year, stock_code, listing_state, condition, mileage, financing_markup_pct), profiles(full_name, region_code), purchase_details(*), sell_details(*), sale_handovers(*)",
     )
     .eq("id", id)
     .single();
@@ -252,7 +252,11 @@ export default async function TransactionDetailPage({ params }: { readonly param
                 hasRecoveryCase,
                 recoveryInProgress,
                 threadId: (financingThread as { id: string } | null)?.id ?? null,
-                markupPct: await getFinancingMarkupPct(),
+                markupPct: markupFor(
+                  ((transaction as Record<string, unknown>).vehicles as { financing_markup_pct?: unknown } | null) ??
+                    null,
+                  await getFinancingMarkupPct(),
+                ),
               }
             : null
         }

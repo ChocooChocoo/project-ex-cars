@@ -2,21 +2,31 @@
 
 import { useState } from "react";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { toast } from "sonner";
 
-import { recordBuyerMet, recordContractCopy, reportSigning } from "@/app/(staff)/transactions/handover-actions";
+import {
+  recordBuyerMet,
+  recordContractCopy,
+  recordFieldSignatures,
+  reportSigning,
+} from "@/app/(staff)/transactions/handover-actions";
 import { ContractProgress } from "@/components/contract-progress";
+import { SignaturePad } from "@/components/signature-pad";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { isHalfwayCashRequest, signsInApp } from "@/lib/transactions/buy-flow";
+import { MISSED_PAYMENT_POLICY, MISSED_PAYMENT_POLICY_LABEL } from "@/lib/transactions/missed-payment-policy";
 
 type Row = Record<string, unknown>;
 type Result = { error: string } | { success: true };
 
 // Meet-up or delivery day: the team records the buyer met, the signing and the signed copies they keep, in
 // that order. T10: no payment is recorded in the field; the buyer pays in the app or at GCE. Each button appears only for the person who may press it, when it is due.
+// T11: the buyer and the Confidential Informant sign on the device here, and both signature images are kept
+// with the sale.
 export function ContractCard({
   transactionId,
   details,
@@ -30,10 +40,14 @@ export function ContractCard({
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [buyerSignature, setBuyerSignature] = useState<HTMLCanvasElement | null>(null);
+  const [ciSignature, setCiSignature] = useState<HTMLCanvasElement | null>(null);
   const signed = handover.contract_state === "signed";
   const keepsCopy = member === "informant" || (member === "mechanic" && isHalfwayCashRequest(details));
   const ownCopy = member === "informant" ? handover.ci_copy_at : handover.mechanic_copy_at;
   const waitsForApp = signsInApp(details) && !signed;
+  const financed = details?.payment_method === "financing";
+  const canSign = member === "informant" && !signed;
 
   async function send(action: (fd: FormData) => Promise<Result>, message: string) {
     const fd = new FormData();
@@ -45,6 +59,37 @@ export function ContractCard({
     else {
       toast.success(message);
       router.refresh();
+    }
+  }
+
+  async function sign() {
+    if (!buyerSignature || !ciSignature) return;
+    setBusy(true);
+    try {
+      const [buyerBlob, ciBlob] = await Promise.all([
+        new Promise<Blob | null>((resolve) => buyerSignature.toBlob(resolve, "image/png")),
+        new Promise<Blob | null>((resolve) => ciSignature.toBlob(resolve, "image/png")),
+      ]);
+      if (!buyerBlob || !ciBlob) {
+        toast.error("Could not read a signature. Draw it again.");
+        return;
+      }
+      // The server stores both PNGs: the Confidential Informant has no upload policy on the document bucket.
+      const fd = new FormData();
+      fd.set("transaction_id", transactionId);
+      fd.set("buyer_signature", new File([buyerBlob], "signature-buyer.png", { type: "image/png" }));
+      fd.set("ci_signature", new File([ciBlob], "signature-ci.png", { type: "image/png" }));
+      const result = await recordFieldSignatures(fd);
+      if ("error" in result) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Contract signed by the buyer and the Confidential Informant.");
+      setBuyerSignature(null);
+      setCiSignature(null);
+      router.refresh();
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -61,6 +106,7 @@ export function ContractCard({
         {member && handover.buyer_met_at && waitsForApp ? (
           <p className="text-muted-foreground">The buyer signs this contract in the app on their own phone.</p>
         ) : null}
+        {signed ? <p>Signed by the buyer and the Confidential Informant.</p> : null}
         {member ? (
           <div className="flex flex-wrap gap-2">
             {handover.buyer_met_at ? null : (
@@ -83,6 +129,32 @@ export function ContractCard({
                 Record my signed copy
               </Button>
             ) : null}
+          </div>
+        ) : null}
+
+        {canSign ? (
+          <div className="flex flex-col gap-3 border-t pt-3">
+            <div className="flex flex-col gap-1.5">
+              <p className="font-medium">Buyer signature</p>
+              <SignaturePad onChange={setBuyerSignature} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <p className="font-medium">Your signature (Confidential Informant)</p>
+              <SignaturePad onChange={setCiSignature} />
+            </div>
+            <Button size="sm" className="self-start" disabled={busy || !buyerSignature || !ciSignature} onClick={sign}>
+              Record signatures
+            </Button>
+          </div>
+        ) : null}
+
+        {financed ? (
+          <div className="flex flex-col gap-2 border-t pt-3">
+            <p className="font-medium">{MISSED_PAYMENT_POLICY_LABEL}</p>
+            <p className="text-muted-foreground">{MISSED_PAYMENT_POLICY}</p>
+            <Button asChild size="sm" variant="outline" className="self-start">
+              <Link href={`/vehicle-papers/${transactionId}/missed-payment-policy`}>Print policy</Link>
+            </Button>
           </div>
         ) : null}
       </CardContent>

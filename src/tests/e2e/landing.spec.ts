@@ -16,15 +16,25 @@ test.describe("landing page", () => {
     await expect(page).toHaveURL(/\/auth\/v1\/login$/);
   });
 
-  test("the financing estimate adds 10% to the chosen car's price", async ({ page }) => {
+  // T11: financing now applies each car's own markup, so the total is no longer a fixed price × 1.1, and the
+  // percentage is GCE's own figure that buyers must never see.
+  test("the financing estimate shows a total above the car's price, with no percentage", async ({ page }) => {
     await page.goto("/");
     const car = page.getByLabel("Car");
     // The option text ends with the car's price, e.g. "2021 Suzuki Ertiga (₱905,264)".
     const label = await car.locator("option:checked").innerText();
     const price = Number(label.match(/₱([\d,]+)\)$/)?.[1].replaceAll(",", ""));
     await page.getByText("5 yrs", { exact: true }).click();
-    const expected = Math.round(price * 1.1).toLocaleString("en-PH");
-    await expect(page.getByTestId("financed-total")).toHaveText(`₱${expected}`);
+
+    const total = page.getByTestId("financed-total");
+    await expect(total).toHaveText(/^₱[\d,]+$/);
+
+    const cents = Number((await total.innerText()).replace(/[₱,]/g, ""));
+    expect(cents).toBeGreaterThan(price);
+
+    // The percentage stays inside the server: the estimate prints totals only.
+    await expect(total).not.toContainText("%");
+    await expect(page.getByText(/financing.*\d+%/i)).toHaveCount(0);
   });
 
   test("a signed-in customer is sent from / to the showroom", async ({ page }) => {

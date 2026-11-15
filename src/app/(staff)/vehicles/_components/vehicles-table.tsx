@@ -27,7 +27,6 @@ import {
   Gauge,
   Plus,
   Search,
-  Tag,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -86,11 +85,6 @@ const conditionOptions = [
   { value: "used", label: "Used" },
   { value: "certified", label: "Certified Pre-Owned" },
 ] as const;
-const pricingTypeOptions = [
-  { value: "all", label: "All" },
-  { value: "negotiable", label: "Negotiable" },
-  { value: "fixed", label: "Fixed" },
-] as const;
 const sortOptions = [
   { value: "newest", label: "Newest first" },
   { value: "oldest", label: "Oldest first" },
@@ -102,10 +96,13 @@ export function VehicleTable({
   vehicles,
   canManage,
   canView,
+  defaultMarkupPct,
 }: {
   readonly vehicles: Record<string, unknown>[];
   readonly canManage: boolean;
   readonly canView: boolean;
+  /** T11: GCE's global financing markup, the fallback for a car with no markup of its own. */
+  readonly defaultMarkupPct?: number;
 }) {
   const router = useRouter();
   const [rowSelection, setRowSelection] = React.useState({});
@@ -220,7 +217,6 @@ export function VehicleTable({
   const searchQuery = (table.getColumn("search")?.getFilterValue() as string) ?? "";
   const statusFilter = (table.getColumn("listing_state")?.getFilterValue() as string) ?? "all";
   const conditionFilter = (table.getColumn("condition")?.getFilterValue() as string) ?? "all";
-  const pricingTypeFilter = (table.getColumn("pricing_type")?.getFilterValue() as string) ?? "all";
   const sortValue = React.useMemo(() => {
     const currentSort = sorting[0];
 
@@ -312,29 +308,6 @@ export function VehicleTable({
                 </DropdownMenu>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center xl:w-auto">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm">
-                      <Tag />
-                      Pricing
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuRadioGroup
-                      value={pricingTypeFilter}
-                      onValueChange={(value) => {
-                        table.getColumn("pricing_type")?.setFilterValue(value === "all" ? undefined : value);
-                        table.setPageIndex(0);
-                      }}
-                    >
-                      {pricingTypeOptions.map((pricingType) => (
-                        <DropdownMenuRadioItem key={pricingType.value} value={pricingType.value}>
-                          {pricingType.label}
-                        </DropdownMenuRadioItem>
-                      ))}
-                    </DropdownMenuRadioGroup>
-                  </DropdownMenuContent>
-                </DropdownMenu>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" size="sm">
@@ -582,6 +555,7 @@ export function VehicleTable({
         mode={formSheet?.mode ?? "add"}
         vehicle={formSheet?.vehicle ?? null}
         stockCodePreview={nextStockCode(vehicles.map((vehicle) => vehicle.stock_code as string))}
+        defaultMarkupPct={defaultMarkupPct}
         onOpenChange={(open) => {
           if (!open) setFormSheet(null);
         }}

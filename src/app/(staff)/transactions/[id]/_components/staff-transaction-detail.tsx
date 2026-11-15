@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import {
   instructRepossession,
   markInstallmentWaived,
+  recordAdvancePayment,
   recordBuyerDecline,
   recordNoShow,
   recordPaperwork,
@@ -267,6 +268,19 @@ export function StaffTransactionDetail({
     }
   }
 
+  // T11: an advance payment settles several installments in one cash record for each.
+  async function onRecordAdvancePayment(installmentIds: string[]) {
+    const fd = new FormData();
+    fd.set("transaction_id", id);
+    for (const installmentId of installmentIds) fd.append("installment_ids", installmentId);
+    const result = await recordAdvancePayment(fd);
+    if ("error" in result) toast.error(result.error);
+    else {
+      toast.success("Advance payment recorded for Head Accountant confirmation.");
+      router.refresh();
+    }
+  }
+
   async function onRecordPaperwork(documentKind: string) {
     const fd = new FormData();
     fd.set("transaction_id", id);
@@ -376,6 +390,7 @@ export function StaffTransactionDetail({
           onRecordPaperwork={onRecordPaperwork}
           onWaiveInstallment={onWaiveInstallment}
           onRecordInstallmentPaid={onRecordInstallmentPaid}
+          onRecordAdvancePayment={onRecordAdvancePayment}
           headSecurity={headSecurity}
           onInstructRepossession={onInstructRepossession}
         />

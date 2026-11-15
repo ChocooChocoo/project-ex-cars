@@ -275,7 +275,12 @@ describe("saveBuyDetails", () => {
 
   // T04 P5–P7: Payment Option and every financing term.
   it("asks every financing arrangement for a term and offers 6 months", async () => {
-    const visit = { payment_option: "financing", payment_method: "cash", arrangement_kind: "gce_visit" };
+    const visit = {
+      payment_option: "financing",
+      payment_method: "cash",
+      arrangement_kind: "gce_visit",
+      financing_pay_method: "paymongo",
+    };
 
     await expect(saveBuyDetails(details(visit))).resolves.toEqual({ error: "Choose a payment term." });
     await expect(saveBuyDetails(details({ ...visit, requested_term_months: "48" }))).resolves.toEqual({
@@ -289,7 +294,51 @@ describe("saveBuyDetails", () => {
       payment_option: "financing",
       payment_method: "financing",
       requested_term_months: 6,
+      financing_pay_method: "paymongo",
     });
+  });
+
+  // T11: the buyer says whether the installments are paid in cash at GCE or online through PayMongo.
+  it("stores the financing pay method and refuses a financing save without one", async () => {
+    const visit = {
+      payment_option: "financing",
+      payment_method: "cash",
+      arrangement_kind: "gce_visit",
+      requested_term_months: "12",
+    };
+
+    await expect(saveBuyDetails(details(visit))).resolves.toEqual({
+      error: "Choose Cash or PayMongo for the financing.",
+    });
+    expect(saved()).toBeUndefined();
+
+    await expect(saveBuyDetails(details({ ...visit, financing_pay_method: "cash" }))).resolves.toEqual({
+      success: true,
+    });
+    expect(saved()).toMatchObject({ financing_pay_method: "cash" });
+  });
+
+  it("clears the financing pay method on a Full Payment save", async () => {
+    await expect(
+      saveBuyDetails(
+        details({
+          payment_option: "full",
+          payment_method: "cash",
+          arrangement_kind: "gce_visit",
+          financing_pay_method: "",
+        }),
+      ),
+    ).resolves.toEqual({ success: true });
+    expect(saved()).toMatchObject({ payment_method: "cash", financing_pay_method: null });
+  });
+
+  it("keeps a financing save working for a form older than T11, with no pay method", async () => {
+    await expect(
+      saveBuyDetails(
+        details({ payment_method: "financing", arrangement_kind: "gce_visit", requested_term_months: "12" }),
+      ),
+    ).resolves.toEqual({ success: true });
+    expect(saved()).toMatchObject({ payment_method: "financing", financing_pay_method: null });
   });
 
   it("saves Bank Transfer as the Full Payment method", async () => {

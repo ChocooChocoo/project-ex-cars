@@ -1,10 +1,18 @@
-// The two papers the Confidential Informant prints, filled in from GCE's records. The wording lives
-// here and only here, so a change to the Deed of Sale or the Policy & Warranty is one edit.
+// The papers the Confidential Informant prints, filled in from GCE's records. The wording lives here
+// and only here, so a change to the Deed of Sale, the Contract or the Policy & Warranty is one edit.
 
 import { GCE_SELLER } from "@/lib/transactions/buy-flow";
 
 // What a line reads when GCE has no value for it: the CI writes it in by hand before signing.
 export const PAPER_BLANK = "________";
+
+// T11: the buyer and the Confidential Informant sign the contract on the device in the field, so both
+// signature images are kept in the private bucket. The paper stays text-only and prints the paths as a
+// record; the images are shown under the sheet.
+export interface PaperSignatures {
+  buyer: string | null;
+  ci: string | null;
+}
 
 type Embedded<T> = T | T[] | null;
 
@@ -74,8 +82,13 @@ function one<T>(value: Embedded<T>): T | null {
 }
 
 // The fixed financing policy, filled in with the client, the car and the money. The same wording is
-// printed for every sale; only the recorded values change.
-export function missedPaymentPolicy(sale: PaperSale, financing: PaperFinancing): PaperDocument {
+// printed for every sale; only the recorded values change. T11: a policy printed after the field signing
+// carries the signature line of whoever signed, when GCE recorded one.
+export function missedPaymentPolicy(
+  sale: PaperSale,
+  financing: PaperFinancing,
+  signatures?: PaperSignatures,
+): PaperDocument {
   return {
     title: "MISSED PAYMENT POLICY",
     paragraphs: [
@@ -91,6 +104,7 @@ export function missedPaymentPolicy(sale: PaperSale, financing: PaperFinancing):
         "5. The client may stop the towing by paying every missed installment and these costs in full before the recovery team takes the vehicle.",
         "6. Returning the vehicle voluntarily does not cancel the remaining balance unless GCE accepts the surrender in writing.",
       ].join("\n"),
+      ...(signatures ? [signatureLines(sale, signatures)] : []),
       `CLIENT\nSignature over printed name: ______________________________\nPrinted name: ${sale.buyer.name}\nDate: ____________________`,
       "GCE REPRESENTATIVE\nSignature over printed name: ______________________________\nPrinted name: ______________________________\nDate: ____________________",
     ],
@@ -196,6 +210,31 @@ function vehicleLines(sale: PaperSale): string {
     `Engine No.: ${sale.vehicle.engine}`,
     `Chassis No.: ${sale.vehicle.chassis}`,
   ].join("\n");
+}
+
+// The two signature images GCE recorded, printed as text lines: a blank line where one is missing.
+function signatureLines(sale: PaperSale, signatures: PaperSignatures): string {
+  return [
+    `SIGNED BY\nBuyer: ${sale.buyer.name}\nSignature image: ${printed(signatures.buyer)}`,
+    `Confidential Informant\nSignature image: ${printed(signatures.ci)}`,
+  ].join("\n");
+}
+
+// T11: the sale contract. The Sales Manager writes the body and the Head Accountant approves it; the buyer
+// and the Confidential Informant sign it in the field. A contract without a body prints the blank line
+// note instead, so the sheet is never an empty page.
+export function contract(sale: PaperSale, contractBody: string | null, signatures: PaperSignatures): PaperDocument {
+  const body = String(contractBody ?? "").trim();
+  return {
+    title: "CONTRACT",
+    paragraphs: [
+      `This contract is made between ${GCE_SELLER} (the SELLER) and ${sale.buyer.name}, of legal age, with residence and postal address at ${sale.buyer.address} (the BUYER), over the motor vehicle described below.`,
+      `MOTOR VEHICLE\n${vehicleLines(sale)}\nTotal contract price: ${sale.price}`,
+      body === "" ? `TERMS\n${PAPER_BLANK}\nGCE has not recorded the contract terms yet.` : `TERMS\n${body}`,
+      `The BUYER and the SELLER have read this contract and sign it on ${sale.date}.`,
+      signatureLines(sale, signatures),
+    ],
+  };
 }
 
 export function deedOfSale(sale: PaperSale): PaperDocument {

@@ -23,7 +23,13 @@ export const vehicleSchema = z.object({
   engine: z.string().max(200).optional().or(z.literal("")),
   description: z.string().max(2000).optional().or(z.literal("")),
   current_price: z.coerce.number().min(0, "Price cannot be negative.").optional(),
-  pricing_type: z.enum(["negotiable", "fixed"]),
+  // T11: a per-car financing markup. Left blank the global `app_settings.financing_markup_pct` applies, so
+  // the empty string comes first: a union is tried in order, and `Number("")` is 0, which would otherwise
+  // parse a blank field as a deliberate 0% markup.
+  financing_markup_pct: z
+    .literal("")
+    .or(z.coerce.number().min(0, "The markup cannot be negative.").max(100, "The markup cannot exceed 100%."))
+    .optional(),
   warranty_details: z.string().max(500).optional().or(z.literal("")),
   offer_details: z.string().max(500).optional().or(z.literal("")),
 });

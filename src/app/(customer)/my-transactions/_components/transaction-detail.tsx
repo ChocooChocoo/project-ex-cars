@@ -73,7 +73,12 @@ import {
 } from "@/lib/transactions/buy-flow";
 import { deliveryArea, deliveryFeeRangeLabel, downPaymentFor } from "@/lib/transactions/delivery-fee";
 import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_SIZE, transactionDocumentLabel } from "@/lib/transactions/document-media";
-import { isOpenCheckout } from "@/lib/transactions/financing-payments";
+import {
+  isAwaitingConfirmation,
+  isOpenCheckout,
+  paidToDate,
+  remainingBalance,
+} from "@/lib/transactions/financing-payments";
 import {
   arrangementKindLabel,
   paymentMethodLabel,
@@ -391,6 +396,11 @@ export function TransactionDetail({
     (purchaseDetails?.payment_option as string) ?? (savedMethod === "financing" ? "financing" : "full"),
   );
   const [paymentMethod, setPaymentMethod] = useState(savedMethod === "financing" ? "" : savedMethod);
+  // T11: how the installments are paid. Saved rows from before T11 have no value; they default to PayMongo,
+  // which is what they offered at the time.
+  const [financingPayMethod, setFinancingPayMethod] = useState<"cash" | "paymongo">(
+    purchaseDetails?.financing_pay_method === "cash" ? "cash" : "paymongo",
+  );
   const [arrangementKind, setArrangementKind] = useState((purchaseDetails?.arrangement_kind as string) ?? "");
   const [schedule, setSchedule] = useState("");
   // The date half of the slot: a date without an hour cannot be saved.
@@ -512,6 +522,7 @@ export function TransactionDetail({
     fd.set("transaction_id", id);
     fd.set("payment_option", paymentOption);
     fd.set("payment_method", financingPicked ? "financing" : paymentMethod);
+    fd.set("financing_pay_method", financingPicked ? financingPayMethod : "");
     fd.set("arrangement_kind", arrangementKind);
     // Already a Manila ISO slot, or "" until an hour is picked.
     fd.set("schedule", schedule);
@@ -587,6 +598,20 @@ export function TransactionDetail({
       addressLines: autofill?.address ? [autofill.address] : [],
     },
   };
+
+  // T11: what the buyer has paid off the financing. paidToDate sums the installments verifyPayment marked
+  // 'paid'; a row that is recorded but not yet verified is shown as awaiting confirmation and never counted.
+  const account = installmentAccount as Record<string, unknown> | null;
+  const accountInstallments = (Array.isArray(account?.installments) ? account.installments : []) as Record<
+    string,
+    unknown
+  >[];
+  const totalFinanced = Number(
+    account?.opening_balance ??
+      accountInstallments.reduce((sum, installment) => sum + Number(installment.amount_due ?? 0), 0),
+  );
+  const paid = paidToDate(accountInstallments, payments);
+  const awaitingConfirmation = payments.filter((payment) => isAwaitingConfirmation(payment)).length;
 
   return (
     <>
@@ -748,7 +773,25 @@ export function TransactionDetail({
                       </SelectContent>
                     </Select>
                   </div>
-                  {financingPicked ? null : (
+                  {financingPicked ? (
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="payment_method">Payment Method</Label>
+                      <Select
+                        value={financingPayMethod}
+                        onValueChange={(value) => setFinancingPayMethod(value as "cash" | "paymongo")}
+                      >
+                        <SelectTrigger id="payment_method">
+                          <SelectValue placeholder="Select method" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectGroup>
+                            <SelectItem value="cash">Cash</SelectItem>
+                            <SelectItem value="paymongo">PayMongo (bank transfer or e-wallet)</SelectItem>
+                          </SelectGroup>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : (
                     <div className="flex flex-col gap-1.5">
                       <Label htmlFor="payment_method">Payment Method</Label>
                       <Select value={paymentMethod} onValueChange={setPaymentMethod}>
@@ -773,7 +816,6 @@ export function TransactionDetail({
                   <p className="text-sm">
                     Total with financing:{" "}
                     <span className="font-medium tabular-nums">{formatCurrency(financingTotal)}</span>
-                    <span className="text-muted-foreground"> (Showroom price plus {financingMarkupPct}%)</span>
                   </p>
                 ) : null}
                 <Separator />
@@ -1079,7 +1121,12 @@ export function TransactionDetail({
 
           {kind === "buy" && installmentAccount && ["approved", "completed"].includes(state) ? (
             <>
-              <FinancingPaymentPanel transactionId={id} account={installmentAccount} payments={payments} />
+              <FinancingPaymentPanel
+                transactionId={id}
+                account={installmentAccount}
+                payments={payments}
+                payMethod={(purchaseDetails?.financing_pay_method as string) === "cash" ? "cash" : "paymongo"}
+              />
               <Separator />
             </>
           ) : null}
@@ -1340,7 +1387,7 @@ export function TransactionDetail({
           </section>
           <Separator />
 
-          <section className="flex flex-col gap-3">
+          <section className="flex flex-col gap-3" aria-label="Financial summary">
             <h2 className="font-medium tracking-tight">Financial Summary</h2>
             {payments.some((p) => !isOpenCheckout(p)) && (
               <div className="flex flex-col gap-2">
@@ -1363,7 +1410,13 @@ export function TransactionDetail({
                       </div>
                     ) : (
                       <div key={p.id as string} className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">{paymentMethodLabel(p.method as string)}</span>
+                        <span className="text-muted-foreground">
+                          {paymentMethodLabel(p.method as string)}
+                          {/* T11: recorded but not yet confirmed by the Head Accountant, so not in paid to date. */}
+                          {isAwaitingConfirmation(p) ? (
+                            <span className="text-muted-foreground"> · Awaiting confirmation</span>
+                          ) : null}
+                        </span>
                         <span className="font-medium">{formatCurrency(Number(p.amount))}</span>
                       </div>
                     ),
@@ -1386,6 +1439,14 @@ export function TransactionDetail({
                   value={`₱${Number((installmentAccount as Record<string, unknown>).opening_balance).toLocaleString()}`}
                 />
                 <DetailRow label="Status" value={(installmentAccount as Record<string, unknown>).state as string} />
+                <DetailRow label="Paid to date" value={formatCurrency(paid)} />
+                <DetailRow label="Remaining balance" value={formatCurrency(remainingBalance(totalFinanced, paid))} />
+                {awaitingConfirmation > 0 ? (
+                  <p className="text-muted-foreground text-xs">
+                    {awaitingConfirmation} payment{awaitingConfirmation === 1 ? "" : "s"} recorded but not confirmed
+                    yet. A payment counts once the Head Accountant confirms it.
+                  </p>
+                ) : null}
                 {Array.isArray((installmentAccount as Record<string, unknown>).installments) &&
                   ((installmentAccount as Record<string, unknown>).installments as Record<string, unknown>[]).map(
                     (inst) => (

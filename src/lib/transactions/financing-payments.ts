@@ -1,6 +1,6 @@
 import { financingFullyPaid } from "./buy-flow";
 
-type Installment = { state: unknown; due_date?: unknown; amount_due?: unknown };
+export type Installment = { state: unknown; due_date?: unknown; amount_due?: unknown };
 
 type PaymentRow = Record<string, unknown>;
 
@@ -52,4 +52,35 @@ export function advancedPaymentTotal(installments: readonly Installment[]): numb
 
 export function canMarkFinancingSold(installments: readonly Installment[]): boolean {
   return financingFullyPaid(installments.map((installment) => ({ ...installment, due_date: installment.due_date })));
+}
+
+// A payment counts only once the Head Accountant has confirmed it. A rejected row never counts.
+export function isConfirmedPayment(payment: PaymentRow): boolean {
+  return Boolean(payment.verified_by) && !payment.rejected_at;
+}
+
+// What GCE has banked for this sale: confirmed payments only, of every kind.
+export function confirmedPaymentTotal(payments: readonly PaymentRow[]): number {
+  return payments.filter(isConfirmedPayment).reduce((total, payment) => total + Number(payment.amount ?? 0), 0);
+}
+
+// What the buyer has paid off the financed balance: the installments verifyPayment marked 'paid' when the
+// Head Accountant confirmed their payment. That is the same figure confirmedPaymentTotal() sums, but read
+// from the schedule; both are exposed so the page can show a discrepancy if one ever appears.
+export function paidToDate(
+  installments: readonly { state?: unknown; amount_due?: unknown }[],
+  _payments: readonly PaymentRow[],
+): number {
+  return installments
+    .filter((installment) => installment.state === "paid")
+    .reduce((total, installment) => total + Number(installment.amount_due ?? 0), 0);
+}
+
+export function remainingBalance(totalFinanced: unknown, paid: number): number {
+  return Math.max(0, Number(totalFinanced ?? 0) - paid);
+}
+
+// Recorded but neither confirmed nor refused, and not an unanswered PayMongo session.
+export function isAwaitingConfirmation(payment: PaymentRow): boolean {
+  return !payment.rejected_at && !payment.verified_by && !isOpenCheckout(payment);
 }

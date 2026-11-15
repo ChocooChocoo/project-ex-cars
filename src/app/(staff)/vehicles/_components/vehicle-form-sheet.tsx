@@ -10,6 +10,8 @@ interface VehicleFormSheetProps {
   mode: "add" | "edit";
   vehicle: Record<string, unknown> | null;
   stockCodePreview?: string;
+  /** T11: GCE's global financing markup, the fallback for a car that has no markup of its own. */
+  defaultMarkupPct?: number;
   onOpenChange: (open: boolean) => void;
 }
 
@@ -35,13 +37,22 @@ function toFormDefaults(vehicle: Record<string, unknown>): VehicleFormData & { i
     engine: (vehicle.engine as string) ?? "",
     description: (vehicle.description as string) ?? "",
     current_price: (vehicle.current_price as number | undefined) ?? undefined,
-    pricing_type: (vehicle.pricing_type as VehicleFormData["pricing_type"]) ?? "negotiable",
+    // A number input needs a string, and the column comes back as a NUMERIC string from Supabase.
+    financing_markup_pct: ((vehicle.financing_markup_pct as number | string | null)?.toString() ??
+      "") as VehicleFormData["financing_markup_pct"],
     warranty_details: (vehicle.warranty_details as string) ?? "",
     offer_details: (vehicle.offer_details as string) ?? "",
   };
 }
 
-export function VehicleFormSheet({ open, mode, vehicle, stockCodePreview, onOpenChange }: VehicleFormSheetProps) {
+export function VehicleFormSheet({
+  open,
+  mode,
+  vehicle,
+  stockCodePreview,
+  defaultMarkupPct,
+  onOpenChange,
+}: VehicleFormSheetProps) {
   const isEdit = mode === "edit";
   const vehicleName = vehicle ? `${(vehicle.make as string) ?? ""} ${(vehicle.model as string) ?? ""}`.trim() : "";
 
@@ -71,6 +82,7 @@ export function VehicleFormSheet({ open, mode, vehicle, stockCodePreview, onOpen
             <VehicleForm
               defaultValues={isEdit && vehicle ? toFormDefaults(vehicle) : undefined}
               stockCodePreview={stockCodePreview}
+              defaultMarkupPct={defaultMarkupPct}
               onSuccess={() => onOpenChange(false)}
               onCancel={() => onOpenChange(false)}
             />

@@ -748,6 +748,23 @@ export async function recordPayment(formData: FormData) {
       .eq("flow_status", "purchase_claim");
   }
 
+  // T11: every recorded row waits for the Head Accountant's confirmation, so they are told once. An online
+  // installment is the exception: the Sales Manager approves it first, and that approval notifies them. The
+  // payment schema refuses PayMongo here today, so the comparison is widened to keep the guard honest if the
+  // channel is ever let through.
+  if (!(paymentKind === "installment" && String(method) === "paymongo")) {
+    await notify(
+      createAdminClient(),
+      { role: "head_accountant" },
+      {
+        kind: "installment_recorded",
+        title: "Payment waiting for your confirmation",
+        body: `₱${Number(amount).toLocaleString()} recorded for ${paymentKind?.replace(/_/g, " ") ?? "payment"}. Verify it to count the payment.`,
+        transactionId,
+      },
+    );
+  }
+
   await logAuditEvent({
     actorId: user.user.id,
     action: "payment_recorded",
@@ -757,8 +774,94 @@ export async function recordPayment(formData: FormData) {
   });
 
   revalidatePath(`/dashboard/transactions/${transactionId}`);
-  revalidatePath("/dashboard/transactions/payments");
   return { success: true };
+}
+
+// T11: an advance payment settles several installments at once, in cash at GCE. The Sales Manager picks the
+// installments; the server reads each amount, so a client amount is never trusted, and the Head Accountant
+// confirms every row.
+export async function recordAdvancePayment(formData: FormData) {
+  const supabase = await createServerSupabaseClient();
+  const { data: user } = await supabase.auth.getUser();
+  if (!user.user) return { error: "Not authenticated" };
+
+  const role = await getCurrentRole();
+  if (!role || !["sales_manager", "ceo"].includes(role)) {
+    return { error: "The Sales Manager records the advance payment." };
+  }
+
+  const transactionId = z.string().uuid().safeParse(formData.get("transaction_id"));
+  if (!transactionId.success) return { error: "Invalid request." };
+  const installmentIds = [
+    ...new Set(
+      formData
+        .getAll("installment_ids")
+        .map((value) => String(value))
+        .filter(Boolean),
+    ),
+  ];
+  if (installmentIds.length === 0) return { error: "Pick at least one installment to pay in advance." };
+
+  const admin = createAdminClient();
+  const made: { amount: number }[] = [];
+  for (const installmentId of installmentIds) {
+    const parsedId = z.string().uuid().safeParse(installmentId);
+    if (!parsedId.success) return { error: "Installment not found." };
+    const { data: installment, error: readError } = await admin
+      .from("installments")
+      .select("id, amount_due, state, account_id, installment_accounts!inner(purchase_transaction_id)")
+      .eq("id", parsedId.data)
+      .maybeSingle();
+    if (readError) return { error: readError.message };
+    if (!installment) return { error: "Installment not found." };
+    const account = Array.isArray(installment.installment_accounts)
+      ? installment.installment_accounts[0]
+      : installment.installment_accounts;
+    if (account?.purchase_transaction_id !== transactionId.data) return { error: "Installment not found." };
+    if (installment.state === "paid" || installment.state === "waived") {
+      return { error: "This installment is already settled." };
+    }
+
+    const { error } = await admin.from("payment_records").insert({
+      transaction_id: transactionId.data,
+      installment_id: parsedId.data,
+      amount: Number(installment.amount_due),
+      method: "cash",
+      recorded_by: user.user.id,
+      settlement_date: new Date().toISOString().slice(0, 10),
+      payment_kind: "installment",
+      proof_path: null,
+    });
+    if (error) {
+      if (error.code === "23505") return { error: "This installment is already recorded." };
+      return { error: error.message };
+    }
+    made.push({ amount: Number(installment.amount_due) });
+  }
+
+  const total = made.reduce((sum, payment) => sum + payment.amount, 0);
+  await notify(
+    admin,
+    { role: "head_accountant" },
+    {
+      kind: "installment_recorded",
+      title: "Advance payment waiting for your confirmation",
+      body: `The Sales Manager recorded ₱${total.toLocaleString()} for ${made.length} installment${made.length === 1 ? "" : "s"}. Confirm them.`,
+      transactionId: transactionId.data,
+    },
+  );
+
+  await logAuditEvent({
+    actorId: user.user.id,
+    action: "advance_payment_recorded",
+    recordKind: "payment_records",
+    recordId: transactionId.data,
+    summary: `Advance payment of PHP ${total} recorded for ${made.length} installments`,
+  });
+
+  revalidatePath(`/dashboard/transactions/${transactionId.data}`);
+  revalidatePath(`/my-transactions/${transactionId.data}`);
+  return { success: true, recorded: made.length };
 }
 
 export async function verifyPayment(paymentId: string) {
@@ -871,7 +974,6 @@ export async function verifyPayment(paymentId: string) {
     revalidatePath(`/my-transactions/${payment.transaction_id}`);
   }
 
-  revalidatePath("/dashboard/transactions/payments");
   return { success: true };
 }
 
@@ -942,7 +1044,6 @@ export async function recordPaperwork(formData: FormData) {
   }
 
   revalidatePath(`/dashboard/transactions/${transactionId}`);
-  revalidatePath("/dashboard/transactions/paperwork");
   return { success: true };
 }
 
@@ -1118,7 +1219,6 @@ export async function markInstallmentWaived(installmentId: string) {
     summary: `Installment ${installmentId} waived`,
   });
 
-  revalidatePath("/dashboard/transactions/installments");
   return { success: true };
 }
 
@@ -1272,6 +1372,20 @@ export async function assignMechanic(formData: FormData) {
   const mechanicId = formData.get("mechanic_id") as string;
 
   if (!fieldCaseId || !mechanicId) return { error: "Field case and mechanic are required." };
+
+  // T11: the Confidential Informant owns only the cases assigned to them; the CEO keeps the override.
+  if (role === "confidential_informant") {
+    const { data: fieldCase, error: caseError } = await createAdminClient()
+      .from("field_cases")
+      .select("id, assigned_confidential_informant")
+      .eq("id", fieldCaseId)
+      .maybeSingle();
+    if (caseError) return { error: caseError.message };
+    if (!fieldCase) return { error: "Field case not found." };
+    if (fieldCase.assigned_confidential_informant !== user.user.id) {
+      return { error: "Only the Confidential Informant assigned to this field case can assign its mechanic." };
+    }
+  }
 
   // user_roles is protected from the exposed API schemas. This RPC keeps the
   // role lookup server-side while enforcing the caller-role guard in SQL too.

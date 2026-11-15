@@ -31,7 +31,21 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/app/auth/actions", () => ({ getCurrentRole }));
 vi.mock("@/lib/supabase/server", () => ({ createServerSupabase: vi.fn(async () => ({ auth: { getUser } })) }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn(() => ({ from: db.from, storage: {} })) }));
-vi.mock("@/lib/transactions/document-media", () => ({ withSignedTransactionDocumentUrls: vi.fn(async () => []) }));
+vi.mock("@/lib/transactions/document-media", () => ({
+  // Mirrors the real helper: it signs the path and drops storage_path from what the page receives.
+  withSignedTransactionDocumentUrls: vi.fn(async (_storage: unknown, documents: Record<string, unknown>[] = []) =>
+    documents.map(({ storage_path: storagePath, ...document }) => ({
+      ...document,
+      is_image: String(storagePath ?? "").endsWith(".png"),
+      signed_url: `signed:${String(storagePath)}`,
+    })),
+  ),
+  transactionDocumentLabel: (kind: unknown) => String(kind).replace(/_/g, " "),
+}));
+vi.mock("@/lib/papers/previous-owner-documents", () => ({
+  previousOwnerDocuments: vi.fn(async () => []),
+  VEHICLE_REGISTRATION_KINDS: ["orcr", "official_receipt", "certificate_of_registration", "deed_of_sale"],
+}));
 vi.mock("./_components/delivery-case", () => ({ DeliveryCase }));
 vi.mock("./_components/buyer-meetup-case", () => ({ BuyerMeetupCase }));
 vi.mock("./_components/sell-meetup-case", () => ({ SellMeetupCase: vi.fn() }));
@@ -123,5 +137,31 @@ describe("field case detail access", () => {
     db.rows.field_cases = caseRow({ case_kind: "acquisition", assigned_confidential_informant: "another-ci" });
 
     await expect(load()).rejects.toThrow("redirect:/unauthorized");
+  });
+
+  it("passes the sale's papers and the deed link to the delivery case", async () => {
+    db.rows.field_cases = caseRow({ assigned_confidential_informant: ciId });
+    db.rows.transaction_documents = [
+      { id: "doc-1", document_kind: "orcr", storage_path: `${transactionId}/orcr.png`, upload_date: "2026-10-01" },
+      { id: "doc-2", document_kind: "orcr", storage_path: `${transactionId}/ci-doc-1.pdf`, note: "From the owner" },
+      { id: "doc-3", document_kind: "sell_photo", storage_path: `${transactionId}/sell-photo-1.png` },
+    ];
+
+    const element = await load();
+
+    expect(element.props.deedHref).toBe(`/vehicle-papers/${transactionId}/deed-of-sale`);
+    expect(element.props.canUpload).toBe(true);
+    const papers = element.props.papers as { source: string; label: string; note: string | null }[];
+    // A sale paper that is not a CI upload is GCE's; the ci-doc upload is the Confidential Informant's.
+    expect(papers.map((paper) => paper.source)).toEqual(["gce", "ci"]);
+    expect(papers[1]?.note).toBe("From the owner");
+  });
+
+  it("keeps the upload form away from an unassigned Confidential Informant", async () => {
+    db.rows.field_cases = caseRow({ assigned_confidential_informant: "another-ci" });
+
+    const element = await load();
+
+    expect(element.props.canUpload).toBe(false);
   });
 });

@@ -15,7 +15,8 @@ const informant = { id: "11111111-1111-4111-8111-111111111111", full_name: "Info
 const security = { id: "22222222-2222-4222-8222-222222222222", full_name: "Security One" };
 
 describe("DeliveryPanel delivery team (T05)", () => {
-  it("gives the Head Accountant the fixed financing policy to print at delivery", () => {
+  it.each(["head_accountant", "ceo", "sales_manager"])(//
+  "no longer offers %s the missed payment policy to print at delivery", (userRole) => {
     render(
       <DeliveryPanel
         transactionId="tx"
@@ -26,13 +27,10 @@ describe("DeliveryPanel delivery team (T05)", () => {
         fieldCase={null}
         flowStatus={null}
         team={{ informants: [], headSecurity: [] }}
-        userRole="head_accountant"
+        userRole={userRole}
       />,
     );
-    expect(screen.getByRole("link", { name: "Print missed payment policy" })).toHaveAttribute(
-      "href",
-      "/vehicle-papers/tx/missed-payment-policy",
-    );
+    expect(screen.queryByRole("link", { name: "Print missed payment policy" })).not.toBeInTheDocument();
   });
 
   it("asks only for the Confidential Informant and the Head Security", () => {

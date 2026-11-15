@@ -367,7 +367,7 @@ Do not treat older process text, UI wording, and current code as identical. The 
 | Topic | Intended or older wording | Current local implementation |
 | --- | --- | --- |
 | Purchase ceiling | The older process calls it the lowest negotiating price. | The app enforces a maximum purchase price. |
-| Declared defects versus hidden defects | T10 allows accepted declared defects to proceed to payment and reconditioning. | Inspection exposes only No Issues and Issue Found. Issue Found requires the issue-report and revised-price route before payment clearance. |
+| Declared defects versus hidden defects | T10 allows accepted declared defects to proceed to payment and reconditioning. | T11 (`20261116140000_t11_recondition_known_issues.sql`): once the seller is paid, a car goes to `repairing` with a reconditioning job when the seller declared an issue **or** the inspection found one; only a car with neither goes straight to `awaiting_price_approval`. |
 | Cash buying | T10 emphasizes Financing and Bank Transfer. | Cash remains supported in buyer forms, rules, and staff payment actions. |
 | Delivery team | The older process includes a Mechanic. | Current delivery assignment uses Confidential Informant and Head Security. |
 | Financed sale completion | The older process marks Sold when financing starts. Some code comments and notifications still say this. | The completion action blocks Sold until every installment is paid or waived, matching T10's later completion rule. |

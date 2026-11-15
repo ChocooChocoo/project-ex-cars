@@ -10,6 +10,7 @@ import { TransactionImagePreview } from "@/components/transaction-image-preview"
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,6 +41,34 @@ export function normalizeConditionItems(value: unknown): string[] {
   return [];
 }
 
+// T11: what the payments on record say about one installment, so the schedule tells the Sales Manager whether
+// the row is only recorded or already counted.
+function installmentPaymentState(
+  installmentId: unknown,
+  payments: Record<string, unknown>[],
+): "confirmed" | "rejected" | "recorded" | null {
+  const rows = payments.filter((payment) => payment.installment_id === installmentId);
+  if (rows.some((payment) => payment.verified_by)) return "confirmed";
+  if (rows.some((payment) => payment.rejected_at)) return "rejected";
+  return rows.length > 0 ? "recorded" : null;
+}
+
+const INSTALLMENT_PAYMENT_LABELS = {
+  confirmed: "Confirmed",
+  rejected: "Rejected",
+  recorded: "Recorded, waiting for confirmation",
+} as const;
+
+// An advance payment settles installments whose due date is still ahead: the 1st of this month or later.
+function advanceInstallmentIds(installments: Record<string, unknown>[]): string[] {
+  const now = new Date();
+  const firstOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  return installments
+    .filter((installment) => !["paid", "waived"].includes(String(installment.state)))
+    .filter((installment) => typeof installment.due_date === "string" && installment.due_date >= firstOfMonth)
+    .map((installment) => String(installment.id));
+}
+
 export function TransactionDetailSidebarV1({
   kind,
   state,
@@ -63,6 +92,7 @@ export function TransactionDetailSidebarV1({
   onRecordPaperwork,
   onWaiveInstallment,
   onRecordInstallmentPaid,
+  onRecordAdvancePayment,
   onInstructRepossession,
 }: {
   readonly kind: string;
@@ -100,6 +130,8 @@ export function TransactionDetailSidebarV1({
   readonly onRecordPaperwork: (documentKind: string) => Promise<void>;
   readonly onWaiveInstallment: (installmentId: string) => Promise<void>;
   readonly onRecordInstallmentPaid?: (installmentId: string, amount: string) => Promise<void>;
+  /** T11: records one cash payment covering the installments the Sales Manager ticked. */
+  readonly onRecordAdvancePayment?: (installmentIds: string[]) => Promise<void>;
   readonly onInstructRepossession: (informantId: string, reason: string, headSecurityId: string) => Promise<void>;
 }) {
   const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10));
@@ -117,6 +149,9 @@ export function TransactionDetailSidebarV1({
   const [repoInformant, setRepoInformant] = useState("");
   const [repoHeadSecurity, setRepoHeadSecurity] = useState("");
   const [repoReason, setRepoReason] = useState("");
+  // T11: the inline multi-select for an advance payment over the upcoming installments.
+  const [advanceOpen, setAdvanceOpen] = useState(false);
+  const [advancePicked, setAdvancePicked] = useState<string[]>([]);
 
   const insts = installmentAccount
     ? (((installmentAccount as Record<string, unknown>).installments as Record<string, unknown>[]) ?? [])
@@ -151,6 +186,14 @@ export function TransactionDetailSidebarV1({
   // is confirmed by PayMongo, and a financing buy pays through its installments.
   const cashBuy = kind === "buy" && purchaseDetails?.payment_method === "cash";
   const bankTransferBuy = kind === "buy" && paymentMethod === "bank_transfer";
+  // T11: the Initial Downpayment of a financing buy is cash at GCE, so the Sales Manager needs the box too.
+  const financingBuy = kind === "buy" && purchaseDetails?.payment_method === "financing";
+  const financingDownpayment = financingBuy
+    ? Number(purchaseDetails?.downpayment_amount ?? paymentTerms?.down_payment ?? 0)
+    : 0;
+  const financingDownpaymentPaid =
+    financingDownpayment > 0 &&
+    payments.some((payment) => payment.payment_kind === "downpayment" && payment.verified_by && !payment.rejected_at);
   // The agreed price: purchase_details carries it, with the approved terms as the fallback.
   const agreedPrice = Number(purchaseDetails?.final_price ?? paymentTerms?.total_amount ?? 0);
   const duePayment =
@@ -163,19 +206,27 @@ export function TransactionDetailSidebarV1({
       : null;
   // A payment on record but not yet checked keeps the form away, so the record cannot be spammed.
   const awaitingCheck = payments.some((payment) => !payment.rejected_at && !payment.verified_by);
+  // T11: a financing buy records only the Initial Downpayment here, and only while it is not verified yet.
+  const recordFinancingDownpayment =
+    financingBuy && financingDownpayment > 0 && flowStatus === "purchase_claim" && !financingDownpaymentPaid;
   const canRecordPayment =
     userRole === "sales_manager" &&
     ["approved", "completed"].includes(tState) &&
-    (bankTransferBuy || (cashBuy && (paymentRecorded || awaitingCheck || duePayment !== null)));
+    (recordFinancingDownpayment ||
+      bankTransferBuy ||
+      (cashBuy && (paymentRecorded || awaitingCheck || duePayment !== null)));
+  // Once the downpayment is on record the form gives way to the wait-for-check note, like the cash path.
+  const showFinancingDownpaymentForm = recordFinancingDownpayment && !paymentRecorded && !awaitingCheck;
 
   function submitPayment() {
     // A CASH buy always uses the payment the server worked out. A Bank Transfer buy has no server-side
     // payment due, so the cash fallback sends what the Sales Manager typed.
-    const target =
-      duePayment ??
-      (bankTransferBuy && manualAmount.trim() !== ""
-        ? { kind: manualKind, amount: Number(manualAmount), method: "cash" }
-        : null);
+    const target = showFinancingDownpaymentForm
+      ? { kind: "downpayment", amount: financingDownpayment, method: "cash" }
+      : (duePayment ??
+        (bankTransferBuy && manualAmount.trim() !== ""
+          ? { kind: manualKind, amount: Number(manualAmount), method: "cash" }
+          : null));
     if (!target || submittingRef.current) return;
     submittingRef.current = true;
     const picked = proofFileRef.current?.files?.[0];
@@ -191,6 +242,16 @@ export function TransactionDetailSidebarV1({
         submittingRef.current = false;
       }
     });
+  }
+
+  async function handleAdvance() {
+    if (advancePicked.length === 0) {
+      toast.error("Tick at least one installment.");
+      return;
+    }
+    await onRecordAdvancePayment?.(advancePicked);
+    setAdvanceOpen(false);
+    setAdvancePicked([]);
   }
 
   async function handleInstruct() {
@@ -265,6 +326,60 @@ export function TransactionDetailSidebarV1({
                   </Button>
                 </div>
               )}
+              {canRecordCash && onRecordAdvancePayment && advanceInstallmentIds(insts).length > 0 ? (
+                <div className="space-y-1.5 rounded-md border bg-background/70 px-2.5 py-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-muted-foreground text-xs">Advance payment</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-6 px-2 text-xs"
+                      onClick={() => {
+                        setAdvanceOpen((open) => !open);
+                        setAdvancePicked([]);
+                      }}
+                    >
+                      {advanceOpen ? "Cancel" : "Record advance payment"}
+                    </Button>
+                  </div>
+                  {advanceOpen ? (
+                    <>
+                      {advanceInstallmentIds(insts).map((installmentId) => (
+                        <label
+                          key={installmentId}
+                          className="flex items-center gap-2 text-xs"
+                          htmlFor={`advance-${installmentId}`}
+                        >
+                          <Checkbox
+                            id={`advance-${installmentId}`}
+                            checked={advancePicked.includes(installmentId)}
+                            onCheckedChange={(checked) =>
+                              setAdvancePicked((picked) =>
+                                checked === true
+                                  ? [...picked, installmentId]
+                                  : picked.filter((pickedId) => pickedId !== installmentId),
+                              )
+                            }
+                          />
+                          <span className="tabular-nums">
+                            #{String(insts.find((inst) => inst.id === installmentId)?.sequence_no ?? "")} ·{" "}
+                            {String(insts.find((inst) => inst.id === installmentId)?.due_date ?? "")} ·{" "}
+                            {formatCurrency(Number(insts.find((inst) => inst.id === installmentId)?.amount_due ?? 0))}
+                          </span>
+                        </label>
+                      ))}
+                      <Button
+                        size="sm"
+                        className="h-6 px-2 text-xs"
+                        disabled={advancePicked.length === 0 || submittingPayment}
+                        onClick={handleAdvance}
+                      >
+                        Pay {advancePicked.length} in advance
+                      </Button>
+                    </>
+                  ) : null}
+                </div>
+              ) : null}
               {insts.map((inst: Record<string, unknown>) => (
                 <div key={inst.id as string} className="space-y-1 rounded-md border bg-background/70 px-2.5 py-1.5">
                   <div className="flex items-center justify-between gap-2">
@@ -282,6 +397,7 @@ export function TransactionDetailSidebarV1({
                       >
                         {inst.state as string}
                       </Badge>
+                      <InstallmentPaymentBadge installmentId={inst.id} payments={payments} />
                       {inst.state !== "paid" &&
                       inst.state !== "waived" &&
                       canRecordCash &&
@@ -370,8 +486,65 @@ export function TransactionDetailSidebarV1({
 
           {canRecordPayment && (
             <div className="space-y-2 rounded-md border bg-muted/20 px-3 py-2">
-              <p className="text-muted-foreground text-xs">Record payment</p>
-              {bankTransferBuy ? (
+              <p className="text-muted-foreground text-xs">
+                {showFinancingDownpaymentForm ? "Initial Downpayment" : "Record payment"}
+              </p>
+              {showFinancingDownpaymentForm ? (
+                <>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="dp_amount" className="text-xs">
+                      Amount (₱)
+                    </Label>
+                    <Input
+                      id="dp_amount"
+                      readOnly
+                      className="h-7 text-xs tabular-nums"
+                      value={formatCurrency(financingDownpayment)}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="dp_kind" className="text-xs">
+                        Payment for
+                      </Label>
+                      <Input id="dp_kind" readOnly className="h-7 text-xs" value={paymentKindLabel("downpayment")} />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="dp_method" className="text-xs">
+                        Method
+                      </Label>
+                      <Input id="dp_method" readOnly className="h-7 text-xs" value={paymentMethodLabel("cash")} />
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="dp_date" className="text-xs">
+                      Date
+                    </Label>
+                    <Input
+                      id="dp_date"
+                      type="date"
+                      className="h-7 text-xs"
+                      value={payDate}
+                      onChange={(e) => setPayDate(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="dp_proof" className="text-xs">
+                      Photo of deposit slip / receipt (optional)
+                    </Label>
+                    <Input
+                      id="dp_proof"
+                      ref={proofFileRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="h-7 w-full text-xs"
+                    />
+                  </div>
+                  <Button size="sm" className="h-7 w-full text-xs" disabled={submittingPayment} onClick={submitPayment}>
+                    {submittingPayment ? "Recording…" : "Record Initial Downpayment"}
+                  </Button>
+                </>
+              ) : bankTransferBuy ? (
                 <>
                   <p className="text-muted-foreground text-xs">
                     Bank Transfer is paid online through PayMongo and confirmed automatically.
@@ -580,6 +753,22 @@ export function TransactionDetailSidebarV1({
         </DialogContent>
       </Dialog>
     </Card>
+  );
+}
+
+function InstallmentPaymentBadge({
+  installmentId,
+  payments,
+}: {
+  readonly installmentId: unknown;
+  readonly payments: Record<string, unknown>[];
+}) {
+  const state = installmentPaymentState(installmentId, payments);
+  if (!state) return null;
+  return (
+    <Badge variant={state === "rejected" ? "destructive" : "outline"} className="h-5 px-2 text-[11px]">
+      {INSTALLMENT_PAYMENT_LABELS[state]}
+    </Badge>
   );
 }
 

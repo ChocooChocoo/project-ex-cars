@@ -101,16 +101,16 @@ test.describe
       await approveAsSalesManager(page, id);
 
       // No Initial Downpayment field, and nothing is sent without the missed payment policy.
-      await expect(page.getByLabel("Initial Downpayment (₱)")).toHaveCount(0);
-      const send = page.getByRole("button", { name: "Send to Head Accountant" });
+      await expect(page.getByLabel("Initial Downpayment (â‚±)")).toHaveCount(0);
+      const send = page.getByRole("button", { name: "Send to CEO" });
       await page.getByLabel("Payment duration (months)").fill("36");
-      await page.getByLabel("Total with financing (₱)").fill("500000");
-      await page.getByLabel("Monthly payment (₱)").fill("13889");
+      await page.getByLabel("Total with financing (â‚±)").fill("500000");
+      await page.getByLabel("Monthly payment (â‚±)").fill("13889");
       await page.getByLabel("First installment due").fill("2033-12-01");
       await expect(send).toBeDisabled();
       await page.screenshot({ path: "test-results/phase4-terms-meetup-desktop.png", fullPage: true });
       await send.click();
-      await expect(page.getByText("Terms sent to the Head Accountant.")).toBeVisible();
+      await expect(page.getByText("Terms sent to the CEO for confirmation.")).toBeVisible();
 
       // The Sales Manager and the buyer chat on the request.
       await page.getByRole("link", { name: "Open chat with the buyer" }).click();
@@ -223,16 +223,16 @@ test.describe
       await approveAsSalesManager(page, id);
 
       // Not sent without the delivery fee.
-      const send = page.getByRole("button", { name: "Send to Head Accountant" });
+      const send = page.getByRole("button", { name: "Send to CEO" });
       await page.getByLabel("Payment duration (months)").fill("12");
-      await page.getByLabel("Total with financing (₱)").fill("500000");
-      await page.getByLabel("Downpayment (₱)").fill("100000");
-      await page.getByLabel("Monthly payment (₱)").fill("33334");
+      await page.getByLabel("Total with financing (â‚±)").fill("500000");
+      await page.getByLabel("Downpayment (â‚±)").fill("100000");
+      await page.getByLabel("Monthly payment (â‚±)").fill("33334");
       await page.getByLabel("First installment due").fill("2033-12-01");
       await expect(send).toBeDisabled();
-      await page.getByLabel("Delivery fee (₱)").fill("2500");
+      await page.getByLabel("Delivery fee (â‚±)").fill("2500");
       await send.click();
-      await expect(page.getByText("Terms sent to the Head Accountant.")).toBeVisible();
+      await expect(page.getByText("Terms sent to the CEO for confirmation.")).toBeVisible();
 
       await headAccountantApproves(page, id);
       await ceoConfirms(page, id);
@@ -244,12 +244,12 @@ test.describe
         .eq("reference_id", id)
         .eq("kind", "financing_offer")
         .single();
-      for (const part of ["₱2,500", "₱100,000", "₱102,500", "₱400,000", "₱33,334"]) {
+      for (const part of ["â‚±2,500", "â‚±100,000", "â‚±102,500", "â‚±400,000", "â‚±33,334"]) {
         expect(offer?.body).toContain(part);
       }
       await signInAs(page, "customer@gce.local");
       await open(page, `/my-transactions/${id}`);
-      await expect(page.getByText(/Delivery fee ₱2,500(\.00)? and downpayment ₱100,000/)).toBeVisible();
+      await expect(page.getByText(/Delivery fee â‚±2,500(\.00)? and downpayment â‚±100,000/)).toBeVisible();
       await expect(page.getByRole("button", { name: /Accept and book/ })).toHaveCount(0);
       await page.setViewportSize({ width: 390, height: 844 });
       await page.screenshot({ path: "test-results/phase4-financed-delivery-buyer-mobile.png", fullPage: true });

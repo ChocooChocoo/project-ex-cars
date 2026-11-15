@@ -4,12 +4,12 @@ import { revalidatePath } from "next/cache";
 
 import { z } from "zod";
 
-import { getCurrentRole } from "@/app/auth/actions";
 import { notify } from "@/lib/notifications/notify";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { MAX_UPLOAD_BYTES } from "@/lib/uploads/compress-image";
 import { formatCurrency } from "@/lib/utils";
+
+import { assignedCase } from "./access";
 
 type FieldActionResult = { error: string } | { success: true };
 
@@ -21,47 +21,6 @@ const FILE_EXTENSIONS: Record<string, string> = {
 };
 const MAX_FILE_SIZE = MAX_UPLOAD_BYTES;
 const MAX_INSPECTION_PHOTOS = 10;
-
-interface AssignedCase {
-  id: string;
-  transaction_id: string | null;
-  case_kind: string;
-  state: string;
-  assigned_confidential_informant: string | null;
-  mechanic_id: string | null;
-  identity_confirmed_at: string | null;
-  plate_confirmed_at: string | null;
-  inspection_outcome: string | null;
-}
-
-// Loads a field case the caller is assigned to. The field roles cannot read transactions under
-// RLS, so these steps run with the service role behind this assignment check.
-async function assignedCase(
-  fieldCaseId: unknown,
-): Promise<{ userId: string; role: string; fieldCase: AssignedCase } | { error: string }> {
-  const supabase = await createServerSupabaseClient();
-  const { data } = await supabase.auth.getUser();
-  if (!data.user) return { error: "Not authenticated" };
-  const role = await getCurrentRole();
-  const id = z.string().uuid().safeParse(fieldCaseId);
-  if (!id.success) return { error: "Invalid field case." };
-
-  const { data: fieldCase } = await createAdminClient()
-    .from("field_cases")
-    .select(
-      "id, transaction_id, case_kind, state, assigned_confidential_informant, mechanic_id, identity_confirmed_at, plate_confirmed_at, inspection_outcome",
-    )
-    .eq("id", id.data)
-    .maybeSingle();
-  if (!fieldCase) return { error: "Field case not found." };
-
-  const assigned =
-    (role === "confidential_informant" && fieldCase.assigned_confidential_informant === data.user.id) ||
-    (role === "mechanic" && fieldCase.mechanic_id === data.user.id);
-  if (!role || !assigned) return { error: "Only the assigned field team can update this case." };
-  if (["completed", "cancelled"].includes(fieldCase.state)) return { error: "This field case is closed." };
-  return { userId: data.user.id, role, fieldCase: fieldCase as AssignedCase };
-}
 
 function readFiles(formData: FormData, key: string): File[] {
   return formData.getAll(key).filter((entry): entry is File => entry instanceof File && entry.size > 0);

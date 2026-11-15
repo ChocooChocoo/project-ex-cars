@@ -255,6 +255,7 @@ export async function saveBuyDetails(formData: FormData) {
     acknowledge_condition,
     agree_delivery_terms,
     requested_term_months,
+    financing_pay_method: pickedFinancingPayMethod,
   } = parsed.data;
 
   // T04 P5: Financing keeps the method 'financing', which the financing flow reads. Full Payment needs a real method.
@@ -315,6 +316,13 @@ export async function saveBuyDetails(formData: FormData) {
   // T04 P7: every financing request says how long the buyer wants to pay.
   const financing = payment_method === "financing";
   if (financing && !requested_term_months) return { error: "Choose a payment term." };
+  // T11: the installments are paid in cash at GCE or online through PayMongo. The schema refuses any other
+  // value and requires one when the buyer explicitly picks Financing. A form older than T11 sends neither, so
+  // that save writes null and leaves the column to its default instead of inventing a choice.
+  const financing_pay_method =
+    financing && (pickedFinancingPayMethod === "cash" || pickedFinancingPayMethod === "paymongo")
+      ? pickedFinancingPayMethod
+      : null;
 
   let location = typedLocation;
   if (arrangement_kind === "meetup" || arrangement_kind === "delivery") {
@@ -335,6 +343,7 @@ export async function saveBuyDetails(formData: FormData) {
       ...(acknowledge_condition === "yes" ? { condition_acknowledged_at: new Date().toISOString() } : {}),
       ...(needsDeliveryTerms && agree_delivery_terms ? { delivery_terms_agreed_at: new Date().toISOString() } : {}),
       ...(financing ? { requested_term_months } : {}),
+      financing_pay_method,
     },
     { onConflict: "transaction_id" },
   );

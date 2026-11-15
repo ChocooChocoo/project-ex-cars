@@ -1,19 +1,19 @@
 import { notFound } from "next/navigation";
 
-import { requireRole } from "@/lib/auth/guards";
 import { missedPaymentPolicy, paperFinancing, paperSale, type TransactionPaperSource } from "@/lib/papers/templates";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { MISSED_PAYMENT_POLICY_LABEL } from "@/lib/transactions/missed-payment-policy";
 
 import { PaperDocumentView } from "../../_components/paper-document-view";
+import { PAPER_ROLES, requirePaperReader } from "../../_lib/paper-access";
 
 export default async function MissedPaymentPolicyPage({
   params,
 }: {
   readonly params: Promise<{ transactionId: string }>;
 }) {
-  await requireRole(["ceo", "head_accountant", "sales_manager"]);
   const { transactionId } = await params;
+  await requirePaperReader(transactionId, PAPER_ROLES);
   const { data } = await createAdminClient()
     .from("transactions")
     .select(

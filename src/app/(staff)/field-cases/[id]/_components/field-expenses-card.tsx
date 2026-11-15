@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { fileFieldExpense } from "@/app/(staff)/field-cases/sell-inspection-actions";
+import { TransactionImagePreview } from "@/components/transaction-image-preview";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,7 @@ import { formatCurrency } from "@/lib/utils";
 type Row = Record<string, unknown>;
 
 // Each field worker logs an expense with its purpose and a receipt photo. Shared by every field case kind.
+// T11: the receipt photo is signed into `proof_url` and shown beside the expense.
 export function FieldExpensesCard({
   fieldCaseId,
   expenses,
@@ -68,8 +70,17 @@ export function FieldExpensesCard({
             key={expense.id as string}
             className="flex items-center justify-between gap-2 rounded-md border px-2.5 py-1.5"
           >
-            <span>
-              {String(expense.description)} · {formatCurrency(Number(expense.amount))}
+            <span className="flex min-w-0 items-center gap-2">
+              {typeof expense.proof_url === "string" ? (
+                <TransactionImagePreview
+                  src={expense.proof_url}
+                  alt={`Receipt for ${String(expense.description)}`}
+                  triggerClassName="h-12 w-16"
+                />
+              ) : null}
+              <span>
+                {String(expense.description)} · {formatCurrency(Number(expense.amount))}
+              </span>
             </span>
             <span className="text-muted-foreground text-xs">{expense.reimbursed_at ? "Reimbursed" : "Logged"}</span>
           </div>

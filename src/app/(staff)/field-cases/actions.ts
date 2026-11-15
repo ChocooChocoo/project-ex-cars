@@ -7,9 +7,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { fieldCaseUpdateSchema } from "@/lib/validation/phase6";
 
+import { isAssigned } from "./access";
+
 type Phase6ActionResult = { error: string } | { success: true };
 
 const FIELD_CASE_WORKERS = ["ceo", "confidential_informant", "mechanic", "sales_manager"];
+// T11: the CEO and Sales Manager oversee every case; the field workers act only on their own assignment.
+const FIELD_CASE_OVERSEERS = ["ceo", "sales_manager"];
 
 export async function updateFieldCase(formData: FormData): Promise<Phase6ActionResult> {
   const supabase = await createServerSupabaseClient();
@@ -25,6 +29,18 @@ export async function updateFieldCase(formData: FormData): Promise<Phase6ActionR
   const parsed = fieldCaseUpdateSchema.safeParse(raw);
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid field case update." };
+  }
+
+  // T11: a field worker works the cases assigned to them. The read runs with the service role so the
+  // check does not lean on the field_cases RLS policies being scoped to the assignment.
+  if (!FIELD_CASE_OVERSEERS.includes(role)) {
+    const { data: fieldCase } = await createAdminClient()
+      .from("field_cases")
+      .select("id, case_kind, state, assigned_confidential_informant, mechanic_id, head_security_id")
+      .eq("id", parsed.data.field_case_id)
+      .maybeSingle();
+    if (!fieldCase) return { error: "Field case not found." };
+    if (!isAssigned(fieldCase, user.user.id)) return { error: "Only the assigned field team can update this case." };
   }
 
   const update: Record<string, unknown> = {

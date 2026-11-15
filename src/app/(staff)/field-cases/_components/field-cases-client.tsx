@@ -47,6 +47,7 @@ export interface FieldCaseRow {
   created_at: string;
   assigned_confidential_informant?: string | null;
   mechanic_id?: string | null;
+  head_security_id?: string | null;
   price_status?: string | null;
 }
 
@@ -151,6 +152,13 @@ const CASE_KIND_RULES: Record<string, string[]> = {
 
 type FieldCasesQuickFilter = "all" | "needs_assignment" | "assigned_to_me";
 
+// T11: once RLS scopes the list to their own cases, a field worker's useful default is their own work.
+const FIELD_WORKER_ROLES = ["confidential_informant", "mechanic", "head_security"];
+
+export function defaultQuickFilter(userRole: string): FieldCasesQuickFilter {
+  return FIELD_WORKER_ROLES.includes(userRole) ? "assigned_to_me" : "all";
+}
+
 export function FieldCasesClient({
   cases,
   canUpdate,
@@ -164,7 +172,7 @@ export function FieldCasesClient({
   vehicles = [],
 }: FieldCasesClientProps) {
   const router = useRouter();
-  const [quickFilter, setQuickFilter] = useState<FieldCasesQuickFilter>("all");
+  const [quickFilter, setQuickFilter] = useState<FieldCasesQuickFilter>(() => defaultQuickFilter(userRole));
 
   const filteredCases = useMemo(() => {
     if (quickFilter === "needs_assignment") {
@@ -172,7 +180,10 @@ export function FieldCasesClient({
     }
     if (quickFilter === "assigned_to_me" && currentUserId) {
       return cases.filter(
-        (c) => c.assigned_confidential_informant === currentUserId || c.mechanic_id === currentUserId,
+        (c) =>
+          c.assigned_confidential_informant === currentUserId ||
+          c.mechanic_id === currentUserId ||
+          c.head_security_id === currentUserId,
       );
     }
     return cases;

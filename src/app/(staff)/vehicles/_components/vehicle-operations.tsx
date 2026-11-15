@@ -50,6 +50,7 @@ export function VehicleOperations({
   isHeadAccountant,
   userRole = null,
   reconditioningByVehicle = {},
+  defaultMarkupPct,
 }: {
   readonly proposals: PriceProposalRow[];
   readonly vehicles: Record<string, unknown>[];
@@ -58,6 +59,8 @@ export function VehicleOperations({
   readonly isHeadAccountant?: boolean;
   readonly userRole?: string | null;
   readonly reconditioningByVehicle?: Record<string, ReconditioningSummary>;
+  /** T11: GCE's global financing markup, shown as the fallback in the per-car markup field. */
+  readonly defaultMarkupPct?: number;
 }) {
   const [segment, setSegment] = useState<"pending" | "vehicles">(proposals.length > 0 ? "pending" : "vehicles");
   const [vehicleFilter, setVehicleFilter] = useState<VehicleQuickFilter>("all");
@@ -142,7 +145,12 @@ export function VehicleOperations({
       {segment === "pending" ? (
         <PendingApprovalsTable proposals={proposals} canApprove={!isHeadAccountant} />
       ) : (
-        <VehicleTable vehicles={filteredVehicles} canManage={canManage} canView={canView} />
+        <VehicleTable
+          vehicles={filteredVehicles}
+          canManage={canManage}
+          canView={canView}
+          defaultMarkupPct={defaultMarkupPct}
+        />
       )}
     </div>
   );

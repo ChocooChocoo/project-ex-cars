@@ -34,7 +34,7 @@ export function LoanCalculator({
           Loan calculator
         </h3>
         <p className="text-muted-foreground text-xs">
-          Vehicle price {peso(price)} · Downpayment {peso(loan.downPayment)} (10%) · Financing adds {markupPct}%.
+          Vehicle price {peso(price)} · Downpayment {peso(loan.downPayment)} · Total financed {peso(loan.total)}.
         </p>
       </div>
       <div className="flex max-w-xs flex-col gap-1.5">

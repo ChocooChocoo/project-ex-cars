@@ -124,10 +124,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
             <h1 className="text-3xl leading-none tracking-tight">
               {v.make ?? ""} {v.model ?? ""}
             </h1>
-            <p className="text-muted-foreground text-sm">
-              {v.stock_code ?? "No stock code"}
-              {v.vin ? ` · ${v.vin}` : ""}
-            </p>
+            <p className="text-muted-foreground text-sm">{v.stock_code ?? "No stock code"}</p>
           </div>
           <div className="flex items-center gap-2">
             <Badge variant="outline">{v.year ?? "—"}</Badge>

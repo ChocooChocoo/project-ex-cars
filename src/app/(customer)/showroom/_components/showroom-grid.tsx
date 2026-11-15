@@ -154,7 +154,6 @@ export function ShowroomGrid({
             const mileage = v.mileage as number | null;
             const fuel = v.fuel_type as string | null;
             const transmission = v.transmission as string | null;
-            const pricingType = v.pricing_type as string;
             const offer = v.offer_details as string | null;
             const favourited = favourites.has(id);
 
@@ -172,9 +171,6 @@ export function ShowroomGrid({
                         </h3>
                         <p className="text-muted-foreground text-xs">{year}</p>
                       </div>
-                      <Badge variant={pricingType === "fixed" ? "default" : "secondary"} className="text-xs capitalize">
-                        {pricingType}
-                      </Badge>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-lg">{price ? `₱${price.toLocaleString()}` : "Price TBA"}</span>

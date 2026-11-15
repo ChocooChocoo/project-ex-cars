@@ -32,10 +32,23 @@ export const buyDetailsSchema = z
       .refine((months) => (FINANCING_TERM_MONTHS as readonly number[]).includes(months), "Choose a payment term.")
       .optional()
       .or(z.literal("")),
+    // T11: how the buyer pays the installments. Saved rows from before T11 have no value, so it is optional;
+    // it is only required when the buyer explicitly picked Financing in this save.
+    financing_pay_method: z
+      .enum(["cash", "paymongo"], { error: "Choose how you will pay the installments." })
+      .optional()
+      .or(z.literal("")),
   })
   .superRefine((data, ctx) => {
     if (["meetup", "delivery"].includes(data.arrangement_kind ?? "") && !data.location?.trim()) {
       ctx.addIssue({ code: "custom", path: ["location"], message: "Enter a location for meet-up or delivery." });
+    }
+    if (data.payment_option === "financing" && !data.financing_pay_method) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["financing_pay_method"],
+        message: "Choose Cash or PayMongo for the financing.",
+      });
     }
   });
 

@@ -207,6 +207,66 @@ describe("proposeFinancingTerms", () => {
   });
 });
 
+// T11: the Head Accountant no longer reviews the terms, so the CEO confirms a proposal directly.
+describe("T11 the CEO confirms the terms the Sales Manager proposed", () => {
+  beforeEach(() => {
+    getCurrentRole.mockResolvedValue("ceo");
+    request("gce_visit");
+    terms({
+      id: "terms-1",
+      state: "proposed",
+      total_amount: 500000,
+      down_payment: 100000,
+      number_of_payments: 12,
+      monthly_payment: 33334,
+    });
+  });
+
+  it("confirms terms that are still proposed", async () => {
+    await expect(confirmFinancingTerms(form({ decision: "confirm" }))).resolves.toEqual({ success: true });
+    expect(written("payment_terms")[0]).toMatchObject({ state: "approved", approver_id: userId });
+  });
+
+  it("still confirms terms the old review step left in ha_approved", async () => {
+    terms({
+      id: "terms-1",
+      state: "ha_approved",
+      total_amount: 500000,
+      down_payment: 100000,
+      number_of_payments: 12,
+      monthly_payment: 33334,
+    });
+
+    await expect(confirmFinancingTerms(form({ decision: "confirm" }))).resolves.toEqual({ success: true });
+    expect(written("payment_terms")[0]).toMatchObject({ state: "approved" });
+  });
+
+  it("refuses terms that are already approved", async () => {
+    terms({ id: "terms-1", state: "approved" });
+
+    await expect(confirmFinancingTerms(form({ decision: "confirm" }))).resolves.toEqual({
+      error: "No financing terms to confirm.",
+    });
+    expect(written("payment_terms")).toEqual([]);
+  });
+});
+
+describe("T11 proposeFinancingTerms asks the CEO to confirm", () => {
+  it("sends the confirmation request to the CEO, not the Head Accountant", async () => {
+    request("gce_visit");
+
+    await expect(proposeFinancingTerms(form(offer))).resolves.toEqual({ success: true });
+    const [, to, message] = notify.mock.calls[0] ?? [];
+    expect(to).toEqual({ role: "ceo" });
+    expect(message).toMatchObject({ kind: "financing_terms_proposed", title: "Financing terms to confirm" });
+  });
+
+  it("keeps the Head Accountant review action exported for existing rows", async () => {
+    const actions = await import("./financing-actions");
+    expect(typeof actions.reviewFinancingTerms).toBe("function");
+  });
+});
+
 describe("confirmFinancingTerms on a delivery", () => {
   beforeEach(() => {
     getCurrentRole.mockResolvedValue("ceo");

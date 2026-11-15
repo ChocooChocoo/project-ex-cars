@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { DEFAULT_FINANCING_MARKUP_PCT } from "@/lib/transactions/buy-flow";
 import { type VehicleFormData, vehicleSchema } from "@/lib/validation/vehicles";
 import { BODY_TYPES, BRANDS, listedYears, modelsFor, VEHICLE_PURPOSES } from "@/lib/vehicles/catalog";
 
@@ -24,6 +25,8 @@ interface VehicleFormProps {
   defaultValues?: VehicleFormData & { id?: string };
   /** T06: the next stock code, shown read-only on a new car. The server assigns the final one. */
   stockCodePreview?: string;
+  /** T11: GCE's global financing markup, shown as the placeholder of the per-car markup field. */
+  defaultMarkupPct?: number;
   onSuccess?: () => void;
   onCancel?: () => void;
 }
@@ -36,11 +39,18 @@ function withCurrent(options: readonly string[], current: string | undefined): r
   return current && !options.includes(current) ? [current, ...options] : options;
 }
 
-export function VehicleForm({ defaultValues, stockCodePreview, onSuccess, onCancel }: VehicleFormProps) {
+export function VehicleForm({
+  defaultValues,
+  stockCodePreview,
+  defaultMarkupPct,
+  onSuccess,
+  onCancel,
+}: VehicleFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const isEdit = !!defaultValues?.id;
   const isDialog = !!onSuccess || !!onCancel;
+  const globalMarkupPct = defaultMarkupPct ?? DEFAULT_FINANCING_MARKUP_PCT;
 
   const form = useForm<z.infer<typeof vehicleSchema>>({
     // biome-ignore lint/suspicious/noExplicitAny: zod coerce fields cause resolver type mismatch
@@ -65,7 +75,7 @@ export function VehicleForm({ defaultValues, stockCodePreview, onSuccess, onCanc
       engine: "",
       description: "",
       current_price: undefined,
-      pricing_type: "negotiable",
+      financing_markup_pct: "",
       warranty_details: "",
       offer_details: "",
     }) as never,
@@ -472,21 +482,28 @@ export function VehicleForm({ defaultValues, stockCodePreview, onSuccess, onCanc
               />
               <Controller
                 control={form.control}
-                name="pricing_type"
+                name="financing_markup_pct"
                 render={({ field, fieldState }) => (
                   <Field data-invalid={fieldState.invalid}>
-                    <FieldLabel>Pricing Type</FieldLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          <SelectItem value="negotiable">Negotiable Price</SelectItem>
-                          <SelectItem value="fixed">Fixed Price</SelectItem>
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
+                    <FieldLabel htmlFor="vehicle-financing-markup">Financing markup %</FieldLabel>
+                    <InputGroup>
+                      <InputGroupInput
+                        {...field}
+                        value={field.value ?? ""}
+                        id="vehicle-financing-markup"
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        max={100}
+                        step="0.01"
+                        placeholder={String(globalMarkupPct)}
+                      />
+                      <InputGroupAddon align="inline-end">%</InputGroupAddon>
+                    </InputGroup>
+                    <p className="text-muted-foreground text-xs">
+                      Leave blank to use GCE's default markup ({globalMarkupPct}%). The buyer always sees the financed
+                      total, never the percentage.
+                    </p>
                     {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                   </Field>
                 )}

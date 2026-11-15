@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import type { PapersStatus } from "@/lib/transactions/buy-flow";
 
 import { ContractCard } from "./contract-card";
-import { PapersCard } from "./papers-card";
+import { type PaperDocumentRow, PapersCard } from "./papers-card";
 import { ReceiveCaseButton } from "./receive-case-button";
 
 type Row = Record<string, unknown>;
@@ -19,6 +19,9 @@ export function BuyerMeetupCase({
   handover,
   member,
   canRecordPapers,
+  papers,
+  canUpload,
+  deedHref,
 }: {
   readonly fieldCase: Row;
   readonly transaction: Row;
@@ -26,6 +29,9 @@ export function BuyerMeetupCase({
   readonly handover: Row;
   readonly member: "informant" | "mechanic" | null;
   readonly canRecordPapers: boolean;
+  readonly papers: PaperDocumentRow[];
+  readonly canUpload: boolean;
+  readonly deedHref: string;
 }) {
   const buyer = transaction.profiles as Row | null;
   const vehicle = transaction.vehicles as Row | null;
@@ -74,7 +80,14 @@ export function BuyerMeetupCase({
             ) : null}
           </CardContent>
         </Card>
-        <PapersCard transactionId={transaction.id as string} papersStatus={papersStatus} canRecord={canRecordPapers} />
+        <PapersCard
+          transactionId={transaction.id as string}
+          papersStatus={papersStatus}
+          canRecord={canRecordPapers}
+          documents={papers}
+          canUpload={canUpload}
+          deedHref={deedHref}
+        />
         <ContractCard transactionId={transaction.id as string} details={details} handover={handover} member={member} />
       </div>
     </div>

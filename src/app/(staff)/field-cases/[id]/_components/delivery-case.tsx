@@ -27,7 +27,7 @@ import {
 import { formatCurrency } from "@/lib/utils";
 
 import { ContractCard } from "./contract-card";
-import { PapersCard } from "./papers-card";
+import { type PaperDocumentRow, PapersCard } from "./papers-card";
 import { ShareLocation } from "./share-location";
 
 type Row = Record<string, unknown>;
@@ -41,6 +41,9 @@ export function DeliveryCase({
   member,
   userRole,
   userId,
+  papers,
+  canUpload,
+  deedHref,
 }: {
   readonly fieldCase: Row;
   readonly transaction: Row;
@@ -49,6 +52,9 @@ export function DeliveryCase({
   readonly member: "informant" | "mechanic" | null;
   readonly userRole: string;
   readonly userId: string;
+  readonly papers: PaperDocumentRow[];
+  readonly canUpload: boolean;
+  readonly deedHref: string;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -219,6 +225,9 @@ export function DeliveryCase({
           transactionId={transaction.id as string}
           papersStatus={papersStatus}
           canRecord={isInformant && transaction.current_state === "approved"}
+          documents={papers}
+          canUpload={canUpload}
+          deedHref={deedHref}
         />
         <ContractCard
           transactionId={transaction.id as string}

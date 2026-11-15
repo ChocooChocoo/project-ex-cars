@@ -2,15 +2,21 @@ import { notFound, redirect } from "next/navigation";
 
 import { getCurrentRole } from "@/app/auth/actions";
 import { PurchaseFundsCard } from "@/components/transactions/purchase-funds-card";
+import { previousOwnerDocuments, VEHICLE_REGISTRATION_KINDS } from "@/lib/papers/previous-owner-documents";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import type { PapersStatus } from "@/lib/transactions/buy-flow";
-import { withSignedTransactionDocumentUrls } from "@/lib/transactions/document-media";
+import {
+  type SignedTransactionDocument,
+  transactionDocumentLabel,
+  withSignedTransactionDocumentUrls,
+} from "@/lib/transactions/document-media";
 
 import { BuyerMeetupCase } from "./_components/buyer-meetup-case";
 import { DeliveryCase } from "./_components/delivery-case";
 import { FieldBudgetCard } from "./_components/field-budget-card";
 import { FieldExpensesCard } from "./_components/field-expenses-card";
+import type { PaperDocumentRow } from "./_components/papers-card";
 import { RecoveryCase } from "./_components/recovery-case";
 import { SellMeetupCase } from "./_components/sell-meetup-case";
 
@@ -25,8 +31,57 @@ const FIELD_TEAM = ["confidential_informant", "mechanic", "head_security"];
 // Any Confidential Informant may read a delivery or a meet-up; only the assigned team acts on it.
 const CI_OPEN_CASES = ["delivery", "buyer_meetup"];
 
+// The registration papers GCE keeps on a car. The original OR/CR came with the car, so it hangs on the
+// sell transaction the Confidential Informant bought it on, not on the sale that moves it to a buyer.
+const VEHICLE_PAPERS: readonly string[] = VEHICLE_REGISTRATION_KINDS;
+
+type Admin = ReturnType<typeof createAdminClient>;
+type Row = Record<string, unknown>;
+
+function paperRows(documents: SignedTransactionDocument[], source: PaperDocumentRow["source"]): PaperDocumentRow[] {
+  return documents.map((document) => ({
+    id: String(document.id),
+    document_kind: String(document.document_kind ?? ""),
+    source,
+    label: transactionDocumentLabel(document.document_kind),
+    uploaded_at: (document.upload_date as string | null | undefined) ?? null,
+    signed_url: document.signed_url,
+    is_image: document.is_image,
+    note: (document.note as string | null | undefined) ?? null,
+  }));
+}
+
+// T11: every paper the field team can look at on a delivery or a meet-up — the previous owner's
+// registration papers, the papers on this sale, and the CI's own uploads. The source is read from the
+// storage path before signing, because the signed rows no longer carry it.
+async function loadPapers(admin: Admin, transaction: Row): Promise<PaperDocumentRow[]> {
+  const transactionId = String(transaction.id);
+  const vehicle = transaction.vehicles as Row | null;
+  const [{ data: ownDocuments }, previous] = await Promise.all([
+    admin
+      .from("transaction_documents")
+      .select("id, transaction_id, document_kind, storage_path, upload_date, note")
+      .eq("transaction_id", transactionId)
+      .order("upload_date", { ascending: true }),
+    previousOwnerDocuments(admin, (vehicle?.id as string | null | undefined) ?? null),
+  ]);
+  const rows = (ownDocuments as Row[] | null) ?? [];
+  // The CI's own uploads live under `{saleId}/ci-doc-*`; anything else that is a registration paper is GCE's.
+  const isCiUpload = (document: Row) => String(document.storage_path ?? "").includes("/ci-doc-");
+  const ciRows = rows.filter(isCiUpload);
+  const gceRows = rows.filter(
+    (document) => !isCiUpload(document) && VEHICLE_PAPERS.includes(String(document.document_kind)),
+  );
+  const [gce, ci] = await Promise.all([
+    withSignedTransactionDocumentUrls(admin.storage, gceRows),
+    withSignedTransactionDocumentUrls(admin.storage, ciRows),
+  ]);
+  return [...paperRows(previous, "previous_owner"), ...paperRows(gce, "gce"), ...paperRows(ci, "ci")];
+}
+
 // T10: the Confidential Informant's budget and logged expenses on a delivery or buyer meet-up.
-async function loadFieldMoney(admin: ReturnType<typeof createAdminClient>, fieldCaseId: string) {
+// T11: each expense carries its receipt photo, signed so the team can read it.
+async function loadFieldMoney(admin: Admin, fieldCaseId: string) {
   const [{ data: budget }, { data: expenses }] = await Promise.all([
     admin
       .from("disbursement_requests")
@@ -37,11 +92,31 @@ async function loadFieldMoney(admin: ReturnType<typeof createAdminClient>, field
       .maybeSingle(),
     admin
       .from("field_case_expenses")
-      .select("id, amount, description, submitted_by, submitted_at, reimbursed_at")
+      .select("id, amount, description, submitted_by, submitted_at, reimbursed_at, proof_document_id")
       .eq("field_case_id", fieldCaseId)
       .order("submitted_at", { ascending: true }),
   ]);
-  return { budget: budget as Record<string, unknown> | null, expenses: (expenses ?? []) as Record<string, unknown>[] };
+  const rows = (expenses ?? []) as Row[];
+
+  const proofIds = [...new Set(rows.map((row) => row.proof_document_id).filter((id): id is string => Boolean(id)))];
+  const { data: proofs } =
+    proofIds.length > 0
+      ? await admin
+          .from("transaction_documents")
+          .select("id, storage_path")
+          .in("id", proofIds)
+          .not("storage_path", "is", null)
+      : { data: null };
+  const signedProofs = await withSignedTransactionDocumentUrls(admin.storage, (proofs as Row[] | null) ?? []);
+  const proofUrl = new Map(signedProofs.map((document) => [String(document.id), document.signed_url] as const));
+
+  return {
+    budget: budget as Record<string, unknown> | null,
+    expenses: rows.map((row) => ({
+      ...row,
+      proof_url: row.proof_document_id ? (proofUrl.get(String(row.proof_document_id)) ?? null) : null,
+    })),
+  };
 }
 
 // Selling steps 5–6 and 11, Delivery steps 7–7b: the case pack for the field team.
@@ -129,7 +204,7 @@ export default async function FieldCasePage({ params }: { readonly params: Promi
     const { data: transaction } = await admin
       .from("transactions")
       .select(
-        "id, current_state, profiles(full_name, phone), vehicles(make, model, year, stock_code), purchase_details(payment_method, arrangement_kind)",
+        "id, current_state, profiles(full_name, phone), vehicles(id, make, model, year, stock_code), purchase_details(payment_method, arrangement_kind)",
       )
       .eq("id", fieldCase.transaction_id)
       .maybeSingle();
@@ -137,6 +212,7 @@ export default async function FieldCasePage({ params }: { readonly params: Promi
     const money = await loadFieldMoney(admin, fieldCase.id);
     const isInformant = role === "confidential_informant" && fieldCase.assigned_confidential_informant === user.id;
     const open = !["completed", "cancelled"].includes(fieldCase.state) && transaction.current_state === "approved";
+    const papers = await loadPapers(admin, transaction as Row);
     return (
       <div className="flex flex-col gap-4">
         <BuyerMeetupCase
@@ -150,6 +226,9 @@ export default async function FieldCasePage({ params }: { readonly params: Promi
             fieldCase.assigned_confidential_informant === user.id &&
             transaction.current_state === "approved"
           }
+          papers={papers}
+          canUpload={isInformant && open}
+          deedHref={`/vehicle-papers/${String(transaction.id)}/deed-of-sale`}
         />
         <FieldBudgetCard
           fieldCaseId={fieldCase.id}
@@ -167,7 +246,7 @@ export default async function FieldCasePage({ params }: { readonly params: Promi
     const { data: transaction } = await admin
       .from("transactions")
       .select(
-        "id, current_state, profiles(full_name, phone), vehicles(make, model, year, stock_code), purchase_details(final_price, delivery_fee, downpayment_amount, payment_method, arrangement_kind)",
+        "id, current_state, profiles(full_name, phone), vehicles(id, make, model, year, stock_code), purchase_details(final_price, delivery_fee, downpayment_amount, payment_method, arrangement_kind)",
       )
       .eq("id", fieldCase.transaction_id)
       .maybeSingle();
@@ -175,6 +254,7 @@ export default async function FieldCasePage({ params }: { readonly params: Promi
     const money = await loadFieldMoney(admin, fieldCase.id);
     const isInformant = role === "confidential_informant" && fieldCase.assigned_confidential_informant === user.id;
     const open = !["completed", "cancelled"].includes(fieldCase.state) && transaction.current_state === "approved";
+    const papers = await loadPapers(admin, transaction as Row);
     return (
       <div className="flex flex-col gap-4">
         <DeliveryCase
@@ -185,6 +265,9 @@ export default async function FieldCasePage({ params }: { readonly params: Promi
           member={transaction.current_state === "approved" ? member : null}
           userRole={role}
           userId={user.id}
+          papers={papers}
+          canUpload={isInformant && open}
+          deedHref={`/vehicle-papers/${String(transaction.id)}/deed-of-sale`}
         />
         <FieldBudgetCard
           fieldCaseId={fieldCase.id}
