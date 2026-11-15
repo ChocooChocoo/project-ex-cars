@@ -47,7 +47,10 @@ export function TransactionPaymentsTableV1({
   readonly onApproveOnlinePayment: (paymentId: string) => Promise<void>;
 }) {
   // An unpaid PayMongo session is not a payment: it never shows here or in the counts.
-  const payments = allPayments.filter((payment) => !isOpenCheckout(payment));
+  // Memoised because useReactTable keys its row model on the identity of `data`. A fresh
+  // array on every render makes that row model rememo on each pass, which re-fires
+  // _autoResetPageIndex -> resetPageIndex -> setState -> render forever, freezing the page.
+  const payments = React.useMemo(() => allPayments.filter((payment) => !isOpenCheckout(payment)), [allPayments]);
   // T03 HA3: a rejected payment stays listed but never counts.
   const counted = payments.filter((p) => !p.rejected_at);
   const totalPaid = counted
