@@ -1,14 +1,12 @@
-import { createServerSupabase } from "@/lib/supabase/server";
+import { apiGet } from "@/lib/api/server";
 
 import { ReportReview } from "../_components/report-review";
 
 export default async function ReportsPage() {
-  const supabase = await createServerSupabase();
-
-  const { data: reports } = await supabase
-    .from("message_reports")
-    .select("*, reporter:reporter_id(email), inquiry:reported_inquiry_id(*, vehicles(make, model))")
-    .order("created_at", { ascending: false });
+  // CEO and Account Manager only (the old RLS rule); other roles get an empty list, as RLS gave them.
+  const reports = await apiGet<Record<string, unknown>[]>("/api/v1/staff/message-reports")
+    .then((result) => result.data)
+    .catch(() => []);
 
   return (
     <div className="flex flex-col gap-4">
@@ -16,7 +14,7 @@ export default async function ReportsPage() {
         <h1 className="text-3xl leading-none tracking-tight">Message Reports</h1>
         <p className="text-muted-foreground text-sm">Review reported messages and conversations.</p>
       </div>
-      <ReportReview reports={(reports as Record<string, unknown>[]) ?? []} />
+      <ReportReview reports={reports} />
     </div>
   );
 }

@@ -3,30 +3,17 @@ import Link from "next/link";
 import { Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { createServerSupabase } from "@/lib/supabase/server";
-import { withoutIdentifiers } from "@/lib/vehicles/identifiers";
+import { apiGet } from "@/lib/api/server";
 
 import { ShowroomGrid } from "./_components/showroom-grid";
 
 export default async function ShowroomPage() {
-  const supabase = await createServerSupabase();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const { data: rows } = await supabase
-    .from("vehicles")
-    .select("*")
-    .eq("listing_state", "available")
-    .order("posted_at", { ascending: false });
-  const vehicles = (rows ?? []).map(withoutIdentifiers);
-
-  let favouriteIds: string[] = [];
-  if (user) {
-    const { data: favs } = await supabase.from("favourites").select("vehicle_id").eq("customer_id", user.id);
-    favouriteIds = (favs ?? []).map((f) => f.vehicle_id as string);
-  }
+  // Laravel strips GCE-only fields (identifiers, markup) before the rows leave the API.
+  const { data } = await apiGet<{ vehicles: Record<string, unknown>[]; favourite_ids: string[] }>(
+    "/api/v1/catalogue/vehicles",
+  );
+  const vehicles = data.vehicles;
+  const favouriteIds = data.favourite_ids;
 
   return (
     <div className="flex flex-col gap-6">
@@ -48,7 +35,7 @@ export default async function ShowroomPage() {
           </Link>
         </Button>
       </div>
-      <ShowroomGrid vehicles={(vehicles as Record<string, unknown>[]) ?? []} favouriteIds={favouriteIds} />
+      <ShowroomGrid vehicles={vehicles} favouriteIds={favouriteIds} />
     </div>
   );
 }

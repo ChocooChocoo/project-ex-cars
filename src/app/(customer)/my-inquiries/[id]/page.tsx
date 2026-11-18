@@ -1,46 +1,15 @@
 import { notFound } from "next/navigation";
 
-import { withSignedMessageAttachments } from "@/lib/inquiries/attachments-server";
-import { createServerSupabase } from "@/lib/supabase/server";
-
 import { ChatView } from "../_components/chat-view";
+import { loadThread } from "../actions";
 
 export default async function InquiryChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const supabase = await createServerSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) notFound();
-
-  const { data: inquiry } = await supabase
-    .from("inquiries")
-    .select("*, vehicles(make, model, year, stock_code)")
-    .eq("id", id)
-    .eq("customer_id", user.id)
-    .maybeSingle();
-
-  if (!inquiry) notFound();
-
-  const { data: messages } = await supabase
-    .from("inquiry_messages")
-    .select("*, message_attachments(*)")
-    .eq("inquiry_id", id)
-    .order("sent_at", { ascending: true });
-
-  const { data: arrangement } = await supabase
-    .from("viewing_arrangements")
-    .select("*")
-    .eq("inquiry_id", id)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  // Another customer's thread, a bad id or a signed-out session all render the 404 page, as before.
+  const thread = await loadThread(id);
+  if (!thread.ok) notFound();
 
   return (
-    <ChatView
-      inquiry={inquiry as Record<string, unknown>}
-      messages={await withSignedMessageAttachments((messages as Record<string, unknown>[]) ?? [])}
-      arrangement={arrangement as Record<string, unknown> | null}
-    />
+    <ChatView inquiry={thread.data.inquiry} messages={thread.data.messages} arrangement={thread.data.arrangement} />
   );
 }

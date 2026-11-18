@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 
 import { getCurrentRole } from "@/app/auth/actions";
+import { errorMessage } from "@/lib/api/errors";
+import { apiGet, apiWrite } from "@/lib/api/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { CEILING_PROPOSAL_KINDS } from "@/lib/transactions/sell-flow";
@@ -14,7 +16,6 @@ import {
   priceProposalSchema,
   vehicleSchema,
 } from "@/lib/validation/vehicles";
-import { withoutIdentifiers } from "@/lib/vehicles/identifiers";
 import { isVehicleMediaKind } from "@/lib/vehicles/media-kinds";
 import { nextStockCode } from "@/lib/vehicles/stock-code";
 
@@ -346,15 +347,6 @@ export async function approvePrice(formData: FormData) {
 }
 
 export async function uploadVehicleMedia(formData: FormData) {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
-
-  const role = await getCurrentRole();
-  if (!role || role !== "marketing_specialist") {
-    return { error: "Not authorized to upload media" };
-  }
-
   const vehicleId = formData.get("vehicle_id") as string;
   const mediaKind = formData.get("media_kind") as string;
   const file = formData.get("file") as File | null;
@@ -362,34 +354,17 @@ export async function uploadVehicleMedia(formData: FormData) {
   if (!vehicleId || !file || file.size === 0) return { error: "Vehicle and file are required" };
   if (!isVehicleMediaKind(mediaKind)) return { error: "Invalid media kind" };
 
-  const fileExt = file.name.split(".").pop() ?? "bin";
-  const storagePath = `${vehicleId}/${mediaKind}-${Date.now()}.${fileExt}`;
+  // Laravel checks the role (Marketing Specialist), sniffs the file type, enforces the 2 MB cap and picks the path.
+  const upload = new FormData();
+  upload.set("media_kind", mediaKind);
+  upload.set("file", file);
+  try {
+    await apiWrite("POST", `/api/v1/staff/vehicles/${encodeURIComponent(vehicleId)}/media`, upload);
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
 
-  const { error: uploadError } = await supabase.storage.from("showroom-media").upload(storagePath, file, {
-    cacheControl: "3600",
-    contentType: file.type || "image/jpeg",
-  });
-  if (uploadError) return { error: uploadError.message };
-
-  const { data: maxOrder } = await supabase
-    .from("vehicle_media")
-    .select("display_order")
-    .eq("vehicle_id", vehicleId)
-    .eq("media_kind", mediaKind)
-    .order("display_order", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  const { error: dbError } = await supabase.from("vehicle_media").insert({
-    vehicle_id: vehicleId,
-    media_kind: mediaKind,
-    storage_path: storagePath,
-    display_order: ((maxOrder?.display_order as number) ?? -1) + 1,
-    public_state: true,
-    uploaded_by: user.user.id,
-  });
-  if (dbError) return { error: dbError.message };
-
+  const role = await getCurrentRole();
   revalidatePath(`/dashboard/vehicles/${vehicleId}`);
   // The staff page is served under the role prefix (e.g. /marketing_specialist/vehicles/<id>), so the media
   // count on that URL only refreshes when its own path is revalidated too.
@@ -398,74 +373,41 @@ export async function uploadVehicleMedia(formData: FormData) {
 }
 
 export async function deleteVehicleMedia(mediaId: string) {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
-
-  const role = await getCurrentRole();
-  if (!role || role !== "marketing_specialist") {
-    return { error: "Not authorized to delete media" };
+  let vehicleId: string;
+  try {
+    ({ vehicle_id: vehicleId } = (
+      await apiWrite<{ vehicle_id: string }>("DELETE", `/api/v1/staff/vehicle-media/${encodeURIComponent(mediaId)}`)
+    ).data);
+  } catch (error) {
+    return { error: errorMessage(error) };
   }
 
-  const { data: row } = await supabase
-    .from("vehicle_media")
-    .select("storage_path, vehicle_id")
-    .eq("id", mediaId)
-    .single();
-  if (!row) return { error: "Media not found" };
-
-  const { error: storageError } = await supabase.storage.from("showroom-media").remove([row.storage_path as string]);
-  if (storageError) return { error: storageError.message };
-
-  const { error: dbError } = await supabase.from("vehicle_media").delete().eq("id", mediaId);
-  if (dbError) return { error: dbError.message };
-
+  const role = await getCurrentRole();
   revalidatePath("/dashboard/vehicles");
-  revalidatePath(`/dashboard/vehicles/${row.vehicle_id}`);
-  revalidatePath(`/${role}/vehicles/${row.vehicle_id}`);
+  revalidatePath(`/dashboard/vehicles/${vehicleId}`);
+  revalidatePath(`/${role}/vehicles/${vehicleId}`);
   return { success: true };
 }
 
 export async function toggleFavourite(vehicleId: string) {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
-
-  const { data: existing } = await supabase
-    .from("favourites")
-    .select("id")
-    .eq("customer_id", user.user.id)
-    .eq("vehicle_id", vehicleId)
-    .single();
-
-  if (existing) {
-    await supabase.from("favourites").delete().eq("id", existing.id);
-    return { success: true, favourited: false };
+  try {
+    const { data } = await apiWrite<{ favourited: boolean }>(
+      "POST",
+      `/api/v1/favourites/${encodeURIComponent(vehicleId)}`,
+    );
+    return { success: true, favourited: data.favourited };
+  } catch (error) {
+    return { error: errorMessage(error) };
   }
-
-  await supabase.from("favourites").insert({
-    customer_id: user.user.id,
-    vehicle_id: vehicleId,
-  });
-
-  return { success: true, favourited: true };
 }
 
-export async function getFavourites() {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return [];
-
-  const { data } = await supabase.from("favourites").select("vehicle_id, vehicles(*)").eq("customer_id", user.user.id);
-
-  if (!data) return [];
-
-  // T11: `vehicles(*)` hands back every column, and this list is rendered for the customer, so drop GCE's
-  // private fields (identifiers and the per-car financing markup) before the rows leave the server.
-  return data
-    .map((row) => row.vehicles as unknown as Record<string, unknown> | null)
-    .filter((v): v is Record<string, unknown> => v !== null)
-    .map(withoutIdentifiers);
+export async function getFavourites(): Promise<Record<string, unknown>[]> {
+  // T11: Laravel strips GCE's private vehicle fields (identifiers, financing markup) from this customer list.
+  try {
+    return (await apiGet<Record<string, unknown>[]>("/api/v1/favourites")).data;
+  } catch {
+    return [];
+  }
 }
 
 export async function createInspection(formData: FormData) {
@@ -553,100 +495,54 @@ export async function submitChecklistAnswer(formData: FormData) {
 }
 
 export async function createContentItem(formData: FormData) {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
-
-  const role = await getCurrentRole();
-  if (!role || role !== "marketing_specialist") {
-    return { error: "Not authorized" };
-  }
-
   const parsed = contentItemSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid content item." };
   }
-
-  const { error } = await supabase.from("content_items").insert({
-    content_kind: parsed.data.content_kind,
-    vehicle_id: parsed.data.vehicle_id || null,
-    title: parsed.data.title,
-    body: parsed.data.body || null,
-    author_id: user.user.id,
-  });
-
-  if (error) return { error: error.message };
+  try {
+    await apiWrite("POST", "/api/v1/staff/content", parsed.data);
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
 
   revalidatePath("/content");
   return { success: true };
 }
 
 export async function publishContent(id: string) {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
-
-  const role = await getCurrentRole();
-  if (!role || role !== "marketing_specialist") {
-    return { error: "Not authorized" };
+  try {
+    await apiWrite("POST", `/api/v1/staff/content/${encodeURIComponent(id)}/publish`);
+  } catch (error) {
+    return { error: errorMessage(error) };
   }
-
-  const { error } = await supabase
-    .from("content_items")
-    .update({ publication_state: "published", published_at: new Date().toISOString() })
-    .eq("id", id);
-
-  if (error) return { error: error.message };
 
   revalidatePath("/content");
   return { success: true };
 }
 
 export async function updateContentItem(formData: FormData) {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
-
-  const role = await getCurrentRole();
-  if (!role || role !== "marketing_specialist") {
-    return { error: "Not authorized" };
-  }
-
   const id = formData.get("id") as string;
   const parsed = contentItemSchema.safeParse(Object.fromEntries(formData));
   if (!id) return { error: "Content item not found." };
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid content item." };
   }
-
-  const { error } = await supabase
-    .from("content_items")
-    .update({
-      content_kind: parsed.data.content_kind,
-      vehicle_id: parsed.data.vehicle_id || null,
-      title: parsed.data.title,
-      body: parsed.data.body || null,
-    })
-    .eq("id", id);
-
-  if (error) return { error: error.message };
+  try {
+    await apiWrite("PATCH", `/api/v1/staff/content/${encodeURIComponent(id)}`, parsed.data);
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
 
   revalidatePath("/content");
   return { success: true };
 }
 
 export async function deleteContentItem(id: string) {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
-
-  const role = await getCurrentRole();
-  if (!role || role !== "marketing_specialist") {
-    return { error: "Not authorized" };
+  try {
+    await apiWrite("DELETE", `/api/v1/staff/content/${encodeURIComponent(id)}`);
+  } catch (error) {
+    return { error: errorMessage(error) };
   }
-
-  const { error } = await supabase.from("content_items").delete().eq("id", id);
-  if (error) return { error: error.message };
 
   revalidatePath("/content");
   return { success: true };

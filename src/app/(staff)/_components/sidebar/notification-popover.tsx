@@ -13,7 +13,10 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from "@/components/ui/item";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { usePoll } from "@/hooks/use-poll";
+import { browserApi } from "@/lib/api/client";
 import { markAllNotificationsRead, markNotificationRead, type NotificationRow } from "@/lib/notifications/actions";
+import { type NotificationPage, withHrefs } from "@/lib/notifications/with-hrefs";
 import { cn } from "@/lib/utils";
 
 function formatTimeAgo(date: Date): string {
@@ -107,6 +110,25 @@ export function NotificationPopover({
 }) {
   const [notifications, setNotifications] = useState(initialNotifications);
   const [open, setOpen] = useState(false);
+
+  // Replaces a page reload as the only way to see new alerts: poll for rows created since the newest one.
+  const newest = initialNotifications.reduce<string | null>(
+    (latest, n) => (!latest || n.created_at > latest ? n.created_at : latest),
+    null,
+  );
+  usePoll(newest, async (cursor) => {
+    const query = cursor ? `?after=${encodeURIComponent(cursor)}` : "";
+    const page = await browserApi<NotificationPage>("GET", `/api/v1/notifications${query}`);
+    const rows = withHrefs(page);
+    if (rows.length > 0) {
+      setNotifications((prev) => {
+        const known = new Set(prev.map((n) => n.id));
+        const fresh = rows.filter((n) => !known.has(n.id));
+        return fresh.length ? [...fresh, ...prev] : prev;
+      });
+    }
+    return page.cursor ?? cursor;
+  });
 
   const { active, unreadCount } = useMemo(() => {
     const sorted = [...notifications].sort((a, b) => b.created_at.localeCompare(a.created_at));

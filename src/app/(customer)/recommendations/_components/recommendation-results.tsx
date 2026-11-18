@@ -84,23 +84,19 @@ export function RecommendationResults({ runId }: RecommendationResultsProps) {
   useEffect(() => {
     async function load() {
       const res = await getRecommendationRun(runId);
-      if (res.error) {
+      if (!res.success) {
         toast.error(res.error);
         setLoading(false);
         return;
       }
 
-      const vehicleIds = (res.results as Record<string, unknown>[]).map((r) => r.vehicle_id as string);
-      const supabase = (await import("@/lib/supabase/client")).createClient();
-      const { data: vehicles } = await supabase
-        .from("vehicles")
-        .select("id, make, model, year, current_price, condition, mileage, fuel_type, body_type")
-        .in("id", vehicleIds);
+      // The run response carries the display fields of every ranked car.
+      const vehicles = (res.vehicles ?? []) as Record<string, unknown>[];
 
       const vehicleMap = new Map<string, VehicleDisplay>();
-      for (const v of vehicles ?? []) {
-        vehicleMap.set(v.id, {
-          id: v.id,
+      for (const v of vehicles) {
+        vehicleMap.set(v.id as string, {
+          id: v.id as string,
           make: v.make as string,
           model: v.model as string,
           year: v.year as number,

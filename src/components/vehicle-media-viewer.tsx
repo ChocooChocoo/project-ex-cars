@@ -9,6 +9,7 @@ import { ChevronLeft, ChevronRight, RotateCw, Sparkles } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { publicStorageUrl } from "@/lib/api/config";
 import type { VehicleMediaKind } from "@/lib/vehicles/media-kinds";
 
 export interface VehicleMediaItem {
@@ -21,10 +22,8 @@ export interface VehicleMediaItem {
 type ViewerMode = "360" | "photo" | "interior";
 const MODE_LABELS: Record<ViewerMode, string> = { "360": "360°", photo: "Gallery", interior: "Interior" };
 
-const PUBLIC_BUCKET_BASE = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/showroom-media`;
-
 function mediaUrl(storagePath: string): string {
-  return `${PUBLIC_BUCKET_BASE}/${storagePath}`;
+  return publicStorageUrl("showroom-media", storagePath);
 }
 
 export function VehicleMediaViewer({ media }: { readonly media: VehicleMediaItem[] }) {

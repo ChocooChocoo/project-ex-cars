@@ -7,8 +7,8 @@ import { getCurrentRole } from "@/app/auth/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { type VehicleMediaItem, VehicleMediaViewer } from "@/components/vehicle-media-viewer";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { ApiError } from "@/lib/api/errors";
+import { apiGet } from "@/lib/api/server";
 import { listingStateLabel, listingStateVariant } from "@/lib/vehicles/labels";
 
 import { ReconditioningPanel } from "./_components/reconditioning-panel";
@@ -27,88 +27,26 @@ const MEDIA_MANAGER_ROLES = ["marketing_specialist"];
 
 export default async function VehicleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const supabase = await createServerSupabase();
   const role = (await getCurrentRole()) ?? null;
 
-  const { data: vehicle } = await supabase.from("vehicles").select("*").eq("id", id).single();
-
-  if (!vehicle) notFound();
-
-  const v = vehicle as unknown as VehicleDetail;
-
-  const [{ data: media }, { data: proposal }, { data: reconditioning }, { data: revision }] = await Promise.all([
-    supabase
-      .from("vehicle_media")
-      .select("id, media_kind, storage_path, display_order")
-      .eq("vehicle_id", id)
-      .order("display_order", { ascending: true }),
-    role === "ceo"
-      ? supabase
-          .from("vehicle_price_proposals")
-          .select("id, proposed_amount, notes, created_at, proposal_kind")
-          .eq("vehicle_id", id)
-          .eq("decision", "pending")
-          .order("created_at", { ascending: false })
-          .maybeSingle()
-      : Promise.resolve({ data: null }),
-    // §6 steps 27–38: the latest reconditioning job of a repossessed car (RLS limits who sees it).
-    supabase
-      .from("reconditioning_jobs")
-      .select(
-        "*, disbursement_requests(status, amount_cents), reconditioning_parts(*), reconditioning_fund_requests(*, reconditioning_fund_receipts(*), disbursement_requests(status))",
-      )
-      .eq("vehicle_id", id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    // T06: the CEO's latest Request Revision, while the car still waits for a new price.
-    role === "marketing_specialist" && (v.listing_state === "draft" || v.listing_state === "repairing")
-      ? supabase
-          .from("vehicle_price_proposals")
-          .select("decision, decision_notes, decision_date")
-          .eq("vehicle_id", id)
-          .neq("proposal_kind", "purchase_ceiling")
-          .neq("proposal_kind", "revised_ceiling")
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle()
-      : Promise.resolve({ data: null }),
-  ]);
-
-  // Receipts live in a private bucket; the panel gets short-lived signed links.
-  const reconditioningJob = reconditioning as
-    | (Record<string, unknown> & {
-        reconditioning_fund_requests?: Array<
-          Record<string, unknown> & {
-            reconditioning_fund_receipts?: Array<Record<string, unknown>>;
-          }
-        >;
-      })
-    | null;
-  // T10: each reconditioning part carries a photo in the same private bucket.
-  const parts = (reconditioningJob as { reconditioning_parts?: Array<Record<string, unknown>> } | null)
-    ?.reconditioning_parts;
-  if (parts?.length) {
-    const admin = createAdminClient();
-    for (const part of parts) {
-      if (!part.photo_path) continue;
-      const { data } = await admin.storage
-        .from("reconditioning-receipts")
-        .createSignedUrl(String(part.photo_path), 3600);
-      part.photo_url = data?.signedUrl ?? null;
-    }
+  // Laravel shapes this page's data by role: the CEO's pending proposal, the Marketing Specialist's latest
+  // revision request, and the latest reconditioning job with 1-hour signed links to its private photos.
+  let data: {
+    vehicle: Record<string, unknown>;
+    media: Record<string, unknown>[];
+    proposal: Record<string, unknown> | null;
+    reconditioning: Record<string, unknown> | null;
+    revision: Record<string, unknown> | null;
+  };
+  try {
+    ({ data } = await apiGet<typeof data>(`/api/v1/staff/vehicles/${encodeURIComponent(id)}`));
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) notFound();
+    throw error;
   }
-  if (reconditioningJob?.reconditioning_fund_requests?.length) {
-    const admin = createAdminClient();
-    for (const request of reconditioningJob.reconditioning_fund_requests) {
-      for (const receipt of request.reconditioning_fund_receipts ?? []) {
-        const path = String(receipt.storage_path ?? "");
-        if (!path) continue;
-        const { data } = await admin.storage.from("reconditioning-receipts").createSignedUrl(path, 3600);
-        receipt.signed_url = data?.signedUrl ?? null;
-      }
-    }
-  }
+  const { media, proposal, revision } = data;
+  const v = data.vehicle as unknown as VehicleDetail;
+  const reconditioningJob = data.reconditioning;
 
   return (
     <div className="flex flex-col gap-6">

@@ -1,49 +1,25 @@
 import { notFound } from "next/navigation";
 
+import { loadThread } from "@/app/(customer)/my-inquiries/actions";
 import { getCurrentRole } from "@/app/auth/actions";
-import { withSignedMessageAttachments } from "@/lib/inquiries/attachments-server";
-import { createServerSupabase } from "@/lib/supabase/server";
 
 import { StaffChatView } from "../_components/staff-chat-view";
 
 export default async function StaffChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const supabase = await createServerSupabase();
   const role = await getCurrentRole();
   if (!role || !["ceo", "account_manager", "sales_manager", "marketing_specialist"].includes(role)) notFound();
 
-  let inquiryQuery = supabase
-    .from("inquiries")
-    .select("*, vehicles(make, model, year, stock_code), profiles(full_name)")
-    .eq("id", id);
-
-  if (role === "sales_manager") inquiryQuery = inquiryQuery.in("intention_kind", ["buy_now", "buy_financing"]);
-  // T01 Selling step 5: the Marketing Specialist negotiates in the offer's own thread only.
-  if (role === "marketing_specialist") inquiryQuery = inquiryQuery.eq("intention_kind", "sell_negotiation");
-
-  const { data: inquiry } = await inquiryQuery.maybeSingle();
-
-  if (!inquiry) notFound();
-
-  const { data: messages } = await supabase
-    .from("inquiry_messages")
-    .select("*, message_attachments(*)")
-    .eq("inquiry_id", id)
-    .order("sent_at", { ascending: true });
-
-  const { data: arrangement } = await supabase
-    .from("viewing_arrangements")
-    .select("*")
-    .eq("inquiry_id", id)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  // Laravel's InquiryPolicy: the Sales Manager reads buy threads, and (T01 Selling step 5) the Marketing
+  // Specialist only the offer's own sell_negotiation thread. Anything else is a 404.
+  const thread = await loadThread(id);
+  if (!thread.ok) notFound();
 
   return (
     <StaffChatView
-      inquiry={inquiry as Record<string, unknown>}
-      messages={await withSignedMessageAttachments((messages as Record<string, unknown>[]) ?? [])}
-      arrangement={arrangement as Record<string, unknown> | null}
+      inquiry={thread.data.inquiry}
+      messages={thread.data.messages}
+      arrangement={thread.data.arrangement}
       userRole={role}
     />
   );

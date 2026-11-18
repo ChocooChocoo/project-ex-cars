@@ -1,29 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { db } = vi.hoisted(() => {
-  const rows: Record<string, unknown> = {};
-  const filters: unknown[][] = [];
-  const from = (table: string) => {
-    const answer = () => Promise.resolve({ data: rows[table] ?? [], error: null });
-    const builder = {
-      select: () => builder,
-      eq: (key: string, value: unknown) => {
-        filters.push([table, key, value]);
-        return builder;
-      },
-      order: () => builder,
-      single: answer,
-      // biome-ignore lint/suspicious/noThenProperty: Supabase builders are thenable.
-      then: (resolve: (value: unknown) => unknown) => answer().then(resolve),
-    };
-    return builder;
-  };
-  return { db: { rows, filters, from } };
-});
+import { ApiError } from "@/lib/api/errors";
 
-vi.mock("@/lib/supabase/server", () => ({
-  createServerSupabase: async () => ({ from: db.from, auth: { getUser: async () => ({ data: { user: null } }) } }),
-}));
+// The available-only rule and the stripped fields are enforced by Laravel (CatalogueTest); these tests pin
+// the page side of the contract: the endpoints used and Laravel's 404 becoming notFound().
+const { apiGet } = vi.hoisted(() => ({ apiGet: vi.fn() }));
+vi.mock("@/lib/api/server", () => ({ apiGet }));
 vi.mock("next/navigation", () => ({
   notFound: () => {
     throw new Error("notFound");
@@ -37,23 +19,33 @@ import VehicleDetailPage from "./[id]/page";
 import ShowroomPage from "./page";
 
 beforeEach(() => {
-  db.filters.length = 0;
-  for (const key of Object.keys(db.rows)) delete db.rows[key];
+  apiGet.mockReset();
 });
 
-describe("available-only customer showroom", () => {
-  it("queries only available vehicles", async () => {
+describe("customer showroom", () => {
+  it("reads the catalogue endpoint", async () => {
+    apiGet.mockResolvedValue({ data: { vehicles: [], favourite_ids: [] } });
     await ShowroomPage();
-    expect(db.filters).toContainEqual(["vehicles", "listing_state", "available"]);
+    expect(apiGet).toHaveBeenCalledWith("/api/v1/catalogue/vehicles");
   });
 
-  it.each(["reserved", "sold", "draft", null])("404s for %s vehicles", async (state) => {
-    db.rows.vehicles = state ? { id: "car", listing_state: state } : null;
+  it("404s when Laravel says the car is not available", async () => {
+    apiGet.mockRejectedValue(new ApiError(404, { code: "not_found", message: "Resource not found." }));
     await expect(VehicleDetailPage({ params: Promise.resolve({ id: "car" }) })).rejects.toThrow("notFound");
   });
 
   it("renders an available vehicle", async () => {
-    db.rows.vehicles = { id: "car", listing_state: "available" };
+    apiGet.mockResolvedValue({
+      data: { vehicle: { id: "car", listing_state: "available", make: "Toyota" }, media: [] },
+    });
     await expect(VehicleDetailPage({ params: Promise.resolve({ id: "car" }) })).resolves.toBeTruthy();
+    expect(apiGet).toHaveBeenCalledWith("/api/v1/catalogue/vehicles/car");
+  });
+
+  it("rethrows an outage instead of hiding it as a 404", async () => {
+    apiGet.mockRejectedValue(new ApiError(0, { message: "Laravel API unreachable" }));
+    await expect(VehicleDetailPage({ params: Promise.resolve({ id: "car" }) })).rejects.toThrow(
+      "Laravel API unreachable",
+    );
   });
 });

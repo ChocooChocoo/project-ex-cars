@@ -6,18 +6,15 @@ import { ArrowRight, Building2, Car, MapPin, Truck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { getFinancingMarkupPct, markupFor } from "@/lib/settings/financing";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { financedTotal } from "@/lib/transactions/buy-flow";
+import { apiPublicGet } from "@/lib/api/server";
 import { cn, formatCurrency } from "@/lib/utils";
-import { getPublishedReviews } from "@/server/customer-reviews";
 
 import { FinancingEstimator } from "./_components/financing-estimator";
 import { HeroCopy, HeroLine, HeroPhoto } from "./_components/hero-entrance";
 import { PromoStrip } from "./_components/promo-strip";
 import { Reveal } from "./_components/reveal";
 
-// The admin client reads no cookies, so without this the page would be frozen at build time.
+// Regenerated every minute from the public Laravel endpoint.
 // ponytail: a sold car can show for up to a minute; switch to force-dynamic if that matters.
 export const revalidate = 60;
 
@@ -28,8 +25,32 @@ const STOCK = {
   route: "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=1600&q=80",
 };
 
-const mediaUrl = (path: string) =>
-  `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/showroom-media/${path}`;
+interface LandingData {
+  content: { id: string; content_kind: string; title: string; body: string | null; vehicle_id: string | null }[];
+  cars: {
+    id: string;
+    make: string;
+    model: string;
+    year: number;
+    current_price: number | null;
+    stock_code: string;
+    financed_total: number;
+    photo_url: string | null;
+  }[];
+  // Published reviews (newest six) with the average over all published ratings.
+  reviews: {
+    reviews: {
+      id: string;
+      rating: number;
+      body: string;
+      created_at: string;
+      profiles: { full_name: string | null } | null;
+      vehicles: { make: string; model: string; year: number } | null;
+    }[];
+    average: number | null;
+    count: number;
+  };
+}
 
 const peso = (amount: unknown) => formatCurrency(Number(amount ?? 0), { noDecimals: true });
 
@@ -46,51 +67,20 @@ const ROUTES = [
 // Public landing page (T04 L1/L2). src/proxy.ts sends signed-in users from / to their own landing path,
 // so only signed-out visitors see this page. Styling uses the app's shadcn components and theme tokens only.
 export default async function LandingPage() {
-  // The anon role cannot read vehicles or content_items: their staff RLS policies read private.user_roles,
-  // which anon may not touch. This server-only page reads with the admin client instead, limited to public
-  // columns of published content and available cars.
-  const supabase = createAdminClient();
-  const customerReviews = await getPublishedReviews();
-  const { data: content } = await supabase
-    .from("content_items")
-    .select("id, content_kind, title, body, vehicle_id")
-    .eq("publication_state", "published")
-    .order("published_at", { ascending: false });
-
-  const items = content ?? [];
+  // Public Laravel endpoint: published content, the five newest available cars (Laravel computes each car's
+  // financing total, so the markup percentage never leaves the API) and published reviews.
+  const {
+    content: items,
+    cars,
+    reviews: customerReviews,
+  } = await apiPublicGet<LandingData>("/api/v1/catalogue/landing", revalidate).catch(
+    // API down (or a build without it): render the static marketing page; the next revalidation fills it in.
+    (): LandingData => ({ content: [], cars: [], reviews: { reviews: [], average: null, count: 0 } }),
+  );
   const promos = items.filter((c) => c.content_kind === "hero" || c.content_kind === "promotion");
   const featured = items.filter((c) => c.content_kind === "featured_vehicle");
   const announcements = items.filter((c) => c.content_kind === "announcement");
-
-  // Cars currently in the showroom, newest first.
-  const markupPct = await getFinancingMarkupPct();
-  const { data: vehicles } = await supabase
-    .from("vehicles")
-    // T11: the per-car markup is read here so the estimate is right, but only the finished total is handed to
-    // the client component: the percentage itself is GCE's figure and never reaches the browser.
-    .select("id, make, model, year, current_price, stock_code, financing_markup_pct")
-    .eq("listing_state", "available")
-    .order("posted_at", { ascending: false })
-    .limit(5);
-  const cars = vehicles ?? [];
-
-  // First public photo of each listed car.
-  const { data: media } = cars.length
-    ? await supabase
-        .from("vehicle_media")
-        .select("vehicle_id, storage_path")
-        .in(
-          "vehicle_id",
-          cars.map((c) => c.id),
-        )
-        .eq("media_kind", "photo")
-        .eq("public_state", true)
-        .order("display_order", { ascending: true })
-    : { data: [] };
-  const photoOf = new Map<string, string>();
-  for (const row of media ?? []) {
-    if (!photoOf.has(row.vehicle_id)) photoOf.set(row.vehicle_id, mediaUrl(row.storage_path));
-  }
+  const photoOf = new Map(cars.filter((c) => c.photo_url).map((c) => [c.id, c.photo_url as string]));
 
   const carName = (c: { year: unknown; make: unknown; model: unknown }) => `${c.year} ${c.make} ${c.model}`;
 
@@ -285,7 +275,7 @@ export default async function LandingPage() {
                     price: Number(c.current_price),
                     // T11: the car's own markup is applied here, on the server, so the browser only ever
                     // receives the finished total.
-                    total: financedTotal(Number(c.current_price), markupFor(c, markupPct)),
+                    total: c.financed_total,
                   }))}
                 />
               </Reveal>
@@ -331,8 +321,8 @@ export default async function LandingPage() {
             ) : null}
             <ul className="mt-6 grid gap-x-12 sm:grid-cols-2">
               {customerReviews.reviews.map((review) => {
-                const profile = Array.isArray(review.profiles) ? review.profiles[0] : review.profiles;
-                const vehicle = Array.isArray(review.vehicles) ? review.vehicles[0] : review.vehicles;
+                const profile = review.profiles;
+                const vehicle = review.vehicles;
                 return (
                   <li key={review.id} className="border-t py-5">
                     <p className="font-medium">

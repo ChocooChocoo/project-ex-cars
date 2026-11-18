@@ -362,6 +362,13 @@ class DemoDataSeeder extends Seeder
             }
         }
         $this->insert('vehicle_document_items', $docs);
+        // Every seeded path points to a real file (Phase 4): one sample PDF fixture, private disk.
+        $pdf = file_get_contents(database_path('seeders/files/sample-document.pdf'));
+        foreach ($docs as $doc) {
+            if ($doc['storage_path']) {
+                Storage::disk('local')->put('transaction-documents/'.$doc['storage_path'], $pdf);
+            }
+        }
 
         $proposals = [];
         foreach (array_slice($vehicles, 12, 10) as $v) {
@@ -413,7 +420,8 @@ class DemoDataSeeder extends Seeder
                     'inquiry_id' => $inquiry['id'],
                     'sender_id' => $sender,
                     'message_text' => $this->pick($isCustomer ? $customerLines : $staffLines),
-                    'sent_at' => $this->ts($this->daysAgo($this->randInt(1, 14))->addDays($t)),
+                    // Never in the future (the Supabase seed could produce future-dated messages).
+                    'sent_at' => $this->ts($this->daysAgo($this->randInt(1, 14))->addDays($t)->min($this->now)),
                     'read_at' => $this->rand() < 0.7 ? $this->ts($this->daysAgo($this->randInt(1, 14))->addDays($t)) : null,
                 ];
                 $sender = $isCustomer ? ($this->rand() < 0.7 ? $this->u['account_manager'] : $this->u['sales_manager']) : $this->u['customer'];
@@ -1090,6 +1098,12 @@ class DemoDataSeeder extends Seeder
             ];
         }
         $this->insert('security_duty_checks', $duties);
+        $evidence = $this->makePng(320, 240, $this->hueToRgb(200), $this->hueToRgb(240));
+        foreach ($duties as $duty) {
+            foreach (array_filter([$duty['before_image_path'], $duty['after_image_path']]) as $path) {
+                Storage::disk('local')->put('security-evidence/'.$path, $evidence);
+            }
+        }
 
         // [kind, parent index, title, status, priority, quarter, team]
         $roadmap = [

@@ -24,6 +24,8 @@ class SellDetail extends Model
             'agreed_price' => 'decimal:2',
             'cleared_for_payment_at' => 'immutable_datetime',
             'owner_number' => 'integer',
+            'meetup_lat' => 'decimal:6',
+            'meetup_lng' => 'decimal:6',
         ];
     }
 

@@ -1,30 +1,15 @@
 import { expect, it, vi } from "vitest";
 
-const { filters } = vi.hoisted(() => ({ filters: [] as unknown[][] }));
-vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: () => ({
-    from: (table: string) => {
-      const builder = {
-        select: () => builder,
-        eq: (key: string, value: string) => {
-          filters.push([table, key, value]);
-          return builder;
-        },
-        order: () => builder,
-        limit: () => builder,
-        // biome-ignore lint/suspicious/noThenProperty: Supabase builders are thenable.
-        then: (resolve: (value: unknown) => unknown) => Promise.resolve({ data: [] }).then(resolve),
-      };
-      return builder;
-    },
-  }),
+const { apiPublicGet } = vi.hoisted(() => ({
+  apiPublicGet: vi.fn(async () => ({ content: [], cars: [], reviews: { reviews: [], average: null, count: 0 } })),
 }));
-vi.mock("@/lib/settings/financing", () => ({ getFinancingMarkupPct: async () => 10 }));
-vi.mock("@/server/customer-reviews", () => ({ getPublishedReviews: async () => ({ reviews: [] }) }));
+vi.mock("@/lib/api/server", () => ({ apiPublicGet }));
 
 import LandingPage from "./page";
 
-it("shows only available vehicles on the public landing page", async () => {
+// Laravel filters to available cars (backend/tests/Feature/Catalogue/CatalogueTest.php); the page must use
+// that public endpoint with the page's revalidate window, never a session-bound call.
+it("reads the public landing endpoint", async () => {
   await LandingPage();
-  expect(filters).toContainEqual(["vehicles", "listing_state", "available"]);
+  expect(apiPublicGet).toHaveBeenCalledWith("/api/v1/catalogue/landing", 60);
 });

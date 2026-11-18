@@ -1,70 +1,25 @@
 import { getCurrentRole } from "@/app/auth/actions";
+import { apiGet } from "@/lib/api/server";
 import { requireRole } from "@/lib/auth/guards";
 import { STAFF_ROLES } from "@/lib/auth/roles";
-import { getFinancingMarkupPct } from "@/lib/settings/financing";
-import { createServerSupabase } from "@/lib/supabase/server";
 
 import type { PriceProposalRow } from "./_components/price-approvals";
 import { VehicleOperations } from "./_components/vehicle-operations";
 
 export default async function VehiclesPage() {
   await requireRole(STAFF_ROLES);
-  const supabase = await createServerSupabase();
   const role = (await getCurrentRole()) ?? null;
-
-  const { data: vehicles } = await supabase.from("vehicles").select("*").order("created_at", { ascending: false });
-  // T11: the global markup is the fallback for a car that has no financing_markup_pct of its own.
-  const defaultMarkupPct = await getFinancingMarkupPct();
-
+  // One Laravel read shaped for this page: proposals for the CEO/Head Accountant (with what GCE paid the
+  // seller, T10), latest reconditioning state per car for the Marketing Specialist, and the global markup.
+  const { data } = await apiGet<{
+    vehicles: Record<string, unknown>[];
+    proposals: PriceProposalRow[];
+    reconditioning_by_vehicle: Record<string, { state: string; papers_processed_at: string | null }>;
+    default_markup_pct: number;
+  }>("/api/v1/staff/vehicles");
   const isCeo = role === "ceo";
   const isHeadAccountant = role === "head_accountant";
   const canManage = role === "marketing_specialist";
-  const { data: proposals } = isCeo
-    ? await supabase
-        .from("vehicle_price_proposals")
-        .select("*, vehicles(make, model, year)")
-        .eq("decision", "pending")
-        .order("created_at", { ascending: false })
-    : isHeadAccountant
-      ? await supabase
-          .from("vehicle_price_proposals")
-          .select("*, vehicles(make, model, year)")
-          .eq("decision", "pending")
-          .order("created_at", { ascending: false })
-      : { data: [] };
-
-  // T10: show what GCE paid the seller next to each proposed selling price.
-  const proposalVehicleIds = [...new Set((proposals ?? []).map((row) => String(row.vehicle_id)))];
-  const { data: acquisitions } = proposalVehicleIds.length
-    ? await supabase
-        .from("transactions")
-        .select("vehicle_id, sell_details(agreed_price)")
-        .eq("transaction_kind", "sell")
-        .eq("current_state", "completed")
-        .in("vehicle_id", proposalVehicleIds)
-    : { data: [] };
-  const acquisitionByVehicle = new Map<string, number>();
-  for (const row of acquisitions ?? []) {
-    const sell = Array.isArray(row.sell_details) ? row.sell_details[0] : row.sell_details;
-    if (sell?.agreed_price != null) acquisitionByVehicle.set(String(row.vehicle_id), Number(sell.agreed_price));
-  }
-
-  const { data: reconditioningJobs } =
-    role === "marketing_specialist"
-      ? await supabase
-          .from("reconditioning_jobs")
-          .select("vehicle_id, state, papers_processed_at, created_at")
-          .order("created_at", { ascending: false })
-      : { data: [] };
-  const reconditioningByVehicle: Record<string, { state: string; papers_processed_at: string | null }> = {};
-  for (const job of reconditioningJobs ?? []) {
-    const vehicleId = String(job.vehicle_id ?? "");
-    if (!vehicleId || reconditioningByVehicle[vehicleId]) continue;
-    reconditioningByVehicle[vehicleId] = {
-      state: String(job.state ?? ""),
-      papers_processed_at: (job.papers_processed_at as string | null) ?? null,
-    };
-  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -75,19 +30,14 @@ export default async function VehiclesPage() {
         </div>
       </div>
       <VehicleOperations
-        proposals={
-          ((proposals ?? []) as unknown as PriceProposalRow[]).map((row) => ({
-            ...row,
-            acquisition_price: acquisitionByVehicle.get(row.vehicle_id) ?? null,
-          })) ?? []
-        }
-        vehicles={(vehicles as Record<string, unknown>[]) ?? []}
+        proposals={data.proposals}
+        vehicles={data.vehicles}
         canManage={canManage}
         canView={isCeo}
         isHeadAccountant={isHeadAccountant}
         userRole={role}
-        reconditioningByVehicle={reconditioningByVehicle}
-        defaultMarkupPct={defaultMarkupPct}
+        reconditioningByVehicle={data.reconditioning_by_vehicle}
+        defaultMarkupPct={data.default_markup_pct}
       />
     </div>
   );

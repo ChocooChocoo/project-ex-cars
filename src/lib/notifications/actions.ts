@@ -2,25 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 
-import { notificationHref } from "@/lib/notifications/notification-href";
+import { ApiError, errorMessage } from "@/lib/api/errors";
+import { apiGet, apiWrite } from "@/lib/api/server";
+import { type NotificationPage, type NotificationRow, withHrefs } from "@/lib/notifications/with-hrefs";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createServerSupabase, createServerSupabaseClient } from "@/lib/supabase/server";
 import { MISSED_INSTALLMENTS_BEFORE_REPOSSESSION, missedInstallments, verifiedPaid } from "@/lib/transactions/buy-flow";
 
-export interface NotificationRow {
-  id: string;
-  recipient_role: string | null;
-  recipient_id: string | null;
-  kind: string;
-  title: string;
-  body: string | null;
-  is_read: boolean;
-  reference_table: string | null;
-  reference_id: string | null;
-  created_at: string;
-  /** Page the notification opens, computed server-side by getNotifications (null: not clickable). */
-  href?: string | null;
-}
+export type { NotificationRow } from "./with-hrefs";
 
 // amount_due is NUMERIC pesos, not cents.
 function installmentDueBody(amount: number, label: string, dueDate: string, today: string): string {
@@ -213,133 +201,41 @@ async function notifyMissedDownpayments(admin: ReturnType<typeof createAdminClie
   if (toInsert.length > 0) await admin.from("notifications").insert(toInsert);
 }
 
-// Rows for the current role, plus rows addressed to this user. RLS limits recipient_id rows to
-// recipient_id = auth.uid(), so "recipient_id not null" never reaches another user's row.
-// The role is interpolated into a PostgREST filter, so only a plain role name is accepted.
-function roleOrOwnFilter(role: string): string {
-  const safeRole = /^[a-z_]+$/.test(role) ? role : "__none__";
-  return `recipient_role.eq.${safeRole},recipient_id.not.is.null`;
+// Rows for the caller's role plus rows addressed to them; Laravel derives both from the session, so `_role`
+// is kept only for the existing call sites. Awaited during layout renders: a GET only, never a cookie write.
+export async function getNotifications(_role: string): Promise<NotificationRow[]> {
+  try {
+    return withHrefs((await apiGet<NotificationPage>("/api/v1/notifications")).data);
+  } catch {
+    return [];
+  }
 }
 
-// Awaited during Server Component renders (the staff/customer layouts), so it must
-// use the read-only client and never write cookies.
-export async function getNotifications(role: string): Promise<NotificationRow[]> {
-  const supabase = await createServerSupabase();
-  const { data } = await supabase
-    .from("notifications")
-    .select("*")
-    .or(roleOrOwnFilter(role))
-    .order("created_at", { ascending: false })
-    .limit(20);
-  const rows = (data ?? []) as NotificationRow[];
-
-  // Installment reminders reference the installment; they open the purchase transaction it belongs to.
-  const installmentIds = rows
-    .filter((n) => n.reference_table === "installments" && n.reference_id)
-    .map((n) => n.reference_id as string);
-  const installmentTransactions = new Map<string, string>();
-  if (installmentIds.length > 0) {
-    const { data: installments } = await supabase
-      .from("installments")
-      .select("id, installment_accounts(purchase_transaction_id)")
-      .in("id", installmentIds);
-    for (const installment of installments ?? []) {
-      const account = installment.installment_accounts as unknown as { purchase_transaction_id: string | null } | null;
-      if (account?.purchase_transaction_id)
-        installmentTransactions.set(installment.id as string, account.purchase_transaction_id);
-    }
+export async function getUnreadNotificationCount(_role: string): Promise<number> {
+  try {
+    return (await apiGet<{ count: number }>("/api/v1/notifications/count")).data.count;
+  } catch {
+    return 0;
   }
-
-  // Mechanic and Head Security cannot open transactions; their alerts open the field case assigned to them.
-  const assignedFieldCases = new Map<string, string>();
-  const transactionIds = rows
-    .filter((n) => n.reference_table === "transactions" && n.reference_id)
-    .map((n) => n.reference_id as string);
-  if ((role === "mechanic" || role === "head_security") && transactionIds.length > 0) {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user) {
-      const { data: cases } = await supabase
-        .from("field_cases")
-        .select("id, transaction_id")
-        .in("transaction_id", transactionIds)
-        .or(`mechanic_id.eq.${user.id},head_security_id.eq.${user.id}`)
-        .order("created_at", { ascending: false });
-      for (const fieldCase of cases ?? []) {
-        const transactionId = fieldCase.transaction_id as string;
-        if (!assignedFieldCases.has(transactionId)) assignedFieldCases.set(transactionId, fieldCase.id as string);
-      }
-    }
-  }
-
-  return rows.map((row) => ({
-    ...row,
-    href: notificationHref(row, role, installmentTransactions, assignedFieldCases),
-  }));
-}
-
-// Also awaited during Server Component renders, same constraint as getNotifications.
-export async function getUnreadNotificationCount(role: string): Promise<number> {
-  const supabase = await createServerSupabase();
-  const { count } = await supabase
-    .from("notifications")
-    .select("id", { count: "exact", head: true })
-    .or(roleOrOwnFilter(role))
-    .eq("is_read", false);
-  return count ?? 0;
 }
 
 export async function markNotificationRead(notificationId: string) {
-  const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Not authenticated" };
-
-  const { data: roles } = await supabase.rpc("get_user_roles");
-  const userRole = (roles as { account_id: string; role: string }[] | undefined)?.find(
-    (r) => r.account_id === user.id,
-  )?.role;
-  if (!userRole) return { error: "No role assigned." };
-
-  const { data: notification } = await supabase
-    .from("notifications")
-    .select("recipient_role, recipient_id")
-    .eq("id", notificationId)
-    .maybeSingle();
-  if (!notification) return { error: "Notification not found." };
-  if (notification.recipient_role !== userRole && notification.recipient_id !== user.id) {
-    return { error: "Not authorized" };
+  try {
+    await apiWrite("POST", `/api/v1/notifications/${encodeURIComponent(notificationId)}/read`);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return { error: "Notification not found." };
+    return { error: errorMessage(error) };
   }
-
-  const { error } = await supabase.from("notifications").update({ is_read: true }).eq("id", notificationId);
-  if (error) return { error: error.message };
-
   revalidatePath("/dashboard");
   return { success: true };
 }
 
 export async function markAllNotificationsRead() {
-  const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Not authenticated" };
-
-  const { data: roles } = await supabase.rpc("get_user_roles");
-  const userRole = (roles as { account_id: string; role: string }[] | undefined)?.find(
-    (r) => r.account_id === user.id,
-  )?.role;
-  if (!userRole) return { error: "No role assigned." };
-
-  const { error } = await supabase
-    .from("notifications")
-    .update({ is_read: true })
-    .or(`recipient_role.eq.${userRole},recipient_id.eq.${user.id}`)
-    .eq("is_read", false);
-  if (error) return { error: error.message };
-
+  try {
+    await apiWrite("POST", "/api/v1/notifications/read-all");
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
   revalidatePath("/dashboard");
   return { success: true };
 }

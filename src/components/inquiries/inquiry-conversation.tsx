@@ -1,13 +1,12 @@
 "use client";
 "use no memo";
 
-import { type ReactElement, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactElement, type ReactNode, useEffect, useRef, useState } from "react";
 
 import { format } from "date-fns";
 import { ArrowLeft, FileText, Paperclip, X } from "lucide-react";
 import { toast } from "sonner";
 
-import { getMessageAttachment, prepareMessageAttachment } from "@/app/(customer)/my-inquiries/actions";
 import { TransactionImagePreview } from "@/components/transaction-image-preview";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -16,14 +15,10 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import {
-  attachmentError,
-  attachmentMimeType,
-  MESSAGE_ATTACHMENT_ACCEPT,
-  MESSAGE_ATTACHMENTS_BUCKET,
-  type SignedAttachment,
-} from "@/lib/inquiries/attachments";
-import { createClient } from "@/lib/supabase/client";
+import { usePoll } from "@/hooks/use-poll";
+import { browserApi } from "@/lib/api/client";
+import { useAccountSummary } from "@/lib/api/use-account-summary";
+import { attachmentError, MESSAGE_ATTACHMENT_ACCEPT, type SignedAttachment } from "@/lib/inquiries/attachments";
 import { compressImage } from "@/lib/uploads/compress-image";
 import { cn, getInitials } from "@/lib/utils";
 import { censorMessage } from "@/lib/word-filter";
@@ -101,6 +96,14 @@ function withAttachment(
   return { ...prev, [attachment.message_id]: [...current, attachment] };
 }
 
+/** Adds rows not seen yet (by id) and keeps the thread in sent order. */
+function mergeMessages(prev: InquiryRecord[], incoming: InquiryRecord[]): InquiryRecord[] {
+  const known = new Set(prev.map((message) => message.id));
+  const fresh = incoming.filter((message) => !known.has(message.id));
+  if (fresh.length === 0) return prev;
+  return [...prev, ...fresh].sort((a, b) => String(a.sent_at).localeCompare(String(b.sent_at)));
+}
+
 function getActionError(result: unknown): string | null {
   if (!result || typeof result !== "object") return null;
   if ("ok" in result && result.ok === false && "message" in result && typeof result.message === "string") {
@@ -132,7 +135,7 @@ export function InquiryConversation({
   const [myInitials, setMyInitials] = useState("ME");
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const supabase = useMemo(() => createClient(), []);
+  const account = useAccountSummary();
 
   const inquiryId = inquiry.id as string;
   const vehicles = inquiry.vehicles as Record<string, unknown> | undefined;
@@ -146,36 +149,34 @@ export function InquiryConversation({
       ? format(new Date(msgs[0].sent_at as string), "MMM d, yyyy")
       : format(new Date((inquiry.created_at as string) ?? Date.now()), "MMM d, yyyy");
 
+  // Once per thread. The action prop gets a new identity on every RSC refresh, so it is not a dependency.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: see above.
   useEffect(() => {
     void markMessagesRead(inquiryId);
+  }, [inquiryId]);
 
-    const channel = supabase
-      .channel(`inquiry-${inquiryId}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "inquiry_messages", filter: `inquiry_id=eq.${inquiryId}` },
-        (payload) => {
-          setMsgs((prev) => {
-            const nextMessage = payload.new as InquiryRecord;
-            return prev.some((message) => message.id === nextMessage.id) ? prev : [...prev, nextMessage];
-          });
-        },
-      )
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "message_attachments" }, (payload) => {
-        // The table has no inquiry_id and realtime filters cannot prefix-match, so filter on the
-        // storage path, which the server always puts under `${inquiryId}/`.
-        const row = payload.new as { id?: string; storage_path?: string };
-        if (!row.id || !row.storage_path?.startsWith(`${inquiryId}/`)) return;
-        void getMessageAttachment(row.id).then((attachment) => {
-          if (attachment) setExtraAttachments((prev) => withAttachment(prev, attachment));
-        });
-      })
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [inquiryId, markMessagesRead, supabase]);
+  // Replaces the Supabase realtime channel: fetch messages newer than the last one we have. Our own sends
+  // and the API's small overlap come back too, so rows are merged by id.
+  const lastSentAt = (initialMessages.at(-1)?.sent_at as string | undefined) ?? null;
+  const seenIds = useRef(new Set(initialMessages.map((message) => message.id as string)));
+  usePoll(lastSentAt, async (cursor) => {
+    const query = cursor ? `?after=${encodeURIComponent(cursor)}` : "";
+    const page = await browserApi<{ messages: InquiryRecord[]; cursor: string | null }>(
+      "GET",
+      `/api/v1/inquiries/${encodeURIComponent(inquiryId)}/messages${query}`,
+    );
+    // Only rows not seen before count: the overlap window repeats some on every poll.
+    const fresh = page.messages.filter((message) => !seenIds.current.has(message.id as string));
+    if (fresh.length > 0) {
+      for (const message of fresh) seenIds.current.add(message.id as string);
+      setMsgs((prev) => mergeMessages(prev, fresh));
+      // Mark read only when the other side wrote something new (a Server Action per poll would queue up).
+      if (account && fresh.some((message) => message.sender_id !== account.id && !message.read_at)) {
+        void markMessagesRead(inquiryId);
+      }
+    }
+    return page.cursor ?? cursor;
+  });
 
   // The message collection is the scroll trigger for initial and realtime messages.
   // biome-ignore lint/correctness/useExhaustiveDependencies: msgs intentionally triggers auto-scroll.
@@ -184,12 +185,9 @@ export function InquiryConversation({
   }, [msgs]);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      const meta = data.user?.user_metadata as Record<string, unknown> | undefined;
-      const name = typeof meta?.full_name === "string" ? meta.full_name : data.user?.email;
-      setMyInitials(name ? getInitials(name) : "ME");
-    });
-  }, [supabase]);
+    const name = account?.user_metadata.full_name ?? account?.email;
+    setMyInitials(name ? getInitials(name) : "ME");
+  }, [account]);
 
   async function pickFile(chosen: File | null) {
     const picked = chosen ? await compressImage(chosen) : null;
@@ -213,29 +211,8 @@ export function InquiryConversation({
     fd.set("message_text", text);
 
     try {
-      if (file) {
-        // The file goes straight to storage on a signed URL; only its path goes through the server action.
-        const type = attachmentMimeType(file);
-        const prepared = await prepareMessageAttachment(inquiryId, { name: file.name, type, size: file.size });
-        if ("error" in prepared) {
-          setFileError(prepared.error);
-          toast.error(prepared.error);
-          return;
-        }
-        const { error: uploadError } = await supabase.storage
-          .from(MESSAGE_ATTACHMENTS_BUCKET)
-          .uploadToSignedUrl(prepared.path, prepared.token, file, { contentType: type });
-        if (uploadError) {
-          const message = `The file did not upload: ${uploadError.message}`;
-          setFileError(message);
-          toast.error(message);
-          return;
-        }
-        fd.set("attachment_path", prepared.path);
-        fd.set("attachment_name", file.name);
-        fd.set("attachment_type", type);
-        fd.set("attachment_size", String(file.size));
-      }
+      // The file travels with the message in one multipart request; Laravel checks it and picks its storage name.
+      if (file) fd.set("attachment", file, file.name);
 
       const result = await sendMessage(fd);
       const error = getActionError(result);
@@ -244,7 +221,12 @@ export function InquiryConversation({
         toast.error(error);
         return;
       }
-      const sent = result as { attachment?: SignedAttachment | null };
+      const sent = result as { message?: InquiryRecord; attachment?: SignedAttachment | null };
+      const sentMessage = sent.message;
+      if (sentMessage) {
+        seenIds.current.add(sentMessage.id as string);
+        setMsgs((prev) => mergeMessages(prev, [sentMessage]));
+      }
       const sentAttachment = sent.attachment;
       if (sentAttachment) setExtraAttachments((prev) => withAttachment(prev, sentAttachment));
 

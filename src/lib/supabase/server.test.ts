@@ -105,26 +105,15 @@ describe("server Supabase clients and expired sessions", () => {
   });
 
   it("notification reads awaited during a layout render survive an expired session", async () => {
-    // The list is empty by design: this asserts the read path never reaches for a cookie
-    // write, not what the rows happen to be.
-    const emptyList = vi.fn(
-      async () =>
-        new Response(JSON.stringify([]), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }),
-    );
-    const authFailure = vi.fn(
-      async () =>
-        new Response(JSON.stringify({ error: "invalid_grant", error_description: "Invalid Refresh Token" }), {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        }),
-    );
+    // Laravel answers 401 for an expired session; the layout reads must fall back without writing a cookie.
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL) =>
-        String(input).includes("/auth/v1/token") ? authFailure() : emptyList(),
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ code: "not_authenticated", message: "You must be signed in." }), {
+            status: 401,
+            headers: { "Content-Type": "application/json" },
+          }),
       ),
     );
 
@@ -194,22 +183,24 @@ describe("notification client wiring", () => {
     return rest.slice(0, next === -1 ? undefined : next);
   }
 
+  // Phase 4: these go to Laravel. Render-path reads must be GETs (apiGet never writes cookies); the
+  // Server Actions use apiWrite.
   it.each([
     "getNotifications",
     "getUnreadNotificationCount",
-  ])("%s reads through the read-only client, since layouts await it during a render", (name) => {
+  ])("%s reads with a GET, since layouts await it during a render", (name) => {
     const body = bodyOf(notifications(), name);
 
-    expect(body).toContain("await createServerSupabase()");
-    expect(body).not.toContain("createServerSupabaseClient");
+    expect(body).toContain("await apiGet");
+    expect(body).not.toContain("apiWrite");
     expect(body).not.toContain("createAdminClient");
   });
 
   it.each([
     "markNotificationRead",
     "markAllNotificationsRead",
-  ])("%s keeps the read-write client, since it runs as a Server Action", (name) => {
-    expect(bodyOf(notifications(), name)).toContain("await createServerSupabaseClient()");
+  ])("%s writes through apiWrite, since it runs as a Server Action", (name) => {
+    expect(bodyOf(notifications(), name)).toContain("await apiWrite(");
   });
 
   it("checkAndNotifyDueInstallments keeps the admin client for its cross-role writes", () => {
@@ -229,13 +220,14 @@ describe("notification client wiring", () => {
     };
 
     for (const name of ["getTotalUnreadCount", "getUnreadCount"]) {
-      expect(bodyOfInquiry(name)).toContain("await createServerSupabase()");
-      expect(bodyOfInquiry(name)).not.toContain("createServerSupabaseClient");
+      expect(bodyOfInquiry(name)).toContain("await apiGet");
+      expect(bodyOfInquiry(name)).not.toContain("apiWrite");
     }
 
     // The mutations in the same module must keep writing.
-    for (const name of ["createInquiry", "sendMessage", "reportMessage"]) {
-      expect(bodyOfInquiry(name)).toContain("await createServerSupabaseClient()");
+    expect(bodyOfInquiry("createInquiry")).toContain("await createServerSupabaseClient()");
+    for (const name of ["sendMessage", "reportMessage"]) {
+      expect(bodyOfInquiry(name)).toContain("await apiWrite(");
     }
   });
 });

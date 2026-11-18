@@ -5,7 +5,8 @@ import { MESSAGE_ATTACHMENTS_BUCKET, type SignedAttachment } from "./attachments
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
 
 /**
- * Signs attachment rows the caller has already read under RLS (the read proves access).
+ * Signs attachment rows the caller has already read under RLS (the read proves access). Chat attachments are
+ * signed by Laravel now (Phase 4); employee-request proofs still use this until Phase 7.
  * The storage path never reaches the browser.
  */
 export async function signAttachments(
@@ -24,19 +25,4 @@ export async function signAttachments(
       return { ...row, signed_url: signedUrl } as SignedAttachment;
     }),
   );
-}
-
-/** Adds signed URLs to the `message_attachments` of each message. */
-export async function withSignedMessageAttachments(
-  messages: Record<string, unknown>[],
-): Promise<Record<string, unknown>[]> {
-  const rows = messages.flatMap((message) => (message.message_attachments as Record<string, unknown>[] | null) ?? []);
-  if (rows.length === 0) return messages;
-  const signed = new Map((await signAttachments(rows)).map((attachment) => [attachment.id, attachment]));
-  return messages.map((message) => ({
-    ...message,
-    message_attachments: ((message.message_attachments as Record<string, unknown>[] | null) ?? []).map(
-      (row) => signed.get(row.id as string) ?? row,
-    ),
-  }));
 }

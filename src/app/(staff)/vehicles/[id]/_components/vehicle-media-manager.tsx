@@ -15,10 +15,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { publicStorageUrl } from "@/lib/api/config";
 import { compressImage } from "@/lib/uploads/compress-image";
 import type { VehicleMediaKind } from "@/lib/vehicles/media-kinds";
-
-const PUBLIC_BUCKET_BASE = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/showroom-media`;
 
 const UPLOADED_MESSAGE: Record<VehicleMediaKind, string> = {
   photo: "Photo uploaded.",
@@ -155,7 +154,7 @@ export function VehicleMediaManager({
             media.map((m) => (
               <div key={m.id} className="relative aspect-[4/3] overflow-hidden rounded-lg border">
                 <Image
-                  src={`${PUBLIC_BUCKET_BASE}/${m.storage_path}`}
+                  src={publicStorageUrl("showroom-media", m.storage_path)}
                   alt=""
                   unoptimized
                   fill

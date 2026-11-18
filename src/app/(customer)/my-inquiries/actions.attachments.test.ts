@@ -1,132 +1,68 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { messageInsert, attachmentInsert, inquiryLookup, remove, createSignedUploadUrl, createSignedUrl } = vi.hoisted(
-  () => ({
-    messageInsert: vi.fn(),
-    attachmentInsert: vi.fn(),
-    inquiryLookup: vi.fn(),
-    remove: vi.fn(),
-    createSignedUploadUrl: vi.fn(),
-    createSignedUrl: vi.fn(),
-  }),
-);
+import { ApiError } from "@/lib/api/errors";
 
-const userId = "11111111-1111-4111-8111-111111111111";
-const inquiryId = "22222222-2222-4222-8222-222222222222";
-const messageId = "33333333-3333-4333-8333-333333333333";
-
-const single = (fn: ReturnType<typeof vi.fn>) => ({ select: () => ({ single: fn }) });
-
+// Storage, type sniffing, the size cap and the server-picked path are Laravel's (InquiryTest, PrivateFilesTest).
+// These tests pin the action's quick checks and the one multipart request it sends.
+const { apiWrite } = vi.hoisted(() => ({ apiWrite: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("@/lib/supabase/server", () => ({
-  createServerSupabase: vi.fn(),
-  createServerSupabaseClient: vi.fn(async () => ({
-    auth: { getUser: vi.fn(async () => ({ data: { user: { id: userId } } })) },
-    from: vi.fn((table: string) => {
-      if (table === "inquiry_messages")
-        return {
-          insert: (row: unknown) => {
-            messageInsert(row);
-            return single(vi.fn(async () => ({ data: { id: messageId }, error: null })));
-          },
-        };
-      if (table === "message_attachments")
-        return { insert: (row: unknown) => single(vi.fn(async () => attachmentInsert(row))) };
-      return { select: () => ({ eq: () => ({ maybeSingle: inquiryLookup }) }) };
-    }),
-  })),
-}));
-vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: () => ({ storage: { from: () => ({ remove, createSignedUploadUrl, createSignedUrl }) } }),
-}));
+vi.mock("@/lib/api/server", () => ({ apiWrite, apiGet: vi.fn() }));
+vi.mock("@/lib/supabase/server", () => ({ createServerSupabaseClient: vi.fn() }));
 
-import { prepareMessageAttachment, sendMessageWithAttachment } from "./actions";
+import { sendMessageWithAttachment } from "./actions";
 
-function messageForm(extra: Record<string, string> = {}) {
-  const fd = new FormData();
-  fd.set("inquiry_id", inquiryId);
-  fd.set("message_text", "Here is the photo");
-  for (const [key, value] of Object.entries(extra)) fd.set(key, value);
-  return fd;
+const inquiryId = "22222222-2222-4222-8222-222222222222";
+
+function messageForm(text: string, file?: File) {
+  const data = new FormData();
+  data.set("inquiry_id", inquiryId);
+  data.set("message_text", text);
+  if (file) data.set("attachment", file);
+  return data;
 }
 
-const fileFields = {
-  attachment_path: `${inquiryId}/abc.jpg`,
-  attachment_name: "front.jpg",
-  attachment_type: "image/jpeg",
-  attachment_size: String(1024 * 1024),
-};
-
-beforeEach(() => {
-  vi.clearAllMocks();
-  createSignedUrl.mockResolvedValue({ data: { signedUrl: "https://signed/front.jpg" } });
-});
-
-describe("prepareMessageAttachment", () => {
-  it("refuses a file over 2 MB or of another type before touching storage", async () => {
-    expect(
-      await prepareMessageAttachment(inquiryId, { name: "big.jpg", type: "image/jpeg", size: 3 * 1024 * 1024 }),
-    ).toEqual({ error: "Files must be 2 MB or smaller." });
-    expect(
-      await prepareMessageAttachment(inquiryId, { name: "a.exe", type: "application/x-msdownload", size: 10 }),
-    ).toEqual({
-      error: "Attach a JPG, PNG, WebP image or a PDF.",
-    });
-    expect(createSignedUploadUrl).not.toHaveBeenCalled();
-  });
-
-  it("refuses a thread the caller cannot read", async () => {
-    inquiryLookup.mockResolvedValue({ data: null });
-    expect(await prepareMessageAttachment(inquiryId, { name: "a.pdf", type: "application/pdf", size: 10 })).toEqual({
-      error: "You cannot send files in this conversation.",
-    });
-  });
-
-  it("returns a signed upload inside the thread's folder", async () => {
-    inquiryLookup.mockResolvedValue({ data: { id: inquiryId } });
-    createSignedUploadUrl.mockImplementation(async (path: string) => ({ data: { path, token: "t" }, error: null }));
-
-    const result = await prepareMessageAttachment(inquiryId, { name: "a.pdf", type: "application/pdf", size: 10 });
-    expect(result).toMatchObject({ token: "t" });
-    expect((result as { path: string }).path).toMatch(new RegExp(`^${inquiryId}/[0-9a-f-]{36}\\.pdf$`));
-  });
-});
+const pdf = (bytes = 10, name = "a.pdf") => new File([new Uint8Array(bytes)], name, { type: "application/pdf" });
 
 describe("sendMessageWithAttachment", () => {
-  it("records the attachment with the sender as uploader and returns it signed", async () => {
-    attachmentInsert.mockImplementation((row) => ({ data: { id: "att-1", ...row }, error: null }));
-
-    const result = await sendMessageWithAttachment(messageForm(fileFields));
-
-    expect(attachmentInsert).toHaveBeenCalledWith({
-      message_id: messageId,
-      file_kind: "image",
-      storage_path: `${inquiryId}/abc.jpg`,
-      original_name: "front.jpg",
-      file_size: 1024 * 1024,
-      uploader_id: userId,
+  beforeEach(() => {
+    vi.clearAllMocks();
+    apiWrite.mockResolvedValue({
+      status: 201,
+      data: { message: { id: "m1" }, attachment: { id: "a1", signed_url: "https://api/x" } },
+      setCookies: [],
     });
-    expect(result).toMatchObject({
-      success: true,
-      attachment: { id: "att-1", signed_url: "https://signed/front.jpg" },
-    });
-    expect((result as { attachment: Record<string, unknown> }).attachment).not.toHaveProperty("storage_path");
   });
 
-  it("returns the error and removes the upload when the attachment row fails", async () => {
-    attachmentInsert.mockReturnValue({ data: null, error: { message: "new row violates row-level security policy" } });
-
-    const result = await sendMessageWithAttachment(messageForm(fileFields));
-
+  it("sends text and file together as multipart", async () => {
+    const result = await sendMessageWithAttachment(messageForm("see file", pdf()));
     expect(result).toEqual({
-      error: "Your message was sent, but the file was not: new row violates row-level security policy",
+      success: true,
+      message: { id: "m1" },
+      attachment: { id: "a1", signed_url: "https://api/x" },
     });
-    expect(remove).toHaveBeenCalledWith([`${inquiryId}/abc.jpg`]);
+    const [method, path, body] = apiWrite.mock.calls[0];
+    expect([method, path]).toEqual(["POST", `/api/v1/inquiries/${inquiryId}/messages`]);
+    expect((body as FormData).get("attachment")).toBeInstanceOf(File);
+    expect((body as FormData).get("message_text")).toBe("see file");
   });
 
-  it("refuses a path outside the thread's folder", async () => {
-    const result = await sendMessageWithAttachment(messageForm({ ...fileFields, attachment_path: "other/abc.jpg" }));
-    expect(result).toEqual({ error: "Invalid attachment. Please attach the file again." });
-    expect(messageInsert).not.toHaveBeenCalled();
+  it.each([
+    [pdf(3 * 1024 * 1024), "Files must be 2 MB or smaller."],
+    [
+      new File([new Uint8Array(10)], "a.exe", { type: "application/x-msdownload" }),
+      "Attach a JPG, PNG, WebP image or a PDF.",
+    ],
+  ])("rejects a bad file before calling Laravel", async (file, error) => {
+    expect(await sendMessageWithAttachment(messageForm("", file))).toEqual({ error });
+    expect(apiWrite).not.toHaveBeenCalled();
+  });
+
+  it("rejects an empty message", async () => {
+    expect(await sendMessageWithAttachment(messageForm("  "))).toEqual({ error: "Message cannot be empty" });
+  });
+
+  it("returns Laravel's message when the thread is not the caller's", async () => {
+    apiWrite.mockRejectedValue(new ApiError(404, { code: "not_found", message: "Resource not found." }));
+    expect(await sendMessageWithAttachment(messageForm("hi"))).toEqual({ error: "Resource not found." });
   });
 });

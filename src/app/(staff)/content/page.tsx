@@ -1,8 +1,8 @@
 import { getCurrentRole } from "@/app/auth/actions";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { apiGet } from "@/lib/api/server";
 import { requireRole } from "@/lib/auth/guards";
-import { createServerSupabase } from "@/lib/supabase/server";
 
 import { ContentManager } from "./_components/content-manager";
 
@@ -61,26 +61,16 @@ function ContentSummaryBar({ items }: { readonly items: Record<string, unknown>[
 
 export default async function ContentPage() {
   await requireRole(["ceo", "marketing_specialist"]);
-  const supabase = await createServerSupabase();
   const canManage = (await getCurrentRole()) === "marketing_specialist";
-
-  const { data: items } = await supabase.from("content_items").select("*").order("created_at", { ascending: false });
-
-  const { data: vehicles } = await supabase
-    .from("vehicles")
-    .select("id, make, model, year")
-    .order("created_at", { ascending: false });
-
-  const normalizedItems = (items as Record<string, unknown>[]) ?? [];
+  const { data } = await apiGet<{ items: Record<string, unknown>[]; vehicles: Record<string, unknown>[] }>(
+    "/api/v1/staff/content",
+  );
+  const normalizedItems = data.items;
 
   return (
     <div className="flex flex-col gap-6">
       <ContentSummaryBar items={normalizedItems} />
-      <ContentManager
-        items={normalizedItems}
-        vehicles={(vehicles as Record<string, unknown>[]) ?? []}
-        canManage={canManage}
-      />
+      <ContentManager items={normalizedItems} vehicles={data.vehicles} canManage={canManage} />
     </div>
   );
 }

@@ -7,6 +7,7 @@ import type { Me } from "./types";
 
 /** The shape the sidebar menus read (formerly Supabase `user` + `user_metadata`). */
 export interface AccountSummary {
+  id: string;
   email: string;
   user_metadata: { full_name?: string; avatar_url?: string };
 }
@@ -20,6 +21,7 @@ export function useAccountSummary(): AccountSummary | null {
       .then((me) => {
         if (live) {
           setSummary({
+            id: me.id,
             email: me.email,
             user_metadata: {
               full_name: me.profile.full_name ?? undefined,

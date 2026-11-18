@@ -6,9 +6,10 @@ import { getCurrentRole } from "@/app/auth/actions";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { ApiError } from "@/lib/api/errors";
+import { apiGet } from "@/lib/api/server";
 import { requireRole } from "@/lib/auth/guards";
 import type { GceRole } from "@/lib/auth/roles";
-import { createServerSupabase } from "@/lib/supabase/server";
 
 import { type ChecklistEntry, ChecklistForm, type ChecklistResult } from "../_components/checklist-form";
 
@@ -23,31 +24,23 @@ const INSPECTION_VIEWER_ROLES: GceRole[] = [
 export default async function InspectionDetailPage({ params }: { readonly params: Promise<{ id: string }> }) {
   await requireRole(INSPECTION_VIEWER_ROLES);
   const { id } = await params;
-  const supabase = await createServerSupabase();
   const role = await getCurrentRole();
 
-  const { data: inspection } = await supabase
-    .from("vehicle_inspections")
-    .select("*, vehicles(make, model, year, stock_code)")
-    .eq("id", id)
-    .single();
-
-  if (!inspection) notFound();
-
-  const insp = inspection as Record<string, unknown>;
+  let data: {
+    inspection: Record<string, unknown>;
+    checklist: Record<string, unknown>[];
+    results: Record<string, unknown>[];
+  };
+  try {
+    ({ data } = await apiGet<typeof data>(`/api/v1/staff/inspections/${encodeURIComponent(id)}`));
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) notFound();
+    throw error;
+  }
+  const { checklist, results } = data;
+  const insp = data.inspection;
   const vehicles = insp.vehicles as Record<string, unknown> | undefined;
   const conditionScore = Number(insp.condition_score);
-
-  const { data: checklist } = await supabase
-    .from("inspection_checklist_nodes")
-    .select("*")
-    .eq("active", true)
-    .order("display_order");
-
-  const { data: results } = await supabase
-    .from("inspection_checklist_results")
-    .select("*, part_replacements(*)")
-    .eq("inspection_id", id);
 
   return (
     <div className="flex flex-col gap-6">

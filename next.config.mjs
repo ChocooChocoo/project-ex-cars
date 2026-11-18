@@ -6,10 +6,19 @@ const nextConfig = {
   experimental: {
     serverActions: { bodySizeLimit: "4mb" },
   },
-  // Landing page photos: showroom media from Supabase storage, and stock photos from Unsplash.
+  // Landing page photos: public showroom media from the Laravel API's `public` disk (only /storage/**, never
+  // the signed private-file route), and stock photos from Unsplash.
   images: {
     remotePatterns: [
-      { protocol: "https", hostname: "*.supabase.co", pathname: "/storage/v1/object/public/**" },
+      (() => {
+        const api = new URL(process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000");
+        return {
+          protocol: api.protocol.replace(":", ""),
+          hostname: api.hostname,
+          port: api.port,
+          pathname: "/storage/**",
+        };
+      })(),
       { protocol: "https", hostname: "images.unsplash.com" },
     ],
   },

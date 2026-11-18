@@ -13,3 +13,8 @@ export const REMEMBER_COOKIE_PREFIX = "remember_web_";
 export function isForwardedCookie(name: string): boolean {
   return name === SESSION_COOKIE || name === XSRF_COOKIE || name.startsWith(REMEMBER_COOKIE_PREFIX);
 }
+
+/** Public file on Laravel's `public` disk (showroom media, avatars), served at {API}/storage/{bucket}/{path}. */
+export function publicStorageUrl(bucket: "showroom-media" | "avatars", path: string): string {
+  return `${apiBaseUrl()}/storage/${bucket}/${path.replace(/^\/+/, "")}`;
+}

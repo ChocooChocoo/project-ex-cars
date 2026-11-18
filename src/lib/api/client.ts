@@ -24,7 +24,9 @@ export async function browserApi<T>(
   const headers: Record<string, string> = { Accept: "application/json", "X-Requested-With": "XMLHttpRequest" };
   const xsrf = readXsrf();
   if (xsrf && method !== "GET") headers["X-XSRF-TOKEN"] = xsrf;
-  if (body !== undefined) headers["Content-Type"] = "application/json";
+  // FormData (file uploads) sets its own multipart boundary.
+  const multipart = body instanceof FormData;
+  if (body !== undefined && !multipart) headers["Content-Type"] = "application/json";
 
   let response: Response;
   try {
@@ -32,7 +34,7 @@ export async function browserApi<T>(
       method,
       headers,
       credentials: "include",
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : multipart ? (body as FormData) : JSON.stringify(body),
     });
   } catch {
     throw new ApiError(0, { message: "Laravel API unreachable" });

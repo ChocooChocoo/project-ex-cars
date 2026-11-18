@@ -69,14 +69,16 @@ async function send<T>(path: string, init: { method: string; body?: unknown }, j
   if (jar.size) headers.Cookie = [...jar].map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("; ");
   const xsrf = jar.get(XSRF_COOKIE);
   if (xsrf && init.method !== "GET") headers["X-XSRF-TOKEN"] = xsrf;
-  if (init.body !== undefined) headers["Content-Type"] = "application/json";
+  // FormData (file uploads) sets its own multipart boundary.
+  const multipart = init.body instanceof FormData;
+  if (init.body !== undefined && !multipart) headers["Content-Type"] = "application/json";
 
   let response: Response;
   try {
     response = await fetch(`${apiBaseUrl()}${path}`, {
       method: init.method,
       headers,
-      body: init.body === undefined ? undefined : JSON.stringify(init.body),
+      body: init.body === undefined ? undefined : multipart ? (init.body as FormData) : JSON.stringify(init.body),
       cache: "no-store",
       redirect: "manual",
     });
@@ -160,4 +162,21 @@ export async function relaySetCookies(setCookies: string[]): Promise<void> {
     if (opts.expires && new Date(opts.expires).getTime() < Date.now()) store.delete(name);
     else store.set(name, value, opts);
   }
+}
+
+/**
+ * Public, cookie-less GET for pages that are statically regenerated (the landing page). Sends no session,
+ * so it can use the Next.js data cache with `revalidate` instead of `no-store`.
+ */
+export async function apiPublicGet<T>(path: string, revalidate: number): Promise<T> {
+  if (!path.startsWith("/")) throw new Error("apiPublicGet takes a relative path");
+  let response: Response;
+  try {
+    response = await fetch(`${apiBaseUrl()}${path}`, { headers: { Accept: "application/json" }, next: { revalidate } });
+  } catch {
+    throw new ApiError(0, { message: "Laravel API unreachable" });
+  }
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new ApiError(response.status, data);
+  return data as T;
 }

@@ -4,32 +4,33 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { type VehicleMediaItem, VehicleMediaViewer } from "@/components/vehicle-media-viewer";
-import { createServerSupabase } from "@/lib/supabase/server";
-import { withoutIdentifiers } from "@/lib/vehicles/identifiers";
+import { ApiError } from "@/lib/api/errors";
+import { apiGet } from "@/lib/api/server";
 
 import { InquiryButtons } from "../_components/inquiry-buttons";
 
 export default async function VehicleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const supabase = await createServerSupabase();
-  const { data: row } = await supabase.from("vehicles").select("*").eq("id", id).single();
-  const vehicle = row ? withoutIdentifiers(row) : null;
-
-  if (vehicle?.listing_state !== "available") notFound();
-
-  const { data: media } = await supabase
-    .from("vehicle_media")
-    .select("id, media_kind, storage_path, display_order")
-    .eq("vehicle_id", id)
-    .eq("public_state", true)
-    .order("display_order", { ascending: true });
+  // Laravel answers 404 unless the car is available, and strips GCE-only fields.
+  let vehicle: Record<string, unknown>;
+  let media: VehicleMediaItem[];
+  try {
+    ({ vehicle, media } = (
+      await apiGet<{ vehicle: Record<string, unknown>; media: VehicleMediaItem[] }>(
+        `/api/v1/catalogue/vehicles/${encodeURIComponent(id)}`,
+      )
+    ).data);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) notFound();
+    throw error;
+  }
 
   const v = vehicle as Record<string, unknown>;
 
   return (
     <div className="flex flex-col gap-6">
       <div className="grid gap-6 lg:grid-cols-3">
-        <VehicleMediaViewer media={(media as unknown as VehicleMediaItem[]) ?? []} />
+        <VehicleMediaViewer media={media} />
         <Card>
           <CardHeader>
             <CardTitle className="text-2xl">

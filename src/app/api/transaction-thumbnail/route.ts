@@ -1,30 +1,31 @@
 import sharp from "sharp";
 
+import { apiBaseUrl } from "@/lib/api/config";
+
 export const runtime = "nodejs";
 
 const MAX_SOURCE_BYTES = 20 * 1024 * 1024;
 const PRIVATE_HEADERS = { "Cache-Control": "private, no-store" };
-const IMAGE_PATH = /^\/storage\/v1\/object\/sign\/(transaction-documents|message-attachments)\/.+\.(jpe?g|png|webp)$/i;
+// Only Laravel's signed private-file route, and only image files in the two buckets that have previews.
+const IMAGE_PATH = /^\/api\/v1\/files\/(transaction-documents|message-attachments)\/.+\.(jpe?g|png|webp)$/i;
 
 function unavailable(status: number) {
   return new Response("Preview unavailable", { status, headers: PRIVATE_HEADERS });
 }
 
 export async function GET(request: Request) {
-  const projectUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!projectUrl) return unavailable(503);
-
   let source: URL;
   try {
     source = new URL(new URL(request.url).searchParams.get("src") ?? "");
     const decodedPath = decodeURIComponent(source.pathname);
     if (
-      source.origin !== new URL(projectUrl).origin ||
+      source.origin !== new URL(apiBaseUrl()).origin ||
       source.username ||
       source.password ||
       !IMAGE_PATH.test(source.pathname) ||
       decodedPath.split("/").some((part) => part === "." || part === "..") ||
-      !source.searchParams.get("token")
+      !source.searchParams.get("signature") ||
+      !source.searchParams.get("expires")
     ) {
       return unavailable(400);
     }
@@ -33,7 +34,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Storage validates the existing bearer token on every request. Never use an admin key or cache past its expiry.
+    // Laravel checks the signature and expiry on every request. Never add credentials or cache past its expiry.
     const response = await fetch(source.href, {
       cache: "no-store",
       redirect: "error",

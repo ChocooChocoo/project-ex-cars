@@ -4,24 +4,15 @@ import { revalidatePath } from "next/cache";
 
 import { z } from "zod";
 
-import type { InquiryThreadData } from "@/components/inquiries/types";
+import type { InquiryRecord, InquiryThreadData } from "@/components/inquiries/types";
+import { ApiError, errorMessage as apiErrorMessage } from "@/lib/api/errors";
+import { apiGet, apiWrite } from "@/lib/api/server";
 import { authorizeAction } from "@/lib/auth/action-guard";
 import { type ActionResult, failure, notAuthenticated, notFound } from "@/lib/auth/action-result";
 import { getProfileAutoFill } from "@/lib/autofill";
-import {
-  type AttachmentMeta,
-  attachmentError,
-  attachmentMimeType,
-  MESSAGE_ATTACHMENT_TYPES,
-  MESSAGE_ATTACHMENTS_BUCKET,
-  type SignedAttachment,
-} from "@/lib/inquiries/attachments";
-import { signAttachments, withSignedMessageAttachments } from "@/lib/inquiries/attachments-server";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { createServerSupabase, createServerSupabaseClient } from "@/lib/supabase/server";
+import { attachmentError, attachmentMimeType, type SignedAttachment } from "@/lib/inquiries/attachments";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createInquirySchema, scheduleArrangementSchema, sendMessageSchema } from "@/lib/validation/inquiries";
-
-import { randomUUID } from "node:crypto";
 
 export async function createInquiry(formData: FormData) {
   const authorization = await authorizeAction(["customer"]);
@@ -53,190 +44,59 @@ export async function createInquiry(formData: FormData) {
 }
 
 export async function getInquiryThread(inquiryId: string): Promise<ActionResult<InquiryThreadData>> {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return notAuthenticated();
-
-  const { data: inquiry, error: inquiryError } = await supabase
-    .from("inquiries")
-    .select("*, vehicles(make, model, year, stock_code)")
-    .eq("id", inquiryId)
-    .eq("customer_id", user.user.id)
-    .maybeSingle();
-
-  if (inquiryError) return failure("load_failed", "Could not load this inquiry.");
-  if (!inquiry) return notFound("Inquiry");
-
-  const { data: messages, error: messagesError } = await supabase
-    .from("inquiry_messages")
-    .select("*, message_attachments(*)")
-    .eq("inquiry_id", inquiryId)
-    .order("sent_at", { ascending: true });
-  if (messagesError) return failure("load_failed", "Could not load this conversation.");
-
-  const { data: arrangement, error: arrangementError } = await supabase
-    .from("viewing_arrangements")
-    .select("*")
-    .eq("inquiry_id", inquiryId)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (arrangementError) return failure("load_failed", "Could not load this conversation.");
-
-  return {
-    ok: true,
-    data: {
-      inquiry: inquiry as Record<string, unknown>,
-      messages: await withSignedMessageAttachments((messages as Record<string, unknown>[]) ?? []),
-      arrangement: arrangement as Record<string, unknown> | null,
-    },
-  };
+  return loadThread(inquiryId);
 }
 
-// T03 C16: step 1 of sending a file. Checks the sender can read the thread, then returns a signed
-// upload URL in the thread's folder; the browser uploads straight to storage.
-export async function prepareMessageAttachment(
-  inquiryId: string,
-  file: AttachmentMeta,
-): Promise<{ error: string } | { path: string; token: string }> {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
-  if (!z.string().uuid().safeParse(inquiryId).success) return { error: "Invalid conversation." };
-
-  const fileError = attachmentError(file);
-  if (fileError) return { error: fileError };
-
-  const { data: inquiry } = await supabase.from("inquiries").select("id").eq("id", inquiryId).maybeSingle();
-  if (!inquiry) return { error: "You cannot send files in this conversation." };
-
-  const path = `${inquiryId}/${randomUUID()}.${MESSAGE_ATTACHMENT_TYPES[attachmentMimeType(file)]}`;
-  const { data, error } = await createAdminClient()
-    .storage.from(MESSAGE_ATTACHMENTS_BUCKET)
-    .createSignedUploadUrl(path);
-  if (error || !data) return { error: error?.message ?? "Could not prepare the upload." };
-  return { path: data.path, token: data.token };
-}
-
-const attachmentFieldsSchema = z.object({
-  attachment_path: z.string().min(1),
-  attachment_name: z.string().trim().min(1).max(200),
-  attachment_type: z.string(),
-  attachment_size: z.coerce.number().int(),
-});
-
-// Step 2: the message, with the already uploaded file when there is one. Errors come back to the UI.
+// T03 C16: the message, with its file when there is one, in one multipart request. Laravel stores the
+// file under the thread's folder (it picks the name), checks type and size, and signs the link it returns.
 export async function sendMessageWithAttachment(
   formData: FormData,
-): Promise<{ error: string } | { success: true; attachment: SignedAttachment | null }> {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
-
+): Promise<{ error: string } | { success: true; message: InquiryRecord; attachment: SignedAttachment | null }> {
   const parsed = sendMessageSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid message." };
   }
-
   const inquiryId = parsed.data.inquiry_id;
   const text = parsed.data.message_text || "";
-  const hasFile = !!formData.get("attachment_path");
+  const file = formData.get("attachment");
+  const hasFile = file instanceof File && file.size > 0;
   if (!text.trim() && !hasFile) return { error: "Message cannot be empty" };
-
-  let file: z.infer<typeof attachmentFieldsSchema> | null = null;
   if (hasFile) {
-    const fields = attachmentFieldsSchema.safeParse(Object.fromEntries(formData));
-    if (!fields.success || !fields.data.attachment_path.startsWith(`${inquiryId}/`)) {
-      return { error: "Invalid attachment. Please attach the file again." };
-    }
-    const fileError = attachmentError({
-      name: fields.data.attachment_name,
-      type: fields.data.attachment_type,
-      size: fields.data.attachment_size,
-    });
+    const fileError = attachmentError({ name: file.name, type: attachmentMimeType(file), size: file.size });
     if (fileError) return { error: fileError };
-    file = fields.data;
-  }
-  const removeUpload = async () => {
-    if (file) await createAdminClient().storage.from(MESSAGE_ATTACHMENTS_BUCKET).remove([file.attachment_path]);
-  };
-
-  const { data: message, error } = await supabase
-    .from("inquiry_messages")
-    .insert({
-      inquiry_id: inquiryId,
-      sender_id: user.user.id,
-      message_text: text || null,
-    })
-    .select("id")
-    .single();
-
-  if (error) {
-    await removeUpload();
-    return { error: error.message };
   }
 
-  let attachment: SignedAttachment | null = null;
-  if (file) {
-    const { data: row, error: attachmentInsertError } = await supabase
-      .from("message_attachments")
-      .insert({
-        message_id: message.id,
-        file_kind: file.attachment_type.startsWith("image/") ? "image" : "file",
-        storage_path: file.attachment_path,
-        original_name: file.attachment_name,
-        file_size: file.attachment_size,
-        uploader_id: user.user.id,
-      })
-      .select("*")
-      .single();
-    if (attachmentInsertError || !row) {
-      await removeUpload();
-      return {
-        error: `Your message was sent, but the file was not: ${attachmentInsertError?.message ?? "unknown error"}`,
-      };
-    }
-    [attachment] = await signAttachments([row as Record<string, unknown>]);
+  const body = new FormData();
+  body.set("message_text", text);
+  if (hasFile) body.set("attachment", file);
+  try {
+    const { data } = await apiWrite<{ message: InquiryRecord; attachment: SignedAttachment | null }>(
+      "POST",
+      `/api/v1/inquiries/${encodeURIComponent(inquiryId)}/messages`,
+      body,
+    );
+    revalidatePath(`/inquiries/${inquiryId}`);
+    revalidatePath(`/dashboard/inquiries/${inquiryId}`);
+    return { success: true, message: data.message, attachment: data.attachment };
+  } catch (error) {
+    return { error: apiErrorMessage(error) };
   }
-
-  revalidatePath(`/inquiries/${inquiryId}`);
-  revalidatePath(`/dashboard/inquiries/${inquiryId}`);
-  return { success: true, attachment };
-}
-
-// A file another participant just sent (realtime): read under RLS, then signed.
-export async function getMessageAttachment(attachmentId: string): Promise<SignedAttachment | null> {
-  if (!z.string().uuid().safeParse(attachmentId).success) return null;
-  const supabase = await createServerSupabaseClient();
-  const { data: row } = await supabase.from("message_attachments").select("*").eq("id", attachmentId).maybeSingle();
-  if (!row) return null;
-  const [attachment] = await signAttachments([row as Record<string, unknown>]);
-  return attachment ?? null;
 }
 
 export async function sendMessage(formData: FormData) {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
-
   const parsed = sendMessageSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid message." };
   }
-
   const inquiryId = parsed.data.inquiry_id;
   const text = parsed.data.message_text || "";
-
   if (!text?.trim()) return { error: "Message cannot be empty" };
 
-  const { error } = await supabase.from("inquiry_messages").insert({
-    inquiry_id: inquiryId,
-    sender_id: user.user.id,
-    message_text: text,
-  });
-
-  if (error) return { error: error.message };
-
+  try {
+    await apiWrite("POST", `/api/v1/inquiries/${encodeURIComponent(inquiryId)}/messages`, { message_text: text });
+  } catch (error) {
+    return { error: apiErrorMessage(error) };
+  }
   revalidatePath(`/inquiries/${inquiryId}`);
   revalidatePath(`/dashboard/inquiries/${inquiryId}`);
   return { success: true };
@@ -393,74 +253,48 @@ export async function acceptHandoff(inquiryId: string) {
 }
 
 export async function markMessagesRead(inquiryId: string) {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return;
-
-  await supabase
-    .from("inquiry_messages")
-    .update({ read_at: new Date().toISOString() })
-    .eq("inquiry_id", inquiryId)
-    .neq("sender_id", user.user.id)
-    .is("read_at", null);
-
-  revalidatePath("/inquiries");
-  revalidatePath("/dashboard/inquiries");
+  let marked = 0;
+  try {
+    ({ marked } = (
+      await apiWrite<{ marked: number }>("POST", `/api/v1/inquiries/${encodeURIComponent(inquiryId)}/read`)
+    ).data);
+  } catch {
+    return;
+  }
+  // Revalidating refreshes the open page; doing it when nothing changed re-mounts the thread and loops.
+  if (marked > 0) {
+    revalidatePath("/inquiries");
+    revalidatePath("/dashboard/inquiries");
+  }
 }
 
-// Read-only; same constraint as getTotalUnreadCount.
 export async function getUnreadCount(inquiryId: string): Promise<number> {
-  const supabase = await createServerSupabase();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return 0;
-
-  const { count } = await supabase
-    .from("inquiry_messages")
-    .select("*", { count: "exact", head: true })
-    .eq("inquiry_id", inquiryId)
-    .neq("sender_id", user.user.id)
-    .is("read_at", null);
-
-  return count ?? 0;
+  try {
+    const { data } = await apiGet<{ unread_by_inquiry: Record<string, number> }>("/api/v1/inquiries");
+    return data.unread_by_inquiry[inquiryId] ?? 0;
+  } catch {
+    return 0;
+  }
 }
 
-// Read-only, and awaited during the staff layout render for the sidebar badge, so it must
-// use the read-only client — a lazy token refresh here would attempt a cookie write during
-// a Server Component render, which Next.js rejects.
+// Awaited during the staff layout render for the sidebar badge: a GET only, so it never writes cookies.
 export async function getTotalUnreadCount(): Promise<number> {
-  const supabase = await createServerSupabase();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return 0;
-
-  const { data: roles } = await supabase.rpc("get_user_roles");
-  const hasRole = (roles as { role: string }[] | undefined)?.some((r) =>
-    ["ceo", "account_manager", "sales_manager"].includes(r.role),
-  );
-  if (!hasRole) return 0;
-
-  const { count } = await supabase
-    .from("inquiry_messages")
-    .select("*", { count: "exact", head: true })
-    .neq("sender_id", user.user.id)
-    .is("read_at", null);
-
-  return count ?? 0;
+  try {
+    return (await apiGet<{ count: number }>("/api/v1/inquiries/unread-count")).data.count;
+  } catch {
+    return 0;
+  }
 }
 
 export async function reportMessage(inquiryId: string, messageId: string, reason: string) {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
-
-  const { error } = await supabase.from("message_reports").insert({
-    reported_message_id: messageId || null,
-    reported_inquiry_id: inquiryId,
-    reporter_id: user.user.id,
-    reason,
-  });
-
-  if (error) return { error: error.message };
-
+  try {
+    await apiWrite("POST", `/api/v1/inquiries/${encodeURIComponent(inquiryId)}/reports`, {
+      message_id: messageId || null,
+      reason,
+    });
+  } catch (error) {
+    return { error: apiErrorMessage(error) };
+  }
   return { success: true };
 }
 
@@ -486,4 +320,17 @@ export async function reviewReport(reportId: string, decision: string) {
 
   revalidatePath("/dashboard/inquiries/reports");
   return { success: true };
+}
+
+/** One thread for whoever is signed in; Laravel applies InquiryPolicy (another customer's thread is a 404). */
+export async function loadThread(inquiryId: string): Promise<ActionResult<InquiryThreadData>> {
+  if (!z.string().uuid().safeParse(inquiryId).success) return failure("validation_error", "Invalid inquiry.");
+  try {
+    const { data } = await apiGet<InquiryThreadData>(`/api/v1/inquiries/${encodeURIComponent(inquiryId)}`);
+    return { ok: true, data: { inquiry: data.inquiry, messages: data.messages, arrangement: data.arrangement } };
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return notFound("Inquiry");
+    if (error instanceof ApiError && error.status === 401) return notAuthenticated();
+    return failure("load_failed", "Could not load this conversation.");
+  }
 }

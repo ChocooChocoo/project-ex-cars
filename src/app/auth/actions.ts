@@ -13,7 +13,6 @@ import { authorizeAction } from "@/lib/auth/action-guard";
 import { EMPLOYEE_ROLES } from "@/lib/auth/roles";
 import { getSession } from "@/lib/auth/session";
 import { landingPath } from "@/lib/routing/paths";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { MAX_UPLOAD_BYTES } from "@/lib/uploads/compress-image";
 import { emailSchema, fullNameSchema, newPasswordSchema, passwordSchema } from "@/lib/validation/forms";
 import { changePasswordSchema, ownProfileSchema, profileAddressColumns } from "@/lib/validation/profile";
@@ -278,29 +277,22 @@ export async function changeOwnPassword(formData: FormData): Promise<{ error: st
   return { success: true };
 }
 
-// Test sheet #4 (C15): own profile photo, stored at avatars/<user id>/ (storage rules allow only that folder).
-const AVATAR_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
-const AVATAR_MAX_BYTES = MAX_UPLOAD_BYTES;
+// Test sheet #4 (C15): own profile photo. Laravel stores it under avatars/<user id>/, sniffs the type, enforces
+// the 2 MB cap and removes the previous photo. The quick checks here keep the existing messages.
+const AVATAR_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
-function avatarPath(url: string | null | undefined) {
-  const marker = "/storage/v1/object/public/avatars/";
-  const at = url?.indexOf(marker) ?? -1;
-  return url && at >= 0 ? decodeURIComponent(url.slice(at + marker.length)) : null;
-}
-
-async function saveOwnAvatar(avatarUrl: string | null): Promise<{ error: string } | { success: true }> {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
-
-  const { data: profile } = await supabase.from("profiles").select("avatar_url").eq("id", user.user.id).maybeSingle();
-  const { error } = await supabase.from("profiles").update({ avatar_url: avatarUrl }).eq("id", user.user.id);
-  if (error) return { error: error.message };
-  await supabase.auth.updateUser({ data: { avatar_url: avatarUrl } });
-
-  const oldPath = avatarPath(profile?.avatar_url);
-  if (oldPath) await supabase.storage.from("avatars").remove([oldPath]);
-
+async function avatarRequest(
+  method: "POST" | "DELETE",
+  body?: FormData,
+): Promise<{ error: string } | { success: true }> {
+  try {
+    await apiWrite(method, "/api/v1/me/avatar", body);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) return { error: "Not authenticated" };
+    if (error instanceof ApiError && error.status === 422)
+      return { error: "The photo could not be uploaded. Please try again." };
+    return { error: errorMessage(error) };
+  }
   revalidatePath("/profile");
   revalidatePath("/my-profile");
   return { success: true };
@@ -309,26 +301,15 @@ async function saveOwnAvatar(avatarUrl: string | null): Promise<{ error: string 
 export async function updateOwnAvatar(formData: FormData): Promise<{ error: string } | { success: true }> {
   const file = formData.get("avatar");
   if (!(file instanceof File) || file.size === 0) return { error: "Choose a photo to upload." };
-  const ext = AVATAR_TYPES[file.type];
-  if (!ext) return { error: "Use a JPG, PNG or WebP photo." };
-  if (file.size > AVATAR_MAX_BYTES) return { error: "The photo must be 2 MB or smaller." };
-
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
-
-  const path = `${user.user.id}/avatar-${Date.now()}.${ext}`;
-  const bucket = supabase.storage.from("avatars");
-  const { error } = await bucket.upload(path, file, { contentType: file.type });
-  if (error) return { error: "The photo could not be uploaded. Please try again." };
-
-  const result = await saveOwnAvatar(bucket.getPublicUrl(path).data.publicUrl);
-  if ("error" in result) await bucket.remove([path]);
-  return result;
+  if (!AVATAR_TYPES.has(file.type)) return { error: "Use a JPG, PNG or WebP photo." };
+  if (file.size > MAX_UPLOAD_BYTES) return { error: "The photo must be 2 MB or smaller." };
+  const body = new FormData();
+  body.set("avatar", file);
+  return avatarRequest("POST", body);
 }
 
 export async function removeOwnAvatar(): Promise<{ error: string } | { success: true }> {
-  return saveOwnAvatar(null);
+  return avatarRequest("DELETE");
 }
 
 // Test sheet #4 (C15): a customer changes their sign-in email. Laravel emails a signed confirmation link

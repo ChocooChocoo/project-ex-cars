@@ -1,0 +1,262 @@
+{
+  "inputs": [
+    {
+      "id": "a",
+      "current_price": 850000,
+      "condition": "used",
+      "mileage": 42000,
+      "fuel_type": "Gasoline",
+      "make": "Toyota",
+      "model": "Vios",
+      "body_type": "Sedan",
+      "inspection_score": 82,
+      "favourite_count": 3,
+      "inquiry_count": 2
+    },
+    {
+      "id": "b",
+      "current_price": 1250000,
+      "condition": "certified",
+      "mileage": 15000,
+      "fuel_type": "Diesel",
+      "make": "Ford",
+      "model": "Ranger",
+      "body_type": "Pickup",
+      "inspection_score": null,
+      "favourite_count": 0,
+      "inquiry_count": 7
+    },
+    {
+      "id": "c",
+      "current_price": 2100000,
+      "condition": "new",
+      "mileage": 0,
+      "fuel_type": "Hybrid",
+      "make": "Toyota",
+      "model": "Corolla Cross",
+      "body_type": "SUV",
+      "inspection_score": 99,
+      "favourite_count": 12,
+      "inquiry_count": 1
+    },
+    {
+      "id": "d",
+      "current_price": null,
+      "condition": null,
+      "mileage": null,
+      "fuel_type": null,
+      "make": null,
+      "model": null,
+      "body_type": null,
+      "inspection_score": null,
+      "favourite_count": 0,
+      "inquiry_count": 0
+    },
+    {
+      "id": "e",
+      "current_price": 999999.99,
+      "condition": "Used",
+      "mileage": 250000,
+      "fuel_type": "electric",
+      "make": "BYD",
+      "model": "Dolphin",
+      "body_type": "Hatchback",
+      "inspection_score": 55.5,
+      "favourite_count": 1,
+      "inquiry_count": 0
+    },
+    {
+      "id": "f",
+      "current_price": 4000000,
+      "condition": "used",
+      "mileage": 1000,
+      "fuel_type": "lpg",
+      "make": "X",
+      "model": "Y",
+      "body_type": "Van",
+      "inspection_score": 70,
+      "favourite_count": 0,
+      "inquiry_count": 0
+    },
+    {
+      "id": "g",
+      "current_price": 850000,
+      "condition": "used",
+      "mileage": 42000,
+      "fuel_type": "Gasoline",
+      "make": "Toyota",
+      "model": "Vios",
+      "body_type": "Sedan",
+      "inspection_score": 82,
+      "favourite_count": 3,
+      "inquiry_count": 2
+    }
+  ],
+  "cases": [
+    {
+      "budget": 1000000,
+      "expected": [
+        {
+          "vehicleId": "b",
+          "budgetScore": 75,
+          "conditionScore": 85,
+          "fuelScore": 70,
+          "demandScore": 35,
+          "mileageScore": 92.5,
+          "totalScore": 72.5,
+          "rank": 1
+        },
+        {
+          "vehicleId": "a",
+          "budgetScore": 85,
+          "conditionScore": 73.5,
+          "fuelScore": 55,
+          "demandScore": 40,
+          "mileageScore": 79,
+          "totalScore": 70.28,
+          "rank": 2
+        },
+        {
+          "vehicleId": "g",
+          "budgetScore": 85,
+          "conditionScore": 73.5,
+          "fuelScore": 55,
+          "demandScore": 40,
+          "mileageScore": 79,
+          "totalScore": 70.28,
+          "rank": 2
+        },
+        {
+          "vehicleId": "e",
+          "budgetScore": 100,
+          "conditionScore": 60.25,
+          "fuelScore": 100,
+          "demandScore": 10,
+          "mileageScore": 0,
+          "totalScore": 66.56,
+          "rank": 3
+        },
+        {
+          "vehicleId": "d",
+          "budgetScore": 0,
+          "conditionScore": 50,
+          "fuelScore": 40,
+          "demandScore": 0,
+          "mileageScore": 50,
+          "totalScore": 23.5,
+          "rank": 4
+        }
+      ]
+    },
+    {
+      "budget": 1500000,
+      "expected": [
+        {
+          "vehicleId": "c",
+          "budgetScore": 60,
+          "conditionScore": 99.5,
+          "fuelScore": 85,
+          "demandScore": 100,
+          "mileageScore": 100,
+          "totalScore": 83.63,
+          "rank": 1
+        },
+        {
+          "vehicleId": "b",
+          "budgetScore": 83.33,
+          "conditionScore": 85,
+          "fuelScore": 70,
+          "demandScore": 35,
+          "mileageScore": 92.5,
+          "totalScore": 75.42,
+          "rank": 2
+        },
+        {
+          "vehicleId": "a",
+          "budgetScore": 56.67,
+          "conditionScore": 73.5,
+          "fuelScore": 55,
+          "demandScore": 40,
+          "mileageScore": 79,
+          "totalScore": 60.36,
+          "rank": 3
+        },
+        {
+          "vehicleId": "g",
+          "budgetScore": 56.67,
+          "conditionScore": 73.5,
+          "fuelScore": 55,
+          "demandScore": 40,
+          "mileageScore": 79,
+          "totalScore": 60.36,
+          "rank": 3
+        },
+        {
+          "vehicleId": "e",
+          "budgetScore": 66.67,
+          "conditionScore": 60.25,
+          "fuelScore": 100,
+          "demandScore": 10,
+          "mileageScore": 0,
+          "totalScore": 54.9,
+          "rank": 4
+        },
+        {
+          "vehicleId": "d",
+          "budgetScore": 0,
+          "conditionScore": 50,
+          "fuelScore": 40,
+          "demandScore": 0,
+          "mileageScore": 50,
+          "totalScore": 23.5,
+          "rank": 5
+        }
+      ]
+    },
+    {
+      "budget": 600000,
+      "expected": [
+        {
+          "vehicleId": "a",
+          "budgetScore": 58.33,
+          "conditionScore": 73.5,
+          "fuelScore": 55,
+          "demandScore": 40,
+          "mileageScore": 79,
+          "totalScore": 60.94,
+          "rank": 1
+        },
+        {
+          "vehicleId": "g",
+          "budgetScore": 58.33,
+          "conditionScore": 73.5,
+          "fuelScore": 55,
+          "demandScore": 40,
+          "mileageScore": 79,
+          "totalScore": 60.94,
+          "rank": 1
+        },
+        {
+          "vehicleId": "e",
+          "budgetScore": 33.33,
+          "conditionScore": 60.25,
+          "fuelScore": 100,
+          "demandScore": 10,
+          "mileageScore": 0,
+          "totalScore": 43.23,
+          "rank": 2
+        },
+        {
+          "vehicleId": "d",
+          "budgetScore": 0,
+          "conditionScore": 50,
+          "fuelScore": 40,
+          "demandScore": 0,
+          "mileageScore": 50,
+          "totalScore": 23.5,
+          "rank": 3
+        }
+      ]
+    }
+  ]
+}

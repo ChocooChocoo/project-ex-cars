@@ -5,8 +5,9 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 
 import { GET } from "./route";
 
-const origin = "https://project.supabase.co";
-const source = `${origin}/storage/v1/object/sign/transaction-documents/car.jpg?token=example`;
+const origin = "https://api.gce.test";
+const sig = "expires=1900000000&signature=abc123";
+const source = `${origin}/api/v1/files/transaction-documents/tx/car.jpg?${sig}`;
 const fetchImage = vi.fn<typeof fetch>();
 let original: Uint8Array<ArrayBuffer>;
 
@@ -23,7 +24,7 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
-  vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", origin);
+  vi.stubEnv("NEXT_PUBLIC_API_URL", origin);
   vi.stubGlobal("fetch", fetchImage);
   fetchImage.mockReset();
   fetchImage.mockResolvedValue(new Response(original, { headers: { "Content-Type": "image/jpeg" } }));
@@ -58,13 +59,14 @@ describe("GET /api/transaction-thumbnail", () => {
   });
 
   it.each([
-    "https://attacker.test/storage/v1/object/sign/transaction-documents/car.jpg?token=example",
-    `${origin}:444/storage/v1/object/sign/transaction-documents/car.jpg?token=example`,
-    `${origin}/storage/v1/object/public/transaction-documents/car.jpg?token=example`,
-    `${origin}/storage/v1/object/sign/other-bucket/car.jpg?token=example`,
-    `${origin}/storage/v1/object/sign/transaction-documents/car.jpg`,
-    `${origin}/storage/v1/object/sign/transaction-documents/car.svg?token=example`,
-    `${origin}/storage/v1/object/sign/transaction-documents/%2e%2e%2fauth.jpg?token=example`,
+    `https://attacker.test/api/v1/files/transaction-documents/tx/car.jpg?${sig}`,
+    `${origin}:444/api/v1/files/transaction-documents/tx/car.jpg?${sig}`,
+    `${origin}/storage/transaction-documents/tx/car.jpg?${sig}`,
+    `${origin}/api/v1/files/security-evidence/tx/car.jpg?${sig}`,
+    `${origin}/api/v1/files/transaction-documents/tx/car.jpg`,
+    `${origin}/api/v1/files/transaction-documents/tx/car.jpg?signature=abc123`,
+    `${origin}/api/v1/files/transaction-documents/tx/car.svg?${sig}`,
+    `${origin}/api/v1/files/transaction-documents/%2e%2e%2fauth.jpg?${sig}`,
     "not-a-url",
   ])("rejects unapproved image source %s before fetching", async (src) => {
     const response = await GET(request(src));
