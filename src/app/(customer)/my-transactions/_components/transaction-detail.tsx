@@ -46,9 +46,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { createClient } from "@/lib/api/storage-client";
 import type { ProfileAutoFill } from "@/lib/autofill";
 import { type AddressValue, composeAddress, emptyAddressValue, provinceNameFor } from "@/lib/psgc/address";
-import { createClient } from "@/lib/supabase/client";
 import {
   activeBuyerIds,
   BUYER_ID_IMAGES,

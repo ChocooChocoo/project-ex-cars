@@ -1,9 +1,12 @@
-import { requireRole } from "@/lib/auth/guards";
+"use client";
+
+import { useRequireRole } from "@/components/auth/session-provider";
+import { PageSkeleton } from "@/components/page-skeleton";
+import { browserApi } from "@/lib/api/client";
+import { usePageData } from "@/lib/api/use-page-data";
 import { SELL_SUBMISSION_VIEWER_ROLES } from "@/lib/auth/roles";
-import { getCurrentRole } from "@/lib/auth/server-session";
-import { createServerSupabase } from "@/lib/supabase/server";
-import { withSignedTransactionDocumentUrls } from "@/lib/transactions/document-media";
-import { getConditionItemIds, resolveConditionItemLabels } from "@/lib/transactions/sell-condition-items";
+import type { SignedTransactionDocument } from "@/lib/transactions/document-media";
+import { resolveConditionItemLabels } from "@/lib/transactions/sell-condition-items";
 
 import { type SellSubmissionListing, SellSubmissionsList } from "./_components/sell-submissions-list";
 
@@ -19,19 +22,27 @@ type SubmissionRow = {
 };
 
 /**
- * Lets the field roles look at the photos and condition checklist a customer sent with a car.
- * The list RPC exists because `transactions` has no read policy for them, so the car a
- * submission concerns is otherwise unreachable; it returns nothing but the car and the
- * checklist. Submissions with neither photos nor a checklist have nothing to look at, so they
- * are left out rather than listed as empty rows.
+ * Lets the field roles look at the photos and condition checklist a customer sent with a car. Laravel returns
+ * nothing but the car, the checklist and signed photo links (was the list_field_sell_submissions RPC).
+ * Submissions with neither photos nor a checklist have nothing to look at, so they are left out.
  */
-export default async function SellSubmissionsPage() {
-  await requireRole(SELL_SUBMISSION_VIEWER_ROLES);
-  const supabase = await createServerSupabase();
-  const role = (await getCurrentRole()) ?? "customer";
-
-  const { data: rows } = await supabase.rpc("list_field_sell_submissions");
-  const submissions = (rows as SubmissionRow[] | null) ?? [];
+export default function SellSubmissionsPage() {
+  const allowed = useRequireRole(SELL_SUBMISSION_VIEWER_ROLES);
+  const page = usePageData(allowed ? "sell-submissions" : "sell-submissions:denied", () =>
+    allowed
+      ? browserApi<{
+          role: string | null;
+          submissions: SubmissionRow[];
+          photos: SignedTransactionDocument[];
+          nodeNames: Record<string, string>;
+        }>("GET", "/api/v1/staff/sell-submissions")
+      : Promise.resolve(null),
+  );
+  if (page.error) throw page.error;
+  if (!allowed || !page.data) return <PageSkeleton />;
+  const role = page.data.role ?? "customer";
+  const submissions = page.data.submissions;
+  const nodeNames = page.data.nodeNames;
 
   if (submissions.length === 0) {
     return (
@@ -42,38 +53,12 @@ export default async function SellSubmissionsPage() {
     );
   }
 
-  const transactionIds = submissions.map((row) => row.transaction_id);
-
-  const { data: documents } = await supabase
-    .from("transaction_documents")
-    .select("id, transaction_id, document_kind, storage_path")
-    .in("transaction_id", transactionIds)
-    .eq("document_kind", "sell_photo")
-    .order("upload_date", { ascending: true });
-
-  const signedDocuments = await withSignedTransactionDocumentUrls(
-    supabase.storage,
-    (documents as Record<string, unknown>[] | null) ?? [],
-  );
-
   const photosByTransaction = new Map<string, { id: string; is_image: boolean; signed_url: string | null }[]>();
-  for (const document of signedDocuments) {
+  for (const document of page.data.photos) {
     const transactionId = String(document.transaction_id);
     const bucket = photosByTransaction.get(transactionId) ?? [];
     bucket.push({ id: String(document.id), is_image: document.is_image, signed_url: document.signed_url });
     photosByTransaction.set(transactionId, bucket);
-  }
-
-  const allConditionIds = [...new Set(submissions.flatMap((row) => getConditionItemIds(row.condition_items)))];
-  let nodeNames: Record<string, string> = {};
-  if (allConditionIds.length > 0) {
-    const { data: nodes } = await supabase
-      .from("inspection_checklist_nodes")
-      .select("id, name")
-      .in("id", allConditionIds);
-    nodeNames = Object.fromEntries(
-      ((nodes as { id: string; name: string }[] | null) ?? []).map((node) => [node.id, node.name]),
-    );
   }
 
   const listings: SellSubmissionListing[] = submissions

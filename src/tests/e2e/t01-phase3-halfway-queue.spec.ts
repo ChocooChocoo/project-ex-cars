@@ -9,10 +9,10 @@ import {
   futureSlot,
   markSold,
   open,
-  recordPayment,
+  recordVerifiedPayment,
   seedPassword,
+  setCustomerAddress,
   signInAs,
-  verifyPayments,
 } from "./support/t01";
 import { archiveListedTestVehicles, canCreateTestVehicle, createTestVehicle } from "./support/test-vehicle";
 
@@ -24,12 +24,10 @@ import { archiveListedTestVehicles, canCreateTestVehicle, createTestVehicle } fr
 
 test.describe
   .serial("T01 Phase 3 halfway queue", () => {
-    test.skip(
-      !seedPassword || !canCreateTestVehicle(),
-      "SEED_USER_PASSWORD and the Supabase service role are required",
-    );
+    test.skip(!seedPassword || !canCreateTestVehicle(), "SEED_USER_PASSWORD and the local Laravel app are required");
     test.use({ actionTimeout: 60_000 });
     test.afterAll(archiveListedTestVehicles);
+    test.beforeAll(setCustomerAddress);
 
     const meetup = futureSlot();
     let firstId = "";
@@ -55,10 +53,15 @@ test.describe
 
       await open(page, `/sales_manager/transactions/${firstId}`);
       await page.getByRole("button", { name: /^Transition Reject/ }).click();
-      await expect(page.getByText("Rejected").first()).toBeVisible();
+      // T03: the transition asks for confirmation first.
+      await page.getByRole("alertdialog").getByRole("button").last().click();
+      await expect(page.getByText("Transaction moved to rejected.")).toBeVisible();
 
       await open(page, `/sales_manager/transactions/${secondId}`);
       await page.getByRole("button", { name: "Make Active" }).click();
+      const confirm = page.getByRole("alertdialog");
+      if (await confirm.isVisible({ timeout: 2_000 }).catch(() => false))
+        await confirm.getByRole("button").last().click();
       await expect(page.getByText("Pending Sales Manager Approval").first()).toBeVisible();
     });
 
@@ -67,14 +70,13 @@ test.describe
       await approveAsSalesManager(page, secondId);
       const casePath = await fieldCasePath(page);
 
-      // Scenario 2 step 6: paper contract signed at the meet-up, both copies kept, cash reported.
-      await ciClosesFieldCase(page, casePath, { cash: true, mechanicCopy: true });
+      // Payment recording and verification move to Laravel in Phase 6; a fixture records the checked cash. T10:
+      // the CI hands the papers over only after the full payment is verified, so it is recorded first.
+      await recordVerifiedPayment(secondId, 500000);
 
-      await signInAs(page, "sales_manager@gce.local");
-      await open(page, `/sales_manager/transactions/${secondId}`);
-      await recordPayment(page, "500000", "Cash", "Full payment");
-      await expect(page.getByText("Payment recorded.")).toBeVisible();
-      await verifyPayments(page, secondId);
+      // Scenario 2 step 6: paper contract signed at the meet-up, both copies kept. (The CI's "cash reported"
+      // step was removed in T10; the Head Accountant's verification replaces it.)
+      await ciClosesFieldCase(page, casePath, { mechanicCopy: true });
 
       await signInAs(page, "sales_manager@gce.local");
       await open(page, `/sales_manager/transactions/${secondId}`);

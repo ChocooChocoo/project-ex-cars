@@ -1,25 +1,31 @@
-import { createServerSupabase } from "@/lib/supabase/server";
+"use client";
+
+import { PageSkeleton } from "@/components/page-skeleton";
+import { browserApi } from "@/lib/api/client";
+import { usePageData } from "@/lib/api/use-page-data";
 
 import { buildTransactionRows, type TransactionRow } from "./_components/transactions-data";
 import { TransactionsView } from "./_components/transactions-view";
 
-export default async function MyTransactionsPage() {
-  const supabase = await createServerSupabase();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return null;
+type ReviewRow = {
+  id: string;
+  rating: number;
+  body: string;
+  created_at: string;
+  vehicles: { make: string; model: string; year: number } | null;
+};
 
-  const { data: transactions } = await supabase
-    .from("transactions")
-    .select("*, vehicles(make, model, year, stock_code)")
-    .eq("customer_id", user.user.id)
-    .order("updated_at", { ascending: false });
+export default function MyTransactionsPage() {
+  // Phase 5: Laravel returns only this customer's transactions and reviews.
+  const page = usePageData("my-transactions", () =>
+    browserApi<{ transactions: Record<string, unknown>[]; reviews: ReviewRow[] }>("GET", "/api/v1/my-transactions"),
+  );
+  if (page.error) throw page.error;
+  if (!page.data) return <PageSkeleton />;
 
-  const rows: TransactionRow[] = buildTransactionRows((transactions ?? []) as Record<string, unknown>[]);
-  const { data: reviews, error: reviewsError } = await supabase
-    .from("customer_reviews")
-    .select("id, rating, body, created_at, vehicles(make, model, year)")
-    .eq("customer_id", user.user.id)
-    .order("created_at", { ascending: false });
+  const rows: TransactionRow[] = buildTransactionRows(page.data.transactions);
+  const reviews = page.data.reviews;
+  const reviewsError = !Array.isArray(reviews);
 
   return (
     <div className="flex flex-col gap-6">

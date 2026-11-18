@@ -1,6 +1,12 @@
 import { expect as baseExpect, type Page, test } from "@playwright/test";
 
-import { recordDeliveryPayments, uploadBuyerBilling, uploadBuyerId, verifyAll } from "./support/t01";
+import {
+  recordDeliveryPayments,
+  setCustomerAddress,
+  uploadBuyerBilling,
+  uploadBuyerId,
+  verifyAll,
+} from "./support/t01";
 import { archiveListedTestVehicles, canCreateTestVehicle, createTestVehicle } from "./support/test-vehicle";
 
 // The dev server compiles each route on first use, so a refresh after a server action can take
@@ -42,11 +48,9 @@ async function pickByLabel(page: Page, label: string, option?: string) {
 
 test.describe
   .serial("T01 Phase 4 cash delivery", () => {
-    test.skip(
-      !seedPassword || !canCreateTestVehicle(),
-      "SEED_USER_PASSWORD and the Supabase service role are required",
-    );
+    test.skip(!seedPassword || !canCreateTestVehicle(), "SEED_USER_PASSWORD and the local Laravel app are required");
     test.afterAll(archiveListedTestVehicles);
+    test.beforeAll(setCustomerAddress);
 
     let txId = "";
     let fieldCasePath = "";
@@ -68,7 +72,6 @@ test.describe
       await page.locator("#schedule-date").fill("2031-08-20");
       await page.locator("#schedule-hour").click();
       await page.getByRole("option", { name: "10:00 AM", exact: true }).click();
-      await page.locator("#location").fill("123 Rizal St, Calamba, Laguna");
       await page.getByLabel(/I have reviewed this car's condition/).check();
       // Buying-flow revision Phase 4: the buyer agrees to the delivery terms notice.
       await page.locator("#agree-delivery-terms").check();
@@ -82,6 +85,8 @@ test.describe
     test("Sales Manager approves and confirms the delivery terms", async ({ page }) => {
       await signInAs(page, "sales_manager@gce.local");
       await page.goto(`/sales_manager/transactions/${txId}`);
+      // The page loads in the browser (skeleton first), so wait for the documents before counting them.
+      await expect(page.getByRole("button", { name: "Verify", exact: true }).first()).toBeVisible();
       await verifyAll(page, await page.getByRole("button", { name: "Verify", exact: true }).count());
       await page.getByRole("button", { name: /^Transition Approve/ }).click();
       await page.getByRole("alertdialog").getByRole("button", { name: "Approve", exact: true }).click();
@@ -134,15 +139,12 @@ test.describe
       }
     });
 
-    test("a legitimate decline queues the downpayment refund", async ({ page }) => {
+    // T05: once the papers are out with the CI, a cash buyer's decline is no longer offered to the Sales Manager;
+    // only "Buyer unavailable" remains at Arriving. (The legit-decline refund is covered by the backend RulesTest.)
+    test("with the papers out, the Sales Manager can only record the buyer as unavailable", async ({ page }) => {
       await signInAs(page, "sales_manager@gce.local");
       await page.goto(`/sales_manager/transactions/${txId}`);
-      await page.getByRole("button", { name: /Declined — Legit/ }).click();
-      await expect(page.getByText("Declined by Buyer").first()).toBeVisible();
-
-      await signInAs(page, "head_accountant@gce.local");
-      await page.goto("/head_accountant/finance");
-      await page.getByRole("tab", { name: /Disbursements/ }).click();
-      await expect(page.getByText("Downpayment refund").first()).toBeVisible();
+      await expect(page.getByText("Arriving").first()).toBeVisible();
+      await expect(page.getByRole("button", { name: /Declined — Legit/ })).toHaveCount(0);
     });
   });

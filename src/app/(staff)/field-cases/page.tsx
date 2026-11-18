@@ -1,11 +1,14 @@
-import { redirect } from "next/navigation";
+"use client";
 
-import { getCurrentRole } from "@/lib/auth/server-session";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { useRequireRole } from "@/components/auth/session-provider";
+import { PageSkeleton } from "@/components/page-skeleton";
+import { browserApi } from "@/lib/api/client";
+import { usePageData } from "@/lib/api/use-page-data";
+import type { GceRole } from "@/lib/auth/roles";
 
 import { type FieldCaseRow, FieldCasesClient } from "./_components/field-cases-client";
 
-const FIELD_CASE_ROLES = [
+const FIELD_CASE_ROLES: GceRole[] = [
   "ceo",
   "confidential_informant",
   "sales_manager",
@@ -38,44 +41,39 @@ export function splitFieldCaseWorkers(directory: unknown): {
   };
 }
 
-export default async function FieldCasesPage() {
-  const role = await getCurrentRole();
-  if (!role || !FIELD_CASE_ROLES.includes(role)) {
-    redirect("/unauthorized");
-  }
+type FieldCasePickerTransaction = {
+  id: string;
+  transaction_kind: string;
+  current_state: string;
+  profiles: { full_name: string | null } | null;
+  vehicles: { id: string; make: string; model: string; year: number; stock_code: string } | null;
+};
 
-  const supabase = await createServerSupabase();
-  const [{ data: cases }, { data: userData }] = await Promise.all([
-    supabase.from("field_cases").select("*").order("created_at", { ascending: false }),
-    supabase.auth.getUser(),
-  ]);
-  const currentUserId = userData.user?.id ?? null;
-
-  // Role assignments live in private.user_roles, outside the exposed API schemas, so
-  // the worker directory comes from the guarded SECURITY DEFINER function instead of
-  // get_all_user_roles() — which raises 'Permission denied' for every role except the
-  // CEO and Account Manager, and left this dropdown empty for the other three roles
-  // that can create field cases.
-  const [{ data: workerDirectory }, { data: transactions }, { data: vehicles }] = await Promise.all([
-    supabase.rpc("list_field_case_workers"),
-    supabase
-      .from("transactions")
-      .select("id, transaction_kind, current_state, profiles(full_name), vehicles(id, make, model, year, stock_code)")
-      .order("opened_at", { ascending: false })
-      .limit(100),
-    supabase
-      .from("vehicles")
-      .select("id, make, model, year, stock_code")
-      .order("created_at", { ascending: false })
-      .limit(100),
-  ]);
-
-  const { informants, mechanics } = splitFieldCaseWorkers(workerDirectory);
+export default function FieldCasesPage() {
+  const allowed = useRequireRole(FIELD_CASE_ROLES);
+  // Phase 5: Laravel returns the cases this role may read (FieldCasePolicy), the guarded worker directory and
+  // the latest 100 transactions and cars for the create dialog.
+  const page = usePageData(allowed ? "field-cases" : "field-cases:denied", () =>
+    allowed
+      ? browserApi<{
+          role: string;
+          currentUserId: string;
+          cases: FieldCaseRow[];
+          workers: FieldCaseWorker[];
+          transactions: FieldCasePickerTransaction[];
+          vehicles: { id: string; make: string; model: string; year: number; stock_code: string }[];
+        }>("GET", "/api/v1/staff/field-cases")
+      : Promise.resolve(null),
+  );
+  if (page.error) throw page.error;
+  if (!allowed || !page.data) return <PageSkeleton />;
+  const { role, currentUserId, cases, transactions, vehicles } = page.data;
+  const { informants, mechanics } = splitFieldCaseWorkers(page.data.workers);
 
   return (
     <div className="flex flex-col gap-4">
       <FieldCasesClient
-        cases={(cases as unknown as FieldCaseRow[]) ?? []}
+        cases={cases}
         canUpdate={FIELD_CASE_WORKERS.includes(role)}
         canCreate={FIELD_CASE_CREATORS.includes(role)}
         canAssignMechanic={["confidential_informant", "ceo"].includes(role)}
@@ -83,20 +81,8 @@ export default async function FieldCasesPage() {
         mechanics={mechanics}
         userRole={role}
         currentUserId={currentUserId}
-        transactions={
-          (transactions as
-            | {
-                id: string;
-                transaction_kind: string;
-                current_state: string;
-                profiles: { full_name: string | null } | null;
-                vehicles: { id: string; make: string; model: string; year: number; stock_code: string } | null;
-              }[]
-            | null) ?? []
-        }
-        vehicles={
-          (vehicles as { id: string; make: string; model: string; year: number; stock_code: string }[] | null) ?? []
-        }
+        transactions={transactions}
+        vehicles={vehicles}
       />
     </div>
   );

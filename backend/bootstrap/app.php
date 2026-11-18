@@ -55,6 +55,15 @@ return Application::configure(basePath: dirname(__DIR__))
                 return response()->json(['code' => 'csrf_mismatch', 'message' => 'Your session expired. Refresh the page and try again.'], 419);
             }
         });
+        // Phase 5: a row lock held by a concurrent request (lock wait timeout 1205, deadlock 1213) or a unique key
+        // the request lost to (1062) is a stable conflict for the loser, not a server error.
+        // DeadlockException (a nested transaction's deadlock) is a PDOException, not a QueryException.
+        $exceptions->render(function (\PDOException $e, Request $request) {
+            $code = (int) ($e->errorInfo[1] ?? 0);
+            if ($request->is('api/*') && (in_array($code, [1062, 1205, 1213], true) || $e->getCode() === '40001')) {
+                return response()->json(['code' => 'conflict', 'message' => 'Someone else changed this record at the same moment. Refresh and try again.'], 409);
+            }
+        });
         $exceptions->render(function (HttpException $e, Request $request) {
             if ($request->is('api/*')) {
                 $code = match ($e->getStatusCode()) {

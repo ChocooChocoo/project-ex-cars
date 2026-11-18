@@ -18,7 +18,7 @@ class TransactionPolicy
             return false;
         }
         // Staff do not see a customer's buy draft until it is submitted (00055_t02_hide_unsubmitted_buys).
-        $unsubmittedDraft = $tx->current_state === 'pending' && $tx->flow_status === null && $tx->queue_state === null && $tx->created_by === $tx->customer_id;
+        $unsubmittedDraft = $tx->transaction_kind === 'buy' && $tx->current_state === 'pending' && $tx->flow_status === null && $tx->queue_state === null && $tx->created_by === $tx->customer_id;
         if ($unsubmittedDraft) {
             return false;
         }

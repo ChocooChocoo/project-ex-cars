@@ -1,6 +1,13 @@
 import { expect as baseExpect, type Page, test } from "@playwright/test";
 
-import { papersThenSold, verifyPayments } from "./support/t01";
+import {
+  fillSlot,
+  papersThenSold,
+  recordVerifiedPayment,
+  uploadBuyerBilling,
+  uploadBuyerId,
+  verifyAll,
+} from "./support/t01";
 import { archiveListedTestVehicles, canCreateTestVehicle, createTestVehicle } from "./support/test-vehicle";
 
 // The dev server compiles each route on first use, so a refresh after a server action can take
@@ -39,6 +46,12 @@ async function signInAs(page: Page, email: string) {
     .catch(() => undefined);
 }
 
+// T03: the transition asks for confirmation first.
+async function approve(page: Page) {
+  await page.getByRole("button", { name: /^Transition Approve/ }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Approve", exact: true }).click();
+}
+
 async function pick(page: Page, combobox: string, option: string) {
   await page.locator(`#${combobox}`).click();
   await page.getByRole("option", { name: option, exact: true }).click();
@@ -54,7 +67,7 @@ async function startPurchase(page: Page, vehiclePath: string): Promise<string> {
 async function bookCashVisit(page: Page) {
   await pick(page, "payment_method", "Cash");
   await pick(page, "arrangement_kind", "GCE Visit");
-  await page.locator("#schedule").fill(slot);
+  await fillSlot(page, slot);
   await page.getByRole("button", { name: "Save Details" }).click();
   await page.waitForLoadState("networkidle");
 }
@@ -75,10 +88,7 @@ async function upload(page: Page, kind: "Valid ID" | "Proof of Billing", idType?
 
 test.describe
   .serial("T01 Phase 2 cash onsite visit", () => {
-    test.skip(
-      !seedPassword || !canCreateTestVehicle(),
-      "SEED_USER_PASSWORD and the Supabase service role are required",
-    );
+    test.skip(!seedPassword || !canCreateTestVehicle(), "SEED_USER_PASSWORD and the local Laravel app are required");
     test.afterAll(archiveListedTestVehicles);
 
     let vehiclePath = "";
@@ -90,9 +100,12 @@ test.describe
       vehiclePath = `/customer/showroom/${await createTestVehicle("ONSITE")}`;
       buyId = await startPurchase(page, vehiclePath);
 
-      await upload(page, "Valid ID", "Passport");
-      await upload(page, "Valid ID", "Driver's License");
-      await upload(page, "Proof of Billing");
+      // T10: two IDs, each front and back, and the proof of billing.
+      await uploadBuyerId(page, 0, "Passport", "Front");
+      await uploadBuyerId(page, 0, "Passport", "Back");
+      await uploadBuyerId(page, 1, "Driver's License", "Front");
+      await uploadBuyerId(page, 1, "Driver's License", "Back");
+      await uploadBuyerBilling(page);
       await bookCashVisit(page);
       await expect(page.getByText(/Visit slot locked for/)).toBeVisible();
 
@@ -103,8 +116,22 @@ test.describe
     test("a second request cannot take the locked slot", async ({ page }) => {
       await signInAs(page, "customer@gce.local");
       rivalId = await startPurchase(page, vehiclePath);
-      await bookCashVisit(page);
-      await expect(page.getByText("That visit slot is already taken. Choose another time.")).toBeVisible();
+      // T04: the picker no longer offers an hour another buyer holds (Laravel sends the taken slots); the
+      // server's "slot taken" answer is covered by the backend ConcurrencyTest.
+      await pick(page, "payment_method", "Cash");
+      await pick(page, "arrangement_kind", "GCE Visit");
+      const [date, time] = slot.split("T");
+      const slotHour = Number(time.slice(0, 2));
+      await page.locator("#schedule-date").fill(date);
+      await page.locator("#schedule-hour").click();
+      await expect(page.getByRole("option").first()).toBeVisible();
+      await expect(
+        page.getByRole("option", {
+          name: `${slotHour % 12 === 0 ? 12 : slotHour % 12}:00 ${slotHour < 12 ? "AM" : "PM"}`,
+          exact: true,
+        }),
+      ).toHaveCount(0);
+      await page.keyboard.press("Escape");
     });
 
     test("Sales Manager verifies, approves and marks the car sold to this buyer", async ({ page }) => {
@@ -114,26 +141,17 @@ test.describe
 
       // Scenario 1, also try: approving before the three documents are confirmed is refused.
       await page.waitForLoadState("networkidle");
-      await page.getByRole("button", { name: /^Transition Approve/ }).click();
+      await approve(page);
       await expect(page.getByText(/Two verified valid IDs and a verified proof of billing are required/)).toBeVisible();
 
-      for (let left = 3; left > 0; left--) {
-        await page.getByRole("button", { name: "Verify", exact: true }).first().click();
-        await expect(page.getByRole("button", { name: "Verify", exact: true })).toHaveCount(left - 1, {
-          timeout: 20_000,
-        });
-      }
-      await page.getByRole("button", { name: /Approve/ }).click();
+      await verifyAll(page, 5);
+      await approve(page);
       await expect(page.getByText("Approved").first()).toBeVisible();
       await page.waitForLoadState("networkidle");
 
-      await page.locator("#pay_amount").fill("500000");
-      // Wait for each action's own toast: a "Sold" label is on the page from the start, and signing
-      // out before the actions finish drops them.
-      await page.getByRole("button", { name: "Record Payment" }).click();
-      await expect(page.getByText("Payment recorded.")).toBeVisible({ timeout: 30_000 });
-      // Buying-flow revision Phase 2: the payment is checked and the papers go through the CI first.
-      await verifyPayments(page, buyId);
+      // Payment recording and verification move to Laravel in Phase 6; until then a fixture records the
+      // checked cash payment. The papers still go through the CI first.
+      await recordVerifiedPayment(buyId, 500000);
       await papersThenSold(page, buyId, "E2E Test ONSITE");
 
       // The rival never submitted, so only the buyer can see it closed (00055).
@@ -142,7 +160,8 @@ test.describe
       await expect(page.getByText("Cancelled").first()).toBeVisible();
     });
 
-    test("Head Accountant sees the sale in the records", async ({ page }) => {
+    // The finance records page moves to Laravel in Phase 7.
+    test.fixme("Head Accountant sees the sale in the records", async ({ page }) => {
       await signInAs(page, "head_accountant@gce.local");
       await page.goto("/head_accountant/finance");
       await expect(page.getByText("Sale records")).toBeVisible();

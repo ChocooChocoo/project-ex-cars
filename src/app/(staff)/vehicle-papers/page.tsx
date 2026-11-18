@@ -1,8 +1,10 @@
-import { requireRole } from "@/lib/auth/guards";
+"use client";
+
+import { useRequireRole } from "@/components/auth/session-provider";
+import { PageSkeleton } from "@/components/page-skeleton";
+import { browserApi } from "@/lib/api/client";
+import { usePageData } from "@/lib/api/use-page-data";
 import type { GceRole } from "@/lib/auth/roles";
-import { getCurrentRole } from "@/lib/auth/server-session";
-import { previousOwnerDocuments } from "@/lib/papers/previous-owner-documents";
-import { createAdminClient } from "@/lib/supabase/admin";
 import {
   type VehiclePaperRecord,
   type VehiclePaperSource,
@@ -14,37 +16,25 @@ import { type VehiclePaperRow, VehiclePapersTable } from "./_components/vehicle-
 const VEHICLE_PAPERS_ROLES: GceRole[] = ["confidential_informant", "ceo"];
 
 /**
- * The Confidential Informant's Vehicle Papers tab: every car whose papers are on the move, with the
- * OR/CR kept from the car's own sell transaction. Only the CI reads the papers under RLS, so the list
- * and the signed documents are read with the service role, behind the role guard.
+ * The Confidential Informant's Vehicle Papers tab: every car whose papers are on the move, with the OR/CR kept
+ * from the car's own sell transaction. Phase 5: Laravel returns the handovers and a signed link to each car's
+ * registration paper, for the CI and the CEO only.
  */
-export default async function VehiclePapersPage() {
-  await requireRole(VEHICLE_PAPERS_ROLES);
-  const role = await getCurrentRole();
-  const admin = createAdminClient();
-
-  const { data: handovers } = await admin
-    .from("sale_handovers")
-    .select(
-      "transaction_id, papers_status, papers_updated_at, transactions(id, purchase_details(arrangement_kind), profiles(full_name), vehicles(id, make, model, year, stock_code))",
-    )
-    .not("papers_status", "is", null)
-    .order("papers_updated_at", { ascending: true });
-
-  const records: VehiclePaperRecord[] = ((handovers as VehiclePaperSource[] | null) ?? []).map(vehiclePaperRecord);
-
-  // The OR/CR is the original GCE kept when it bought the car, so it hangs on the car's sell transaction,
-  // not on the purchase. T11: the same lookup the field case uses, so both screens show one set of papers.
-  const orcrByVehicle = new Map<string, string>();
-  const vehicleIds = [...new Set(records.map((record) => record.vehicleId).filter((id): id is string => Boolean(id)))];
-  const papersByVehicle = await Promise.all(
-    vehicleIds.map(async (vehicleId) => [vehicleId, await previousOwnerDocuments(admin, vehicleId)] as const),
+export default function VehiclePapersPage() {
+  const allowed = useRequireRole(VEHICLE_PAPERS_ROLES);
+  const page = usePageData(allowed ? "vehicle-papers" : "vehicle-papers:denied", () =>
+    allowed
+      ? browserApi<{ role: string | null; handovers: VehiclePaperSource[]; orcrByVehicle: Record<string, string> }>(
+          "GET",
+          "/api/v1/staff/vehicle-papers",
+        )
+      : Promise.resolve(null),
   );
-  for (const [vehicleId, documents] of papersByVehicle) {
-    // The CR (or the OR, or the old combined ORCR) stands in for the registration paper; the deed is separate.
-    const registration = documents.find((document) => document.signed_url && document.document_kind !== "deed_of_sale");
-    if (registration?.signed_url) orcrByVehicle.set(vehicleId, registration.signed_url);
-  }
+  if (page.error) throw page.error;
+  if (!allowed || !page.data) return <PageSkeleton />;
+  const role = page.data.role;
+  const records: VehiclePaperRecord[] = page.data.handovers.map(vehiclePaperRecord);
+  const orcrByVehicle = new Map(Object.entries(page.data.orcrByVehicle));
 
   const tableRows: VehiclePaperRow[] = records.map((record) => ({
     transactionId: record.transactionId,

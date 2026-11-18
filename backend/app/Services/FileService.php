@@ -74,6 +74,40 @@ class FileService
         return ['path' => $path, 'mime' => $mime, 'size' => $size];
     }
 
+    /**
+     * Stores an upload at a key the server already validated or granted (Phase 5 transaction documents,
+     * whose keys are `{transaction id}/{kind}-...`). Same type and size checks as store(); the extension
+     * must match the sniffed type, and an existing file is never overwritten.
+     *
+     * @return array{path: string, mime: string, size: int}
+     */
+    public function storeAt(UploadedFile $file, string $bucket, string $path, string $field = 'file'): array
+    {
+        $this->assertBucket($bucket);
+        $size = (int) $file->getSize();
+        $mime = (string) (new \finfo(FILEINFO_MIME_TYPE))->file($file->getRealPath());
+        $allowed = $this->allowed($bucket);
+        if (! isset($allowed[$mime])) {
+            throw ValidationException::withMessages([$field => 'Files must be JPEG, PNG, WebP or PDF.']);
+        }
+        if ($size > self::MAX_BYTES) {
+            throw ValidationException::withMessages([$field => $mime === 'application/pdf'
+                ? 'This PDF is larger than 2 MB. Upload a smaller file.'
+                : 'Each file must be 2 MB or smaller.']);
+        }
+        $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        $matches = $extension === $allowed[$mime] || ($mime === 'image/jpeg' && $extension === 'jpeg');
+        if (! $matches || str_contains($path, '..') || str_starts_with($path, '/')) {
+            throw ValidationException::withMessages([$field => 'The file type does not match the upload.']);
+        }
+        if ($this->exists($bucket, $path)) {
+            throw ValidationException::withMessages([$field => 'This upload already exists.']);
+        }
+        $this->disk($bucket)->putFileAs($bucket.'/'.dirname($path), $file, basename($path));
+
+        return ['path' => $path, 'mime' => $mime, 'size' => $size];
+    }
+
     public function delete(string $bucket, ?string $path): void
     {
         if ($path) {

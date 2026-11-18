@@ -46,17 +46,15 @@ describe("sell-submission navigation", () => {
   it("guards the route with the shared viewer list", () => {
     const page = read("src/app/(staff)/sell-submissions/page.tsx");
 
-    expect(page).toContain("SELL_SUBMISSION_VIEWER_ROLES");
-    expect(page).toMatch(/await requireRole\(SELL_SUBMISSION_VIEWER_ROLES\)/);
+    expect(page).toContain("useRequireRole(SELL_SUBMISSION_VIEWER_ROLES)");
   });
 
-  it("reads submissions only through the scoped list RPC", () => {
+  it("reads submissions only through the scoped Laravel endpoint", () => {
     const page = read("src/app/(staff)/sell-submissions/page.tsx");
+    const routes = read("backend/routes/api.php");
 
-    // The RPC is the only way a field role can see the car: `transactions` has no policy for it.
-    expect(page).toMatch(/rpc\("list_field_sell_submissions"\)/);
-    expect(page).toMatch(/\.eq\("document_kind", "sell_photo"\)/);
-    // Signing stays server-side.
-    expect(page).toContain("withSignedTransactionDocumentUrls");
+    // Phase 5: Laravel returns only the car, the checklist and signed photo links (was list_field_sell_submissions).
+    expect(page).toContain('"/api/v1/staff/sell-submissions"');
+    expect(routes).toMatch(/sell-submissions'.*role:mechanic,confidential_informant/);
   });
 });

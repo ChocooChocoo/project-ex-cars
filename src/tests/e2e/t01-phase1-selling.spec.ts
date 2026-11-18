@@ -1,5 +1,7 @@
 import { expect as baseExpect, type Page, test } from "@playwright/test";
 
+import { verifyAll } from "./support/t01";
+
 // The dev server compiles each route on first use, so a refresh after a server action can take
 // longer than Playwright's default 5 s.
 const expect = baseExpect.configure({ timeout: 20_000 });
@@ -33,6 +35,16 @@ async function signInAs(page: Page, email: string) {
     .catch(() => undefined);
 }
 
+// Clicks a button and, when it asks "Are you sure", confirms in the dialog (T03 confirmations came after this spec).
+async function press(page: Page, name: string) {
+  await page.getByRole("button", { name, exact: true }).click();
+  const dialog = page.getByRole("alertdialog");
+  if (await dialog.isVisible({ timeout: 1_500 }).catch(() => false)) {
+    await dialog.getByRole("button").last().click();
+    await expect(dialog).toBeHidden();
+  }
+}
+
 async function pick(page: Page, combobox: string | RegExp, option?: string | RegExp) {
   await page.getByRole("combobox", { name: combobox }).click();
   const choice = option ? page.getByRole("option", { name: option }) : page.getByRole("option").first();
@@ -60,12 +72,16 @@ test.describe
       await page.getByLabel("There is no known issue").check();
       await pick(page, /^Meet-up method/, "GCE Visit");
       await page.getByLabel("Vehicle photos").setInputFiles(png("front.png"));
-      await page.getByLabel("Valid ID #1 *").setInputFiles(png("id-1.png"));
-      await page.getByLabel("Valid ID #2 *").setInputFiles(png("id-2.png"));
-      await page.getByLabel("ORCR *").setInputFiles(png("orcr.png"));
-      await page.getByLabel("Deed of Sale *").setInputFiles(png("deed.png"));
+      // T10: two IDs, each front and back (the ID type unlocks its file inputs), then the OR, the CR and the deed.
       await pick(page, "ID type #1", "Passport");
       await pick(page, "ID type #2", "Driver's License");
+      for (const n of [1, 2]) {
+        await page.getByLabel(`Front of ID #${n}`).setInputFiles(png(`id-${n}-front.png`));
+        await page.getByLabel(`Back of ID #${n}`).setInputFiles(png(`id-${n}-back.png`));
+      }
+      await page.getByLabel("Official Receipt (OR) *").setInputFiles(png("or.png"));
+      await page.getByLabel("Certificate of Registration (CR) *").setInputFiles(png("cr.png"));
+      await page.getByLabel("Deed of Sale *").setInputFiles(png("deed.png"));
       await page.getByRole("button", { name: "Submit Vehicle", exact: true }).click();
 
       await page.waitForURL(/\/my-transactions\/[0-9a-f-]{36}/, { timeout: 30_000 });
@@ -79,13 +95,11 @@ test.describe
       await page.goto(`/marketing_specialist/transactions/${transactionId}`);
       await expect(page.getByRole("button", { name: "Propose ceiling to CEO" })).toBeDisabled();
 
-      for (let i = 0; i < 4; i++) {
-        await page.getByRole("button", { name: "Verify", exact: true }).first().click();
-        await expect(page.getByRole("button", { name: "Verify", exact: true })).toHaveCount(3 - i);
-      }
+      // Four ID images, the OR, the CR and the deed of sale (the photos are attachments, verified on upload).
+      await verifyAll(page, 7);
 
       await page.getByLabel("Purchase ceiling (₱)").fill("500000");
-      await page.getByRole("button", { name: "Propose ceiling to CEO" }).click();
+      await press(page, "Propose ceiling to CEO");
       await expect(page.getByText("Pending CEO Approval").first()).toBeVisible();
     });
 
@@ -93,7 +107,7 @@ test.describe
     test("CEO approves the ceiling", async ({ page }) => {
       await signInAs(page, "ceo@gce.local");
       await page.goto(`/ceo/transactions/${transactionId}`);
-      await page.getByRole("button", { name: "Approve", exact: true }).click();
+      await press(page, "Approve");
       await expect(page.getByText("Step 5: negotiate in the chat within the ceiling")).toBeVisible();
       await expect(page.getByText("approved", { exact: true }).first()).toBeVisible();
     });
@@ -105,43 +119,43 @@ test.describe
 
       await page.getByLabel(/^Agreed price/).fill("600000");
       await page.getByLabel("Meet-up date and time").fill("2030-01-15T10:00");
-      await pick(page, "Confidential Informant");
-      await pick(page, "Mechanic (optional)");
-      await page.getByRole("button", { name: "Create field case" }).click();
+      // T10: a GCE Visit sends only the Mechanic, who also confirms the seller's identity.
+      await pick(page, "Mechanic for the visit day");
+      await press(page, "Create field case");
       await expect(page.getByText(/within the approved ceiling/).first()).toBeVisible();
 
       await page.getByLabel(/^Agreed price/).fill("480000");
-      await page.getByRole("button", { name: "Create field case" }).click();
+      await press(page, "Create field case");
       const caseLink = page.getByRole("link", { name: "Open field case" });
       await expect(caseLink).toBeVisible();
       fieldCasePath = new URL((await caseLink.getAttribute("href")) ?? "", page.url()).pathname.replace(/^\/[^/]+/, "");
     });
 
-    test("Confidential Informant confirms identity and files the meet-up expense", async ({ page }) => {
-      await signInAs(page, "confidential_informant@gce.local");
-      await page.goto(`/confidential_informant${fieldCasePath}`);
-      await page.getByRole("button", { name: "Confirm identity" }).click();
+    test("Mechanic confirms identity and files the meet-up expense", async ({ page }) => {
+      await signInAs(page, "mechanic@gce.local");
+      await page.goto(`/mechanic${fieldCasePath}`);
+      await press(page, "Confirm identity");
       await expect(page.getByRole("button", { name: "Confirm identity" })).toHaveCount(0);
 
       await page.getByLabel("Expense amount").fill("850");
-      await page.getByLabel("Expense description").fill("Fuel and toll");
-      await page.getByLabel("Proof of expense").setInputFiles(png("receipt.png"));
-      await page.getByRole("button", { name: "File expense" }).click();
+      await page.getByLabel("Expense purpose").fill("Fuel and toll");
+      await page.getByLabel("Receipt photo").setInputFiles(png("receipt.png"));
+      await press(page, "File expense");
       await expect(page.getByText("Fuel and toll")).toBeVisible();
     });
 
     test("Mechanic confirms the plate and reports no issues", async ({ page }) => {
       await signInAs(page, "mechanic@gce.local");
       await page.goto(`/mechanic${fieldCasePath}`);
-      await page.getByRole("button", { name: "Confirm plate" }).click();
+      await press(page, "Confirm plate");
       await pick(page, "Inspection outcome", "No issues found");
-      await page.getByRole("button", { name: "Report inspection" }).click();
+      await press(page, "Report inspection");
       await expect(page.getByText("No issues found. The car is cleared for payment.")).toBeVisible();
     });
 
     test("the cleared car is offered for the seller payment", async ({ page }) => {
       await signInAs(page, "ceo@gce.local");
       await page.goto(`/ceo/transactions/${transactionId}`);
-      await expect(page.getByText("Cleared for payment. Request the purchase funds in Finance.")).toBeVisible();
+      await expect(page.getByText("Cleared for payment. The fund requester pays the seller.")).toBeVisible();
     });
   });

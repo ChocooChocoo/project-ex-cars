@@ -25,18 +25,20 @@ describe("field case worker directory", () => {
     expect(splitFieldCaseWorkers(null)).toEqual({ informants: [], mechanics: [] });
   });
 
-  it("field cases page reads the guarded worker directory, not the CEO-only role list", () => {
+  it("field cases page reads the guarded worker directory from Laravel, not the CEO-only role list", () => {
     const page = read("src/app/(staff)/field-cases/page.tsx");
+    const reads = read("backend/app/Http/Controllers/Field/FieldReadController.php");
 
-    expect(page).toContain('supabase.rpc("list_field_case_workers")');
+    expect(page).toContain("splitFieldCaseWorkers(page.data.workers)");
+    expect(reads).toContain("Trading::fieldWorkers()");
     expect(page).not.toContain('rpc("get_all_user_roles")');
   });
 
   it("transaction page reads the guarded worker directory instead of a missing embed", () => {
-    const page = read("src/app/(staff)/transactions/[id]/page.tsx");
+    const reads = read("backend/app/Http/Controllers/Trading/StaffTradingReadController.php");
 
-    expect(page).toContain('supabase.rpc("list_field_case_workers")');
-    expect(page).not.toContain("private_user_roles!inner");
+    expect(reads).toContain("Trading::fieldWorkers()");
+    expect(reads).not.toContain("private_user_roles");
   });
 });
 

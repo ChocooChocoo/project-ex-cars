@@ -1,14 +1,18 @@
-import { createServerSupabase } from "@/lib/supabase/server";
+"use client";
+
+import { PageSkeleton } from "@/components/page-skeleton";
+import { browserApi } from "@/lib/api/client";
+import { usePageData } from "@/lib/api/use-page-data";
 
 import { type ConditionChecklistNode, SellVehicleForm } from "./_components/sell-vehicle-form";
 
-export default async function SellVehiclePage() {
-  const supabase = await createServerSupabase();
-  const { data: nodes } = await supabase
-    .from("inspection_checklist_nodes")
-    .select("id, parent_id, level, name")
-    .eq("active", true)
-    .order("display_order");
+export default function SellVehiclePage() {
+  const page = usePageData("sell-checklist", () =>
+    browserApi<{ nodes: ConditionChecklistNode[] }>("GET", "/api/v1/sell/checklist"),
+  );
+  if (page.error) throw page.error;
+  if (!page.data) return <PageSkeleton />;
+  const nodes = page.data.nodes;
 
   return (
     <div className="flex flex-col gap-6">

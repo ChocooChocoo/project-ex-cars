@@ -1,81 +1,12 @@
-"use server";
+"use client";
 
-import { revalidatePath } from "next/cache";
+// Phase 5: field case updates call Laravel (backend/app/Http/Controllers/Field/FieldCaseActionController.php),
+// which checks that the caller oversees the case or is named on it.
 
-import { getCurrentRole } from "@/lib/auth/server-session";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { fieldCaseUpdateSchema } from "@/lib/validation/phase6";
-
-import { isAssigned } from "./access";
+import { apiAction } from "@/lib/api/action";
 
 type Phase6ActionResult = { error: string } | { success: true };
 
-const FIELD_CASE_WORKERS = ["ceo", "confidential_informant", "mechanic", "sales_manager"];
-// T11: the CEO and Sales Manager oversee every case; the field workers act only on their own assignment.
-const FIELD_CASE_OVERSEERS = ["ceo", "sales_manager"];
-
 export async function updateFieldCase(formData: FormData): Promise<Phase6ActionResult> {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
-
-  const role = await getCurrentRole();
-  if (!role || !FIELD_CASE_WORKERS.includes(role)) {
-    return { error: "Not authorized to update field cases" };
-  }
-
-  const raw = Object.fromEntries(formData) as Record<string, unknown>;
-  const parsed = fieldCaseUpdateSchema.safeParse(raw);
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid field case update." };
-  }
-
-  // T11: a field worker works the cases assigned to them. The read runs with the service role so the
-  // check does not lean on the field_cases RLS policies being scoped to the assignment.
-  if (!FIELD_CASE_OVERSEERS.includes(role)) {
-    const { data: fieldCase } = await createAdminClient()
-      .from("field_cases")
-      .select("id, case_kind, state, assigned_confidential_informant, mechanic_id, head_security_id")
-      .eq("id", parsed.data.field_case_id)
-      .maybeSingle();
-    if (!fieldCase) return { error: "Field case not found." };
-    if (!isAssigned(fieldCase, user.user.id)) return { error: "Only the assigned field team can update this case." };
-  }
-
-  const update: Record<string, unknown> = {
-    state: parsed.data.state,
-    updated_at: new Date().toISOString(),
-  };
-  if (parsed.data.state === "completed") {
-    // Selling step 11: a seller meet-up closes only once its expenses are filed, bought or not.
-    const { data: fieldCase } = await supabase
-      .from("field_cases")
-      .select("case_kind, transaction_id")
-      .eq("id", parsed.data.field_case_id)
-      .maybeSingle();
-    if (fieldCase?.case_kind === "acquisition" && fieldCase.transaction_id) {
-      const { count } = await createAdminClient()
-        .from("field_case_expenses")
-        .select("id", { count: "exact", head: true })
-        .eq("field_case_id", parsed.data.field_case_id);
-      if (!count) return { error: "File the meet-up expenses with proofs before completing this case." };
-    }
-    update.completion_date = new Date().toISOString();
-  }
-  if (parsed.data.state === "accepted" && !raw.accepted_at) {
-    update.accepted_at = new Date().toISOString();
-  }
-  if (parsed.data.expenses_cents !== undefined) {
-    update.expenses_cents = parsed.data.expenses_cents;
-  }
-  if (parsed.data.notes !== undefined) {
-    update.notes = parsed.data.notes || null;
-  }
-
-  const { error } = await supabase.from("field_cases").update(update).eq("id", parsed.data.field_case_id);
-  if (error) return { error: error.message };
-
-  revalidatePath("/dashboard/field-cases");
-  return { success: true };
+  return apiAction("/staff/field/update-field-case", Object.fromEntries(formData)) as Promise<Phase6ActionResult>;
 }

@@ -1,646 +1,66 @@
-"use server";
+"use client";
 
-import { revalidatePath } from "next/cache";
+// Phase 5: vehicle papers custody and the contract call Laravel
+// (backend/app/Http/Controllers/Trading/HandoverController.php). Same exports and results as before.
 
-import { z } from "zod";
-
-import { getCurrentRole } from "@/lib/auth/server-session";
-import { notify } from "@/lib/notifications/notify";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
-import {
-  isDirectPayment,
-  isFieldArrangement,
-  missingContractCopies,
-  PAPERS_STATUS_LABELS,
-  type PapersStatus,
-  signsInApp,
-  verifiedTowardPrice,
-} from "@/lib/transactions/buy-flow";
-import { DOCUMENT_EXTENSIONS, transactionDocumentLabel } from "@/lib/transactions/document-media";
-import { MAX_UPLOAD_BYTES } from "@/lib/uploads/compress-image";
-
-// Vehicle papers custody (buying-flow revision, "Papers release"). The Confidential Informant keeps a
-// car's papers. At a GCE visit the Sales Manager requests them, the CI hands them over and the Sales
-// Manager receives them. At a meet-up or a delivery the assigned CI records the release to himself,
-// then hands the papers to the buyer. Nobody else may record the papers.
-// The contract lives on the same row: written, approved, signed and kept before the papers move on.
+import { apiAction, laravelForm } from "@/lib/api/action";
 
 type HandoverResult = { error: string } | { success: true };
-type Admin = ReturnType<typeof createAdminClient>;
 
-const CI_ONLY = "Only the Confidential Informant handles the vehicle papers.";
+const send = (path: string, formData: FormData, multipart = false) =>
+  apiAction(
+    `/staff/trading/handover/${path}`,
+    multipart ? laravelForm(formData) : Object.fromEntries(formData),
+  ) as Promise<HandoverResult>;
 
-async function actor(): Promise<{ userId: string; role: string } | { error: string }> {
-  const supabase = await createServerSupabaseClient();
-  const { data } = await supabase.auth.getUser();
-  if (!data.user) return { error: "Not authenticated" };
-  const role = await getCurrentRole();
-  if (!role) return { error: "No role assigned" };
-  return { userId: data.user.id, role };
-}
-
-// An approved buy request with its arrangement, payments and the papers status so far.
-async function loadSale(admin: Admin, transactionId: unknown) {
-  const id = z.string().uuid().safeParse(transactionId);
-  if (!id.success) return null;
-  const { data: tx } = await admin
-    .from("transactions")
-    .select(
-      "id, customer_id, current_state, transaction_kind, purchase_details(arrangement_kind, payment_method, final_price), payment_records(payment_kind, amount, verified_by, rejected_at)",
-    )
-    .eq("id", id.data)
-    .maybeSingle();
-  if (tx?.transaction_kind !== "buy" || tx.current_state !== "approved") return null;
-  const { data: handover } = await admin.from("sale_handovers").select("*").eq("transaction_id", tx.id).maybeSingle();
-  const details = (Array.isArray(tx.purchase_details) ? tx.purchase_details[0] : tx.purchase_details) ?? null;
-  return {
-    id: tx.id as string,
-    customerId: tx.customer_id as string,
-    state: tx.current_state as string,
-    details: details as { arrangement_kind?: unknown; payment_method?: unknown; final_price?: unknown } | null,
-    field: isFieldArrangement(details),
-    paymentChecked: ((tx.payment_records ?? []) as { verified_by: unknown }[]).some((p) => p.verified_by),
-    // T10: verified toward the car price; a cash or Bank Transfer buyer's papers wait for the full amount.
-    paidInFull:
-      verifiedTowardPrice(tx.payment_records ?? []) >=
-      Number((details as { final_price?: unknown } | null)?.final_price ?? 0),
-    papers: (handover?.papers_status as PapersStatus | null | undefined) ?? null,
-    handover: (handover ?? {}) as Record<string, unknown>,
-  };
-}
-
-type Sale = NonNullable<Awaited<ReturnType<typeof loadSale>>>;
-
-// One write to the request's handover row, with a line in its history.
-async function setHandover(
-  admin: Admin,
-  sale: Sale,
-  actorId: string,
-  patch: Record<string, unknown>,
-  historyReason: string,
-) {
-  const { error } = await admin
-    .from("sale_handovers")
-    .upsert({ transaction_id: sale.id, ...patch }, { onConflict: "transaction_id" });
-  if (error) return error.message;
-  await admin.from("transaction_status_history").insert({
-    transaction_id: sale.id,
-    from_state: sale.state,
-    to_state: sale.state,
-    actor_id: actorId,
-    reason: historyReason,
-  });
-  revalidatePath(`/dashboard/transactions/${sale.id}`);
-  revalidatePath("/dashboard/field-cases");
-  revalidatePath("/vehicle-papers");
-  revalidatePath(`/my-transactions/${sale.id}`);
-  return null;
-}
-
-function setPapers(admin: Admin, sale: Sale, actorId: string, status: PapersStatus, ciId?: string) {
-  return setHandover(
-    admin,
-    sale,
-    actorId,
-    { papers_status: status, papers_updated_at: new Date().toISOString(), ...(ciId ? { papers_ci_id: ciId } : {}) },
-    PAPERS_STATUS_LABELS[status],
-  );
-}
-
-const NOT_FOUND = "Approved purchase request not found.";
-
-// GCE visit: the Sales Manager asks the CI for the papers once the Head Accountant has checked the payment.
 export async function requestPapersRelease(formData: FormData): Promise<HandoverResult> {
-  const who = await actor();
-  if ("error" in who) return who;
-  if (!["sales_manager", "ceo"].includes(who.role)) return { error: "Only the Sales Manager requests the papers." };
-
-  const admin = createAdminClient();
-  const sale = await loadSale(admin, formData.get("transaction_id"));
-  if (!sale) return { error: NOT_FOUND };
-  if (sale.field) {
-    return { error: "For a meet-up or a delivery, the Confidential Informant releases the papers on the field case." };
-  }
-  if (!sale.paymentChecked) {
-    return { error: "The Head Accountant must check the payment before the papers are requested." };
-  }
-  if (sale.papers && sale.papers !== "returned") return { error: "The papers were already requested." };
-
-  const error = await setPapers(admin, sale, who.userId, "requested");
-  if (error) return { error };
-  await notify(
-    admin,
-    { role: "confidential_informant" },
-    {
-      kind: "papers_release_requested",
-      title: "Vehicle papers requested",
-      body: "The Sales Manager asks for a sold car's papers. Approve and hand them over from Vehicle Papers.",
-      transactionId: sale.id,
-    },
-  );
-  return { success: true };
+  return send("request-papers-release", formData);
 }
 
-// GCE visit: the CI approves the request and hands the papers to the Sales Manager.
 export async function approvePapersRelease(formData: FormData): Promise<HandoverResult> {
-  const who = await actor();
-  if ("error" in who) return who;
-  if (who.role !== "confidential_informant") return { error: CI_ONLY };
-
-  const admin = createAdminClient();
-  const sale = await loadSale(admin, formData.get("transaction_id"));
-  if (!sale) return { error: NOT_FOUND };
-  if (sale.papers !== "requested") return { error: "No papers release is waiting." };
-
-  const error = await setPapers(admin, sale, who.userId, "handed_over", who.userId);
-  if (error) return { error };
-  await notify(
-    admin,
-    { role: "sales_manager" },
-    {
-      kind: "papers_handed_over",
-      title: "Vehicle papers handed over",
-      body: "The Confidential Informant approved the release. Record the papers as received, then mark the car sold.",
-      transactionId: sale.id,
-    },
-  );
-  return { success: true };
+  return send("approve-papers-release", formData);
 }
 
-// GCE visit: the Sales Manager confirms the papers are in hand. Only then can the car be marked sold.
 export async function receivePapers(formData: FormData): Promise<HandoverResult> {
-  const who = await actor();
-  if ("error" in who) return who;
-  if (!["sales_manager", "ceo"].includes(who.role)) return { error: "Only the Sales Manager receives the papers." };
-
-  const admin = createAdminClient();
-  const sale = await loadSale(admin, formData.get("transaction_id"));
-  if (!sale || sale.field) return { error: NOT_FOUND };
-  if (sale.papers !== "handed_over") return { error: "The Confidential Informant has not handed the papers over yet." };
-
-  const error = await setPapers(admin, sale, who.userId, "received");
-  return error ? { error } : { success: true };
+  return send("receive-papers", formData);
 }
 
-// The meet-up or delivery of a request, with the Confidential Informant who carries its papers and the
-// Mechanic who goes with him.
-async function fieldTeam(
-  admin: Admin,
-  sale: Sale,
-): Promise<{ informant: string | null; mechanic: string | null } | { error: string }> {
-  if (!sale.field) return { error: "This request has no meet-up or delivery." };
-  const { data: fieldCase } = await admin
-    .from("field_cases")
-    .select("id, assigned_confidential_informant, mechanic_id")
-    .eq("transaction_id", sale.id)
-    .in("case_kind", ["delivery", "buyer_meetup"])
-    .neq("state", "cancelled")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (!fieldCase) return { error: "The Sales Manager must assign the field case first." };
-  return {
-    informant: fieldCase.assigned_confidential_informant as string | null,
-    mechanic: fieldCase.mechanic_id as string | null,
-  };
-}
-
-async function assignedInformant(admin: Admin, sale: Sale, userId: string): Promise<string | null> {
-  const team = await fieldTeam(admin, sale);
-  if ("error" in team) return team.error;
-  return team.informant === userId ? null : "Only the Confidential Informant assigned to this field case can do this.";
-}
-
-// The assigned Confidential Informant or, at a Meet Halfway only, the Mechanic. A delivery has no
-// Mechanic (T05).
-async function assignedMember(
-  admin: Admin,
-  sale: Sale,
-  who: { userId: string; role: string },
-): Promise<"informant" | "mechanic" | { error: string }> {
-  const team = await fieldTeam(admin, sale);
-  if ("error" in team) return team;
-  if (who.role === "confidential_informant" && team.informant === who.userId) return "informant";
-  if (who.role === "mechanic" && team.mechanic === who.userId && sale.details?.arrangement_kind === "meetup") {
-    return "mechanic";
-  }
-  return { error: "Only the team assigned to this field case can do this." };
-}
-
-// Meet-up or delivery: before the day, the assigned CI takes the papers out and records it.
 export async function releasePapersToCi(formData: FormData): Promise<HandoverResult> {
-  const who = await actor();
-  if ("error" in who) return who;
-  if (who.role !== "confidential_informant") return { error: CI_ONLY };
-
-  const admin = createAdminClient();
-  const sale = await loadSale(admin, formData.get("transaction_id"));
-  if (!sale) return { error: NOT_FOUND };
-  const refusal = await assignedInformant(admin, sale, who.userId);
-  if (refusal) return { error: refusal };
-  if (sale.papers && sale.papers !== "returned") return { error: "The papers are already released." };
-
-  const error = await setPapers(admin, sale, who.userId, "released_to_ci", who.userId);
-  return error ? { error } : { success: true };
+  return send("release-papers-to-ci", formData);
 }
 
-// Meet-up or delivery: the assigned CI hands the papers to the buyer, after the contract is signed and,
-// where the buyer pays in cash or by bank transfer, after the Head Accountant verifies the full payment.
 export async function handPapersToBuyer(formData: FormData): Promise<HandoverResult> {
-  const who = await actor();
-  if ("error" in who) return who;
-  if (who.role !== "confidential_informant") return { error: CI_ONLY };
-
-  const admin = createAdminClient();
-  const sale = await loadSale(admin, formData.get("transaction_id"));
-  if (!sale) return { error: NOT_FOUND };
-  const refusal = await assignedInformant(admin, sale, who.userId);
-  if (refusal) return { error: refusal };
-  if (sale.papers !== "released_to_ci") return { error: "Record the papers as released first." };
-  if (sale.handover.contract_state !== "signed") {
-    return { error: "The buyer must sign the contract before the papers are handed over." };
-  }
-  if (isDirectPayment(sale.details) && !sale.paidInFull) {
-    return { error: "Wait for the Head Accountant to verify the buyer's full payment before handing over the papers." };
-  }
-
-  const error = await setPapers(admin, sale, who.userId, "handed_over", who.userId);
-  if (error) return { error };
-  await notify(
-    admin,
-    { role: "sales_manager" },
-    {
-      kind: "papers_handed_over",
-      title: "Vehicle papers handed to the buyer",
-      body: "The Confidential Informant handed the papers to the buyer.",
-      transactionId: sale.id,
-    },
-  );
-  return { success: true };
+  return send("hand-papers-to-buyer", formData);
 }
 
-// Financing at a GCE visit or a meet-up: the Sales Manager writes the contract (typed, or started from
-// the template) and sends it to the Head Accountant.
 export async function saveContract(formData: FormData): Promise<HandoverResult> {
-  const who = await actor();
-  if ("error" in who) return who;
-  if (!["sales_manager", "ceo"].includes(who.role)) return { error: "Only the Sales Manager writes the contract." };
-
-  const admin = createAdminClient();
-  const sale = await loadSale(admin, formData.get("transaction_id"));
-  if (!sale) return { error: NOT_FOUND };
-  if (!signsInApp(sale.details)) {
-    return { error: "This contract is signed on paper at the meet-up or on delivery." };
-  }
-  if (!["draft", "returned"].includes(String(sale.handover.contract_state ?? "draft"))) {
-    return { error: "The contract can no longer be changed." };
-  }
-  const body = String(formData.get("body") ?? "").trim();
-  if (!body) return { error: "Write the contract first." };
-
-  const submit = formData.get("submit") === "1";
-  const error = await setHandover(
-    admin,
-    sale,
-    who.userId,
-    {
-      contract_body: body,
-      contract_state: submit ? "pending_approval" : "draft",
-      contract_written_by: who.userId,
-      contract_returned_reason: null,
-    },
-    submit ? "Contract sent for approval" : "Contract draft saved",
-  );
-  if (error) return { error };
-  if (submit) {
-    await notify(
-      admin,
-      { role: "head_accountant" },
-      {
-        kind: "contract_pending_approval",
-        title: "Contract waiting for approval",
-        body: "The Sales Manager wrote a contract. Read it on the request, then approve it or return it.",
-        transactionId: sale.id,
-      },
-    );
-  }
-  return { success: true };
+  return send("save-contract", formData);
 }
 
-// The Head Accountant approves the contract, or returns it to the Sales Manager with a reason.
 export async function reviewContract(formData: FormData): Promise<HandoverResult> {
-  const who = await actor();
-  if ("error" in who) return who;
-  if (who.role !== "head_accountant") return { error: "Only the Head Accountant reviews the contract." };
-
-  const admin = createAdminClient();
-  const sale = await loadSale(admin, formData.get("transaction_id"));
-  if (!sale) return { error: NOT_FOUND };
-  if (sale.handover.contract_state !== "pending_approval") return { error: "No contract is waiting for approval." };
-
-  if (formData.get("decision") === "approve") {
-    const error = await setHandover(
-      admin,
-      sale,
-      who.userId,
-      { contract_state: "approved", contract_approved_by: who.userId },
-      "Contract approved",
-    );
-    if (error) return { error };
-    await notify(
-      admin,
-      { userId: sale.customerId },
-      {
-        kind: "contract_approved",
-        title: "Your contract is ready to sign",
-        body: "Read the contract on your request and sign it.",
-        transactionId: sale.id,
-      },
-    );
-    return { success: true };
-  }
-
-  const reason = String(formData.get("reason") ?? "").trim();
-  if (!reason) return { error: "Give the reason for returning the contract." };
-  const error = await setHandover(
-    admin,
-    sale,
-    who.userId,
-    { contract_state: "returned", contract_returned_reason: reason },
-    `Contract returned for revision: ${reason}`,
-  );
-  if (error) return { error };
-  await notify(
-    admin,
-    { role: "sales_manager" },
-    {
-      kind: "contract_returned",
-      title: "Contract returned for revision",
-      body: `The Head Accountant returned the contract. Reason: ${reason}`,
-      transactionId: sale.id,
-    },
-  );
-  return { success: true };
+  return send("review-contract", formData);
 }
 
-// Meet-up or delivery: the team tells GCE the buyer has been met.
 export async function recordBuyerMet(formData: FormData): Promise<HandoverResult> {
-  const who = await actor();
-  if ("error" in who) return who;
-
-  const admin = createAdminClient();
-  const sale = await loadSale(admin, formData.get("transaction_id"));
-  if (!sale) return { error: NOT_FOUND };
-  const member = await assignedMember(admin, sale, who);
-  if (typeof member !== "string") return member;
-
-  const error = await setHandover(admin, sale, who.userId, { buyer_met_at: new Date().toISOString() }, "Buyer Met");
-  return error ? { error } : { success: true };
+  return send("record-buyer-met", formData);
 }
 
-// Meet-up or delivery: the assigned CI reports that the buyer signed. A contract signed on paper becomes
-// signed here; one signed in the app must already carry the buyer's signature.
 export async function reportSigning(formData: FormData): Promise<HandoverResult> {
-  const who = await actor();
-  if ("error" in who) return who;
-  if (who.role !== "confidential_informant") {
-    return { error: "Only the assigned Confidential Informant reports the signing." };
-  }
-
-  const admin = createAdminClient();
-  const sale = await loadSale(admin, formData.get("transaction_id"));
-  if (!sale) return { error: NOT_FOUND };
-  const refusal = await assignedInformant(admin, sale, who.userId);
-  if (refusal) return { error: refusal };
-  if (!sale.handover.buyer_met_at) return { error: "Record Buyer Met first." };
-
-  const signed = sale.handover.contract_state === "signed";
-  // T06: a buyer who chose face-to-face signs the approved contract in front of the CI.
-  const faceToFace = sale.handover.signing_method === "face_to_face" && sale.handover.contract_state === "approved";
-  if (signsInApp(sale.details) && !signed && !faceToFace) {
-    return { error: "The buyer has not signed the contract in the app yet." };
-  }
-
-  const now = new Date().toISOString();
-  const error = await setHandover(
-    admin,
-    sale,
-    who.userId,
-    { signing_reported_at: now, ...(signed ? {} : { contract_state: "signed", contract_signed_at: now }) },
-    "Contract Signed (reported by CI)",
-  );
-  if (error) return { error };
-  for (const role of ["sales_manager", "head_accountant"]) {
-    await notify(
-      admin,
-      { role },
-      {
-        kind: "contract_signing_reported",
-        title: "Contract signed",
-        body: "The buyer has signed the contract.",
-        transactionId: sale.id,
-      },
-    );
-  }
-  return { success: true };
+  return send("report-signing", formData);
 }
 
-// T06: at a GCE visit, a buyer who chose face-to-face signs the approved contract with the Sales Manager, who
-// records it here. In the field the CI reports it with reportSigning instead.
 export async function recordFaceToFaceSigning(formData: FormData): Promise<HandoverResult> {
-  const who = await actor();
-  if ("error" in who) return who;
-  if (!["sales_manager", "ceo"].includes(who.role)) return { error: "Only the Sales Manager records the signing." };
-
-  const admin = createAdminClient();
-  const sale = await loadSale(admin, formData.get("transaction_id"));
-  if (!sale) return { error: NOT_FOUND };
-  if (sale.field) return { error: "In the field, the Confidential Informant reports the signing." };
-  if (sale.handover.signing_method !== "face_to_face") return { error: "The buyer did not choose face-to-face." };
-  if (sale.handover.contract_state !== "approved") return { error: "The contract is not approved yet." };
-
-  const error = await setHandover(
-    admin,
-    sale,
-    who.userId,
-    { contract_state: "signed", contract_signed_at: new Date().toISOString() },
-    "Contract signed face-to-face",
-  );
-  return error ? { error } : { success: true };
+  return send("record-face-to-face-signing", formData);
 }
 
-// Meet-up or delivery: the CI, and at a cash Meet Halfway the Mechanic, record that they hold a signed copy.
 export async function recordContractCopy(formData: FormData): Promise<HandoverResult> {
-  const who = await actor();
-  if ("error" in who) return who;
-
-  const admin = createAdminClient();
-  const sale = await loadSale(admin, formData.get("transaction_id"));
-  if (!sale) return { error: NOT_FOUND };
-  const member = await assignedMember(admin, sale, who);
-  if (typeof member !== "string") return member;
-  if (sale.handover.contract_state !== "signed") return { error: "The contract is not signed yet." };
-
-  const column = member === "informant" ? "ci_copy_at" : "mechanic_copy_at";
-  const holder = member === "informant" ? "Confidential Informant" : "Mechanic";
-  const now = new Date().toISOString();
-  const error = await setHandover(admin, sale, who.userId, { [column]: now }, `Signed contract kept by the ${holder}`);
-  if (error) return { error };
-
-  const missing = missingContractCopies(sale.details, { ...sale.handover, [column]: now });
-  if (missing.length > 0) {
-    await notify(
-      admin,
-      { role: "sales_manager" },
-      {
-        kind: "contract_copy_missing",
-        title: "Signed contract not fully kept",
-        body: `The ${holder} recorded a signed copy. Still missing: ${missing.join(" and ")}.`,
-        transactionId: sale.id,
-      },
-    );
-  }
-  return { success: true };
+  return send("record-contract-copy", formData);
 }
 
-// T11: the papers the Confidential Informant may add to a sale at the field case. The registration papers
-// the CI carries, and a plain sale document for anything else.
-const FIELD_DOCUMENT_KINDS = [
-  "orcr",
-  "official_receipt",
-  "certificate_of_registration",
-  "deed_of_sale",
-  "sale_document",
-  "other",
-] as const;
-
-const fieldDocumentSchema = z.object({
-  document_kind: z.enum(FIELD_DOCUMENT_KINDS),
-  note: z.string().trim().max(500, "Keep the note under 500 characters.").optional(),
-});
-
-// Meet-up or delivery: the assigned CI files a paper against the sale. The file lands in the transaction's
-// own storage folder (`{transactionId}/ci-doc-*`), so the buyer can read it through the same prefix rule.
 export async function uploadFieldDocument(formData: FormData): Promise<HandoverResult> {
-  const who = await actor();
-  if ("error" in who) return who;
-  if (who.role !== "confidential_informant") return { error: CI_ONLY };
-
-  const admin = createAdminClient();
-  const sale = await loadSale(admin, formData.get("transaction_id"));
-  if (!sale) return { error: NOT_FOUND };
-  const refusal = await assignedInformant(admin, sale, who.userId);
-  if (refusal) return { error: refusal };
-
-  const parsed = fieldDocumentSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Choose the kind of document." };
-
-  const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) return { error: "Attach the document." };
-  const extension = DOCUMENT_EXTENSIONS[file.type];
-  if (!extension) return { error: "Documents must be a JPEG, PNG, WebP image or a PDF." };
-  if (file.size > MAX_UPLOAD_BYTES) return { error: "The document must be 2 MB or smaller." };
-
-  const path = `${sale.id}/ci-doc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`;
-  const { error: uploadError } = await admin.storage.from("transaction-documents").upload(path, file);
-  if (uploadError) return { error: uploadError.message };
-
-  const { error } = await admin.from("transaction_documents").insert({
-    transaction_id: sale.id,
-    document_kind: parsed.data.document_kind,
-    storage_path: path,
-    uploader_id: who.userId,
-    verification_state: "pending",
-    note: parsed.data.note && parsed.data.note !== "" ? parsed.data.note : null,
-  });
-  if (error) {
-    await admin.storage.from("transaction-documents").remove([path]);
-    return { error: error.message };
-  }
-
-  await admin.from("transaction_status_history").insert({
-    transaction_id: sale.id,
-    from_state: sale.state,
-    to_state: sale.state,
-    actor_id: who.userId,
-    reason: `Document added by the Confidential Informant: ${transactionDocumentLabel(parsed.data.document_kind)}`,
-  });
-  revalidatePath("/dashboard/field-cases");
-  revalidatePath("/vehicle-papers");
-  revalidatePath(`/my-transactions/${sale.id}`);
-  return { success: true };
+  return send("upload-field-document", formData, true);
 }
 
-// T11: the buyer and the Confidential Informant sign the sale contract on the device in the field.
-// The two PNGs arrive as files and are uploaded here with the service role: the Confidential Informant has no
-// INSERT policy on the transaction-documents bucket (only customers, the Sales Manager, the CEO, the Account
-// Manager and the Head Accountant do), so a browser-side upload answers 400.
 export async function recordFieldSignatures(formData: FormData): Promise<HandoverResult> {
-  const who = await actor();
-  if ("error" in who) return who;
-  if (who.role !== "confidential_informant") return { error: CI_ONLY };
-
-  const admin = createAdminClient();
-  const sale = await loadSale(admin, formData.get("transaction_id"));
-  if (!sale) return { error: NOT_FOUND };
-  const refusal = await assignedInformant(admin, sale, who.userId);
-  if (refusal) return { error: refusal };
-
-  const buyerFile = formData.get("buyer_signature");
-  const ciFile = formData.get("ci_signature");
-  if (!(buyerFile instanceof File) || !(ciFile instanceof File)) return { error: "Draw both signatures." };
-  for (const file of [buyerFile, ciFile]) {
-    if (file.size === 0) return { error: "Draw both signatures." };
-    if (file.size > MAX_UPLOAD_BYTES) return { error: "Each signature must be 2 MB or smaller." };
-    if (file.type !== "image/png") return { error: "The signatures must be PNG images." };
-  }
-
-  const stamp = Date.now();
-  const buyerPath = `${sale.id}/signature-buyer-${stamp}.png`;
-  const ciPath = `${sale.id}/signature-ci-${stamp}.png`;
-  const bucket = admin.storage.from("transaction-documents");
-  const uploaded: string[] = [];
-  for (const [path, file] of [
-    [buyerPath, buyerFile],
-    [ciPath, ciFile],
-  ] as const) {
-    const { error: uploadError } = await bucket.upload(path, file, { contentType: "image/png", upsert: false });
-    if (uploadError) {
-      if (uploaded.length > 0) await bucket.remove(uploaded);
-      return { error: uploadError.message };
-    }
-    uploaded.push(path);
-  }
-
-  const now = new Date().toISOString();
-  const error = await setHandover(
-    admin,
-    sale,
-    who.userId,
-    {
-      signature_path: buyerPath,
-      ci_signature_path: ciPath,
-      contract_state: "signed",
-      contract_signed_at: now,
-      signing_method: "in_app",
-    },
-    "Contract signed in the field by the buyer and the Confidential Informant",
-  );
-  if (error) {
-    await bucket.remove(uploaded);
-    return { error };
-  }
-
-  await notify(
-    admin,
-    { role: "sales_manager" },
-    {
-      kind: "contract_signed",
-      title: "Contract signed in the field",
-      body: "The buyer and the Confidential Informant signed the contract on the device.",
-      transactionId: sale.id,
-    },
-  );
-  return { success: true };
+  return send("record-field-signatures", formData, true);
 }

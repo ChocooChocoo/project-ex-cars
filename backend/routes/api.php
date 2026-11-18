@@ -14,8 +14,25 @@ use App\Http\Controllers\FileController;
 use App\Http\Controllers\MeController;
 use App\Http\Controllers\Messaging\InquiryController;
 use App\Http\Controllers\Messaging\NotificationController;
+use App\Enums\Role;
+use App\Http\Controllers\Field\FieldCaseActionController;
+use App\Http\Controllers\Field\FieldReadController;
+use App\Http\Controllers\Messaging\InquiryWorkflowController;
 use App\Http\Controllers\ThumbnailController;
+use App\Http\Controllers\Trading\CustomerTradingController;
+use App\Http\Controllers\Trading\CustomerTradingReadController;
+use App\Http\Controllers\Trading\DeliveryController;
+use App\Http\Controllers\Trading\FinancingVisitController;
+use App\Http\Controllers\Trading\HandoverController;
+use App\Http\Controllers\Trading\PapersReadController;
+use App\Http\Controllers\Trading\ReconditioningController;
+use App\Http\Controllers\Trading\SellFlowController;
+use App\Http\Controllers\Trading\SellIntakeController;
+use App\Http\Controllers\Trading\StaffTradingReadController;
+use App\Http\Controllers\Trading\StaffTransactionController;
+use App\Http\Controllers\Trading\VehicleWriteController;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Str;
 
 // Browser and Next.js server adapters call these with Sanctum first-party cookies (no bearer tokens).
 Route::prefix('v1')->group(function () {
@@ -92,5 +109,96 @@ Route::prefix('v1')->group(function () {
         Route::post('admin/accounts/walk-in', [AccountAdminController::class, 'storeWalkIn'])->middleware('role:account_manager,ceo');
         Route::post('admin/accounts/employee', [AccountAdminController::class, 'storeEmployee'])->middleware('role:ceo,account_manager');
         Route::post('admin/roles', [AccountAdminController::class, 'assignRole'])->middleware('role:ceo,super_admin');
+
+        // Trading, scheduling and field workflows (Phase 5). One POST per former Server Action; each
+        // controller method re-checks the exact role and record rule of the action it replaces.
+        Route::middleware('role:customer')->group(function () {
+            Route::get('my-transactions', [CustomerTradingReadController::class, 'index']);
+            Route::get('my-transactions/{id}', [CustomerTradingReadController::class, 'show']);
+            Route::get('sell/checklist', [CustomerTradingReadController::class, 'checklist']);
+            Route::post('trading/uploads', [CustomerTradingController::class, 'upload'])->middleware('throttle:60,1');
+            Route::post('trading/sell/prepare-uploads', [SellIntakeController::class, 'prepareUploads'])->middleware('throttle:20,1');
+            Route::post('trading/sell', [SellIntakeController::class, 'submit'])->middleware('throttle:10,1');
+            Route::post('trading/purchase-documents', [CustomerTradingController::class, 'uploadPurchaseDocument']);
+            Route::delete('trading/purchase-documents/{documentId}', [CustomerTradingController::class, 'removePurchaseDocument']);
+            Route::post('trading/buy', [CustomerTradingController::class, 'createBuyTransaction']);
+            Route::post('trading/buy-details', [CustomerTradingController::class, 'saveBuyDetails']);
+            Route::post('trading/submit-buy-request', [CustomerTradingController::class, 'submitBuyRequest']);
+            Route::post('trading/financing-offer', [CustomerTradingController::class, 'respondToFinancingOffer']);
+            Route::post('trading/delivery-reschedule', [CustomerTradingController::class, 'requestDeliveryReschedule']);
+            Route::post('trading/sign-contract', [CustomerTradingController::class, 'signContract']);
+            Route::post('trading/cancel', [CustomerTradingController::class, 'cancelTransaction']);
+            Route::post('trading/review', [CustomerTradingController::class, 'submitReview']);
+            Route::post('inquiries', [InquiryWorkflowController::class, 'create']);
+        });
+        Route::get('field-cases/{id}/location', [FieldCaseActionController::class, 'location'])->middleware('throttle:polling');
+        Route::post('inquiries/{id}/assign', [InquiryWorkflowController::class, 'assign'])->middleware('role:account_manager,sales_manager');
+        Route::post('inquiries/{id}/handoff', [InquiryWorkflowController::class, 'handoff'])->middleware('role:account_manager');
+        Route::post('inquiries/{id}/accept-handoff', [InquiryWorkflowController::class, 'acceptHandoff'])->middleware('role:sales_manager');
+        Route::post('staff/arrangements', [InquiryWorkflowController::class, 'schedule'])->middleware('role:account_manager,sales_manager');
+        Route::post('staff/message-reports/{id}/review', [InquiryWorkflowController::class, 'reviewReport'])->middleware('role:ceo,account_manager');
+        Route::get('papers/{transactionId}/{paper}', [PapersReadController::class, 'show']);
+
+        Route::middleware('role:'.implode(',', Role::STAFF))->prefix('staff')->group(function () {
+            Route::get('field-workers', [StaffTradingReadController::class, 'fieldWorkers']);
+            Route::get('vehicle-papers', [PapersReadController::class, 'index'])->middleware('role:confidential_informant,ceo');
+            Route::get('transactions', [StaffTradingReadController::class, 'index'])->middleware('role:'.implode(',', Role::TRANSACTION_VIEWERS));
+            Route::get('transactions/{id}', [StaffTradingReadController::class, 'show'])->middleware('role:'.implode(',', Role::TRANSACTION_VIEWERS));
+            Route::get('sell-submissions', [FieldReadController::class, 'sellSubmissions'])->middleware('role:mechanic,confidential_informant');
+            Route::get('field-cases', [FieldReadController::class, 'index'])->middleware('role:ceo,confidential_informant,sales_manager,mechanic,head_accountant,head_security');
+            Route::get('field-cases/{id}', [FieldReadController::class, 'show']);
+
+            // Buy requests (transactions/actions.ts, delivery-actions.ts, handover-actions.ts, financing visit).
+            Route::post('trading/transition', [StaffTransactionController::class, 'transition'])->middleware('role:ceo,sales_manager,account_manager,head_accountant');
+            Route::post('trading/buyer-decline', [StaffTransactionController::class, 'recordBuyerDecline']);
+            Route::post('trading/no-show', [StaffTransactionController::class, 'recordNoShow']);
+            Route::post('trading/promote', [StaffTransactionController::class, 'promoteQueuedRequest']);
+            Route::post('trading/paperwork', [StaffTransactionController::class, 'recordPaperwork']);
+            Route::post('trading/verify-document', [StaffTransactionController::class, 'verifyTransactionDocument']);
+            Route::post('trading/walk-in', [StaffTransactionController::class, 'createWalkInTransaction']);
+            Route::post('trading/field-cases', [StaffTransactionController::class, 'createFieldCase']);
+            Route::post('trading/assign-mechanic', [StaffTransactionController::class, 'assignMechanic']);
+            Route::post('trading/repossession', [StaffTransactionController::class, 'instructRepossession']);
+            Route::middleware('role:sales_manager,ceo')->group(function () {
+                Route::post('trading/delivery-terms', [DeliveryController::class, 'setDeliveryTerms']);
+                Route::post('trading/delivery-case', [DeliveryController::class, 'createDeliveryFieldCase']);
+                Route::post('trading/meetup-case', [DeliveryController::class, 'createMeetupFieldCase']);
+                Route::post('trading/delivery-delay', [DeliveryController::class, 'relayDeliveryDelay']);
+                Route::post('trading/cancel-unpaid-delivery', [DeliveryController::class, 'cancelUnpaidDelivery']);
+            });
+            foreach (['requestPapersRelease', 'approvePapersRelease', 'receivePapers', 'releasePapersToCi', 'handPapersToBuyer', 'saveContract', 'reviewContract',
+                'recordBuyerMet', 'reportSigning', 'recordFaceToFaceSigning', 'recordContractCopy', 'uploadFieldDocument', 'recordFieldSignatures'] as $action) {
+                Route::post('trading/handover/'.Str::kebab($action), [HandoverController::class, $action]);
+            }
+            Route::post('trading/visit-decision', [FinancingVisitController::class, 'recordVisitDecision']);
+            Route::post('trading/vehicle-recovered', [FinancingVisitController::class, 'recordVehicleRecovered']);
+
+            // Sell offers (sell-actions.ts).
+            Route::middleware('role:marketing_specialist')->group(function () {
+                foreach (['flagSellSubmission', 'proposePurchaseCeiling', 'recordAgreedPrice', 'createInspectionIssueReport', 'recordSellerResponse'] as $action) {
+                    Route::post('trading/sell/'.Str::kebab($action), [SellFlowController::class, $action]);
+                }
+            });
+
+            // Field teams (field-cases/*-actions.ts).
+            foreach (['updateFieldCase', 'advanceDeliveryStatus', 'reportDeliveryDelay', 'receiveFieldCase', 'updateDeliveryLocation', 'advanceRecovery',
+                'uploadTowEvidence', 'updateRecoveryLocation', 'confirmFieldCheck', 'reportInspection', 'fileFieldExpense', 'recordFieldPrice'] as $action) {
+                Route::post('field/'.Str::kebab($action), [FieldCaseActionController::class, $action]);
+            }
+
+            // Vehicles, prices, inspections and reconditioning (vehicles/actions.ts, reconditioning-actions.ts).
+            Route::post('vehicles', [VehicleWriteController::class, 'createVehicle']);
+            Route::post('vehicles/update', [VehicleWriteController::class, 'updateVehicle']);
+            Route::post('vehicles/publish', [VehicleWriteController::class, 'publishVehicle']);
+            Route::post('vehicles/propose-price', [VehicleWriteController::class, 'proposePrice']);
+            Route::post('vehicles/approve-price', [VehicleWriteController::class, 'approvePrice']);
+            Route::post('vehicles/{vehicleId}/archive', [VehicleWriteController::class, 'archiveVehicle']);
+            Route::post('inspections', [VehicleWriteController::class, 'createInspection']);
+            Route::post('inspections/answer', [VehicleWriteController::class, 'submitChecklistAnswer']);
+            Route::post('reconditioning/report', [ReconditioningController::class, 'submitReport']);
+            Route::post('reconditioning/start', [ReconditioningController::class, 'start']);
+            Route::post('reconditioning/complete', [ReconditioningController::class, 'complete']);
+            Route::post('reconditioning/papers-processed', [ReconditioningController::class, 'markPapersProcessed']);
+        });
     });
 });

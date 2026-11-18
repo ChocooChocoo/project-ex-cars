@@ -1,40 +1,35 @@
-import { requireRole } from "@/lib/auth/guards";
+"use client";
+
+import { useRequireRole } from "@/components/auth/session-provider";
+import { PageSkeleton } from "@/components/page-skeleton";
+import { browserApi } from "@/lib/api/client";
+import { usePageData } from "@/lib/api/use-page-data";
 import { TRANSACTION_VIEWER_ROLES } from "@/lib/auth/roles";
-import { getCurrentRole } from "@/lib/auth/server-session";
-import { checkAndNotifyOverdueReviews } from "@/lib/notifications/actions";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { useQuery } from "@/lib/routing/use-query";
 import { paidInstallmentCount } from "@/lib/transactions/financing-payments";
 
 import type { TransactionRow } from "./_components/recent-transactions-table/schema";
 import { RecentTransactionsTable } from "./_components/recent-transactions-table/table";
 import { type TransactionsKpiDatum, TransactionsKpiStrip } from "./_components/transactions-kpi-strip";
 
-export default async function TransactionsPage({
-  searchParams,
-}: {
-  readonly searchParams: Promise<{ state?: string }>;
-}) {
-  await requireRole(TRANSACTION_VIEWER_ROLES);
-  await checkAndNotifyOverdueReviews();
-  const supabase = await createServerSupabase();
-  const role = (await getCurrentRole()) ?? "customer";
-  const { state } = await searchParams;
-
-  let query = supabase
-    .from("transactions")
-    .select(
-      "*, vehicles(make, model, year), profiles(full_name), purchase_details(*), sell_details(*), installment_accounts(installments(state))",
-    )
-    .order("updated_at", { ascending: false });
-
-  if (role === "sales_manager") query = query.eq("transaction_kind", "buy");
-
-  if (state && ["pending", "under_review", "approved", "rejected", "completed", "cancelled"].includes(state)) {
-    query = query.eq("current_state", state);
-  }
-
-  const { data: transactions } = await query;
-  const all = (transactions as Record<string, unknown>[]) ?? [];
+export default function TransactionsPage() {
+  const allowed = useRequireRole(TRANSACTION_VIEWER_ROLES);
+  const query = useQuery();
+  const state = query?.get("state") ?? "";
+  // Phase 5: Laravel applies the same record rules as before (the Sales Manager sees buy requests only, the
+  // Marketing Specialist sell offers only) and the optional ?state= filter.
+  const page = usePageData(allowed && query ? `staff-transactions?${state}` : "staff-transactions:wait", () =>
+    allowed && query
+      ? browserApi<{ role: string | null; transactions: Record<string, unknown>[] }>(
+          "GET",
+          `/api/v1/staff/transactions${state ? `?state=${encodeURIComponent(state)}` : ""}`,
+        )
+      : Promise.resolve(null),
+  );
+  if (page.error) throw page.error;
+  if (!allowed || !page.data) return <PageSkeleton />;
+  const role = page.data.role ?? "customer";
+  const all = page.data.transactions;
 
   const rows: TransactionRow[] = all.map((t) => {
     const vehicles = t.vehicles as Record<string, unknown> | null;

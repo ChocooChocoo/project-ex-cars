@@ -1,6 +1,8 @@
 import { expect as baseExpect, type Page } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 
+import { canUseLaravelFixtures, laravelFixture } from "./laravel-fixture";
+
 // Shared steps for the T01 branch specs. The dev server compiles each route on first use, so
 // assertions wait longer than Playwright's default 5 s.
 export const expect = baseExpect.configure({ timeout: 20_000 });
@@ -86,6 +88,21 @@ export async function uploadBuyerBilling(page: Page) {
 
 // The buyer's side up to Submit Request: Buy Now, 2 IDs (front and back each) + proof of billing, method,
 // arrangement.
+// T04/T10: a slot is a date plus a whole hour (9 AM–9 PM Manila) picked from the list. `when` is "YYYY-MM-DDTHH:00".
+export async function fillSlot(page: Page, when: string) {
+  const [date, time] = when.split("T");
+  const hour = Number(time.slice(0, 2));
+  const label = `${hour % 12 === 0 ? 12 : hour % 12}:00 ${hour < 12 ? "AM" : "PM"}`;
+  await page.locator("#schedule-date").fill(date);
+  await page.locator("#schedule-hour").click();
+  await page.getByRole("option", { name: label, exact: true }).click();
+}
+
+// The meet-up or delivery address starts from the customer's PSGC profile address (T10).
+export function setCustomerAddress() {
+  laravelFixture("set-customer-address");
+}
+
 export async function buyerRequest(
   page: Page,
   vehicleId: string,
@@ -113,8 +130,7 @@ export async function buyerRequest(
   if (options.method === "Financing") await pick(page, "payment_option", "Financing");
   else await pick(page, "payment_method", options.method === "Bank Transfer" ? "Bank Transfer (via PayMongo)" : "Cash");
   await pick(page, "arrangement_kind", options.arrangement);
-  if (options.when) await page.locator("#schedule").fill(options.when);
-  if (options.arrangement !== "GCE Visit") await page.locator("#location").fill("SM Calamba parking, Laguna");
+  if (options.when) await fillSlot(page, options.when);
   // Every financing request asks for a term.
   if (options.term || options.method === "Financing") await pick(page, "requested_term", options.term ?? "1 year");
   const acknowledge = page.getByLabel(/I have reviewed this car's condition/);
@@ -155,6 +171,10 @@ export async function approveAsSalesManager(page: Page, transactionId: string) {
     await pickByLabel(page, "Mechanic");
   }
   await page.getByRole("button", { name: /^Transition Approve/ }).click();
+  const dialog = page.getByRole("alertdialog");
+  if (await dialog.isVisible({ timeout: 2_000 }).catch(() => false)) {
+    await dialog.getByRole("button", { name: "Approve", exact: true }).click();
+  }
   await expect(page.getByText("Transaction moved to approved.")).toBeVisible();
   await page.waitForLoadState("networkidle");
 }
@@ -248,26 +268,7 @@ function testAdmin() {
 // PayMongo checkout is external, so the financing downpayment is recorded as a verified bank transfer
 // for the rest of the browser chain.
 export async function recordFinancingDownpayment(transactionId: string) {
-  const admin = testAdmin();
-  const { data: transaction } = await admin
-    .from("transactions")
-    .select("customer_id, payment_terms(down_payment)")
-    .eq("id", transactionId)
-    .single();
-  const terms = Array.isArray(transaction?.payment_terms) ? transaction?.payment_terms[0] : transaction?.payment_terms;
-  const amount = Number(terms?.down_payment ?? 0);
-  await admin.from("payment_records").delete().eq("transaction_id", transactionId).eq("payment_kind", "downpayment");
-  const { error } = await admin.from("payment_records").insert({
-    transaction_id: transactionId,
-    amount,
-    method: "bank_transfer",
-    recorded_by: transaction?.customer_id,
-    verified_by: transaction?.customer_id,
-    settlement_date: new Date().toISOString().slice(0, 10),
-    payment_kind: "downpayment",
-  });
-  if (error) throw new Error(error.message);
-  await admin.from("transactions").update({ flow_status: "initial_dp_confirmed" }).eq("id", transactionId);
+  laravelFixture("record-financing-downpayment", transactionId);
 }
 
 export async function markFinancingFullyPaid(transactionId: string) {
@@ -287,34 +288,13 @@ export async function markFinancingFullyPaid(transactionId: string) {
 
 // The delivery fee and downpayment are paid online through PayMongo; record the same verified rows a
 // successful checkout creates so the rest of the delivery chain can run.
+// Phase 5 stand-in for the Phase 6 payment screens: the cash payment, recorded and verified, straight into Laravel.
+export async function recordVerifiedPayment(transactionId: string, amount: number) {
+  laravelFixture("record-verified-payment", transactionId, amount);
+}
+
 export async function recordDeliveryPayments(transactionId: string) {
-  const admin = testAdmin();
-  const { data: transaction } = await admin
-    .from("transactions")
-    .select("customer_id, purchase_details(delivery_fee, downpayment_amount)")
-    .eq("id", transactionId)
-    .single();
-  const details = Array.isArray(transaction?.purchase_details)
-    ? transaction?.purchase_details[0]
-    : transaction?.purchase_details;
-  const today = new Date().toISOString().slice(0, 10);
-  for (const [kind, amount] of [
-    ["delivery_fee", Number(details?.delivery_fee ?? 0)],
-    ["downpayment", Number(details?.downpayment_amount ?? 0)],
-  ] as const) {
-    if (amount <= 0) continue;
-    await admin.from("payment_records").delete().eq("transaction_id", transactionId).eq("payment_kind", kind);
-    const { error } = await admin.from("payment_records").insert({
-      transaction_id: transactionId,
-      amount,
-      method: "paymongo",
-      recorded_by: transaction?.customer_id,
-      verified_by: transaction?.customer_id,
-      settlement_date: today,
-      payment_kind: kind,
-    });
-    if (error) throw new Error(error.message);
-  }
+  laravelFixture("record-delivery-payments", transactionId);
 }
 
 // Head Accountant verifies every payment still waiting on the request.
@@ -333,8 +313,12 @@ export async function papersThenSold(page: Page, id: string, vehicleLabel: strin
   await expect(page.getByText("Papers requested from the Confidential Informant.")).toBeVisible();
   await signInAs(page, "confidential_informant@gce.local");
   await open(page, "/confidential_informant/vehicle-papers");
-  const request = page.getByRole("row").filter({ hasText: vehicleLabel });
-  await request.getByRole("button", { name: /Actions for/ }).click();
+  // Earlier runs can leave rows for the same test car; act on the newest one still waiting for the CI (rows are oldest first).
+  const request = page.getByRole("row").filter({ hasText: vehicleLabel }).filter({ hasText: "Papers Requested" });
+  await request
+    .getByRole("button", { name: /Actions for/ })
+    .last()
+    .click();
   await page.getByRole("menuitem", { name: "Mark Released" }).click();
   await expect(page.getByText("Papers released to the Sales Manager.")).toBeVisible();
   await signInAs(page, "sales_manager@gce.local");
@@ -391,15 +375,10 @@ export function db() {
 }
 
 export async function customerId(): Promise<string> {
-  const { data } = await db().auth.admin.listUsers({ perPage: 1000 });
-  return data.users.find((u) => u.email === "customer@gce.local")?.id ?? "";
+  return laravelFixture("customer-id");
 }
 
 // Clears no-shows and strikes the specs gave customer@gce.local, so later specs are not restricted.
 export async function resetCustomerStanding(): Promise<void> {
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return;
-  await db()
-    .from("customer_standing")
-    .delete()
-    .eq("account_id", await customerId());
+  if (canUseLaravelFixtures()) laravelFixture("reset-standing");
 }

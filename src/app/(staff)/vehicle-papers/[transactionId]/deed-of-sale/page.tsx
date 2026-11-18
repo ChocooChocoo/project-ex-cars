@@ -1,41 +1,10 @@
-import { notFound } from "next/navigation";
+import { DeedOfSalePaper } from "../../_components/paper-pages";
 
-import { deedOfSale, paperSale, type TransactionPaperSource } from "@/lib/papers/templates";
-import { createAdminClient } from "@/lib/supabase/admin";
+// Static build: one page under the placeholder id (see src/lib/routing/htaccess.ts).
+export function generateStaticParams() {
+  return [{ transactionId: "_" }];
+}
 
-import { PaperDocumentView } from "../../_components/paper-document-view";
-import { requirePaperReader } from "../../_lib/paper-access";
-
-// T11: the Deed of Sale for one sold car. The Confidential Informant prints it for the buyer; the buyer
-// keeps their own copy, so they may open it too.
-const DEED_ROLES = ["confidential_informant", "ceo", "head_accountant", "sales_manager"] as const;
-
-/**
- * The Deed of Sale for one sold car, filled in from the transaction on record. The buyer is the
- * transaction's own customer, so the deed never names an earlier or later buyer of the same car.
- */
-export default async function DeedOfSalePage({ params }: { readonly params: Promise<{ transactionId: string }> }) {
-  const { transactionId } = await params;
-  await requirePaperReader(transactionId, [...DEED_ROLES]);
-  const admin = createAdminClient();
-
-  const { data } = await admin
-    .from("transactions")
-    .select(
-      "id, opened_at, completed_at, purchase_details(final_price), profiles(full_name, address), vehicles(make, model, year, exterior_color, plate_number, engine_number, chassis_number, vin, warranty_details)",
-    )
-    .eq("id", transactionId)
-    .maybeSingle();
-
-  if (!data) notFound();
-
-  const paper = deedOfSale(paperSale(data as unknown as TransactionPaperSource));
-
-  return (
-    <PaperDocumentView
-      paper={paper}
-      heading="Deed of Sale"
-      note="Filled in from the sale on record. A blank line is a detail GCE has not recorded yet; write it in by hand before signing."
-    />
-  );
+export default function Page() {
+  return <DeedOfSalePaper />;
 }
