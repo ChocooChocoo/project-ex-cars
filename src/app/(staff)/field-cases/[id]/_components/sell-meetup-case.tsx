@@ -120,6 +120,20 @@ export function SellMeetupCase({
           {fieldCase.schedule ? format(new Date(fieldCase.schedule as string), "MMM d, yyyy h:mm a") : "No schedule"} ·{" "}
           {String(fieldCase.location ?? "No location")} ·{" "}
           {method ? SELL_MEETUP_METHOD_LABELS[method] : "Method not set"}
+          {sellDetails?.meetup_lat != null && sellDetails?.meetup_lng != null ? (
+            <>
+              {" · "}
+              {/* T12: the halfway point the seller set on the map. */}
+              <a
+                href={`https://www.google.com/maps?q=${sellDetails.meetup_lat},${sellDetails.meetup_lng}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-primary underline underline-offset-2"
+              >
+                Open the seller's meet-up point in Google Maps
+              </a>
+            </>
+          ) : null}
         </p>
       </div>
 

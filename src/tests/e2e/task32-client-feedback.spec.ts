@@ -36,11 +36,10 @@ test.describe("Task 32 client feedback", () => {
     await page.getByLabel("Brand *").fill("Honda");
     await page.getByLabel("Model *").fill("Civic");
     await page.keyboard.press("Escape");
-    await page.getByRole("combobox", { name: /^Year/ }).click();
-    await page.getByRole("option", { name: "2020", exact: true }).click();
+    await page.getByRole("spinbutton", { name: /^Year/ }).fill("2020");
     await page.getByLabel("Mileage (km) *").fill("50000");
     await page.getByRole("combobox", { name: /^Condition/ }).click();
-    await page.getByRole("option", { name: "Second Hand" }).click();
+    await page.getByRole("option", { name: /^Good/ }).click();
     await page.getByRole("combobox", { name: /^Owner number/ }).click();
     await page.getByRole("option", { name: "1st owner" }).click();
     await page.getByLabel("Offered Amount (₱) *").fill("450000");

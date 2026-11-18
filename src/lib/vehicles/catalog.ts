@@ -47,6 +47,22 @@ export const BODY_TYPES = [
 /** T06: seat counts a buyer can ask for in Recommendations. */
 export const SEAT_OPTIONS = ["2", "4", "5", "7", "8+"] as const;
 
+export type BodyType = (typeof BODY_TYPES)[number];
+export type SeatOption = (typeof SEAT_OPTIONS)[number];
+
+/** T12: the seat counts that fit each body type, so a buyer cannot ask for a 7-seat sedan or a 2-seat van. */
+export const SEATS_BY_BODY: Record<BodyType, readonly SeatOption[]> = {
+  Sedan: ["4", "5"],
+  Hatchback: ["4", "5"],
+  Coupe: ["2", "4"],
+  Convertible: ["2", "4"],
+  Wagon: ["5", "7"],
+  SUV: ["5", "7", "8+"],
+  MPV: ["7", "8+"],
+  Pickup: ["2", "5"],
+  Van: ["7", "8+"],
+};
+
 /** Models for a brand, matched without case so a typed "toyota" still gets Toyota's models. */
 export function modelsFor(brand: string): readonly string[] {
   const key = BRANDS.find((name) => name.toLowerCase() === brand.trim().toLowerCase());
@@ -60,7 +76,14 @@ export const OWNER_NUMBERS = [
   { value: "4", label: "4th owner or more" },
 ] as const;
 
-export const SELL_CONDITIONS = ["Brand New", "Second Hand"] as const;
+/** T12: the condition a seller declares, with the meaning shown beside each term. */
+export const SELL_CONDITIONS = [
+  { value: "Like New", description: "Barely used, no visible wear." },
+  { value: "Good", description: "Normal signs of use, fully functional." },
+  { value: "Fair", description: "Noticeable wear, but works." },
+] as const;
+
+export const SELL_CONDITION_VALUES = ["Like New", "Good", "Fair"] as const;
 
 export const OLDEST_LISTED_YEAR = 1980;
 

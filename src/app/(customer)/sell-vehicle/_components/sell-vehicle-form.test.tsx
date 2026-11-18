@@ -41,7 +41,7 @@ function baseData(overrides: Record<string, unknown> = {}) {
     model: "Civic",
     year: 2020,
     mileage: 50000,
-    condition: "excellent",
+    condition: "Good",
     offered_amount: 450000,
     has_known_issues: "no",
     meetup_method: "gce_visit",
@@ -56,63 +56,34 @@ function getVisibleOption(label: string): HTMLElement {
   return (visible ?? candidates[0]) as HTMLElement;
 }
 
-describe("sellVehicleSchema condition enum + legacy fallback", () => {
-  it("accepts each enum and maps to Title Case", () => {
-    const pairs: [string, string][] = [
-      ["excellent", "Excellent"],
-      ["good", "Good"],
-      ["fair", "Fair"],
-      ["needs_repair", "Needs Repair"],
-    ];
-    for (const [raw, expected] of pairs) {
-      const parsed = sellVehicleSchema.safeParse(baseData({ condition: raw }));
-      expect(parsed.success).toBe(true);
-      if (parsed.success) expect(parsed.data.condition).toBe(expected);
+describe("T12 sellVehicleSchema year", () => {
+  it("rejects negative, decimal, too old and future years", () => {
+    const next = new Date().getFullYear() + 2;
+    for (const year of [-2020, 2020.5, 1979, next, "", "abc"]) {
+      expect(sellVehicleSchema.safeParse(baseData({ year })).success).toBe(false);
     }
   });
 
-  it("transforms legacy Good with trailing space", () => {
-    const parsed = sellVehicleSchema.safeParse(baseData({ condition: "Good " }));
-    expect(parsed.success).toBe(true);
-    if (parsed.success) expect(parsed.data.condition).toBe("Good");
+  it("accepts a whole year typed as text", () => {
+    const parsed = sellVehicleSchema.safeParse(baseData({ year: "2020" }));
+    expect(parsed.success && parsed.data.year).toBe(2020);
+  });
+});
+
+describe("T12 sellVehicleSchema meet-up point", () => {
+  it("requires the map point for Meet Halfway only", () => {
+    expect(sellVehicleSchema.safeParse(baseData({ meetup_method: "meet_halfway" })).success).toBe(false);
+    expect(
+      sellVehicleSchema.safeParse(baseData({ meetup_method: "meet_halfway", meetup_lat: "14.3", meetup_lng: "121.0" }))
+        .success,
+    ).toBe(true);
+    expect(sellVehicleSchema.safeParse(baseData({ meetup_method: "gce_visit" })).success).toBe(true);
   });
 
-  it("handles needs repair variants via mapping", () => {
-    for (const raw of ["needs repair", "needsrepair", "NEEDS_REPAIR"]) {
-      const parsed = sellVehicleSchema.safeParse(baseData({ condition: raw }));
-      expect(parsed.success).toBe(true);
-      if (parsed.success) expect(parsed.data.condition).toBe("Needs Repair");
-    }
-  });
-
-  it("allows legacy free-text via title-case fallback", () => {
-    const parsed = sellVehicleSchema.safeParse(baseData({ condition: "  custom_condition  " }));
-    expect(parsed.success).toBe(true);
-    if (parsed.success) expect(parsed.data.condition).toBe("Custom Condition");
-  });
-
-  it("allows condition_detail optional and keeps DB shape", () => {
-    const parsed = sellVehicleSchema.safeParse(baseData({ condition: "other", condition_detail: "Minor scratches" }));
-    expect(parsed.success).toBe(true);
-    if (parsed.success) {
-      expect(parsed.data.condition).toBe("Other");
-      expect(parsed.data.condition_detail).toBe("Minor scratches");
-    }
-  });
-
-  it("rejects empty condition", () => {
-    const parsed = sellVehicleSchema.safeParse(baseData({ condition: "" }));
-    expect(parsed.success).toBe(false);
-  });
-
-  it("keeps same DB insert shape with vehicles.condition TEXT", () => {
-    const parsed = sellVehicleSchema.safeParse(baseData({ condition: "excellent" }));
-    expect(parsed.success).toBe(true);
-    if (parsed.success) {
-      expect(typeof parsed.data.condition).toBe("string");
-      expect(parsed.data.condition.length).toBeGreaterThan(0);
-      expect(parsed.data.condition.length).toBeLessThanOrEqual(50);
-    }
+  it("rejects a point outside the valid range", () => {
+    expect(
+      sellVehicleSchema.safeParse(baseData({ meetup_method: "meet_halfway", meetup_lat: 95, meetup_lng: 121 })).success,
+    ).toBe(false);
   });
 });
 
@@ -205,7 +176,7 @@ describe("SellVehicleForm photo + issues UI", () => {
     render(<SellVehicleForm />);
     expect(screen.getByLabelText("Brand", { exact: false })).toBeInTheDocument();
     expect(screen.getByLabelText("Model", { exact: false })).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: /^Year/ })).toBeInTheDocument();
+    expect(screen.getByRole("spinbutton", { name: /^Year/ })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: /^Owner number/ })).toBeInTheDocument();
   });
 
@@ -227,20 +198,36 @@ describe("SellVehicleForm photo + issues UI", () => {
   });
 });
 
+describe("SellVehicleForm year", () => {
+  it("blocks the keys that make a negative or decimal year", () => {
+    render(<SellVehicleForm />);
+    const year = screen.getByRole("spinbutton", { name: /^Year/ });
+    for (const key of ["-", ".", "e", "+"]) {
+      expect(fireEvent.keyDown(year, { key })).toBe(false);
+    }
+    expect(fireEvent.keyDown(year, { key: "2" })).toBe(true);
+  });
+});
+
 describe("SellVehicleForm condition", () => {
-  it("offers Brand New and Second Hand only", async () => {
+  it("offers Like New, Good and Fair with their descriptions", async () => {
     render(<SellVehicleForm />);
     fireEvent.click(screen.getByRole("combobox", { name: /^Condition/ }));
-    await waitFor(() => expect(screen.getAllByText("Brand New").length).toBeGreaterThanOrEqual(1));
-    expect(getVisibleOption("Second Hand")).toBeInTheDocument();
-    expect(screen.queryByText("Excellent")).not.toBeInTheDocument();
-    expect(screen.queryByText("Other")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByText("Like New").length).toBeGreaterThanOrEqual(1));
+    expect(getVisibleOption("Good")).toBeInTheDocument();
+    expect(getVisibleOption("Fair")).toBeInTheDocument();
+    expect(screen.getByText("Barely used, no visible wear.")).toBeInTheDocument();
+    expect(screen.queryByText("Brand New")).not.toBeInTheDocument();
+    expect(screen.queryByText("Second Hand")).not.toBeInTheDocument();
   });
 
-  it("stores the two conditions as written", () => {
-    for (const condition of ["Brand New", "Second Hand"]) {
+  it("stores the three conditions as written and rejects the old terms", () => {
+    for (const condition of ["Like New", "Good", "Fair"]) {
       const parsed = sellVehicleSchema.safeParse(baseData({ condition }));
       expect(parsed.success && parsed.data.condition).toBe(condition);
+    }
+    for (const condition of ["Brand New", "Second Hand", ""]) {
+      expect(sellVehicleSchema.safeParse(baseData({ condition })).success).toBe(false);
     }
   });
 });

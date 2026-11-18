@@ -1,10 +1,12 @@
 import Link from "next/link";
 
-import { CircleCheck, FileText, HandCoins, MapPin, Search } from "lucide-react";
+import { CircleCheck, FileText, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ACCEPTED_ID_TYPES, ID_LABELS } from "@/lib/auth/roles";
+
+import { RequirementsPicker } from "./_components/requirements-picker";
 
 const STEPS = [
   {
@@ -23,30 +25,14 @@ const STEPS = [
     step: "Step 3",
     title: "View the car and agree on payment",
     details:
-      "Browse the showroom, view the car in person, then agree on the price. Choose Full Payment or Financing (the Showroom price plus GCE's financing charge, over 6 to 60 months; the app shows the exact total you will repay). Full Payment is paid in cash or by bank transfer through PayMongo.",
+      "Browse the showroom and agree on the price. Pay in cash, by bank transfer through PayMongo, or through In-House Financing (the Showroom price plus GCE's financing charge, over 6 to 60 months). Financing also needs your latest payslip.",
   },
   {
     step: "Step 4",
     title: "Choose how to receive the car",
     details:
-      "Pick delivery, a CALABARZON meet-up, or a visit to GCE. Your purchase is completed only after staff verify your two IDs and proof of billing, then approve the transaction.",
+      "Pick a GCE visit, a meet-up within CALABARZON, or delivery. Use the checklist below to see what your choice needs. Staff verify your documents before they approve the purchase.",
   },
-] as const;
-
-const PAYMENT_METHODS = [
-  { label: "Cash", detail: "Pay the whole price in cash at GCE or on delivery." },
-  { label: "Bank Transfer (via PayMongo)", detail: "Pay the whole price online through PayMongo checkout." },
-  {
-    label: "Financing",
-    detail:
-      "Repay the Showroom price plus GCE's financing charge in monthly installments over 6, 12, 24, 36, or 60 months. The app shows the exact total before you agree.",
-  },
-] as const;
-
-const ARRANGEMENTS = [
-  { label: "Delivery", detail: "GCE brings the car to your address." },
-  { label: "CALABARZON meet-up", detail: "Meet GCE at an agreed place within CALABARZON only." },
-  { label: "GCE visit", detail: "Pick up the car at the GCE office." },
 ] as const;
 
 export default function BuyingRequirementsPage() {
@@ -107,46 +93,7 @@ export default function BuyingRequirementsPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <HandCoins className="size-4 text-muted-foreground" />
-              Payment methods
-            </CardTitle>
-            <CardDescription>Agree on one of these with GCE staff when you buy.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ul className="flex flex-col gap-2">
-              {PAYMENT_METHODS.map((method) => (
-                <li key={method.label} className="flex flex-col gap-0.5 rounded-md border px-3 py-2">
-                  <span className="font-medium text-sm">{method.label}</span>
-                  <span className="text-muted-foreground text-xs">{method.detail}</span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <MapPin className="size-4 text-muted-foreground" />
-              Receiving the car
-            </CardTitle>
-            <CardDescription>Choose one arrangement. Meet-ups are within CALABARZON only.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ul className="flex flex-col gap-2">
-              {ARRANGEMENTS.map((arrangement) => (
-                <li key={arrangement.label} className="flex flex-col gap-0.5 rounded-md border px-3 py-2">
-                  <span className="font-medium text-sm">{arrangement.label}</span>
-                  <span className="text-muted-foreground text-xs">{arrangement.detail}</span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      </div>
+      <RequirementsPicker />
     </div>
   );
 }

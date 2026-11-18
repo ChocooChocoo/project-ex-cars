@@ -19,6 +19,17 @@ export const SELL_MEETUP_METHOD_LABELS: Record<SellMeetupMethod, string> = {
   gce_visit: "GCE Visit",
 };
 
+export type LatLng = { lat: number; lng: number };
+
+/** T12: GCE's office in Dasmariñas, Cavite, one end of the halfway calculation. Adjust to the exact office pin. */
+export const GCE_LOCATION: LatLng = { lat: 14.3294, lng: 120.9367 };
+
+// ponytail: straight-line average of the two points, accurate enough inside CALABARZON. Use a driving-route
+// midpoint (a routing API) if the panel needs travel time to be equal on both sides.
+export function halfwayPoint(a: LatLng, b: LatLng): LatLng {
+  return { lat: (a.lat + b.lat) / 2, lng: (a.lng + b.lng) / 2 };
+}
+
 export const CEILING_PROPOSAL_KINDS = ["purchase_ceiling", "revised_ceiling"] as const;
 
 export const PROPOSAL_KIND_LABELS: Record<string, string> = {

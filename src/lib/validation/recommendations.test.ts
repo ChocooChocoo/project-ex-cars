@@ -19,4 +19,19 @@ describe("T06 recommendation preferences", () => {
       true,
     );
   });
+
+  it("T12: rejects a seat count that does not fit the body type", () => {
+    const base = { budget: 800000, make: "Toyota", purpose: "Family Car" };
+    for (const [bodyType, seats] of [
+      ["Sedan", "7"],
+      ["Van", "2"],
+      ["Van", "4"],
+    ]) {
+      const result = recommendationPreferencesSchema.safeParse({ ...base, bodyType, seats });
+      expect(result.success).toBe(false);
+      expect(result.error?.issues[0]?.path).toEqual(["seats"]);
+    }
+    expect(statedPreferencesSchema.safeParse({ ...required, bodyType: "Sedan", seats: "7" }).success).toBe(false);
+    expect(recommendationPreferencesSchema.safeParse({ ...base, bodyType: "Sedan", seats: "5" }).success).toBe(true);
+  });
 });
