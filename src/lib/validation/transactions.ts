@@ -3,6 +3,7 @@ import { z } from "zod";
 import { FINANCING_TERM_MONTHS } from "@/lib/transactions/buy-flow";
 import { SELL_MEETUP_METHODS } from "@/lib/transactions/sell-flow";
 import { PURCHASE_PAYMENT_METHODS } from "@/lib/transactions/state-machine";
+import { OLDEST_LISTED_YEAR, SELL_CONDITION_VALUES } from "@/lib/vehicles/catalog";
 
 export const buyTransactionSchema = z.object({
   vehicle_id: z.string().uuid(),
@@ -58,55 +59,33 @@ export const sellVehicleSchema = z
   .object({
     make: z.string().trim().min(1, "Brand is required.").max(100),
     model: z.string().trim().min(1, "Model is required.").max(100),
-    year: z.coerce.number({ error: "Choose the year." }).int().min(1900, "Choose the year.").max(2100),
+    // T12: the year is typed, so negative and decimal values are rejected here as well as in the input.
+    year: z.coerce
+      .number({ error: "Enter the year." })
+      .int("Enter a whole year, without decimals.")
+      .min(OLDEST_LISTED_YEAR, `Enter a year from ${OLDEST_LISTED_YEAR} onward.`)
+      .max(new Date().getFullYear() + 1, "The year cannot be in the future."),
     mileage: z.coerce.number().int().min(0, "Mileage cannot be negative."),
-    condition: z
-      .enum(["excellent", "good", "fair", "needs_repair"])
-      .transform((val) => {
-        const map: Record<string, string> = {
-          excellent: "Excellent",
-          good: "Good",
-          fair: "Fair",
-          needs_repair: "Needs Repair",
-        };
-        return map[val] ?? val;
-      })
-      .or(
-        z
-          .string()
-          .trim()
-          .toLowerCase()
-          .transform((val) => {
-            const map: Record<string, string> = {
-              excellent: "Excellent",
-              good: "Good",
-              fair: "Fair",
-              needs_repair: "Needs Repair",
-              "needs repair": "Needs Repair",
-              needsrepair: "Needs Repair",
-            };
-            if (map[val]) return map[val];
-            const cleaned = val.trim();
-            if (!cleaned) return cleaned;
-            return cleaned
-              .split(/[\s_]+/)
-              .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-              .join(" ");
-          })
-          .pipe(z.string().min(1, "Condition is required.").max(50)),
-      ),
+    condition: z.enum(SELL_CONDITION_VALUES, { error: "Choose the condition." }),
     condition_detail: z.string().max(1000).optional().or(z.literal("")),
     offered_amount: z.coerce.number().min(0, "Amount cannot be negative."),
     description: z.string().max(2000).optional().or(z.literal("")),
     has_known_issues: z.enum(["yes", "no"], { error: "Declare the vehicle's issues, or that it has no known issue." }),
     declared_issues: z.string().trim().max(2000).optional().or(z.literal("")),
     meetup_method: z.enum(SELL_MEETUP_METHODS, { error: "Choose a meet-up method." }),
+    // T12: the meet-up point on the map, required for Meet Halfway.
+    meetup_lat: z.coerce.number().min(-90).max(90).optional(),
+    meetup_lng: z.coerce.number().min(-180).max(180).optional(),
     // C10: 1st, 2nd, 3rd, or 4 for "4th owner or more".
     owner_number: z.enum(["1", "2", "3", "4"], { error: "Choose which owner you are." }).transform(Number),
   })
   .refine((data) => data.has_known_issues === "no" || !!data.declared_issues, {
     message: "Tick the issues, or tick Others and describe them.",
     path: ["declared_issues"],
+  })
+  .refine((data) => data.meetup_method !== "meet_halfway" || (data.meetup_lat != null && data.meetup_lng != null), {
+    message: "Set the meet-up point on the map.",
+    path: ["meetup_lat"],
   });
 
 export type SellVehicleFormData = z.infer<typeof sellVehicleSchema>;

@@ -867,20 +867,6 @@ export async function submitSellVehicle(formData: FormData) {
   }
 
   const data = parsed.data;
-  let finalCondition: string = data.condition;
-  const rawDetail = (data as unknown as { condition_detail?: string }).condition_detail;
-  if (finalCondition.toLowerCase() === "other" && rawDetail?.trim()) {
-    const trimmed = rawDetail.trim();
-    const map: Record<string, string> = {
-      excellent: "Excellent",
-      good: "Good",
-      fair: "Fair",
-      needs_repair: "Needs Repair",
-      "needs repair": "Needs Repair",
-    };
-    const lower = trimmed.toLowerCase();
-    finalCondition = map[lower] ?? trimmed;
-  }
 
   // Create the sell transaction under the id its files were uploaded for.
   const { data: transaction, error } = await supabase
@@ -905,6 +891,8 @@ export async function submitSellVehicle(formData: FormData) {
     has_known_issues: data.has_known_issues === "yes",
     declared_issues: data.has_known_issues === "yes" ? data.declared_issues : null,
     meetup_method: data.meetup_method,
+    meetup_lat: data.meetup_method === "meet_halfway" ? (data.meetup_lat ?? null) : null,
+    meetup_lng: data.meetup_method === "meet_halfway" ? (data.meetup_lng ?? null) : null,
     owner_number: data.owner_number,
   });
 
@@ -944,7 +932,7 @@ export async function submitSellVehicle(formData: FormData) {
     model: data.model,
     year: data.year,
     mileage: data.mileage,
-    condition: finalCondition,
+    condition: data.condition,
     description: data.description ?? null,
     listing_state: "draft",
   });

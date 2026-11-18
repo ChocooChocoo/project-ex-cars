@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { approvedCeiling, sellerSafeNote, sellPapersVerified } from "./sell-flow";
+import { approvedCeiling, GCE_LOCATION, halfwayPoint, sellerSafeNote, sellPapersVerified } from "./sell-flow";
 import { reviewDueAt } from "./state-machine";
 
 const doc = (document_kind: string, verification_state = "verified") => ({ document_kind, verification_state });
@@ -81,5 +81,14 @@ describe("sellerSafeNote (T10)", () => {
     expect(sellerSafeNote("Purchase ceiling of ₱480,000 rejected by the CEO")).toBeNull();
     expect(sellerSafeNote("Cancelled: not profitable after inspection. Margin too thin")).toBeNull();
     expect(sellerSafeNote(null)).toBeNull();
+  });
+});
+
+describe("T12 halfwayPoint", () => {
+  it("is the midpoint between GCE and the seller", () => {
+    expect(halfwayPoint(GCE_LOCATION, GCE_LOCATION)).toEqual(GCE_LOCATION);
+    const point = halfwayPoint({ lat: 14, lng: 121 }, { lat: 14.5, lng: 120 });
+    expect(point.lat).toBeCloseTo(14.25);
+    expect(point.lng).toBeCloseTo(120.5);
   });
 });

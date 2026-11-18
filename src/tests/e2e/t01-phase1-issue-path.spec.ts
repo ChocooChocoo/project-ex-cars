@@ -12,7 +12,7 @@ const tag = Math.floor(100 + Math.random() * 899);
 const recalculated = 450_000 + tag; // unique amount, so the Finance row is easy to find
 const expenseNote = `Fuel and toll ${tag}`;
 
-async function pickNamed(page: Page, name: RegExp | string, option?: string) {
+async function pickNamed(page: Page, name: RegExp | string, option?: string | RegExp) {
   await page.getByRole("combobox", { name }).click();
   await (option ? page.getByRole("option", { name: option }) : page.getByRole("option").first()).click();
 }
@@ -33,7 +33,12 @@ test.describe
       "SEED_USER_PASSWORD and the Supabase service role are required",
     );
     // A click that cannot land fails in a minute instead of holding the run until the test timeout.
-    test.use({ actionTimeout: 60_000 });
+    // T12: Meet Halfway sets its map point from the device location (Bacoor, Cavite here).
+    test.use({
+      actionTimeout: 60_000,
+      permissions: ["geolocation"],
+      geolocation: { latitude: 14.4624, longitude: 120.9645 },
+    });
 
     let transactionId = "";
     let casePath = "";
@@ -44,9 +49,9 @@ test.describe
       await page.getByLabel("Brand *").fill("Mitsubishi");
       await page.getByLabel("Model *").fill("Mirage");
       await page.keyboard.press("Escape");
-      await pickNamed(page, /^Year/, "2018");
+      await page.getByRole("spinbutton", { name: /^Year/ }).fill("2018");
       await page.getByLabel("Mileage (km) *").fill("62000");
-      await pickNamed(page, /^Condition/, "Second Hand");
+      await pickNamed(page, /^Condition/, /^Good/);
       await pickNamed(page, /^Owner number/, "2nd owner");
       await page.getByLabel("Offered Amount (₱) *").fill("520000");
       await page.getByLabel("The vehicle has known issues").check();

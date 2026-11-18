@@ -1,8 +1,8 @@
 import { z } from "zod";
 
-import { BODY_TYPES, SEAT_OPTIONS, VEHICLE_PURPOSES } from "@/lib/vehicles/catalog";
+import { BODY_TYPES, SEAT_OPTIONS, SEATS_BY_BODY, VEHICLE_PURPOSES } from "@/lib/vehicles/catalog";
 
-export const recommendationPreferencesSchema = z.object({
+const preferencesObject = z.object({
   budget: z.coerce.number().positive("Budget must be positive").min(1000, "Budget must be at least ₱1,000"),
   condition: z.enum(["any", "new", "certified", "used"]).optional().default("any"),
   fuel: z.enum(["any", "electric", "hybrid", "diesel", "petrol"]).optional().default("any"),
@@ -17,7 +17,14 @@ export const recommendationPreferencesSchema = z.object({
   notes: z.string().trim().max(300).optional(),
 });
 
+// T12: the seat count must fit the body type.
+const seatsFitBody = (data: { bodyType: (typeof BODY_TYPES)[number]; seats: (typeof SEAT_OPTIONS)[number] }) =>
+  SEATS_BY_BODY[data.bodyType]?.includes(data.seats) ?? true;
+const SEATS_FIT_MESSAGE = { message: "That number of seats does not fit this body type.", path: ["seats"] };
+
+export const recommendationPreferencesSchema = preferencesObject.refine(seatsFitBody, SEATS_FIT_MESSAGE);
+
 /** The preferences a run is saved with: everything but the budget. */
-export const statedPreferencesSchema = recommendationPreferencesSchema.omit({ budget: true });
+export const statedPreferencesSchema = preferencesObject.omit({ budget: true }).refine(seatsFitBody, SEATS_FIT_MESSAGE);
 
 export type RecommendationPreferences = z.infer<typeof recommendationPreferencesSchema>;

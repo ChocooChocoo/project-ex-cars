@@ -19,7 +19,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { getWeightLabels } from "@/lib/recommendations/engine";
 import { plainHintByLabel } from "@/lib/recommendations/plain-hints";
 import { type RecommendationPreferences, recommendationPreferencesSchema } from "@/lib/validation/recommendations";
-import { BODY_TYPES, BRANDS, SEAT_OPTIONS, VEHICLE_PURPOSES } from "@/lib/vehicles/catalog";
+import {
+  BODY_TYPES,
+  type BodyType,
+  BRANDS,
+  SEAT_OPTIONS,
+  SEATS_BY_BODY,
+  VEHICLE_PURPOSES,
+} from "@/lib/vehicles/catalog";
 
 import { runRecommendation } from "../actions";
 
@@ -131,6 +138,17 @@ export function RecommendationForm({ onResults }: RecommendationFormProps) {
   });
 
   const budget = form.watch("budget");
+  // T12: only the seat counts that fit the chosen body type are offered.
+  const bodyType = form.watch("bodyType") as BodyType | "";
+  const seatOptions = bodyType ? SEATS_BY_BODY[bodyType] : [];
+
+  function optionsFor(choice: (typeof CHOICES)[number]) {
+    return choice.name === "seats" ? seatOptions.map((s) => ({ value: s, label: `${s} seats` })) : choice.options;
+  }
+
+  function placeholderFor(choice: (typeof CHOICES)[number]) {
+    return choice.name === "seats" && !bodyType ? "Choose a body type first" : choice.placeholder;
+  }
 
   async function onSubmit({ budget: amount, ...data }: RecommendationPreferences) {
     setRunning(true);
@@ -221,16 +239,25 @@ export function RecommendationForm({ onResults }: RecommendationFormProps) {
                       id={`rec-${choice.name}`}
                       className="w-full"
                       value={(field.value as string | undefined) ?? ""}
-                      onChange={(e) => field.onChange(e.target.value)}
+                      onChange={(e) => {
+                        field.onChange(e.target.value);
+                        // A seat count that no longer fits the new body type is cleared.
+                        const seats = form.getValues("seats");
+                        if (choice.name === "bodyType" && seats) {
+                          const fits = SEATS_BY_BODY[e.target.value as BodyType]?.includes(seats);
+                          if (!fits) form.setValue("seats", "" as never);
+                        }
+                      }}
+                      disabled={choice.name === "seats" && !bodyType}
                       aria-invalid={fieldState.invalid}
                       aria-required={choice.required}
                     >
-                      {choice.placeholder ? (
+                      {placeholderFor(choice) ? (
                         <NativeSelectOption value="" disabled>
-                          {choice.placeholder}
+                          {placeholderFor(choice)}
                         </NativeSelectOption>
                       ) : null}
-                      {choice.options.map((option) => (
+                      {optionsFor(choice).map((option) => (
                         <NativeSelectOption key={option.value} value={option.value}>
                           {option.label}
                         </NativeSelectOption>

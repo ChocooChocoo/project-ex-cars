@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -24,7 +25,7 @@ import { createClient } from "@/lib/supabase/client";
 import { SELL_MEETUP_METHOD_LABELS, SELL_MEETUP_METHODS } from "@/lib/transactions/sell-flow";
 import { compressImage, MAX_UPLOAD_BYTES } from "@/lib/uploads/compress-image";
 import { type SellVehicleFormData, sellVehicleSchema } from "@/lib/validation/transactions";
-import { listedYears, OWNER_NUMBERS, SELL_CONDITIONS } from "@/lib/vehicles/catalog";
+import { OLDEST_LISTED_YEAR, OWNER_NUMBERS, SELL_CONDITIONS } from "@/lib/vehicles/catalog";
 
 export interface ConditionChecklistNode {
   id: string;
@@ -60,7 +61,16 @@ export function composeDeclaredIssues(tickedNames: string[], othersText: string 
   return [...tickedNames, ...(others ? [`Others: ${others}`] : [])].join("; ");
 }
 
-const YEARS = listedYears();
+const LATEST_YEAR = new Date().getFullYear() + 1;
+
+// T12: the year is typed, so keys that make a negative, decimal or exponent number are blocked.
+const BLOCKED_YEAR_KEYS = new Set(["-", "+", ".", ",", "e", "E"]);
+
+// Leaflet needs the browser window, so the map is never rendered on the server.
+const MeetupMap = dynamic(() => import("./meetup-map").then((mod) => mod.MeetupMap), {
+  ssr: false,
+  loading: () => <div className="h-72 w-full animate-pulse rounded-md border bg-muted" />,
+});
 
 export const SELL_PAPER_ACCEPT = "image/jpeg,image/png,image/webp,application/pdf";
 
@@ -109,6 +119,8 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
   });
 
   const hasKnownIssues = watch("has_known_issues");
+  const meetupMethod = watch("meetup_method");
+  const condition = watch("condition");
   const { field: makeField } = useController({ control, name: "make" });
   const { field: modelField } = useController({ control, name: "model" });
 
@@ -234,6 +246,10 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
     fd.set("has_known_issues", data.has_known_issues);
     if (hasIssues && data.declared_issues) fd.set("declared_issues", data.declared_issues);
     fd.set("meetup_method", data.meetup_method);
+    if (data.meetup_method === "meet_halfway" && data.meetup_lat != null && data.meetup_lng != null) {
+      fd.set("meetup_lat", String(data.meetup_lat));
+      fd.set("meetup_lng", String(data.meetup_lng));
+    }
     fd.set("id_type_1", idTypes.id_type_1);
     fd.set("id_type_2", idTypes.id_type_2);
     if (hasIssues && selectedConditionItems.length > 0) {
@@ -301,23 +317,22 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
           <div className="grid gap-4 sm:grid-cols-2">
             <Field data-invalid={!!errors.year}>
               <FieldLabel htmlFor="sell-year">Year *</FieldLabel>
-              <Controller
-                control={control}
-                name="year"
-                render={({ field }) => (
-                  <Select value={field.value ? String(field.value) : ""} onValueChange={field.onChange}>
-                    <SelectTrigger id="sell-year" className="w-full" aria-invalid={!!errors.year}>
-                      <SelectValue placeholder="Select year" />
-                    </SelectTrigger>
-                    <SelectContent className="max-h-72">
-                      {YEARS.map((year) => (
-                        <SelectItem key={year} value={String(year)}>
-                          {year}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
+              <Input
+                id="sell-year"
+                {...register("year")}
+                type="number"
+                inputMode="numeric"
+                min={OLDEST_LISTED_YEAR}
+                max={LATEST_YEAR}
+                step={1}
+                placeholder={`${OLDEST_LISTED_YEAR}–${LATEST_YEAR}`}
+                aria-invalid={!!errors.year}
+                onKeyDown={(event) => {
+                  if (BLOCKED_YEAR_KEYS.has(event.key)) event.preventDefault();
+                }}
+                onPaste={(event) => {
+                  if (!/^\d+$/.test(event.clipboardData.getData("text").trim())) event.preventDefault();
+                }}
               />
               {errors.year && <FieldError errors={[{ message: errors.year.message }]} />}
             </Field>
@@ -336,18 +351,26 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
                 render={({ field }) => (
                   <Select value={field.value ?? ""} onValueChange={field.onChange}>
                     <SelectTrigger id="sell-condition" className="w-full" aria-invalid={!!errors.condition}>
-                      <SelectValue placeholder="Select condition" />
+                      <SelectValue placeholder="Select condition">{field.value}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      {SELL_CONDITIONS.map((condition) => (
-                        <SelectItem key={condition} value={condition}>
-                          {condition}
+                      {SELL_CONDITIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value} textValue={option.value}>
+                          <span className="flex flex-col">
+                            <span>{option.value}</span>
+                            <span className="text-muted-foreground text-xs">{option.description}</span>
+                          </span>
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 )}
               />
+              {condition ? (
+                <FieldDescription>
+                  {SELL_CONDITIONS.find((option) => option.value === condition)?.description}
+                </FieldDescription>
+              ) : null}
               {errors.condition && <FieldError errors={[{ message: errors.condition.message }]} />}
             </Field>
             <Field data-invalid={!!errors.owner_number}>
@@ -551,6 +574,21 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
             />
             {errors.meetup_method && <FieldError errors={[{ message: errors.meetup_method.message }]} />}
           </Field>
+          {meetupMethod === "meet_halfway" ? (
+            <Field data-invalid={!!errors.meetup_lat}>
+              <FieldLabel>Meet-up point *</FieldLabel>
+              <FieldDescription>
+                We suggest the halfway point between GCE and your location. Drag the pin to adjust it.
+              </FieldDescription>
+              <MeetupMap
+                onChange={(point) => {
+                  setValue("meetup_lat", point.lat, { shouldValidate: isSubmitted });
+                  setValue("meetup_lng", point.lng, { shouldValidate: isSubmitted });
+                }}
+              />
+              {errors.meetup_lat && <FieldError errors={[{ message: errors.meetup_lat.message }]} />}
+            </Field>
+          ) : null}
           <Field data-invalid={!!paperError}>
             <FieldLabel>Required papers (JPEG/PNG/WebP/PDF, max 2 MB each)</FieldLabel>
             <ul className="grid gap-3 sm:grid-cols-2">

@@ -33,7 +33,7 @@ async function signInAs(page: Page, email: string) {
     .catch(() => undefined);
 }
 
-async function pick(page: Page, combobox: string | RegExp, option?: string) {
+async function pick(page: Page, combobox: string | RegExp, option?: string | RegExp) {
   await page.getByRole("combobox", { name: combobox }).click();
   const choice = option ? page.getByRole("option", { name: option }) : page.getByRole("option").first();
   await choice.click();
@@ -52,9 +52,9 @@ test.describe
       await page.getByLabel("Brand *").fill("Toyota");
       await page.getByLabel("Model *").fill("Vios");
       await page.keyboard.press("Escape");
-      await pick(page, /^Year/, "2019");
+      await page.getByRole("spinbutton", { name: /^Year/ }).fill("2019");
       await page.getByLabel("Mileage (km) *").fill("40000");
-      await pick(page, /^Condition/, "Second Hand");
+      await pick(page, /^Condition/, /^Good/);
       await pick(page, /^Owner number/, "1st owner");
       await page.getByLabel("Offered Amount (₱) *").fill("520000");
       await page.getByLabel("There is no known issue").check();
