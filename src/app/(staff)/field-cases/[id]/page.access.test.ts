@@ -28,7 +28,7 @@ vi.mock("next/navigation", () => ({
     throw new Error("notFound");
   }),
 }));
-vi.mock("@/app/auth/actions", () => ({ getCurrentRole }));
+vi.mock("@/lib/auth/server-session", () => ({ getCurrentRole }));
 vi.mock("@/lib/supabase/server", () => ({ createServerSupabase: vi.fn(async () => ({ auth: { getUser } })) }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn(() => ({ from: db.from, storage: {} })) }));
 vi.mock("@/lib/transactions/document-media", () => ({

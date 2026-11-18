@@ -1,3 +1,5 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
 
@@ -6,7 +8,8 @@ import { ArrowRight, Building2, Car, MapPin, Truck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { apiPublicGet } from "@/lib/api/server";
+import { browserApi } from "@/lib/api/client";
+import { usePageData } from "@/lib/api/use-page-data";
 import { cn, formatCurrency } from "@/lib/utils";
 
 import { FinancingEstimator } from "./_components/financing-estimator";
@@ -14,9 +17,7 @@ import { HeroCopy, HeroLine, HeroPhoto } from "./_components/hero-entrance";
 import { PromoStrip } from "./_components/promo-strip";
 import { Reveal } from "./_components/reveal";
 
-// Regenerated every minute from the public Laravel endpoint.
-// ponytail: a sold car can show for up to a minute; switch to force-dynamic if that matters.
-export const revalidate = 60;
+const EMPTY: LandingData = { content: [], cars: [], reviews: { reviews: [], average: null, count: 0 } };
 
 // Stock photos (Unsplash), used only where no specific GCE car is named, so a caption never pairs one car's
 // name with another car's photo. Replace with GCE's own photos.
@@ -66,17 +67,15 @@ const ROUTES = [
 
 // Public landing page (T04 L1/L2). src/proxy.ts sends signed-in users from / to their own landing path,
 // so only signed-out visitors see this page. Styling uses the app's shadcn components and theme tokens only.
-export default async function LandingPage() {
-  // Public Laravel endpoint: published content, the five newest available cars (Laravel computes each car's
-  // financing total, so the markup percentage never leaves the API) and published reviews.
-  const {
-    content: items,
-    cars,
-    reviews: customerReviews,
-  } = await apiPublicGet<LandingData>("/api/v1/catalogue/landing", revalidate).catch(
-    // API down (or a build without it): render the static marketing page; the next revalidation fills it in.
-    (): LandingData => ({ content: [], cars: [], reviews: { reviews: [], average: null, count: 0 } }),
+export default function LandingPage() {
+  // Public Laravel endpoint, read in the browser (static build): published content, the five newest available
+  // cars (Laravel computes each car's financing total, so the markup percentage never leaves the API) and
+  // published reviews. The marketing page renders at once; these sections appear when the data arrives, and
+  // stay hidden if the API is down.
+  const page = usePageData("landing", () =>
+    browserApi<LandingData>("GET", "/api/v1/catalogue/landing").catch(() => EMPTY),
   );
+  const { content: items, cars, reviews: customerReviews } = page.data ?? EMPTY;
   const promos = items.filter((c) => c.content_kind === "hero" || c.content_kind === "promotion");
   const featured = items.filter((c) => c.content_kind === "featured_vehicle");
   const announcements = items.filter((c) => c.content_kind === "announcement");

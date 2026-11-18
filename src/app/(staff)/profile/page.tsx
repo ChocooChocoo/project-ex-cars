@@ -1,6 +1,9 @@
-import { loadOwnProfile } from "@/components/profile/load-own-profile";
+"use client";
+
+import { useSession } from "@/components/auth/session-provider";
+import { toOwnProfile } from "@/components/profile/load-own-profile";
 import { ProfileForms } from "@/components/profile/profile-forms";
 
-export default async function ProfilePage() {
-  return <ProfileForms profile={await loadOwnProfile()} />;
+export default function ProfilePage() {
+  return <ProfileForms profile={toOwnProfile(useSession())} />;
 }

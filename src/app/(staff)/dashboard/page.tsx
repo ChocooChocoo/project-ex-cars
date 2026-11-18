@@ -1,6 +1,6 @@
-import { getCurrentRole } from "@/app/auth/actions";
 import { requireRole } from "@/lib/auth/guards";
 import { STAFF_ROLES } from "@/lib/auth/roles";
+import { getCurrentRole } from "@/lib/auth/server-session";
 import { checkAndNotifyDueInstallments, checkAndNotifyOverdueReviews } from "@/lib/notifications/actions";
 
 import { MetricCards } from "./_components/metric-cards";

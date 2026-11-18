@@ -16,7 +16,7 @@ const { getUser, getCurrentRole, db } = vi.hoisted(() => {
   return { getUser: vi.fn(), getCurrentRole: vi.fn(), db: { rows, from } };
 });
 
-vi.mock("@/app/auth/actions", () => ({ getCurrentRole }));
+vi.mock("@/lib/auth/server-session", () => ({ getCurrentRole }));
 vi.mock("@/lib/supabase/server", () => ({
   createServerSupabaseClient: vi.fn(async () => ({ auth: { getUser } })),
 }));

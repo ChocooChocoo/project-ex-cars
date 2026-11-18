@@ -1,19 +1,25 @@
+"use client";
+
 import Link from "next/link";
 
 import { Sparkles } from "lucide-react";
 
+import { PageSkeleton } from "@/components/page-skeleton";
 import { Button } from "@/components/ui/button";
-import { apiGet } from "@/lib/api/server";
+import { browserApi } from "@/lib/api/client";
+import { usePageData } from "@/lib/api/use-page-data";
 
 import { ShowroomGrid } from "./_components/showroom-grid";
 
-export default async function ShowroomPage() {
+export default function ShowroomPage() {
   // Laravel strips GCE-only fields (identifiers, markup) before the rows leave the API.
-  const { data } = await apiGet<{ vehicles: Record<string, unknown>[]; favourite_ids: string[] }>(
-    "/api/v1/catalogue/vehicles",
+  const page = usePageData("showroom", () =>
+    browserApi<{ vehicles: Record<string, unknown>[]; favourite_ids: string[] }>("GET", "/api/v1/catalogue/vehicles"),
   );
-  const vehicles = data.vehicles;
-  const favouriteIds = data.favourite_ids;
+  if (page.error) throw page.error;
+  if (!page.data) return <PageSkeleton />;
+  const vehicles = page.data.vehicles;
+  const favouriteIds = page.data.favourite_ids;
 
   return (
     <div className="flex flex-col gap-6">

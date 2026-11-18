@@ -53,7 +53,7 @@ async function setNewPassword(page: Page, path: string, password: string) {
   await page.getByLabel("New password", { exact: true }).fill(password);
   await page.getByLabel("Confirm new password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Set new password" }).click();
-  await page.waitForURL(/\/auth\/v1\/login\?notice=password_reset/);
+  await page.waitForURL(/\/auth\/v1\/login\/?\?notice=password_reset/);
   await expect(page.getByText("Your password was changed. Log in with the new one.")).toBeVisible();
 }
 

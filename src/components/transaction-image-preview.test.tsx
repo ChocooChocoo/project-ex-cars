@@ -1,19 +1,24 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { TransactionImagePreview } from "./transaction-image-preview";
+import { TransactionImagePreview, thumbnailUrl } from "./transaction-image-preview";
 
 afterEach(cleanup);
 
-const src = "https://project.supabase.co/storage/v1/object/sign/transaction-documents/car.jpg?token=example";
+const src = "http://localhost:8000/api/v1/files/transaction-documents/tx/car.jpg?expires=1&signature=abc";
 
 describe("TransactionImagePreview", () => {
+  it("loads older (non-Laravel) storage links as they are", () => {
+    const old = "https://project.supabase.co/storage/v1/object/sign/x/car.jpg?token=t";
+    expect(thumbnailUrl(old)).toBe(old);
+  });
+
   it("loads a lazy thumbnail instead of the original image", () => {
     render(<TransactionImagePreview src={src} alt="Vehicle photo" />);
 
     const thumbnail = screen.getByRole("img", { name: "Vehicle photo" });
     const thumbnailUrl = new URL(thumbnail.getAttribute("src") ?? "", window.location.origin);
-    expect(thumbnailUrl.pathname).toBe("/api/transaction-thumbnail");
+    expect(thumbnailUrl.origin + thumbnailUrl.pathname).toBe("http://localhost:8000/api/v1/thumbnail");
     expect(thumbnailUrl.searchParams.get("src")).toBe(src);
     expect(thumbnail).toHaveAttribute("loading", "lazy");
     expect(thumbnail).toHaveAttribute("decoding", "async");

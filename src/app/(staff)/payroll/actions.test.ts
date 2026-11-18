@@ -54,7 +54,7 @@ const from = vi.fn((table: string) => ({
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath }));
-vi.mock("@/app/auth/actions", () => ({ getCurrentRole: vi.fn(async () => "account_manager") }));
+vi.mock("@/lib/auth/server-session", () => ({ getCurrentRole: vi.fn(async () => "account_manager") }));
 vi.mock("@/lib/supabase/server", () => ({
   createServerSupabaseClient: vi.fn(async () => ({
     rpc,

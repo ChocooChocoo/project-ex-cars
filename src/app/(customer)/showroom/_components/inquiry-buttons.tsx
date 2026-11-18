@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { MessageSquare, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
 
-import { createInquiry } from "@/app/(customer)/my-inquiries/actions";
+import { createInquiry } from "@/app/(customer)/my-inquiries/server-actions";
 import { createBuyTransaction } from "@/app/(customer)/my-transactions/actions";
 import { Button } from "@/components/ui/button";
 

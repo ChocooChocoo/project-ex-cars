@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 
-import { getCurrentRole } from "@/app/auth/actions";
 import { PurchaseFundsCard } from "@/components/transactions/purchase-funds-card";
+import { getCurrentRole } from "@/lib/auth/server-session";
 import { previousOwnerDocuments, VEHICLE_REGISTRATION_KINDS } from "@/lib/papers/previous-owner-documents";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";

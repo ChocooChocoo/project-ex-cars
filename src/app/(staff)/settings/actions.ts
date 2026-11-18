@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 
 import { z } from "zod";
 
-import { getCurrentRole } from "@/app/auth/actions";
 import { type GceRole, SETTINGS_MANAGER_ROLES } from "@/lib/auth/roles";
+import { getCurrentRole } from "@/lib/auth/server-session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 

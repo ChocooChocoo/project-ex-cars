@@ -113,9 +113,11 @@ class InquiryTest extends TestCase
 
         $this->travelTo(\Carbon\CarbonImmutable::parse('2026-11-18 12:00:10', 'UTC'));
         $this->message($thread, $customer, 'sent now', '2026-11-18 12:00:10.000000');
+        // The browser polls a while later (offline, backoff): the gap is longer than the overlap window.
+        $this->travelTo(\Carbon\CarbonImmutable::parse('2026-11-18 12:00:30', 'UTC'));
         $poll = $this->as($customer)->getJson("/api/v1/inquiries/{$thread->id}/messages?after=2026-11-23T07:00:00.000000Z")->assertOk();
         $this->assertContains('sent now', array_column($poll->json('messages'), 'message_text'));
-        $this->assertSame('2026-11-18T12:00:10.000000Z', $poll->json('cursor'));
+        $this->assertSame('2026-11-18T12:00:30.000000Z', $poll->json('cursor'));
     }
 
     #[Test]

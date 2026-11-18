@@ -1,27 +1,33 @@
-import { redirect } from "next/navigation";
+"use client";
 
+import { useRequireRole, useSession } from "@/components/auth/session-provider";
+import { PageSkeleton } from "@/components/page-skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { apiGet } from "@/lib/api/server";
-import { getSession } from "@/lib/auth/session";
+import { browserApi } from "@/lib/api/client";
+import { usePageData } from "@/lib/api/use-page-data";
 
 import { StaffInquiryChat } from "./_components/staff-inquiry-chat";
 
-export default async function StaffInquiriesPage() {
-  const me = await getSession();
-  const myRole = me?.role ?? "";
-  if (!me) return null;
-  if (!["ceo", "account_manager", "sales_manager"].includes(myRole)) {
-    redirect("/unauthorized");
-  }
+export default function StaffInquiriesPage() {
+  const me = useSession();
+  const myRole = me.role ?? "";
+  const allowed = useRequireRole(["ceo", "account_manager", "sales_manager"]);
 
   // Laravel scopes the inbox by role: the Sales Manager sees buy threads; the CEO and Account Manager see all
   // but sell negotiations, which the Marketing Specialist opens from the sell offer.
-  const { data } = await apiGet<{ inquiries: Record<string, unknown>[]; unread_by_inquiry: Record<string, number> }>(
-    "/api/v1/inquiries",
+  const page = usePageData(allowed ? "staff-inquiries" : "staff-inquiries:denied", () =>
+    allowed
+      ? browserApi<{ inquiries: Record<string, unknown>[]; unread_by_inquiry: Record<string, number> }>(
+          "GET",
+          "/api/v1/inquiries",
+        )
+      : Promise.resolve(null),
   );
-  const list = data.inquiries;
-  const unreadByInquiry = data.unread_by_inquiry;
+  if (page.error) throw page.error;
+  if (!allowed || !page.data) return <PageSkeleton />;
+  const list = page.data.inquiries;
+  const unreadByInquiry = page.data.unread_by_inquiry;
 
   return (
     <div data-content-padding="false" className="flex min-h-0 min-w-0 flex-1 flex-col gap-6">

@@ -8,7 +8,7 @@ const from = vi.fn(() => ({ update, insert }));
 const getUser = vi.fn(async () => ({ data: { user: { id: "33333333-3333-4333-8333-333333333333" } }, error: null }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("@/app/auth/actions", () => ({ getCurrentRole: vi.fn(async () => "account_manager") }));
+vi.mock("@/lib/auth/server-session", () => ({ getCurrentRole: vi.fn(async () => "account_manager") }));
 vi.mock("@/lib/supabase/server", () => ({
   createServerSupabaseClient: vi.fn(async () => ({ rpc, from, auth: { getUser } })),
 }));

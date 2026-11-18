@@ -26,7 +26,7 @@ const { getUser, getCurrentRole, db } = vi.hoisted(() => {
 });
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("@/app/auth/actions", () => ({ getCurrentRole }));
+vi.mock("@/lib/auth/server-session", () => ({ getCurrentRole }));
 vi.mock("@/lib/auth/audit", () => ({ logAuditEvent: vi.fn() }));
 vi.mock("@/lib/notifications/notify", () => ({ notify: vi.fn() }));
 vi.mock("@/lib/transactions/buy-flow-server", () => ({

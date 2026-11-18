@@ -17,6 +17,7 @@ function getSeedPassword() {
 async function signIn(page: Page, email: string, path: string) {
   for (let attempt = 0; attempt < 2; attempt++) {
     await page.goto("/auth/v1/login");
+    await page.waitForLoadState("networkidle");
     await page.getByLabel("Email Address", { exact: true }).fill(email);
     await page.getByLabel("Password", { exact: true }).fill(getSeedPassword());
     await page.getByRole("button", { name: "Login", exact: true }).click();
@@ -24,10 +25,11 @@ async function signIn(page: Page, email: string, path: string) {
       .waitForURL((url) => !url.pathname.startsWith("/auth/v1/login"), { timeout: 15000 })
       .catch(() => undefined);
     await page.goto(path);
-    if (new URL(page.url()).pathname === path) return;
+    if (new URL(page.url()).pathname.replace(/\/$/, "") === path) return;
   }
 
-  await expect(page).toHaveURL(new RegExp(`${path.replaceAll("/", "\\/")}$`));
+  // The static build serves every page with a trailing slash (trailingSlash: true).
+  await expect(page).toHaveURL(new RegExp(`${path.replaceAll("/", "\\/")}\\/?$`));
 }
 
 function inquiryRows(page: Page) {
@@ -76,7 +78,7 @@ test.describe("shared inquiry conversation", () => {
       const inquiryId = await inquiryRows(page).first().getAttribute("data-inquiry-id");
       expect(inquiryId).toMatch(/^[0-9a-f-]{36}$/i);
       await page.goto(`${route.path}/${inquiryId}`);
-      await expect(page).toHaveURL(new RegExp(`${route.path.replaceAll("/", "\\/")}/[0-9a-f-]{36}$`, "i"));
+      await expect(page).toHaveURL(new RegExp(`${route.path.replaceAll("/", "\\/")}/[0-9a-f-]{36}\\/?$`, "i"));
       await expect(page.getByText("Inquiry not found.", { exact: true })).toHaveCount(0);
       await expect(page.getByText("Select a conversation to view messages.", { exact: true })).toHaveCount(0);
       await expect(page.getByPlaceholder("Type a message...", { exact: true })).toBeVisible({ timeout: 15000 });

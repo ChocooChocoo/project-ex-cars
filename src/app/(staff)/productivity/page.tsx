@@ -1,4 +1,6 @@
-import { requireRole } from "@/lib/auth/guards";
+"use client";
+
+import { useRequireRole } from "@/components/auth/session-provider";
 
 import { CalendarPanel } from "./_components/calendar-panel";
 import { FocusCard } from "./_components/focus-card";
@@ -12,8 +14,8 @@ import { WeeklySummaryCard } from "./_components/weekly-summary-card";
 
 // Productivity is personal productivity (tasks, focus, notes) — not an IT Planner module. Guarded to
 // CEO + Account Manager so it is not an unguarded pseudo-Planner surface.
-export default async function Page() {
-  await requireRole(["ceo", "account_manager"]);
+export default function Page() {
+  if (!useRequireRole(["ceo", "account_manager"])) return null;
   return (
     <div className="grid gap-6 lg:grid-cols-12">
       <section className="lg:col-span-9">

@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
 
 import { getMyAttendanceState } from "@/app/(staff)/attendance/actions";
-import { getCurrentRole } from "@/app/auth/actions";
 import { requireRole } from "@/lib/auth/guards";
 import { ATTENDANCE_TRACKED_ROLES } from "@/lib/auth/roles";
+import { getCurrentRole } from "@/lib/auth/server-session";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { ATTENDANCE_STATUSES, type AttendanceStatus } from "@/lib/validation/phase6";
 

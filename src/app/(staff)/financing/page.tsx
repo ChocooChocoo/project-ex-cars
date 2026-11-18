@@ -1,5 +1,5 @@
-import { getCurrentRole } from "@/app/auth/actions";
 import { requireRole } from "@/lib/auth/guards";
+import { getCurrentRole } from "@/lib/auth/server-session";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 import { type CashSale, FinancingMonitor } from "./_components/financing-monitor";

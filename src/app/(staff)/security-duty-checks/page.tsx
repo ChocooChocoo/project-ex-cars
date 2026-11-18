@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 
-import { getCurrentRole } from "@/app/auth/actions";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { getCurrentRole } from "@/lib/auth/server-session";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 import { type DutyCheckRow, SecurityDutyChecksClient } from "./_components/security-duty-checks-client";

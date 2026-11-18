@@ -1,14 +1,20 @@
-"use server";
+"use client";
 
-import { revalidatePath } from "next/cache";
-
+import { browserApi } from "@/lib/api/client";
 import { errorMessage } from "@/lib/api/errors";
-import { apiGet, apiWrite } from "@/lib/api/server";
+import { revalidatePath } from "@/lib/api/revalidate";
 import type { ScoredVehicle } from "@/lib/recommendations/engine";
 import { statedPreferencesSchema } from "@/lib/validation/recommendations";
 
 // Laravel ranks the available cars (RecommendationService, a port of src/lib/recommendations/engine.ts) and
 // stores the run for the signed-in user; these actions keep the result shapes the components already use.
+
+async function apiGet<T>(path: string) {
+  return { data: await browserApi<T>("GET", path) };
+}
+async function apiWrite<T = unknown>(method: "POST", path: string, body?: unknown) {
+  return { data: await browserApi<T>(method, path, body) };
+}
 
 export async function runRecommendation(budget: number, preferences: Record<string, string>) {
   const parsed = statedPreferencesSchema.safeParse(preferences);

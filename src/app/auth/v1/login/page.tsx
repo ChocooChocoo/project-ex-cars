@@ -1,16 +1,17 @@
+"use client";
+
 import Link from "next/link";
 
 import { GceLogo } from "@/components/gce-logo";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useQuery } from "@/lib/routing/use-query";
 
 import { LoginForm } from "../../_components/login-form";
 
-export default async function LoginV1({
-  searchParams,
-}: {
-  readonly searchParams: Promise<{ error?: string; notice?: string }>;
-}) {
-  const { error, notice } = await searchParams;
+export default function LoginV1() {
+  const query = useQuery();
+  const error = query?.get("error");
+  const notice = query?.get("notice");
 
   return (
     <div className="flex h-dvh">

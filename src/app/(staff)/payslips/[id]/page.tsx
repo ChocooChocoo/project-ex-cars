@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { getCurrentRole } from "@/app/auth/actions";
+import { getCurrentRole } from "@/lib/auth/server-session";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 import { PayslipDetailClient, type PayslipItemRow } from "./_components/payslip-detail-client";

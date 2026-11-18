@@ -15,7 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { usePoll } from "@/hooks/use-poll";
 import { browserApi } from "@/lib/api/client";
-import { markAllNotificationsRead, markNotificationRead, type NotificationRow } from "@/lib/notifications/actions";
+import { markAllNotificationsRead, markNotificationRead, type NotificationRow } from "@/lib/notifications/client";
 import { type NotificationPage, withHrefs } from "@/lib/notifications/with-hrefs";
 import { cn } from "@/lib/utils";
 

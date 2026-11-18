@@ -7,9 +7,17 @@ const { apiWrite, redirect } = vi.hoisted(() => ({
   }),
 }));
 
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("next/navigation", () => ({ redirect }));
-vi.mock("@/lib/api/server", () => ({ apiWrite, relaySetCookies: vi.fn() }));
+vi.mock("@/lib/api/revalidate", () => ({ revalidatePath: vi.fn() }));
+// Full page loads replace Next's redirect(); the stub throws like the old redirect() mock did.
+Object.defineProperty(window, "location", { configurable: true, value: { ...window.location, assign: redirect } });
+vi.mock("@/lib/api/client", () => ({
+  // Phase 4b: the actions call Laravel from the browser; delegate to the apiWrite mock so the request
+  // assertions below stay as they were (trailing undefined arguments dropped).
+  browserApi: (...args: unknown[]) => {
+    while (args.length > 0 && args[args.length - 1] === undefined) args.pop();
+    return Promise.resolve(apiWrite(...args)).then((result: { data?: unknown } | undefined) => result?.data);
+  },
+}));
 vi.mock("@/lib/auth/session", () => ({ getSession: vi.fn() }));
 
 import { ApiError } from "@/lib/api/errors";

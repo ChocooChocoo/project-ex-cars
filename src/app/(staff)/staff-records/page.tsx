@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
 
-import { getCurrentRole } from "@/app/auth/actions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { STAFF_ROLES } from "@/lib/auth/roles";
+import { getCurrentRole } from "@/lib/auth/server-session";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 import { EmployeeAccountForm } from "./_components/employee-account-form";

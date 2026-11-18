@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
-import { getCurrentRole } from "@/app/auth/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getCurrentRole } from "@/lib/auth/server-session";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 import { type PayrollRunRow, PayslipsSummary } from "./_components/payslips-summary";

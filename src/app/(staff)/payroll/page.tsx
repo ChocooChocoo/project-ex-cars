@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
-import { getCurrentRole } from "@/app/auth/actions";
 import { STAFF_ROLES } from "@/lib/auth/roles";
+import { getCurrentRole } from "@/lib/auth/server-session";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 import { type CompensationRow, PayrollClient, type PayrollRunRow } from "./_components/payroll-client";

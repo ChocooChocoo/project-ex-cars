@@ -2,8 +2,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { apiWrite, getSession } = vi.hoisted(() => ({ apiWrite: vi.fn(), getSession: vi.fn() }));
 
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("@/lib/api/server", () => ({ apiWrite, relaySetCookies: vi.fn() }));
+vi.mock("@/lib/api/revalidate", () => ({ revalidatePath: vi.fn() }));
+vi.mock("@/lib/api/client", () => ({
+  // Phase 4b: the actions call Laravel from the browser; delegate to the apiWrite mock so the request
+  // assertions below stay as they were (trailing undefined arguments dropped).
+  browserApi: (...args: unknown[]) => {
+    while (args.length > 0 && args[args.length - 1] === undefined) args.pop();
+    return Promise.resolve(apiWrite(...args)).then((result: { data?: unknown } | undefined) => result?.data);
+  },
+}));
 vi.mock("@/lib/auth/session", () => ({ getSession }));
 
 import { ApiError } from "@/lib/api/errors";
@@ -30,12 +37,14 @@ describe("createEmployeeAccount (T04 E6)", () => {
     });
   });
 
-  it("refuses a caller who is not the CEO or the Account Manager without calling the API", async () => {
-    getSession.mockResolvedValue({ id: "sm-1", role: "sales_manager" });
+  // Phase 4b: the role check is Laravel's (role:ceo,account_manager); its 403 becomes the same message.
+  it("shows Laravel's refusal for a caller who is not the CEO or the Account Manager", async () => {
+    apiWrite.mockRejectedValue(
+      new ApiError(403, { code: "not_authorized", message: "You do not have permission for this action." }),
+    );
     await expect(createEmployeeAccount(input)).resolves.toEqual({
       error: "You do not have permission for this action.",
     });
-    expect(apiWrite).not.toHaveBeenCalled();
   });
 
   it("refuses the CEO role and a weak password before any request", async () => {

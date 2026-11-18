@@ -1,46 +1,50 @@
-import type { ReactNode } from "react";
-import { cache } from "react";
+"use client";
 
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+import { type ReactNode, useState } from "react";
 
 import { AccountSwitcher } from "@/app/(staff)/_components/sidebar/account-switcher";
 import { AppSidebar } from "@/app/(staff)/_components/sidebar/app-sidebar";
 import { LayoutControls } from "@/app/(staff)/_components/sidebar/layout-controls";
 import { NotificationPopover } from "@/app/(staff)/_components/sidebar/notification-popover";
 import { ThemeSwitcher } from "@/app/(staff)/_components/sidebar/theme-switcher";
-import { getCurrentRole } from "@/app/auth/actions";
-import { needsTutorial } from "@/components/onboarding/actions";
+import { PageSpinner } from "@/components/auth/page-spinner";
+import { SessionProvider, useRequireRole, useSession } from "@/components/auth/session-provider";
 import { OnboardingTour } from "@/components/onboarding/onboarding-tour";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { getSession } from "@/lib/auth/session";
-import { getNotifications } from "@/lib/notifications/actions";
+import { usePageData } from "@/lib/api/use-page-data";
+import { getClientCookie } from "@/lib/cookie.client";
+import { getNotifications } from "@/lib/notifications/client";
 import { SIDEBAR_COLLAPSIBLE_VALUES, SIDEBAR_VARIANT_VALUES } from "@/lib/preferences/layout";
+import { readPreference } from "@/lib/preferences/read-preference.client";
 import { cn } from "@/lib/utils";
-import { getPreference } from "@/server/server-actions";
 
-export default async function CustomerLayout({ children }: Readonly<{ children: ReactNode }>) {
-  // Laravel session check. Signed out or inactive → login; an API outage throws to the error page instead.
-  if (!(await getSession())) {
-    redirect("/auth/v1/login");
-  }
+// Phase 4b: client layout (the static build has no server). SessionProvider replaces the server session
+// check and redirect; Laravel still authorises every request.
+export default function CustomerLayout({ children }: Readonly<{ children: ReactNode }>) {
+  return (
+    <SessionProvider fallback={<PageSpinner />}>
+      <CustomerShell>{children}</CustomerShell>
+    </SessionProvider>
+  );
+}
 
-  const cookieStore = await cookies();
-  const defaultOpen = cookieStore.get("sidebar_state")?.value !== "false";
-  const getCachedRole = cache(getCurrentRole);
-  const [variant, collapsible, role] = await Promise.all([
-    getPreference("sidebar_variant", SIDEBAR_VARIANT_VALUES, "inset"),
-    getPreference("sidebar_collapsible", SIDEBAR_COLLAPSIBLE_VALUES, "icon"),
-    getCachedRole(),
-  ]);
-
-  if (role !== "customer") redirect("/unauthorized");
-
-  const [notifications, showTutorial] = await Promise.all([
-    role ? getNotifications(role) : Promise.resolve([]),
-    needsTutorial(),
-  ]);
+function CustomerShell({ children }: Readonly<{ children: ReactNode }>) {
+  const me = useSession();
+  const role = me.role;
+  const allowed = useRequireRole(["customer"]);
+  // Read once in the browser (the static build has no server): the same cookies getPreference() validated.
+  const [{ defaultOpen, variant, collapsible }] = useState(() => ({
+    defaultOpen: getClientCookie("sidebar_state") !== "false",
+    variant: readPreference("sidebar_variant", SIDEBAR_VARIANT_VALUES, "inset"),
+    collapsible: readPreference("sidebar_collapsible", SIDEBAR_COLLAPSIBLE_VALUES, "icon"),
+  }));
+  const shell = usePageData("customer-shell", async () => ({
+    notifications: role ? await getNotifications(role) : [],
+  }));
+  const notifications = shell.data?.notifications ?? [];
+  const showTutorial = !me.profile.tutorial_completed_at;
+  if (!allowed) return <PageSpinner />;
 
   return (
     <SidebarProvider
@@ -55,7 +59,7 @@ export default async function CustomerLayout({ children }: Readonly<{ children: 
       <AppSidebar
         variant={variant}
         collapsible={collapsible}
-        userRole={role ?? cookieStore.get("gce-role")?.value ?? null}
+        userRole={role ?? getClientCookie("gce-role") ?? null}
         showQuickCreate={false}
       />
       <SidebarInset
@@ -85,7 +89,7 @@ export default async function CustomerLayout({ children }: Readonly<{ children: 
             <div className="flex items-center gap-2">
               <LayoutControls />
               <ThemeSwitcher />
-              <NotificationPopover notifications={notifications} />
+              <NotificationPopover key={shell.data ? "ready" : "loading"} notifications={notifications} />
               <AccountSwitcher />
             </div>
           </div>

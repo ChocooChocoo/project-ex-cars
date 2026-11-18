@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 
-import { getCurrentRole } from "@/app/auth/actions";
+import { getCurrentRole } from "@/lib/auth/server-session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 

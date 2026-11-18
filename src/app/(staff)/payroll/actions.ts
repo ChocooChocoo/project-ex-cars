@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { z } from "zod";
 
-import { getCurrentRole } from "@/app/auth/actions";
+import { getCurrentRole } from "@/lib/auth/server-session";
 import {
   computePayslip,
   DEFAULT_SCHEDULED_HOURS,

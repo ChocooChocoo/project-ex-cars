@@ -6,7 +6,7 @@ const { markNotificationRead, markAllNotificationsRead } = vi.hoisted(() => ({
   markAllNotificationsRead: vi.fn(async () => ({})),
 }));
 
-vi.mock("@/lib/notifications/actions", () => ({ markNotificationRead, markAllNotificationsRead }));
+vi.mock("@/lib/notifications/client", () => ({ markNotificationRead, markAllNotificationsRead }));
 vi.mock("next/link", () => ({
   default: ({ href, children, onClick, ...rest }: React.ComponentProps<"a">) => (
     <a

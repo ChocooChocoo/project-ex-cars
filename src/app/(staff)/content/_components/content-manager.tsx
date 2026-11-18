@@ -13,7 +13,7 @@ import {
   deleteContentItem,
   publishContent,
   updateContentItem,
-} from "@/app/(staff)/vehicles/actions";
+} from "@/app/(staff)/vehicles/catalogue-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";

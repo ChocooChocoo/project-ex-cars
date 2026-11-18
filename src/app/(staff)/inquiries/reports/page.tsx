@@ -1,12 +1,18 @@
-import { apiGet } from "@/lib/api/server";
+"use client";
+
+import { PageSkeleton } from "@/components/page-skeleton";
+import { browserApi } from "@/lib/api/client";
+import { usePageData } from "@/lib/api/use-page-data";
 
 import { ReportReview } from "../_components/report-review";
 
-export default async function ReportsPage() {
+export default function ReportsPage() {
   // CEO and Account Manager only (the old RLS rule); other roles get an empty list, as RLS gave them.
-  const reports = await apiGet<Record<string, unknown>[]>("/api/v1/staff/message-reports")
-    .then((result) => result.data)
-    .catch(() => []);
+  const page = usePageData("message-reports", () =>
+    browserApi<Record<string, unknown>[]>("GET", "/api/v1/staff/message-reports").catch(() => []),
+  );
+  if (!page.data) return <PageSkeleton />;
+  const reports = page.data;
 
   return (
     <div className="flex flex-col gap-4">

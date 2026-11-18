@@ -1,6 +1,6 @@
-import { getCurrentRole } from "@/app/auth/actions";
 import { requireRole } from "@/lib/auth/guards";
 import type { GceRole } from "@/lib/auth/roles";
+import { getCurrentRole } from "@/lib/auth/server-session";
 import { previousOwnerDocuments } from "@/lib/papers/previous-owner-documents";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {

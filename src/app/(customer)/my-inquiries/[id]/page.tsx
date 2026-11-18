@@ -1,15 +1,10 @@
-import { notFound } from "next/navigation";
+import { ChatPage } from "../_components/chat-page";
 
-import { ChatView } from "../_components/chat-view";
-import { loadThread } from "../actions";
+// Static build: one page under the placeholder id (see src/lib/routing/htaccess.ts).
+export function generateStaticParams() {
+  return [{ id: "_" }];
+}
 
-export default async function InquiryChatPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  // Another customer's thread, a bad id or a signed-out session all render the 404 page, as before.
-  const thread = await loadThread(id);
-  if (!thread.ok) notFound();
-
-  return (
-    <ChatView inquiry={thread.data.inquiry} messages={thread.data.messages} arrangement={thread.data.arrangement} />
-  );
+export default function Page() {
+  return <ChatPage />;
 }

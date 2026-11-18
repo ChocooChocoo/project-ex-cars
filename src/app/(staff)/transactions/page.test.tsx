@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 
 const { role, eq } = vi.hoisted(() => ({ role: vi.fn(), eq: vi.fn() }));
-vi.mock("@/app/auth/actions", () => ({ getCurrentRole: role }));
+vi.mock("@/lib/auth/server-session", () => ({ getCurrentRole: role }));
 vi.mock("@/lib/auth/guards", () => ({ requireRole: vi.fn() }));
 vi.mock("@/lib/notifications/actions", () => ({ checkAndNotifyOverdueReviews: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({

@@ -30,10 +30,11 @@ describe("CEO navigation (T03 R1)", () => {
   });
 
   it("lets the CEO create walk-in accounts too", () => {
-    const actions = read("src/app/auth/actions.ts");
+    // Phase 4b: the action runs in the browser; Laravel's route middleware is the authority.
+    const routes = read("backend/routes/api.php");
     const page = read("src/app/(staff)/staff-records/page.tsx");
 
-    expect(actions).toMatch(/authorizeAction\(\["account_manager", "ceo"\]\)/);
+    expect(routes).toMatch(/admin\/accounts\/walk-in'.*role:account_manager,ceo/);
     expect(page).toMatch(/role === "account_manager" \|\| role === "ceo"/);
   });
 });

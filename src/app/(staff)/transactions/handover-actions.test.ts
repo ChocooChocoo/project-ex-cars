@@ -32,7 +32,7 @@ const { getUser, getCurrentRole, notify, db, storage } = vi.hoisted(() => {
 });
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("@/app/auth/actions", () => ({ getCurrentRole }));
+vi.mock("@/lib/auth/server-session", () => ({ getCurrentRole }));
 vi.mock("@/lib/notifications/notify", () => ({ notify }));
 vi.mock("@/lib/supabase/server", () => ({ createServerSupabaseClient: vi.fn(async () => ({ auth: { getUser } })) }));
 vi.mock("@/lib/supabase/admin", () => ({

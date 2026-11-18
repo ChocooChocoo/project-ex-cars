@@ -2,21 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 
-import { getCurrentRole } from "@/app/auth/actions";
-import { errorMessage } from "@/lib/api/errors";
-import { apiGet, apiWrite } from "@/lib/api/server";
+import { getCurrentRole } from "@/lib/auth/server-session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { CEILING_PROPOSAL_KINDS } from "@/lib/transactions/sell-flow";
 import { applyCeilingDecision } from "@/lib/transactions/sell-flow-server";
-import {
-  checklistAnswerSchema,
-  contentItemSchema,
-  inspectionSchema,
-  priceProposalSchema,
-  vehicleSchema,
-} from "@/lib/validation/vehicles";
-import { isVehicleMediaKind } from "@/lib/vehicles/media-kinds";
+import { checklistAnswerSchema, inspectionSchema, priceProposalSchema, vehicleSchema } from "@/lib/validation/vehicles";
 import { nextStockCode } from "@/lib/vehicles/stock-code";
 
 export async function createVehicle(formData: FormData) {
@@ -346,70 +337,6 @@ export async function approvePrice(formData: FormData) {
   return { success: true };
 }
 
-export async function uploadVehicleMedia(formData: FormData) {
-  const vehicleId = formData.get("vehicle_id") as string;
-  const mediaKind = formData.get("media_kind") as string;
-  const file = formData.get("file") as File | null;
-
-  if (!vehicleId || !file || file.size === 0) return { error: "Vehicle and file are required" };
-  if (!isVehicleMediaKind(mediaKind)) return { error: "Invalid media kind" };
-
-  // Laravel checks the role (Marketing Specialist), sniffs the file type, enforces the 2 MB cap and picks the path.
-  const upload = new FormData();
-  upload.set("media_kind", mediaKind);
-  upload.set("file", file);
-  try {
-    await apiWrite("POST", `/api/v1/staff/vehicles/${encodeURIComponent(vehicleId)}/media`, upload);
-  } catch (error) {
-    return { error: errorMessage(error) };
-  }
-
-  const role = await getCurrentRole();
-  revalidatePath(`/dashboard/vehicles/${vehicleId}`);
-  // The staff page is served under the role prefix (e.g. /marketing_specialist/vehicles/<id>), so the media
-  // count on that URL only refreshes when its own path is revalidated too.
-  revalidatePath(`/${role}/vehicles/${vehicleId}`);
-  return { success: true };
-}
-
-export async function deleteVehicleMedia(mediaId: string) {
-  let vehicleId: string;
-  try {
-    ({ vehicle_id: vehicleId } = (
-      await apiWrite<{ vehicle_id: string }>("DELETE", `/api/v1/staff/vehicle-media/${encodeURIComponent(mediaId)}`)
-    ).data);
-  } catch (error) {
-    return { error: errorMessage(error) };
-  }
-
-  const role = await getCurrentRole();
-  revalidatePath("/dashboard/vehicles");
-  revalidatePath(`/dashboard/vehicles/${vehicleId}`);
-  revalidatePath(`/${role}/vehicles/${vehicleId}`);
-  return { success: true };
-}
-
-export async function toggleFavourite(vehicleId: string) {
-  try {
-    const { data } = await apiWrite<{ favourited: boolean }>(
-      "POST",
-      `/api/v1/favourites/${encodeURIComponent(vehicleId)}`,
-    );
-    return { success: true, favourited: data.favourited };
-  } catch (error) {
-    return { error: errorMessage(error) };
-  }
-}
-
-export async function getFavourites(): Promise<Record<string, unknown>[]> {
-  // T11: Laravel strips GCE's private vehicle fields (identifiers, financing markup) from this customer list.
-  try {
-    return (await apiGet<Record<string, unknown>[]>("/api/v1/favourites")).data;
-  } catch {
-    return [];
-  }
-}
-
 export async function createInspection(formData: FormData) {
   const supabase = await createServerSupabaseClient();
   const { data: user } = await supabase.auth.getUser();
@@ -491,60 +418,6 @@ export async function submitChecklistAnswer(formData: FormData) {
   }
 
   revalidatePath(`/dashboard/inspections/${inspectionId}`);
-  return { success: true };
-}
-
-export async function createContentItem(formData: FormData) {
-  const parsed = contentItemSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid content item." };
-  }
-  try {
-    await apiWrite("POST", "/api/v1/staff/content", parsed.data);
-  } catch (error) {
-    return { error: errorMessage(error) };
-  }
-
-  revalidatePath("/content");
-  return { success: true };
-}
-
-export async function publishContent(id: string) {
-  try {
-    await apiWrite("POST", `/api/v1/staff/content/${encodeURIComponent(id)}/publish`);
-  } catch (error) {
-    return { error: errorMessage(error) };
-  }
-
-  revalidatePath("/content");
-  return { success: true };
-}
-
-export async function updateContentItem(formData: FormData) {
-  const id = formData.get("id") as string;
-  const parsed = contentItemSchema.safeParse(Object.fromEntries(formData));
-  if (!id) return { error: "Content item not found." };
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid content item." };
-  }
-  try {
-    await apiWrite("PATCH", `/api/v1/staff/content/${encodeURIComponent(id)}`, parsed.data);
-  } catch (error) {
-    return { error: errorMessage(error) };
-  }
-
-  revalidatePath("/content");
-  return { success: true };
-}
-
-export async function deleteContentItem(id: string) {
-  try {
-    await apiWrite("DELETE", `/api/v1/staff/content/${encodeURIComponent(id)}`);
-  } catch (error) {
-    return { error: errorMessage(error) };
-  }
-
-  revalidatePath("/content");
   return { success: true };
 }
 

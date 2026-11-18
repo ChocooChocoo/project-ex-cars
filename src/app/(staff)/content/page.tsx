@@ -1,8 +1,11 @@
-import { getCurrentRole } from "@/app/auth/actions";
+"use client";
+
+import { useRequireRole, useSession } from "@/components/auth/session-provider";
+import { PageSkeleton } from "@/components/page-skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { apiGet } from "@/lib/api/server";
-import { requireRole } from "@/lib/auth/guards";
+import { browserApi } from "@/lib/api/client";
+import { usePageData } from "@/lib/api/use-page-data";
 
 import { ContentManager } from "./_components/content-manager";
 
@@ -59,12 +62,20 @@ function ContentSummaryBar({ items }: { readonly items: Record<string, unknown>[
   );
 }
 
-export default async function ContentPage() {
-  await requireRole(["ceo", "marketing_specialist"]);
-  const canManage = (await getCurrentRole()) === "marketing_specialist";
-  const { data } = await apiGet<{ items: Record<string, unknown>[]; vehicles: Record<string, unknown>[] }>(
-    "/api/v1/staff/content",
+export default function ContentPage() {
+  const allowed = useRequireRole(["ceo", "marketing_specialist"]);
+  const canManage = useSession().role === "marketing_specialist";
+  const page = usePageData(allowed ? "content" : "content:denied", () =>
+    allowed
+      ? browserApi<{ items: Record<string, unknown>[]; vehicles: Record<string, unknown>[] }>(
+          "GET",
+          "/api/v1/staff/content",
+        )
+      : Promise.resolve(null),
   );
+  if (page.error) throw page.error;
+  if (!allowed || !page.data) return <PageSkeleton />;
+  const data = page.data;
   const normalizedItems = data.items;
 
   return (

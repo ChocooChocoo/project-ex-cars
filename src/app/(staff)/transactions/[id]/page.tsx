@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 
-import { getCurrentRole } from "@/app/auth/actions";
 import { requireRole } from "@/lib/auth/guards";
 import { TRANSACTION_VIEWER_ROLES } from "@/lib/auth/roles";
+import { getCurrentRole } from "@/lib/auth/server-session";
 import { getFinancingMarkupPct, markupFor } from "@/lib/settings/financing";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { withSignedTransactionDocumentUrls } from "@/lib/transactions/document-media";

@@ -19,9 +19,8 @@ describe("SellSubmissionsList", () => {
     expect(screen.getByText("Honda Walkthrough Civic (2019)")).toBeInTheDocument();
     expect(screen.getByText("1 photo")).toBeInTheDocument();
     const thumbnail = screen.getByRole("img", { name: /photo 1/ });
-    const thumbnailUrl = new URL(thumbnail.getAttribute("src") ?? "", window.location.origin);
-    expect(thumbnailUrl.pathname).toBe("/api/transaction-thumbnail");
-    expect(thumbnailUrl.searchParams.get("src")).toBe("https://storage.test/signed/sell-photo.jpg?token=x");
+    // Phase 4b: non-Laravel storage links load as they are until this page moves to Laravel (Phase 5).
+    expect(thumbnail.getAttribute("src")).toBe("https://storage.test/signed/sell-photo.jpg?token=x");
     expect(screen.getByText("Exterior scratches")).toBeInTheDocument();
     expect(screen.getByText(/#11111111/)).toBeInTheDocument();
   });

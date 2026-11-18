@@ -1,6 +1,6 @@
-import { getCurrentRole } from "@/app/auth/actions";
 import { requireRole } from "@/lib/auth/guards";
 import { SELL_SUBMISSION_VIEWER_ROLES } from "@/lib/auth/roles";
+import { getCurrentRole } from "@/lib/auth/server-session";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { withSignedTransactionDocumentUrls } from "@/lib/transactions/document-media";
 import { getConditionItemIds, resolveConditionItemLabels } from "@/lib/transactions/sell-condition-items";

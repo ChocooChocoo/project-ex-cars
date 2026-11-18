@@ -6,8 +6,15 @@ const { apiWrite, getSession, revalidatePath } = vi.hoisted(() => ({
   revalidatePath: vi.fn(),
 }));
 
-vi.mock("next/cache", () => ({ revalidatePath }));
-vi.mock("@/lib/api/server", () => ({ apiWrite, relaySetCookies: vi.fn() }));
+vi.mock("@/lib/api/revalidate", () => ({ revalidatePath }));
+vi.mock("@/lib/api/client", () => ({
+  // Phase 4b: the actions call Laravel from the browser; delegate to the apiWrite mock so the request
+  // assertions below stay as they were (trailing undefined arguments dropped).
+  browserApi: (...args: unknown[]) => {
+    while (args.length > 0 && args[args.length - 1] === undefined) args.pop();
+    return Promise.resolve(apiWrite(...args)).then((result: { data?: unknown } | undefined) => result?.data);
+  },
+}));
 vi.mock("@/lib/auth/session", () => ({ getSession }));
 
 import { ApiError } from "@/lib/api/errors";
@@ -39,10 +46,13 @@ describe("createWalkInAccount Task 33", () => {
     expect(apiWrite).not.toHaveBeenCalled();
   });
 
-  it("rejects a staff role outside AM/CEO before any request", async () => {
-    getSession.mockResolvedValue({ id: "mech", role: "mechanic" });
+  // Phase 4b: the role check is Laravel's (role:account_manager,ceo); its 403 becomes the same message.
+  it("shows Laravel's refusal for a staff role outside AM/CEO", async () => {
+    apiWrite.mockRejectedValue(
+      new ApiError(403, { code: "not_authorized", message: "You do not have permission for this action." }),
+    );
     expect(await createWalkInAccount(input)).toEqual({ error: "You do not have permission for this action." });
-    expect(apiWrite).not.toHaveBeenCalled();
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
   it("returns Laravel's error and does not refresh on failure", async () => {

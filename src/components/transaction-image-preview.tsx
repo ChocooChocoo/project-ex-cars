@@ -5,6 +5,17 @@ import { useState } from "react";
 import Image from "next/image";
 
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { apiBaseUrl } from "@/lib/api/config";
+
+/**
+ * Small private preview for a signed image link. Laravel file links go through Laravel's thumbnail route,
+ * which re-checks the link's signature (Phase 4b: the static build has no Next.js route). Older storage
+ * links (pages still on Supabase until Phase 5) load the original.
+ */
+export function thumbnailUrl(src: string): string {
+  const api = apiBaseUrl();
+  return src.startsWith(`${api}/api/v1/files/`) ? `${api}/api/v1/thumbnail?src=${encodeURIComponent(src)}` : src;
+}
 
 // Every submitted image opens in a larger view when clicked.
 export function TransactionImagePreview({
@@ -32,7 +43,7 @@ export function TransactionImagePreview({
           <span className="text-muted-foreground text-xs">Preview unavailable</span>
         ) : (
           <Image
-            src={`/api/transaction-thumbnail?src=${encodeURIComponent(src)}`}
+            src={thumbnailUrl(src)}
             alt={alt}
             fill
             // The thumbnail endpoint resizes privately; Next's public image cache must not retain signed documents.

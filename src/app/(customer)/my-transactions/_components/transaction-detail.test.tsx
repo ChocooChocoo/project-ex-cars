@@ -304,9 +304,8 @@ describe("TransactionDetail document previews", () => {
     ]);
 
     const thumbnail = screen.getByRole("img", { name: "Valid ID preview" });
-    const thumbnailUrl = new URL(thumbnail.getAttribute("src") ?? "", window.location.origin);
-    expect(thumbnailUrl.pathname).toBe("/api/transaction-thumbnail");
-    expect(thumbnailUrl.searchParams.get("src")).toBe("https://storage.test/signed/passport.jpg");
+    // Phase 4b: non-Laravel storage links load as they are until this page moves to Laravel (Phase 5).
+    expect(thumbnail.getAttribute("src")).toBe("https://storage.test/signed/passport.jpg");
     expect(screen.queryByText(/private\/customer\/passport\.jpg/)).not.toBeInTheDocument();
   });
 

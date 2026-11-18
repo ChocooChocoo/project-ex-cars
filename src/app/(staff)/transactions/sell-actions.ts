@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 
 import { z } from "zod";
 
-import { getCurrentRole } from "@/app/auth/actions";
 import { logAuditEvent } from "@/lib/auth/audit";
+import { getCurrentRole } from "@/lib/auth/server-session";
 import { notify } from "@/lib/notifications/notify";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";

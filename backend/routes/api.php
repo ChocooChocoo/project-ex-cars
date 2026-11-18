@@ -14,6 +14,7 @@ use App\Http\Controllers\FileController;
 use App\Http\Controllers\MeController;
 use App\Http\Controllers\Messaging\InquiryController;
 use App\Http\Controllers\Messaging\NotificationController;
+use App\Http\Controllers\ThumbnailController;
 use Illuminate\Support\Facades\Route;
 
 // Browser and Next.js server adapters call these with Sanctum first-party cookies (no bearer tokens).
@@ -35,6 +36,7 @@ Route::prefix('v1')->group(function () {
     Route::get('catalogue/landing', [ShowroomController::class, 'landing'])->middleware('throttle:60,1');
     Route::get('files/{bucket}/{path}', [FileController::class, 'show'])->where('path', '.*')
         ->middleware('signed:relative')->name('files.show');
+    Route::get('thumbnail', [ThumbnailController::class, 'show'])->middleware('throttle:120,1');
 
     Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::get('me', [MeController::class, 'show']);

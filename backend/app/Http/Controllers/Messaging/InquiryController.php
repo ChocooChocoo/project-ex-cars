@@ -234,6 +234,10 @@ class InquiryController extends Controller
             return null;
         }
 
-        return CarbonImmutable::parse($value, 'UTC')->min(CarbonImmutable::now('UTC'));
+        $after = CarbonImmutable::parse($value, 'UTC');
+
+        // Cursors this API returns are never ahead of the clock, so a future one came from a future-dated row
+        // the browser read. The real gap is unknown: send the whole thread once (the browser drops repeats).
+        return $after->isFuture() ? null : $after;
     }
 }

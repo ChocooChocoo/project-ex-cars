@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { getCurrentRole } from "@/app/auth/actions";
+import { getCurrentRole } from "@/lib/auth/server-session";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { announcementSchema } from "@/lib/validation/phase6";
 

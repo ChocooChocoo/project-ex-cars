@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
-import { getCurrentRole } from "@/app/auth/actions";
 import type { GceRole } from "@/lib/auth/roles";
+import { getCurrentRole } from "@/lib/auth/server-session";
 
 export async function requireRole(allowedRoles: GceRole[]) {
   const role = await getCurrentRole();

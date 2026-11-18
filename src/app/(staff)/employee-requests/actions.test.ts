@@ -17,7 +17,7 @@ let requestInsertResult: { data: { id: string } | null; error: { message: string
 let attachmentInsertResult: { error: { message: string } | null } = { error: null };
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("@/app/auth/actions", () => ({ getCurrentRole: vi.fn(async () => "mechanic") }));
+vi.mock("@/lib/auth/server-session", () => ({ getCurrentRole: vi.fn(async () => "mechanic") }));
 vi.mock("@/lib/supabase/server", () => ({
   createServerSupabase: vi.fn(),
   createServerSupabaseClient: vi.fn(async () => ({

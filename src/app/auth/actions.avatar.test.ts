@@ -5,8 +5,15 @@ import { ApiError } from "@/lib/api/errors";
 // Storage, type sniffing, the 2 MB cap and old-photo cleanup are Laravel's (PrivateFilesTest); these tests pin
 // the action's quick checks, the request it sends and its error mapping.
 const { apiWrite } = vi.hoisted(() => ({ apiWrite: vi.fn() }));
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("@/lib/api/server", () => ({ apiWrite, relaySetCookies: vi.fn() }));
+vi.mock("@/lib/api/revalidate", () => ({ revalidatePath: vi.fn() }));
+vi.mock("@/lib/api/client", () => ({
+  // Phase 4b: the actions call Laravel from the browser; delegate to the apiWrite mock so the request
+  // assertions below stay as they were (trailing undefined arguments dropped).
+  browserApi: (...args: unknown[]) => {
+    while (args.length > 0 && args[args.length - 1] === undefined) args.pop();
+    return Promise.resolve(apiWrite(...args)).then((result: { data?: unknown } | undefined) => result?.data);
+  },
+}));
 
 import { removeOwnAvatar, updateOwnAvatar } from "./actions";
 

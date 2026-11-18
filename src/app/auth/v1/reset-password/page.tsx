@@ -1,17 +1,18 @@
+"use client";
+
 import Link from "next/link";
 
 import { GceLogo } from "@/components/gce-logo";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useQuery } from "@/lib/routing/use-query";
 
 import { ResetPasswordForm } from "../../_components/reset-password-form";
 
 // Opened from the reset email: /auth/v1/reset-password?token=…&email=…
-export default async function ResetPasswordV1({
-  searchParams,
-}: {
-  readonly searchParams: Promise<{ token?: string; email?: string }>;
-}) {
-  const { token, email } = await searchParams;
+export default function ResetPasswordV1() {
+  const query = useQuery();
+  const token = query?.get("token");
+  const email = query?.get("email");
   const linkOk = Boolean(token && email);
 
   return (
@@ -42,7 +43,7 @@ export default async function ResetPasswordV1({
             <div className="font-medium tracking-tight">Set a new password</div>
             {linkOk && <div className="mx-auto max-w-xl text-muted-foreground">For {email}</div>}
           </div>
-          {linkOk ? (
+          {query === null ? null : linkOk ? (
             <ResetPasswordForm token={token as string} email={email as string} />
           ) : (
             <Alert variant="destructive">

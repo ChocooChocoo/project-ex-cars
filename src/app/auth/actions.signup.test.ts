@@ -10,10 +10,18 @@ const { apiWrite, relaySetCookies, cookieSet, cookieDelete, redirect } = vi.hois
   }),
 }));
 
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("next/navigation", () => ({ redirect }));
-vi.mock("next/headers", () => ({ cookies: vi.fn(async () => ({ set: cookieSet, delete: cookieDelete })) }));
-vi.mock("@/lib/api/server", () => ({ apiWrite, relaySetCookies }));
+vi.mock("@/lib/api/revalidate", () => ({ revalidatePath: vi.fn() }));
+// Full page loads replace Next's redirect(); the stub throws like the old redirect() mock did.
+Object.defineProperty(window, "location", { configurable: true, value: { ...window.location, assign: redirect } });
+vi.mock("@/lib/cookie.client", () => ({ setClientCookie: cookieSet, deleteClientCookie: cookieDelete }));
+vi.mock("@/lib/api/client", () => ({
+  // Phase 4b: the actions call Laravel from the browser; delegate to the apiWrite mock so the request
+  // assertions below stay as they were (trailing undefined arguments dropped).
+  browserApi: (...args: unknown[]) => {
+    while (args.length > 0 && args[args.length - 1] === undefined) args.pop();
+    return Promise.resolve(apiWrite(...args)).then((result: { data?: unknown } | undefined) => result?.data);
+  },
+}));
 vi.mock("@/lib/auth/session", () => ({ getSession: vi.fn() }));
 
 import { ApiError } from "@/lib/api/errors";
@@ -89,7 +97,7 @@ describe("signUp", () => {
 describe("signIn", () => {
   const me = { id: "u1", email: "ceo@gce.local", email_verified: true, role: "ceo", profile: {} };
 
-  it("relays Laravel's session cookies, sets the role hint and lands on the role's page", async () => {
+  it("signs in through Laravel, sets the role hint and lands on the role's page", async () => {
     apiWrite.mockResolvedValue({ status: 200, data: me, setCookies: ["gce_session=abc; path=/; httponly"] });
 
     await expect(signIn(form({ email: "ceo@gce.local", password: "Secret#123", remember: "on" }))).rejects.toThrow(
@@ -100,8 +108,7 @@ describe("signIn", () => {
       password: "Secret#123",
       remember: true,
     });
-    expect(relaySetCookies).toHaveBeenCalledWith(["gce_session=abc; path=/; httponly"]);
-    expect(cookieSet).toHaveBeenCalledWith("gce-role", "ceo", expect.objectContaining({ httpOnly: true }));
+    expect(cookieSet).toHaveBeenCalledWith("gce-role", "ceo", 7);
   });
 
   it("shows Laravel's wording for bad credentials and unverified emails", async () => {
@@ -130,6 +137,5 @@ describe("signOut", () => {
     await expect(signOut()).rejects.toThrow("NEXT_REDIRECT /auth/v1/login");
     expect(apiWrite).toHaveBeenCalledWith("POST", "/api/v1/auth/logout");
     expect(cookieDelete).toHaveBeenCalledWith("gce-role");
-    expect(cookieDelete).toHaveBeenCalledWith("gce_session");
   });
 });

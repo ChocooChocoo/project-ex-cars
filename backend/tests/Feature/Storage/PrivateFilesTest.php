@@ -126,4 +126,28 @@ class PrivateFilesTest extends TestCase
             $this->assertStringStartsWith($this->files()->publicUrl('avatars', ''), $url);
         }
     }
+
+    #[Test]
+    public function thumbnails_need_the_signed_link_and_fit_640_by_480(): void
+    {
+        $canvas = imagecreatetruecolor(1600, 1200);
+        ob_start();
+        imagejpeg($canvas);
+        Storage::disk('local')->put('transaction-documents/tx/car.jpg', (string) ob_get_clean());
+        $signed = $this->files()->signedUrl('transaction-documents', 'tx/car.jpg', 60);
+        $relative = parse_url($signed, PHP_URL_PATH).'?'.parse_url($signed, PHP_URL_QUERY);
+
+        $ok = $this->get('/api/v1/thumbnail?src='.urlencode($signed))->assertOk()
+            ->assertHeader('Content-Type', 'image/webp')->assertHeader('Cache-Control', 'no-store, private');
+        $size = getimagesizefromstring($ok->getContent());
+        $this->assertSame([640, 480], [$size[0], $size[1]]);
+        $this->get('/api/v1/thumbnail?src='.urlencode($relative))->assertOk(); // relative link works too
+
+        $this->get('/api/v1/thumbnail?src='.urlencode(str_replace('signature=', 'signature=0', $relative)))->assertForbidden();
+        $this->get('/api/v1/thumbnail?src='.urlencode(str_replace('transaction-documents', 'security-evidence', $relative)))->assertStatus(400);
+        $this->get('/api/v1/thumbnail?src='.urlencode('/api/v1/files/transaction-documents/%2e%2e/x.jpg?signature=1'))->assertStatus(400);
+        $this->get('/api/v1/thumbnail?src='.urlencode('/api/v1/files/transaction-documents/tx/car.svg?signature=1'))->assertStatus(400);
+        $this->travel(2)->minutes();
+        $this->get('/api/v1/thumbnail?src='.urlencode($relative))->assertForbidden();
+    }
 }

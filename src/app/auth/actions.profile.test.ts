@@ -2,8 +2,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { apiWrite, relaySetCookies } = vi.hoisted(() => ({ apiWrite: vi.fn(), relaySetCookies: vi.fn() }));
 
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("@/lib/api/server", () => ({ apiWrite, relaySetCookies }));
+vi.mock("@/lib/api/revalidate", () => ({ revalidatePath: vi.fn() }));
+vi.mock("@/lib/api/client", () => ({
+  // Phase 4b: the actions call Laravel from the browser; delegate to the apiWrite mock so the request
+  // assertions below stay as they were (trailing undefined arguments dropped).
+  browserApi: (...args: unknown[]) => {
+    while (args.length > 0 && args[args.length - 1] === undefined) args.pop();
+    return Promise.resolve(apiWrite(...args)).then((result: { data?: unknown } | undefined) => result?.data);
+  },
+}));
 vi.mock("@/lib/auth/session", () => ({ getSession: vi.fn() }));
 
 import { ApiError } from "@/lib/api/errors";
@@ -114,13 +121,12 @@ describe("changeOwnPassword", () => {
     confirm_password: "New-password-1",
   };
 
-  it("sends current and new password, then relays the rotated session cookie", async () => {
+  it("sends current and new password (Laravel rotates the session cookie itself)", async () => {
     expect(await changeOwnPassword(form(valid))).toEqual({ success: true });
     expect(apiWrite).toHaveBeenCalledWith("PUT", "/api/v1/me/password", {
       current_password: "old-password",
       new_password: "New-password-1",
     });
-    expect(relaySetCookies).toHaveBeenCalledWith(["gce_session=new; path=/"]);
   });
 
   it("refuses a wrong current password with Laravel's message", async () => {

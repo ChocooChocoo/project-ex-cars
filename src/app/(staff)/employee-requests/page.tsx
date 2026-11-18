@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 
-import { getCurrentRole } from "@/app/auth/actions";
 import { requireRole } from "@/lib/auth/guards";
 import { STAFF_ROLES } from "@/lib/auth/roles";
+import { getCurrentRole } from "@/lib/auth/server-session";
 import { REQUEST_ATTACHMENTS_BUCKET } from "@/lib/inquiries/attachments";
 import { signAttachments } from "@/lib/inquiries/attachments-server";
 import { createServerSupabase } from "@/lib/supabase/server";

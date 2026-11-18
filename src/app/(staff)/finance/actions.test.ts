@@ -16,7 +16,7 @@ const { notify, moveSellTransaction, completePurchase, currentRole } = vi.hoiste
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("@/app/auth/actions", () => ({ getCurrentRole: currentRole }));
+vi.mock("@/lib/auth/server-session", () => ({ getCurrentRole: currentRole }));
 vi.mock("@/lib/notifications/notify", () => ({ notify }));
 vi.mock("@/lib/transactions/sell-flow-server", () => ({
   loadSellTransaction: vi.fn(async () => sellTx),

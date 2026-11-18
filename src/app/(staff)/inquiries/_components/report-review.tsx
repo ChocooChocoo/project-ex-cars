@@ -3,7 +3,7 @@
 
 import { toast } from "sonner";
 
-import { reviewReport } from "@/app/(customer)/my-inquiries/actions";
+import { reviewReport } from "@/app/(customer)/my-inquiries/server-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

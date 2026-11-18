@@ -1,22 +1,32 @@
-import { getCurrentRole } from "@/app/auth/actions";
-import { apiGet } from "@/lib/api/server";
-import { requireRole } from "@/lib/auth/guards";
+"use client";
+
+import { useRequireRole, useSession } from "@/components/auth/session-provider";
+import { PageSkeleton } from "@/components/page-skeleton";
+import { browserApi } from "@/lib/api/client";
+import { usePageData } from "@/lib/api/use-page-data";
 import { STAFF_ROLES } from "@/lib/auth/roles";
 
 import type { PriceProposalRow } from "./_components/price-approvals";
 import { VehicleOperations } from "./_components/vehicle-operations";
 
-export default async function VehiclesPage() {
-  await requireRole(STAFF_ROLES);
-  const role = (await getCurrentRole()) ?? null;
+export default function VehiclesPage() {
+  const allowed = useRequireRole(STAFF_ROLES);
+  const role = useSession().role;
   // One Laravel read shaped for this page: proposals for the CEO/Head Accountant (with what GCE paid the
   // seller, T10), latest reconditioning state per car for the Marketing Specialist, and the global markup.
-  const { data } = await apiGet<{
-    vehicles: Record<string, unknown>[];
-    proposals: PriceProposalRow[];
-    reconditioning_by_vehicle: Record<string, { state: string; papers_processed_at: string | null }>;
-    default_markup_pct: number;
-  }>("/api/v1/staff/vehicles");
+  const page = usePageData(allowed ? "staff-vehicles" : "staff-vehicles:denied", () =>
+    allowed
+      ? browserApi<{
+          vehicles: Record<string, unknown>[];
+          proposals: PriceProposalRow[];
+          reconditioning_by_vehicle: Record<string, { state: string; papers_processed_at: string | null }>;
+          default_markup_pct: number;
+        }>("GET", "/api/v1/staff/vehicles")
+      : Promise.resolve(null),
+  );
+  if (page.error) throw page.error;
+  if (!allowed || !page.data) return <PageSkeleton />;
+  const data = page.data;
   const isCeo = role === "ceo";
   const isHeadAccountant = role === "head_accountant";
   const canManage = role === "marketing_specialist";

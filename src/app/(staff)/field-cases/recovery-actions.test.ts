@@ -27,7 +27,7 @@ const { db, getCurrentRole, getUser } = vi.hoisted(() => {
   return { db: { rows, writes, from, rpc: vi.fn() }, getCurrentRole: vi.fn(), getUser: vi.fn() };
 });
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("@/app/auth/actions", () => ({ getCurrentRole }));
+vi.mock("@/lib/auth/server-session", () => ({ getCurrentRole }));
 vi.mock("@/lib/auth/audit", () => ({ logAuditEvent: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({
   createServerSupabaseClient: async () => ({ auth: { getUser }, from: db.from, rpc: db.rpc }),

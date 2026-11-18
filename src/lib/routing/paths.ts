@@ -1,5 +1,5 @@
-import type { GceRole } from "@/lib/auth/roles";
-import { GCE_ROLES, STAFF_ROLES, SUPER_ADMIN_ROLE } from "@/lib/auth/roles";
+import type { GceRole } from "../auth/roles";
+import { GCE_ROLES, STAFF_ROLES, SUPER_ADMIN_ROLE } from "../auth/roles";
 
 export function rolePath(role: string, internalPath: string): string {
   if (internalPath === "/dashboard" || internalPath === "/dashboard/default") {

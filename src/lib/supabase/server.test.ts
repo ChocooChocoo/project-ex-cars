@@ -27,7 +27,6 @@ vi.mock("next/headers", () => ({
 }));
 
 const { createServerSupabase } = await import("./server");
-const { getNotifications, getUnreadNotificationCount } = await import("@/lib/notifications/actions");
 
 // A session whose access token is already expired, so the SDK takes the refresh path.
 function expiredSessionCookie() {
@@ -103,26 +102,6 @@ describe("server Supabase clients and expired sessions", () => {
     await expect(supabase.auth.getUser()).resolves.toBeDefined();
     expect(state.writeAttempts).toBe(0);
   });
-
-  it("notification reads awaited during a layout render survive an expired session", async () => {
-    // Laravel answers 401 for an expired session; the layout reads must fall back without writing a cookie.
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(JSON.stringify({ code: "not_authenticated", message: "You must be signed in." }), {
-            status: 401,
-            headers: { "Content-Type": "application/json" },
-          }),
-      ),
-    );
-
-    // Awaited inside src/app/(staff)/layout.tsx and the customer layout, so a
-    // cookie write here is a 500 on every page in those groups.
-    await expect(getNotifications("ceo")).resolves.toEqual([]);
-    await expect(getUnreadNotificationCount("ceo")).resolves.toBe(0);
-    expect(state.writeAttempts).toBe(0);
-  });
 });
 
 describe("render-path wiring", () => {
@@ -131,10 +110,15 @@ describe("render-path wiring", () => {
   // Phase 3: identity moved to Laravel. Renders read the session through getSession (a GET that never
   // writes cookies); only Server Actions and route handlers relay Laravel's Set-Cookie headers.
   it("getCurrentRole and getCurrentUser read the Laravel session, never a cookie-writing client", () => {
-    const actions = read("src/app/auth/actions.ts");
+    const actions = read("src/lib/auth/server-session.ts");
     for (const name of ["getCurrentRole", "getCurrentUser"]) {
       const start = actions.indexOf(`export async function ${name}`);
-      const body = actions.slice(start, actions.indexOf("export async function ", start + 10));
+      const body = actions.slice(
+        start,
+        actions.indexOf("export async function ", start + 10) === -1
+          ? undefined
+          : actions.indexOf("export async function ", start + 10),
+      );
       expect(body).toContain("getSession()");
       expect(body).not.toContain("relaySetCookies");
       expect(body).not.toContain("createServerSupabase");
@@ -171,63 +155,5 @@ describe("render-path wiring", () => {
   });
 });
 
-describe("notification client wiring", () => {
-  const notifications = () => readFileSync(resolve(process.cwd(), "src/lib/notifications/actions.ts"), "utf8");
-
-  // Every function body, from its own `export async function` to the next one.
-  function bodyOf(source: string, name: string): string {
-    const start = source.indexOf(`export async function ${name}(`);
-    expect(start, `${name} is missing from src/lib/notifications/actions.ts`).toBeGreaterThan(-1);
-    const rest = source.slice(start + 1);
-    const next = rest.indexOf("export async function ");
-    return rest.slice(0, next === -1 ? undefined : next);
-  }
-
-  // Phase 4: these go to Laravel. Render-path reads must be GETs (apiGet never writes cookies); the
-  // Server Actions use apiWrite.
-  it.each([
-    "getNotifications",
-    "getUnreadNotificationCount",
-  ])("%s reads with a GET, since layouts await it during a render", (name) => {
-    const body = bodyOf(notifications(), name);
-
-    expect(body).toContain("await apiGet");
-    expect(body).not.toContain("apiWrite");
-    expect(body).not.toContain("createAdminClient");
-  });
-
-  it.each([
-    "markNotificationRead",
-    "markAllNotificationsRead",
-  ])("%s writes through apiWrite, since it runs as a Server Action", (name) => {
-    expect(bodyOf(notifications(), name)).toContain("await apiWrite(");
-  });
-
-  it("checkAndNotifyDueInstallments keeps the admin client for its cross-role writes", () => {
-    expect(bodyOf(notifications(), "checkAndNotifyDueInstallments")).toContain("createAdminClient()");
-  });
-
-  it("keeps the inquiry unread counts off the write client, since the staff layout renders them", () => {
-    // Same hazard as the notification reads: awaited during a render in (staff)/layout.tsx,
-    // where a lazily refreshed token would attempt a cookie write.
-    const inquiries = readFileSync(resolve(process.cwd(), "src/app/(customer)/my-inquiries/actions.ts"), "utf8");
-    const bodyOfInquiry = (name: string): string => {
-      const start = inquiries.indexOf(`export async function ${name}(`);
-      expect(start, `${name} is missing from src/app/(customer)/my-inquiries/actions.ts`).toBeGreaterThan(-1);
-      const rest = inquiries.slice(start + 1);
-      const next = rest.indexOf("export async function ");
-      return rest.slice(0, next === -1 ? undefined : next);
-    };
-
-    for (const name of ["getTotalUnreadCount", "getUnreadCount"]) {
-      expect(bodyOfInquiry(name)).toContain("await apiGet");
-      expect(bodyOfInquiry(name)).not.toContain("apiWrite");
-    }
-
-    // The mutations in the same module must keep writing.
-    expect(bodyOfInquiry("createInquiry")).toContain("await createServerSupabaseClient()");
-    for (const name of ["sendMessage", "reportMessage"]) {
-      expect(bodyOfInquiry(name)).toContain("await apiWrite(");
-    }
-  });
-});
+// Phase 4b: notification reads and inquiry counts run in the browser now (src/lib/notifications/client.ts,
+// src/app/(customer)/my-inquiries/actions.ts), so the server render-path wiring checks that lived here are gone.

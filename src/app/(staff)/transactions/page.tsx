@@ -1,6 +1,6 @@
-import { getCurrentRole } from "@/app/auth/actions";
 import { requireRole } from "@/lib/auth/guards";
 import { TRANSACTION_VIEWER_ROLES } from "@/lib/auth/roles";
+import { getCurrentRole } from "@/lib/auth/server-session";
 import { checkAndNotifyOverdueReviews } from "@/lib/notifications/actions";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { paidInstallmentCount } from "@/lib/transactions/financing-payments";

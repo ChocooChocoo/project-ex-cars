@@ -22,7 +22,7 @@ const { getCurrentRole, getUser, db, redirect } = vi.hoisted(() => {
 });
 
 vi.mock("next/navigation", () => ({ redirect }));
-vi.mock("@/app/auth/actions", () => ({ getCurrentRole }));
+vi.mock("@/lib/auth/server-session", () => ({ getCurrentRole }));
 vi.mock("@/lib/supabase/server", () => ({ createServerSupabase: vi.fn(async () => ({ auth: { getUser } })) }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn(() => ({ from: db.from, storage: {} })) }));
 

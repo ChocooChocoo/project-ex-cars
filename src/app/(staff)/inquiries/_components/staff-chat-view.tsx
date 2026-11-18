@@ -6,14 +6,13 @@ import { useRouter } from "next/navigation";
 
 import { toast } from "sonner";
 
+import { markMessagesRead, sendMessageWithAttachment } from "@/app/(customer)/my-inquiries/actions";
 import {
   acceptHandoff,
   assignInquiry,
   handoffInquiry,
-  markMessagesRead,
   scheduleArrangement,
-  sendMessageWithAttachment,
-} from "@/app/(customer)/my-inquiries/actions";
+} from "@/app/(customer)/my-inquiries/server-actions";
 import { InquiryConversation } from "@/components/inquiries/inquiry-conversation";
 import {
   AlertDialog,

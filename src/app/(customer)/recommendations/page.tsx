@@ -1,6 +1,6 @@
 import { RecommendationPageClient } from "./_components/recommendation-page-client";
 
-export default async function RecommendationsPage() {
+export default function RecommendationsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">

@@ -5,9 +5,12 @@ import { ApiError } from "@/lib/api/errors";
 // Storage, type sniffing, the size cap and the server-picked path are Laravel's (InquiryTest, PrivateFilesTest).
 // These tests pin the action's quick checks and the one multipart request it sends.
 const { apiWrite } = vi.hoisted(() => ({ apiWrite: vi.fn() }));
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("@/lib/api/server", () => ({ apiWrite, apiGet: vi.fn() }));
-vi.mock("@/lib/supabase/server", () => ({ createServerSupabaseClient: vi.fn() }));
+vi.mock("@/lib/api/revalidate", () => ({ revalidatePath: vi.fn() }));
+vi.mock("@/lib/api/client", () => ({
+  // Phase 4b: browser calls; delegate to the apiWrite mock so the request assertions stay as they were.
+  browserApi: (...args: unknown[]) =>
+    Promise.resolve(apiWrite(...args)).then((r: { data?: unknown } | undefined) => r?.data),
+}));
 
 import { sendMessageWithAttachment } from "./actions";
 

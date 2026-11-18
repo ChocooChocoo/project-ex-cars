@@ -1,25 +1,40 @@
-"use server";
-
-import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+"use client";
 
 import { z } from "zod";
 
+import { browserApi } from "@/lib/api/client";
 import { ApiError, errorMessage } from "@/lib/api/errors";
-import { apiWrite, relaySetCookies } from "@/lib/api/server";
+import { revalidatePath } from "@/lib/api/revalidate";
 import type { Me } from "@/lib/api/types";
-import { authorizeAction } from "@/lib/auth/action-guard";
 import { EMPLOYEE_ROLES } from "@/lib/auth/roles";
-import { getSession } from "@/lib/auth/session";
+import { deleteClientCookie, setClientCookie } from "@/lib/cookie.client";
 import { landingPath } from "@/lib/routing/paths";
 import { MAX_UPLOAD_BYTES } from "@/lib/uploads/compress-image";
 import { emailSchema, fullNameSchema, newPasswordSchema, passwordSchema } from "@/lib/validation/forms";
 import { changePasswordSchema, ownProfileSchema, profileAddressColumns } from "@/lib/validation/profile";
 
-// Routing hint only: src/proxy.ts uses it to pick the role prefix. Laravel re-authorises every call.
+// Phase 4b: these run in the browser (the static build has no server). Laravel sets and clears its own
+// session cookies on the response; Laravel's role middleware authorises the admin calls.
+
+// Browser call to Laravel with the `{ data }` shape the server adapter returned, so the bodies stay as they were.
+async function apiWrite<T = unknown>(method: "POST" | "PUT" | "PATCH" | "DELETE", path: string, body?: unknown) {
+  return { data: await browserApi<T>(method, path, body) };
+}
+
+// Routing hint only: Apache (static build) and src/proxy.ts (dev server) use it to pick the role prefix.
+// Laravel re-authorises every call.
 const ROLE_COOKIE = "gce-role";
-const ROLE_COOKIE_OPTIONS = { httpOnly: true, sameSite: "lax", maxAge: 604800, path: "/" } as const;
+
+function setRoleCookie(role: string | null) {
+  if (role) setClientCookie(ROLE_COOKIE, role, 7);
+  else deleteClientCookie(ROLE_COOKIE);
+}
+
+/** Full page load (the layouts read the new session); the caller never sees the promise settle. */
+function goTo(path: string): Promise<never> {
+  window.location.assign(path);
+  return new Promise<never>(() => undefined);
+}
 
 export async function signIn(formData: FormData) {
   const parsed = z.object({ email: emailSchema, password: passwordSchema }).safeParse({
@@ -36,16 +51,14 @@ export async function signIn(formData: FormData) {
       ...parsed.data,
       remember: formData.get("remember") === "on",
     });
-    await relaySetCookies(result.setCookies);
     me = result.data;
   } catch (error) {
     return { error: errorMessage(error) };
   }
 
-  revalidatePath("/", "layout");
-  if (!me.role) redirect("/auth/v1/login");
-  (await cookies()).set(ROLE_COOKIE, me.role, ROLE_COOKIE_OPTIONS);
-  redirect(landingPath(me.role));
+  if (!me.role) return goTo("/auth/v1/login");
+  setRoleCookie(me.role);
+  return goTo(landingPath(me.role));
 }
 
 export async function signUp(formData: FormData) {
@@ -71,7 +84,6 @@ export async function signUp(formData: FormData) {
       accept_terms: true,
       accept_policy: true,
     });
-    await relaySetCookies(result.setCookies);
     return { notice: result.data.notice };
   } catch (error) {
     return { error: errorMessage(error) };
@@ -80,26 +92,14 @@ export async function signUp(formData: FormData) {
 
 export async function signOut() {
   try {
-    await relaySetCookies((await apiWrite("POST", "/api/v1/auth/logout")).setCookies);
+    await apiWrite("POST", "/api/v1/auth/logout");
   } catch {
-    // Already signed out or Laravel unreachable: still clear this browser's cookies below.
+    // Already signed out or Laravel unreachable: still clear the routing hint below.
   }
-  // The proxy sends "/" to the role landing while this cookie is set, so a stale one bounces a
-  // signed-out visitor from the landing page back to the login screen.
-  const cookieStore = await cookies();
-  cookieStore.delete(ROLE_COOKIE);
-  cookieStore.delete("gce_session");
-  revalidatePath("/", "layout");
-  redirect("/auth/v1/login");
-}
-
-export async function getCurrentUser(): Promise<{ id: string; email: string } | null> {
-  const me = await getSession();
-  return me ? { id: me.id, email: me.email } : null;
-}
-
-export async function getCurrentRole(): Promise<string | null> {
-  return (await getSession())?.role ?? null;
+  // "/" goes to the role landing while this cookie is set, so a stale one bounces a signed-out visitor
+  // from the landing page back to the login screen. (Laravel's response clears its session cookie.)
+  setRoleCookie(null);
+  return goTo("/auth/v1/login");
 }
 
 interface AssignRoleParams {
@@ -137,9 +137,6 @@ export async function createWalkInAccount(params: CreateWalkInAccountParams) {
   const parsed = createWalkInAccountSchema.safeParse(params);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid walk-in account details." };
 
-  const authorization = await authorizeAction(["account_manager", "ceo"]);
-  if (!authorization.ok) return { error: authorization.message };
-
   // Laravel creates user, profile, role and audit row in one transaction (nothing half-made to undo).
   try {
     await apiWrite("POST", "/api/v1/admin/accounts/walk-in", {
@@ -167,9 +164,6 @@ const createEmployeeAccountSchema = z.object({
 export async function createEmployeeAccount(params: z.input<typeof createEmployeeAccountSchema>) {
   const parsed = createEmployeeAccountSchema.safeParse(params);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid employee account details." };
-
-  const authorization = await authorizeAction(["ceo", "account_manager"]);
-  if (!authorization.ok) return { error: authorization.message };
 
   try {
     await apiWrite("POST", "/api/v1/admin/accounts/employee", {
@@ -255,7 +249,7 @@ export async function resetPassword(formData: FormData): Promise<{ error: string
   } catch (error) {
     return { error: errorMessage(error) };
   }
-  redirect("/auth/v1/login?notice=password_reset");
+  return goTo("/auth/v1/login?notice=password_reset");
 }
 
 // T03 C15: changing the password asks for the current one; Laravel checks it and signs out the
@@ -265,11 +259,10 @@ export async function changeOwnPassword(formData: FormData): Promise<{ error: st
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid password." };
 
   try {
-    const result = await apiWrite("PUT", "/api/v1/me/password", {
+    await apiWrite("PUT", "/api/v1/me/password", {
       current_password: parsed.data.current_password,
       new_password: parsed.data.new_password,
     });
-    await relaySetCookies(result.setCookies);
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) return { error: "Not authenticated" };
     return { error: errorMessage(error) };
@@ -318,9 +311,6 @@ export async function removeOwnAvatar(): Promise<{ error: string } | { success: 
 export async function requestEmailChange(
   formData: FormData,
 ): Promise<{ error: string } | { success: true; email: string }> {
-  const authorization = await authorizeAction(["customer"]);
-  if (!authorization.ok) return { error: authorization.message };
-
   const parsed = emailSchema.safeParse(
     String(formData.get("email") ?? "")
       .trim()
