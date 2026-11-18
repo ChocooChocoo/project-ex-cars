@@ -14,19 +14,15 @@ import { needsTutorial } from "@/components/onboarding/actions";
 import { OnboardingTour } from "@/components/onboarding/onboarding-tour";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { getSession } from "@/lib/auth/session";
 import { getNotifications } from "@/lib/notifications/actions";
 import { SIDEBAR_COLLAPSIBLE_VALUES, SIDEBAR_VARIANT_VALUES } from "@/lib/preferences/layout";
-import { createServerSupabase } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 import { getPreference } from "@/server/server-actions";
 
 export default async function CustomerLayout({ children }: Readonly<{ children: ReactNode }>) {
-  const supabase = await createServerSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  // Laravel session check. Signed out or inactive → login; an API outage throws to the error page instead.
+  if (!(await getSession())) {
     redirect("/auth/v1/login");
   }
 

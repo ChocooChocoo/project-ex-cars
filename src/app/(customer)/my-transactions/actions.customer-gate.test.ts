@@ -15,14 +15,22 @@ vi.mock("@/lib/supabase/server", () => {
   };
 });
 
+vi.mock("@/lib/auth/session", () => ({
+  getSession: vi.fn(async () => ({
+    id: "staff-id",
+    email: "",
+    email_verified: true,
+    role: "sales_manager",
+    profile: {},
+  })),
+}));
+
 import { createBuyTransaction } from "./actions";
 
 describe("customer-only purchase gate", () => {
   it("returns an error for staff before reading or writing transactions", async () => {
-    rpc.mockResolvedValue({ data: [{ account_id: "staff-id", role: "sales_manager" }] });
     const result = await createBuyTransaction(new FormData());
     expect(result).toEqual({ error: "You do not have permission for this action." });
-    expect(rpc).toHaveBeenCalledWith("get_user_roles");
     expect(from).not.toHaveBeenCalled();
   });
 });

@@ -41,7 +41,8 @@
       "!out",
       "!src/components/ui",
       "!src/app/(main)/dashboard/calendar/_components/event-calendar-views.tsx",
-      "!public/psgc"
+      "!public/psgc",
+      "!backend"
     ]
   },
   "formatter": {

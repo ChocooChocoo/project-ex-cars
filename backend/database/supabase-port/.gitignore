@@ -1,0 +1,4 @@
+*.json
+skipped.txt
+gen/
+node_modules/

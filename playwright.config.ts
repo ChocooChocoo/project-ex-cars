@@ -9,12 +9,13 @@ export default defineConfig({
   // cars, resetting the customer's standing) would break a spec running beside it.
   workers: 1,
   use: {
-    baseURL: "http://localhost:3000",
+    // E2E_BASE_URL lets a second checkout run on another port (e.g. a worktree on :3001).
+    baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000",
     headless: true,
   },
   webServer: {
     command: "npm run dev",
-    url: "http://localhost:3000",
+    url: process.env.E2E_BASE_URL ?? "http://localhost:3000",
     reuseExistingServer: true,
   },
 });

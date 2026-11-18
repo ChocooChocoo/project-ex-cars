@@ -1,4 +1,4 @@
-import { createServerSupabase } from "@/lib/supabase/server";
+import { getSession } from "@/lib/auth/session";
 
 export interface ProfileAutoFill {
   full_name: string | null;
@@ -14,24 +14,13 @@ export interface ProfileAutoFill {
 }
 
 export async function getProfileAutoFill(): Promise<ProfileAutoFill | null> {
-  const supabase = await createServerSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const me = await getSession().catch(() => null);
+  if (!me) return null;
 
-  if (!user) return null;
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("full_name, phone, address, address_line, region_code, province_code, city_code, barangay_code")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile) return null;
-
+  const { profile } = me;
   return {
     full_name: profile.full_name,
-    email: user.email ?? null,
+    email: me.email,
     phone: profile.phone,
     address: profile.address,
     address_line: profile.address_line,

@@ -1,62 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server";
 
-import { createServerClient } from "@supabase/ssr";
-
 import { GCE_ROLES } from "@/lib/auth/roles";
 import { isStaffRole, landingPath, resolveInternalPath } from "@/lib/routing/paths";
 
 const ROLE_SET = new Set<string>(GCE_ROLES);
 
-type ResponseCookie = { name: string; value: string; options?: Record<string, unknown> };
-
-// Supabase rotates refresh tokens on every refresh (auth.enable_refresh_token_rotation
-// in supabase/config.toml). A Server Component render cannot write cookies, so if the
-// refresh only happened there the rotated token would be dropped and the next request
-// would present a spent token — the SDK turns that into a random logout. The proxy runs
-// before the render and is allowed to write cookies, so it owns the refresh.
-function createSessionClient(request: NextRequest, onCookies: (cookies: ResponseCookie[]) => void) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  if (!url || !key) return null;
-
-  return createServerClient(url, key, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll();
-      },
-      setAll(cookiesToSet) {
-        onCookies(cookiesToSet);
-      },
-    },
-  });
-}
-
-// Refreshes an expiring session and returns the cookies that must ride the response.
-// A Supabase outage must not take the whole app down, so failure falls through to a
-// normal (unauthenticated) render, which redirects to login on its own.
-async function refreshSession(request: NextRequest): Promise<ResponseCookie[]> {
-  const refreshed: ResponseCookie[] = [];
-  try {
-    const supabase = createSessionClient(request, (cookies) => refreshed.push(...cookies));
-    if (!supabase) return [];
-    // getUser() validates against the auth server and refreshes when the access token
-    // is missing, expired, or within the SDK's 90s expiry margin.
-    await supabase.auth.getUser();
-  } catch {
-    return [];
-  }
-  return refreshed;
-}
-
-// The refreshed cookies must ride every response, otherwise the browser keeps the spent
-// token and the session drops on the next request.
-function withSession<T extends NextResponse>(response: T, refreshed: ResponseCookie[]): T {
-  for (const { name, value, options } of refreshed) {
-    response.cookies.set(name, value, options as never);
-  }
-  return response;
-}
-
+// Route presentation only. The `gce-role` cookie is a hint for the role prefix; it grants nothing.
+// Laravel owns the session (no token refresh needed here: its session cookie does not rotate on
+// reads) and re-authorises every request, and the layouts check the session via /api/v1/me.
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
@@ -75,31 +26,20 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const refreshed = await refreshSession(request);
-
-  // Rotated cookies otherwise exist only on the response, while the render for this same
-  // request reads the request's own Cookie header — so it would render the pre-refresh
-  // session even though the old refresh token is already spent server-side, which the SDK
-  // can turn into a spurious logout. Putting them on the request fixes that, and the
-  // render branches below forward the resulting headers to the downstream render.
-  for (const { name, value } of refreshed) {
-    request.cookies.set(name, value);
-  }
-
   const role = request.cookies.get("gce-role")?.value ?? null;
   const url = request.nextUrl.clone();
 
   // Root: signed-in users go to their landing path; visitors see the public landing page.
   if (pathname === "/") {
-    if (!role) return withSession(NextResponse.next({ request: { headers: request.headers } }), refreshed);
+    if (!role) return NextResponse.next({ request: { headers: request.headers } });
     url.pathname = landingPath(role);
-    return withSession(NextResponse.redirect(url), refreshed);
+    return NextResponse.redirect(url);
   }
 
   // No role → redirect to login for all non-auth pages
   if (!role) {
     url.pathname = "/auth/v1/login";
-    return withSession(NextResponse.redirect(url), refreshed);
+    return NextResponse.redirect(url);
   }
 
   // Role-prefixed path: /[role]/rest → strip prefix, rewrite internally
@@ -108,19 +48,19 @@ export async function proxy(request: NextRequest) {
     if (firstSegment !== role) {
       const rest = pathname.slice(firstSegment.length + 1) || "";
       url.pathname = `/${role}${rest}`;
-      return withSession(NextResponse.redirect(url), refreshed);
+      return NextResponse.redirect(url);
     }
 
     const segment = pathname.slice(firstSegment.length + 2) || "dashboard";
     const internal = resolveInternalPath(firstSegment, segment);
     url.pathname = internal;
-    return withSession(NextResponse.rewrite(url, { request: { headers: request.headers } }), refreshed);
+    return NextResponse.rewrite(url, { request: { headers: request.headers } });
   }
 
   // The user menus link to /profile for every role; send it to this role's profile page.
   if (pathname === "/profile") {
     url.pathname = `/${role}/profile`;
-    return withSession(NextResponse.redirect(url), refreshed);
+    return NextResponse.redirect(url);
   }
 
   // Legacy paths → redirect to role-prefixed
@@ -129,10 +69,10 @@ export async function proxy(request: NextRequest) {
     url.pathname = isStaffRole(role)
       ? `/${role}/${segment === "default" ? "dashboard" : segment}`
       : `/${role}/showroom`;
-    return withSession(NextResponse.redirect(url), refreshed);
+    return NextResponse.redirect(url);
   }
 
-  return withSession(NextResponse.next({ request: { headers: request.headers } }), refreshed);
+  return NextResponse.next({ request: { headers: request.headers } });
 }
 
 export const config = {

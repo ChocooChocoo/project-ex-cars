@@ -1,110 +1,71 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { adminCreateUser, profileUpdate, profileEq, auditInsert, deleteUser, authorizeAction, revalidatePath, rpc } =
-  vi.hoisted(() => ({
-    adminCreateUser: vi.fn(),
-    profileUpdate: vi.fn(),
-    profileEq: vi.fn(),
-    auditInsert: vi.fn(),
-    deleteUser: vi.fn(),
-    authorizeAction: vi.fn(),
-    revalidatePath: vi.fn(),
-    rpc: vi.fn(),
-  }));
+const { apiWrite, getSession, revalidatePath } = vi.hoisted(() => ({
+  apiWrite: vi.fn(),
+  getSession: vi.fn(),
+  revalidatePath: vi.fn(),
+}));
 
 vi.mock("next/cache", () => ({ revalidatePath }));
-vi.mock("@/lib/auth/action-guard", () => ({ authorizeAction }));
-vi.mock("@/lib/supabase/server", () => ({
-  createServerSupabaseClient: vi.fn(async () => ({
-    auth: { getUser: vi.fn(async () => ({ data: { user: { id: actor } } })) },
-    rpc,
-  })),
-}));
-vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: () => ({
-    auth: { admin: { createUser: adminCreateUser, deleteUser } },
-    from: vi.fn((table: string) =>
-      table === "profiles" ? { update: profileUpdate, eq: profileEq } : { insert: auditInsert },
-    ),
-  }),
-}));
+vi.mock("@/lib/api/server", () => ({ apiWrite, relaySetCookies: vi.fn() }));
+vi.mock("@/lib/auth/session", () => ({ getSession }));
 
-import { createWalkInAccount } from "./actions";
+import { ApiError } from "@/lib/api/errors";
 
-const actor = "11111111-1111-4111-8111-111111111111";
-const createdUser = "22222222-2222-4222-8222-222222222222";
+import { assignRole, createWalkInAccount } from "./actions";
 
-function validParams() {
-  return { fullName: "Walk-in Customer", email: "walkin@example.com", password: "Correct-horse-9" };
-}
+const input = { fullName: "Walk In", email: "walkin@gce.test", password: "Secret#123" };
 
 describe("createWalkInAccount Task 33", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    authorizeAction.mockResolvedValue({ ok: true, data: { userId: actor, role: "account_manager" } });
-    adminCreateUser.mockResolvedValue({ data: { user: { id: createdUser } }, error: null });
-    profileUpdate.mockReturnValue({ eq: profileEq });
-    profileEq.mockResolvedValue({ error: null });
-    auditInsert.mockResolvedValue({ error: null });
-    deleteUser.mockResolvedValue({ error: null });
-    rpc.mockResolvedValue({ data: [{ account_id: actor, role: "account_manager" }], error: null });
+    apiWrite.mockReset().mockResolvedValue({ status: 201, data: { id: "c1" }, setCookies: [] });
+    getSession.mockReset().mockResolvedValue({ id: "am-1", role: "account_manager" });
+    revalidatePath.mockReset();
   });
 
-  it("uses the authorized Account Manager actor and reports success only after all writes", async () => {
-    await expect(createWalkInAccount(validParams())).resolves.toEqual({ success: true });
-    // T03 R1: the CEO holds full access, so the CEO may create walk-in accounts too.
-    expect(authorizeAction).toHaveBeenCalledWith(["account_manager", "ceo"]);
-    expect(profileUpdate).toHaveBeenCalledWith(expect.objectContaining({ created_by: actor }));
-    expect(profileEq).toHaveBeenCalledWith("id", createdUser);
-    expect(auditInsert).toHaveBeenCalledWith(expect.objectContaining({ actor_id: actor, record_id: createdUser }));
+  it("creates the account through Laravel and refreshes staff records only on success", async () => {
+    await expect(createWalkInAccount(input)).resolves.toEqual({ success: true });
+    expect(apiWrite).toHaveBeenCalledWith("POST", "/api/v1/admin/accounts/walk-in", {
+      full_name: "Walk In",
+      email: "walkin@gce.test",
+      password: "Secret#123",
+    });
     expect(revalidatePath).toHaveBeenCalledWith("/staff-records");
   });
 
-  it("rejects malformed input before creating an auth user", async () => {
-    await expect(createWalkInAccount({ ...validParams(), email: "not-an-email" })).resolves.toEqual({
-      error: expect.stringMatching(/email/i),
+  it("rejects malformed input and a weak password before any request", async () => {
+    expect(await createWalkInAccount({ ...input, email: "nope" })).toHaveProperty("error");
+    expect(await createWalkInAccount({ ...input, password: "alllowercase1!" })).toHaveProperty("error");
+    expect(apiWrite).not.toHaveBeenCalled();
+  });
+
+  it("rejects a staff role outside AM/CEO before any request", async () => {
+    getSession.mockResolvedValue({ id: "mech", role: "mechanic" });
+    expect(await createWalkInAccount(input)).toEqual({ error: "You do not have permission for this action." });
+    expect(apiWrite).not.toHaveBeenCalled();
+  });
+
+  it("returns Laravel's error and does not refresh on failure", async () => {
+    apiWrite.mockRejectedValue(new ApiError(422, { code: "validation_error", message: "Email taken" }));
+    expect(await createWalkInAccount(input)).toEqual({ error: "Email taken" });
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+describe("assignRole", () => {
+  beforeEach(() => apiWrite.mockReset().mockResolvedValue({ status: 200, data: { ok: true }, setCookies: [] }));
+
+  it("never forwards a caller-supplied assignedBy; Laravel records the session user", async () => {
+    await expect(assignRole({ accountId: "a1", role: "mechanic", assignedBy: "forged" })).resolves.toEqual({
+      success: true,
     });
-    expect(adminCreateUser).not.toHaveBeenCalled();
+    expect(apiWrite).toHaveBeenCalledWith("POST", "/api/v1/admin/roles", { account_id: "a1", role: "mechanic" });
   });
 
-  it("refuses a weak password before creating an auth user", async () => {
-    await expect(createWalkInAccount({ ...validParams(), password: "abcdefgh" })).resolves.toEqual({
-      error: "Add an uppercase letter.",
-    });
-    expect(adminCreateUser).not.toHaveBeenCalled();
-  });
-
-  it("rejects a CEO authorization result before creating an auth user", async () => {
-    authorizeAction.mockResolvedValue({
-      ok: false,
-      code: "not_authorized",
-      message: "You do not have permission for this action.",
-    });
-
-    await expect(createWalkInAccount(validParams())).resolves.toEqual({
-      error: "You do not have permission for this action.",
-    });
-    expect(adminCreateUser).not.toHaveBeenCalled();
-  });
-
-  it("returns auth creation errors without attempting downstream writes", async () => {
-    adminCreateUser.mockResolvedValue({ data: { user: null }, error: { message: "auth failed" } });
-
-    await expect(createWalkInAccount(validParams())).resolves.toEqual({ error: "auth failed" });
-    expect(profileUpdate).not.toHaveBeenCalled();
-    expect(auditInsert).not.toHaveBeenCalled();
-  });
-
-  it("rolls back the auth user when profile persistence fails", async () => {
-    profileEq.mockResolvedValue({ error: { message: "profile failed" } });
-    await expect(createWalkInAccount(validParams())).resolves.toEqual({ error: "profile failed" });
-    expect(deleteUser).toHaveBeenCalledWith(createdUser);
-    expect(auditInsert).not.toHaveBeenCalled();
-  });
-
-  it("rolls back the auth user when audit persistence fails", async () => {
-    auditInsert.mockResolvedValue({ error: { message: "audit failed" } });
-    await expect(createWalkInAccount(validParams())).resolves.toEqual({ error: "audit failed" });
-    expect(deleteUser).toHaveBeenCalledWith(createdUser);
+  it("maps 401 and 403 to the existing messages", async () => {
+    apiWrite.mockRejectedValueOnce(new ApiError(401, { code: "not_authenticated" }));
+    expect(await assignRole({ accountId: "a1", role: "mechanic" })).toEqual({ error: "Not authenticated" });
+    apiWrite.mockRejectedValueOnce(new ApiError(403, { code: "not_authorized" }));
+    expect(await assignRole({ accountId: "a1", role: "mechanic" })).toEqual({ error: "Not authorized" });
   });
 });

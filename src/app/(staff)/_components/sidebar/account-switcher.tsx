@@ -1,10 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
 import { useRouter } from "next/navigation";
 
-import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { LogOut, User } from "lucide-react";
 
 import { signOut as signOutAction } from "@/app/auth/actions";
@@ -17,18 +14,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { createClient } from "@/lib/supabase/client";
+import { useAccountSummary } from "@/lib/api/use-account-summary";
 
 export function AccountSwitcher() {
   const router = useRouter();
-  const [user, setUser] = useState<SupabaseUser | null>(null);
-  const supabase = createClient();
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setUser(data.user);
-    });
-  }, [supabase]);
+  const user = useAccountSummary();
 
   if (!user) return null;
 

@@ -1,25 +1,28 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
-import { ROLE_WORK_SCHEDULES } from "@/lib/attendance/role-schedules";
+import { ApiError, errorMessage } from "@/lib/api/errors";
+import { apiWrite, relaySetCookies } from "@/lib/api/server";
+import type { Me } from "@/lib/api/types";
 import { authorizeAction } from "@/lib/auth/action-guard";
-import { EMPLOYEE_ROLES, ROLE_LABELS } from "@/lib/auth/roles";
+import { EMPLOYEE_ROLES } from "@/lib/auth/roles";
+import { getSession } from "@/lib/auth/session";
 import { landingPath } from "@/lib/routing/paths";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { createServerSupabase, createServerSupabaseClient } from "@/lib/supabase/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { MAX_UPLOAD_BYTES } from "@/lib/uploads/compress-image";
 import { emailSchema, fullNameSchema, newPasswordSchema, passwordSchema } from "@/lib/validation/forms";
 import { changePasswordSchema, ownProfileSchema, profileAddressColumns } from "@/lib/validation/profile";
 
-export async function signIn(formData: FormData) {
-  const supabase = await createServerSupabaseClient();
+// Routing hint only: src/proxy.ts uses it to pick the role prefix. Laravel re-authorises every call.
+const ROLE_COOKIE = "gce-role";
+const ROLE_COOKIE_OPTIONS = { httpOnly: true, sameSite: "lax", maxAge: 604800, path: "/" } as const;
 
+export async function signIn(formData: FormData) {
   const parsed = z.object({ email: emailSchema, password: passwordSchema }).safeParse({
     email: formData.get("email"),
     password: formData.get("password"),
@@ -28,33 +31,25 @@ export async function signIn(formData: FormData) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid credentials." };
   }
 
-  const { data, error } = await supabase.auth.signInWithPassword(parsed.data);
-
-  if (error) {
-    return { error: error.message };
-  }
-
-  const userId = data.user?.id;
-  if (userId) {
-    const { data: roles } = await supabase.rpc("get_user_roles");
-    if (roles) {
-      const userRole = (roles as { account_id: string; role: string }[]).find((r) => r.account_id === userId);
-      if (userRole) {
-        const cookieStore = await cookies();
-        cookieStore.set("gce-role", userRole.role, { httpOnly: true, sameSite: "lax", maxAge: 604800, path: "/" });
-        revalidatePath("/", "layout");
-        redirect(landingPath(userRole.role));
-      }
-    }
+  let me: Me;
+  try {
+    const result = await apiWrite<Me>("POST", "/api/v1/auth/login", {
+      ...parsed.data,
+      remember: formData.get("remember") === "on",
+    });
+    await relaySetCookies(result.setCookies);
+    me = result.data;
+  } catch (error) {
+    return { error: errorMessage(error) };
   }
 
   revalidatePath("/", "layout");
-  redirect("/auth/v1/login");
+  if (!me.role) redirect("/auth/v1/login");
+  (await cookies()).set(ROLE_COOKIE, me.role, ROLE_COOKIE_OPTIONS);
+  redirect(landingPath(me.role));
 }
 
 export async function signUp(formData: FormData) {
-  const supabase = await createServerSupabaseClient();
-
   // T04 X1: both policy boxes are required server side too, not only in the form.
   if (formData.get("accept_terms") !== "true" || formData.get("accept_policy") !== "true") {
     return { error: "You must agree to the Terms and Conditions and the Company Policy." };
@@ -69,120 +64,62 @@ export async function signUp(formData: FormData) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid registration details." };
   }
 
-  const { email, password, full_name: fullName } = parsed.data;
-  // The Gmail link can be opened on another device, so prefer the deployed site URL over the
-  // request origin. Local development still falls back to the browser origin.
-  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? (await headers()).get("origin") ?? "").replace(/\/$/, "");
-
-  // The handle_new_user trigger creates the profile from the full_name metadata.
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      emailRedirectTo: `${siteUrl}/auth/callback`,
-      data: { full_name: fullName, terms_accepted_at: new Date().toISOString() },
-    },
-  });
-
-  if (error) {
-    return { error: error.message };
+  // Laravel creates user + profile + customer role in one transaction and emails the verification link
+  // (to the frontend /auth/confirm, so it works from another device). T04 A3: no session until verified.
+  try {
+    const result = await apiWrite<{ notice: string }>("POST", "/api/v1/auth/register", {
+      ...parsed.data,
+      accept_terms: true,
+      accept_policy: true,
+    });
+    await relaySetCookies(result.setCookies);
+    return { notice: result.data.notice };
+  } catch (error) {
+    return { error: errorMessage(error) };
   }
-
-  // With confirmations on, Supabase hides an existing email by returning a user with no identities.
-  if (data.user?.identities?.length === 0) {
-    return { error: "This email is already registered. Please log in instead." };
-  }
-
-  // T04 A3: no session means the email still needs verifying; the callback signs the user in later.
-  if (!data.session) {
-    return { notice: "Check your email to verify your account." };
-  }
-
-  const cookieStore = await cookies();
-  cookieStore.set("gce-role", "customer", { httpOnly: true, sameSite: "lax", maxAge: 604800, path: "/" });
-
-  revalidatePath("/", "layout");
-  redirect("/customer/showroom");
 }
 
 export async function signOut() {
-  const supabase = await createServerSupabaseClient();
-  await supabase.auth.signOut();
+  try {
+    await relaySetCookies((await apiWrite("POST", "/api/v1/auth/logout")).setCookies);
+  } catch {
+    // Already signed out or Laravel unreachable: still clear this browser's cookies below.
+  }
   // The proxy sends "/" to the role landing while this cookie is set, so a stale one bounces a
   // signed-out visitor from the landing page back to the login screen.
   const cookieStore = await cookies();
-  cookieStore.delete("gce-role");
+  cookieStore.delete(ROLE_COOKIE);
+  cookieStore.delete("gce_session");
   revalidatePath("/", "layout");
   redirect("/auth/v1/login");
 }
 
-export async function getCurrentUser() {
-  // Read-only client for the same reason as getCurrentRole: this is called from Server
-  // Component renders, where a cookie write throws.
-  const supabase = await createServerSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user;
+export async function getCurrentUser(): Promise<{ id: string; email: string } | null> {
+  const me = await getSession();
+  return me ? { id: me.id, email: me.email } : null;
 }
 
 export async function getCurrentRole(): Promise<string | null> {
-  // Read-only client: this runs during Server Component renders, where Next.js throws
-  // on any cookie write. The read-write client refreshes and persists the rotated
-  // token, which made an expired access token a 500 instead of a page. src/proxy.ts
-  // now owns the refresh, so renders only ever read.
-  const supabase = await createServerSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) return null;
-
-  const { data: roles } = await supabase.rpc("get_user_roles");
-  if (!roles) return null;
-
-  const userRole = (roles as { account_id: string; role: string }[]).find((r) => r.account_id === user.id);
-  return userRole?.role ?? null;
+  return (await getSession())?.role ?? null;
 }
 
 interface AssignRoleParams {
   accountId: string;
   role: string;
-  assignedBy: string;
+  /** @deprecated Ignored: Laravel records the signed-in user as the actor. */
+  assignedBy?: string;
 }
 
+// T03 R2 / T06: CEO and Super Admin grant roles (enforced by Laravel `role:ceo,super_admin`).
 export async function assignRole(params: AssignRoleParams) {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user) return { error: "Not authenticated" };
-
-  const { data: roles } = await supabase.rpc("get_user_roles");
-  // T03 R2: only the CEO grants roles; the Account Manager manages employees without RBAC access.
-  // T06: the Super Admin (IT Support) grants roles too.
-  const hasRole = (roles as { role: string }[] | undefined)?.some((r) => r.role === "ceo" || r.role === "super_admin");
-  if (!hasRole) return { error: "Not authorized" };
-
-  const admin = createAdminClient();
-
-  const { error } = await admin.rpc("assign_user_role", {
-    p_account_id: params.accountId,
-    p_role: params.role,
-    p_assigned_by: params.assignedBy,
-  });
-
-  if (error) {
-    return { error: error.message };
+  try {
+    await apiWrite("POST", "/api/v1/admin/roles", { account_id: params.accountId, role: params.role });
+    return { success: true };
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) return { error: "Not authenticated" };
+    if (error instanceof ApiError && error.status === 403) return { error: "Not authorized" };
+    return { error: errorMessage(error) };
   }
-
-  await admin.from("audit_events").insert({
-    actor_id: params.assignedBy,
-    action: "role_assigned",
-    record_kind: "user_role",
-    record_id: params.accountId,
-    summary: `Role '${params.role}' assigned to account ${params.accountId}`,
-  });
-
-  return { success: true };
 }
 
 interface CreateWalkInAccountParams {
@@ -203,46 +140,16 @@ export async function createWalkInAccount(params: CreateWalkInAccountParams) {
 
   const authorization = await authorizeAction(["account_manager", "ceo"]);
   if (!authorization.ok) return { error: authorization.message };
-  const actorId = authorization.data.userId;
 
-  const admin = createAdminClient();
-  const { data, error } = await admin.auth.admin.createUser({
-    email: parsed.data.email,
-    password: parsed.data.password,
-    email_confirm: true,
-    user_metadata: { full_name: parsed.data.fullName },
-  });
-
-  if (error) return { error: error.message };
-  const createdUserId = data.user?.id;
-  if (!createdUserId) return { error: "The walk-in account could not be created." };
-
-  const profileResult = await admin
-    .from("profiles")
-    .update({
+  // Laravel creates user, profile, role and audit row in one transaction (nothing half-made to undo).
+  try {
+    await apiWrite("POST", "/api/v1/admin/accounts/walk-in", {
       full_name: parsed.data.fullName,
-      account_state: "active",
-      created_by: actorId,
-      activated_at: new Date().toISOString(),
-    })
-    .eq("id", createdUserId);
-
-  if (profileResult.error) {
-    await admin.auth.admin.deleteUser(createdUserId);
-    return { error: profileResult.error.message };
-  }
-
-  const auditResult = await admin.from("audit_events").insert({
-    actor_id: actorId,
-    action: "walk_in_account_created",
-    record_kind: "profile",
-    record_id: createdUserId,
-    summary: `Walk-in account created for ${parsed.data.fullName} (${parsed.data.email})`,
-  });
-
-  if (auditResult.error) {
-    await admin.auth.admin.deleteUser(createdUserId);
-    return { error: auditResult.error.message };
+      email: parsed.data.email,
+      password: parsed.data.password,
+    });
+  } catch (error) {
+    return { error: errorMessage(error) };
   }
 
   revalidatePath("/staff-records");
@@ -256,127 +163,118 @@ const createEmployeeAccountSchema = z.object({
   role: z.enum(EMPLOYEE_ROLES as [string, ...string[]], { message: "Choose a staff role." }),
 });
 
-// T04 E6: the CEO or the Account Manager creates an account for a new employee. The role is set by
-// set_new_employee_role (service role only), which only turns a fresh account into a staff account.
+// T04 E6: the CEO or the Account Manager creates an account for a new employee. Laravel sets the role,
+// profile, default work schedule and audit row in one transaction.
 export async function createEmployeeAccount(params: z.input<typeof createEmployeeAccountSchema>) {
   const parsed = createEmployeeAccountSchema.safeParse(params);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid employee account details." };
 
   const authorization = await authorizeAction(["ceo", "account_manager"]);
   if (!authorization.ok) return { error: authorization.message };
-  const actorId = authorization.data.userId;
 
-  const admin = createAdminClient();
-  const { data, error } = await admin.auth.admin.createUser({
-    email: parsed.data.email,
-    password: parsed.data.password,
-    email_confirm: true,
-    user_metadata: { full_name: parsed.data.fullName },
-  });
-  if (error) return { error: error.message };
-  const createdUserId = data.user?.id;
-  if (!createdUserId) return { error: "The employee account could not be created." };
-
-  // Any failure after this point removes the half-made account, so a retry with the same email works.
-  const undo = async (message: string) => {
-    await admin.auth.admin.deleteUser(createdUserId);
-    return { error: message };
-  };
-
-  const roleResult = await admin.rpc("set_new_employee_role", {
-    p_account_id: createdUserId,
-    p_role: parsed.data.role,
-    p_assigned_by: actorId,
-  });
-  if (roleResult.error) return undo(roleResult.error.message);
-
-  const profileResult = await admin
-    .from("profiles")
-    .update({
+  try {
+    await apiWrite("POST", "/api/v1/admin/accounts/employee", {
       full_name: parsed.data.fullName,
-      account_state: "active",
-      created_by: actorId,
-      activated_at: new Date().toISOString(),
-    })
-    .eq("id", createdUserId);
-  if (profileResult.error) return undo(profileResult.error.message);
-
-  const schedule = ROLE_WORK_SCHEDULES[parsed.data.role];
-  if (schedule) {
-    const scheduleResult = await admin.from("employee_work_schedules").insert({
-      employee_id: createdUserId,
-      ...schedule,
-      created_by: actorId,
-      updated_by: actorId,
+      email: parsed.data.email,
+      password: parsed.data.password,
+      role: parsed.data.role,
     });
-    if (scheduleResult.error) return undo(scheduleResult.error.message);
+  } catch (error) {
+    return { error: errorMessage(error) };
   }
-
-  const roleLabel = ROLE_LABELS[parsed.data.role as keyof typeof ROLE_LABELS];
-  const auditResult = await admin.from("audit_events").insert({
-    actor_id: actorId,
-    action: "employee_account_created",
-    record_kind: "profile",
-    record_id: createdUserId,
-    summary: `${roleLabel} account created for ${parsed.data.fullName} (${parsed.data.email})`,
-  });
-  if (auditResult.error) return undo(auditResult.error.message);
 
   revalidatePath("/staff-records");
   return { success: true };
 }
 
-// T03 C15 / T05: the signed-in user's own name, phone and PSGC address. Only these columns are written,
-// on their own row (RLS "Users can update own profile"); the auth display name follows the full name.
-// `profiles.address` is composed from the parts so autofill and delivery keep reading one string.
+// T03 C15 / T05: the signed-in user's own name, phone and PSGC address, on their own row only (Laravel
+// writes to the session user). `address` is composed here from the PSGC names the form sends.
 export async function updateOwnProfile(formData: FormData): Promise<{ error: string } | { success: true }> {
   const parsed = ownProfileSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid profile details." };
 
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
-
-  const { error } = await supabase
-    .from("profiles")
-    .update({
+  try {
+    await apiWrite("PATCH", "/api/v1/me/profile", {
       full_name: parsed.data.full_name,
       phone: parsed.data.phone || null,
       ...profileAddressColumns(parsed.data),
-    })
-    .eq("id", user.user.id);
-  if (error) return { error: error.message };
-
-  await supabase.auth.updateUser({ data: { full_name: parsed.data.full_name } });
+    });
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) return { error: "Not authenticated" };
+    return { error: errorMessage(error) };
+  }
 
   revalidatePath("/profile");
   revalidatePath("/my-profile");
   return { success: true };
 }
 
-// T03 C15: changing the password asks for the current one, checked on a separate client so the
-// user's session cookies are not touched by the check.
+// Forgot password: Laravel emails a link to /auth/v1/reset-password. The answer is the same whether or
+// not the email has an account, so the form cannot be used to find out who is registered.
+export async function requestPasswordReset(formData: FormData): Promise<{ error: string } | { notice: string }> {
+  const parsed = emailSchema.safeParse(
+    String(formData.get("email") ?? "")
+      .trim()
+      .toLowerCase(),
+  );
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Please enter a valid email address." };
+
+  try {
+    const result = await apiWrite<{ notice: string }>("POST", "/api/v1/auth/password/forgot", { email: parsed.data });
+    return { notice: result.data.notice };
+  } catch (error) {
+    if (error instanceof ApiError && error.code === "rate_limited") {
+      return { error: "Too many emails sent. Please wait a few minutes and try again." };
+    }
+    return { error: errorMessage(error) };
+  }
+}
+
+const resetPasswordSchema = z
+  .object({
+    token: z.string().min(1, "This reset link is invalid or has expired."),
+    email: emailSchema,
+    password: newPasswordSchema,
+    confirm_password: z.string(),
+  })
+  .refine((data) => data.password === data.confirm_password, {
+    message: "The new passwords do not match.",
+    path: ["confirm_password"],
+  });
+
+// Set a new password from the emailed link, then sign in with it.
+export async function resetPassword(formData: FormData): Promise<{ error: string }> {
+  const parsed = resetPasswordSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid password." };
+
+  try {
+    await apiWrite("POST", "/api/v1/auth/password/reset", {
+      token: parsed.data.token,
+      email: parsed.data.email,
+      password: parsed.data.password,
+    });
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
+  redirect("/auth/v1/login?notice=password_reset");
+}
+
+// T03 C15: changing the password asks for the current one; Laravel checks it and signs out the
+// account's other browsers.
 export async function changeOwnPassword(formData: FormData): Promise<{ error: string } | { success: true }> {
   const parsed = changePasswordSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid password." };
 
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user?.email) return { error: "Not authenticated" };
-
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  if (!url || !key) return { error: "Password change is not available right now." };
-  const checker = createSupabaseClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-  const { error: checkError } = await checker.auth.signInWithPassword({
-    email: user.user.email,
-    password: parsed.data.current_password,
-  });
-  if (checkError) return { error: "Your current password is not correct." };
-  await checker.auth.signOut({ scope: "local" });
-
-  const { error } = await supabase.auth.updateUser({ password: parsed.data.new_password });
-  if (error) return { error: error.message };
+  try {
+    const result = await apiWrite("PUT", "/api/v1/me/password", {
+      current_password: parsed.data.current_password,
+      new_password: parsed.data.new_password,
+    });
+    await relaySetCookies(result.setCookies);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) return { error: "Not authenticated" };
+    return { error: errorMessage(error) };
+  }
   return { success: true };
 }
 
@@ -433,19 +331,9 @@ export async function removeOwnAvatar(): Promise<{ error: string } | { success: 
   return saveOwnAvatar(null);
 }
 
-// Test sheet #4 (C15): a customer changes their sign-in email. Supabase emails a confirmation link to
-// the new address; the email changes when the link is opened. Staff emails stay managed by the
-// Account Manager and CEO.
-function emailChangeError(error: { code?: string; status?: number; message: string }) {
-  if (error.code === "email_exists" || /already (been )?registered/i.test(error.message)) {
-    return "This email is already used by another account.";
-  }
-  if (error.status === 429 || error.code?.startsWith("over_")) {
-    return "Too many emails sent. Please wait a few minutes and try again.";
-  }
-  return "We could not send the email. Please try again.";
-}
-
+// Test sheet #4 (C15): a customer changes their sign-in email. Laravel emails a signed confirmation link
+// to the new address; the email changes when the link is opened (/auth/confirm). Staff emails stay
+// managed by the Account Manager and CEO.
 export async function requestEmailChange(
   formData: FormData,
 ): Promise<{ error: string } | { success: true; email: string }> {
@@ -459,16 +347,14 @@ export async function requestEmailChange(
   );
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Please enter a valid email address." };
 
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
-  if (parsed.data === user.user.email?.toLowerCase()) return { error: "This is already your email." };
-
-  const origin = (await headers()).get("origin") ?? process.env.NEXT_PUBLIC_SITE_URL ?? "";
-  const { error } = await supabase.auth.updateUser(
-    { email: parsed.data },
-    { emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent("/customer/profile")}` },
-  );
-  if (error) return { error: emailChangeError(error) };
-  return { success: true, email: parsed.data };
+  try {
+    const result = await apiWrite<{ email: string }>("POST", "/api/v1/me/email", { email: parsed.data });
+    return { success: true, email: result.data.email };
+  } catch (error) {
+    if (error instanceof ApiError && error.code === "rate_limited") {
+      return { error: "Too many emails sent. Please wait a few minutes and try again." };
+    }
+    if (error instanceof ApiError && error.code === "validation_error") return { error: error.message };
+    return { error: "We could not send the email. Please try again." };
+  }
 }

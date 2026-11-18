@@ -139,48 +139,35 @@ describe("server Supabase clients and expired sessions", () => {
 describe("render-path wiring", () => {
   const read = (relative: string) => readFileSync(resolve(process.cwd(), relative), "utf8");
 
-  it("getCurrentRole uses the read-only client so a render can never write cookies", () => {
+  // Phase 3: identity moved to Laravel. Renders read the session through getSession (a GET that never
+  // writes cookies); only Server Actions and route handlers relay Laravel's Set-Cookie headers.
+  it("getCurrentRole and getCurrentUser read the Laravel session, never a cookie-writing client", () => {
     const actions = read("src/app/auth/actions.ts");
-    const body = actions.slice(actions.indexOf("export async function getCurrentRole"));
-
-    expect(body).toContain("await createServerSupabase()");
-    expect(body.slice(0, body.indexOf("export async function ", 10))).not.toContain(
-      "await createServerSupabaseClient()",
-    );
+    for (const name of ["getCurrentRole", "getCurrentUser"]) {
+      const start = actions.indexOf(`export async function ${name}`);
+      const body = actions.slice(start, actions.indexOf("export async function ", start + 10));
+      expect(body).toContain("getSession()");
+      expect(body).not.toContain("relaySetCookies");
+      expect(body).not.toContain("createServerSupabase");
+    }
   });
 
-  it("getCurrentUser uses the read-only client during page rendering", () => {
-    const actions = read("src/app/auth/actions.ts");
-    const body = actions.slice(actions.indexOf("export async function getCurrentUser"));
-
-    expect(body).toContain("await createServerSupabase()");
-    expect(body.slice(0, body.indexOf("export async function ", 10))).not.toContain(
-      "await createServerSupabaseClient()",
-    );
+  it("the session read is a GET with no cookie writes", () => {
+    const session = read("src/lib/auth/session.ts");
+    expect(session).toContain('apiGet<Me>("/api/v1/me")');
+    expect(session).not.toContain("relaySetCookies");
+    expect(session).not.toContain("cookies()");
   });
 
-  it("ships a proxy that refreshes the session, since middleware is deprecated in Next 16", () => {
+  it("ships a routing-only proxy with no Supabase session refresh", () => {
     const proxy = read("src/proxy.ts");
 
     expect(proxy).toMatch(/export async function proxy\(/);
-    expect(proxy).toContain("createServerClient");
-    expect(proxy).toContain("auth.getUser()");
-    // The refreshed cookies must ride whatever response the routing logic returns,
-    // otherwise the rotated refresh token is dropped and the session logs out.
-    expect(proxy).toContain("response.cookies.set(name, value");
+    expect(proxy).not.toContain("@supabase");
+    expect(proxy).not.toContain("auth.getUser()");
     // Next 16 renamed the convention; leaving middleware.ts behind restores the
     // deprecation warning and splits the pipeline across two entry points.
     expect(existsSync(resolve(process.cwd(), "src/middleware.ts"))).toBe(false);
-  });
-
-  it("proxy hands the refreshed session to the render for the same request", () => {
-    const proxy = read("src/proxy.ts");
-
-    // Response-only cookies leave the render reading the pre-refresh session, so the
-    // request itself has to carry them too.
-    expect(proxy).toContain("request.cookies.set(");
-    // The response/redirect/rewrite path must keep attaching them either way.
-    expect(proxy).toContain("response.cookies.set(name, value");
   });
 
   it("has a single proxy entry point, with no stale disabled twin", () => {

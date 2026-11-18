@@ -1,96 +1,135 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { authSignUp, cookieSet, redirect, revalidatePath, createAdminClient } = vi.hoisted(() => ({
-  authSignUp: vi.fn(),
+const { apiWrite, relaySetCookies, cookieSet, cookieDelete, redirect } = vi.hoisted(() => ({
+  apiWrite: vi.fn(),
+  relaySetCookies: vi.fn(),
   cookieSet: vi.fn(),
-  redirect: vi.fn(),
-  revalidatePath: vi.fn(),
-  createAdminClient: vi.fn(),
+  cookieDelete: vi.fn(),
+  redirect: vi.fn((path: string) => {
+    throw new Error(`NEXT_REDIRECT ${path}`);
+  }),
 }));
 
-vi.mock("next/cache", () => ({ revalidatePath }));
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect }));
-vi.mock("next/headers", () => ({
-  cookies: vi.fn(async () => ({ set: cookieSet })),
-  headers: vi.fn(async () => new Headers({ origin: "https://gce.example" })),
-}));
-vi.mock("@/lib/supabase/admin", () => ({ createAdminClient }));
-vi.mock("@/lib/supabase/server", () => ({
-  createServerSupabaseClient: vi.fn(async () => ({ auth: { signUp: authSignUp } })),
-}));
+vi.mock("next/headers", () => ({ cookies: vi.fn(async () => ({ set: cookieSet, delete: cookieDelete })) }));
+vi.mock("@/lib/api/server", () => ({ apiWrite, relaySetCookies }));
+vi.mock("@/lib/auth/session", () => ({ getSession: vi.fn() }));
 
-import { signUp } from "./actions";
+import { ApiError } from "@/lib/api/errors";
 
-function form(overrides: Record<string, string | null> = {}) {
-  const values: Record<string, string | null> = {
+import { signIn, signOut, signUp } from "./actions";
+
+function form(values: Record<string, string | null>) {
+  const data = new FormData();
+  for (const [key, value] of Object.entries(values)) if (value !== null) data.set(key, value);
+  return data;
+}
+
+const signup = (overrides: Record<string, string | null> = {}) =>
+  form({
     email: "new@example.com",
     password: "Correct-horse-9",
     full_name: "Juan Dela Cruz",
     accept_terms: "true",
     accept_policy: "true",
     ...overrides,
-  };
-  const data = new FormData();
-  for (const [key, value] of Object.entries(values)) if (value !== null) data.set(key, value);
-  return data;
-}
+  });
 
-const user = { id: "u1", identities: [{ id: "i1" }] };
+beforeEach(() => vi.clearAllMocks());
 
 describe("signUp", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    process.env.NEXT_PUBLIC_SITE_URL = "https://gce.example";
-  });
+  it("registers through Laravel and asks the user to check their email (no session until verified)", async () => {
+    apiWrite.mockResolvedValue({
+      status: 201,
+      data: { notice: "Check your email to verify your account." },
+      setCookies: [],
+    });
 
-  it("asks the user to check their email when no session comes back", async () => {
-    authSignUp.mockResolvedValue({ data: { user, session: null }, error: null });
-
-    await expect(signUp(form())).resolves.toEqual({ notice: "Check your email to verify your account." });
-    expect(cookieSet).not.toHaveBeenCalled();
-    expect(redirect).not.toHaveBeenCalled();
-    expect(createAdminClient).not.toHaveBeenCalled();
-  });
-
-  it("sends the verification link to the callback and stores the policy acceptance", async () => {
-    authSignUp.mockResolvedValue({ data: { user, session: null }, error: null });
-
-    await signUp(form());
-    const options = authSignUp.mock.calls[0]?.[0].options;
-    expect(options.emailRedirectTo).toBe("https://gce.example/auth/callback");
-    expect(options.data.full_name).toBe("Juan Dela Cruz");
-    expect(typeof options.data.terms_accepted_at).toBe("string");
-  });
-
-  it("treats empty identities as an already registered email", async () => {
-    authSignUp.mockResolvedValue({ data: { user: { id: "u1", identities: [] }, session: null }, error: null });
-
-    await expect(signUp(form())).resolves.toEqual({
-      error: "This email is already registered. Please log in instead.",
+    await expect(signUp(signup())).resolves.toEqual({ notice: "Check your email to verify your account." });
+    expect(apiWrite).toHaveBeenCalledWith("POST", "/api/v1/auth/register", {
+      email: "new@example.com",
+      password: "Correct-horse-9",
+      full_name: "Juan Dela Cruz",
+      accept_terms: true,
+      accept_policy: true,
     });
     expect(cookieSet).not.toHaveBeenCalled();
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("shows Laravel's message for an already registered email", async () => {
+    apiWrite.mockRejectedValue(
+      new ApiError(422, {
+        code: "validation_error",
+        message: "This email is already registered. Please log in instead.",
+      }),
+    );
+    await expect(signUp(signup())).resolves.toEqual({
+      error: "This email is already registered. Please log in instead.",
+    });
   });
 
   it.each([
     ["accept_terms", { accept_terms: null }],
     ["accept_policy", { accept_policy: "false" }],
   ])("refuses registration when %s is not checked", async (_name, overrides) => {
-    await expect(signUp(form(overrides))).resolves.toEqual({
+    await expect(signUp(signup(overrides))).resolves.toEqual({
       error: "You must agree to the Terms and Conditions and the Company Policy.",
     });
-    expect(authSignUp).not.toHaveBeenCalled();
+    expect(apiWrite).not.toHaveBeenCalled();
   });
 
-  it("refuses a weak password before calling Supabase", async () => {
-    await expect(signUp(form({ password: "abcdefgh" }))).resolves.toEqual({ error: "Add an uppercase letter." });
-    expect(authSignUp).not.toHaveBeenCalled();
+  it("refuses a weak password before calling Laravel", async () => {
+    await expect(signUp(signup({ password: "abcdefgh" }))).resolves.toEqual({ error: "Add an uppercase letter." });
+    expect(apiWrite).not.toHaveBeenCalled();
+  });
+});
+
+describe("signIn", () => {
+  const me = { id: "u1", email: "ceo@gce.local", email_verified: true, role: "ceo", profile: {} };
+
+  it("relays Laravel's session cookies, sets the role hint and lands on the role's page", async () => {
+    apiWrite.mockResolvedValue({ status: 200, data: me, setCookies: ["gce_session=abc; path=/; httponly"] });
+
+    await expect(signIn(form({ email: "ceo@gce.local", password: "Secret#123", remember: "on" }))).rejects.toThrow(
+      "NEXT_REDIRECT /ceo/dashboard",
+    );
+    expect(apiWrite).toHaveBeenCalledWith("POST", "/api/v1/auth/login", {
+      email: "ceo@gce.local",
+      password: "Secret#123",
+      remember: true,
+    });
+    expect(relaySetCookies).toHaveBeenCalledWith(["gce_session=abc; path=/; httponly"]);
+    expect(cookieSet).toHaveBeenCalledWith("gce-role", "ceo", expect.objectContaining({ httpOnly: true }));
   });
 
-  it("signs the customer in when confirmations are off", async () => {
-    authSignUp.mockResolvedValue({ data: { user, session: { access_token: "t" } }, error: null });
+  it("shows Laravel's wording for bad credentials and unverified emails", async () => {
+    apiWrite.mockRejectedValueOnce(
+      new ApiError(422, { code: "invalid_credentials", message: "Invalid login credentials" }),
+    );
+    expect(await signIn(form({ email: "a@b.co", password: "Secret#123" }))).toEqual({
+      error: "Invalid login credentials",
+    });
+    apiWrite.mockRejectedValueOnce(new ApiError(403, { code: "email_not_verified", message: "Email not confirmed" }));
+    expect(await signIn(form({ email: "a@b.co", password: "Secret#123" }))).toEqual({ error: "Email not confirmed" });
+    expect(cookieSet).not.toHaveBeenCalled();
+  });
 
-    await signUp(form());
-    expect(cookieSet).toHaveBeenCalledWith("gce-role", "customer", expect.objectContaining({ httpOnly: true }));
-    expect(redirect).toHaveBeenCalledWith("/customer/showroom");
+  it("keeps an API outage distinct from a credential failure", async () => {
+    apiWrite.mockRejectedValue(new ApiError(0, {}));
+    expect(((await signIn(form({ email: "a@b.co", password: "Secret#123" }))) as { error: string }).error).toMatch(
+      /not reachable/,
+    );
+  });
+});
+
+describe("signOut", () => {
+  it("ends the Laravel session and clears this browser's cookies even if Laravel is down", async () => {
+    apiWrite.mockRejectedValue(new ApiError(0, {}));
+    await expect(signOut()).rejects.toThrow("NEXT_REDIRECT /auth/v1/login");
+    expect(apiWrite).toHaveBeenCalledWith("POST", "/api/v1/auth/logout");
+    expect(cookieDelete).toHaveBeenCalledWith("gce-role");
+    expect(cookieDelete).toHaveBeenCalledWith("gce_session");
   });
 });

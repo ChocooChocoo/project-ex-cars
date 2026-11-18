@@ -1,29 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { update, eq, updateUser, signInWithPassword, signOut } = vi.hoisted(() => ({
-  update: vi.fn(),
-  eq: vi.fn(),
-  updateUser: vi.fn(),
-  signInWithPassword: vi.fn(),
-  signOut: vi.fn(),
-}));
-
-const userId = "11111111-1111-4111-8111-111111111111";
+const { apiWrite, relaySetCookies } = vi.hoisted(() => ({ apiWrite: vi.fn(), relaySetCookies: vi.fn() }));
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("@/lib/supabase/server", () => ({
-  createServerSupabase: vi.fn(),
-  createServerSupabaseClient: vi.fn(async () => ({
-    auth: {
-      getUser: vi.fn(async () => ({ data: { user: { id: userId, email: "buyer@example.com" } } })),
-      updateUser,
-    },
-    from: vi.fn(() => ({ update })),
-  })),
-}));
-vi.mock("@supabase/supabase-js", () => ({
-  createClient: vi.fn(() => ({ auth: { signInWithPassword, signOut } })),
-}));
+vi.mock("@/lib/api/server", () => ({ apiWrite, relaySetCookies }));
+vi.mock("@/lib/auth/session", () => ({ getSession: vi.fn() }));
+
+import { ApiError } from "@/lib/api/errors";
 
 import { changeOwnPassword, updateOwnProfile } from "./actions";
 
@@ -35,12 +18,7 @@ function form(values: Record<string, string>) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  update.mockReturnValue({ eq });
-  eq.mockResolvedValue({ error: null });
-  updateUser.mockResolvedValue({ error: null });
-  signOut.mockResolvedValue({ error: null });
-  process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "publishable";
+  apiWrite.mockResolvedValue({ status: 200, data: {}, setCookies: ["gce_session=new; path=/"] });
 });
 
 const address = {
@@ -55,19 +33,16 @@ const address = {
   barangay_name: "Bagong Kalsada",
 };
 
+const sentProfile = () => apiWrite.mock.calls[0][2];
+
 describe("updateOwnProfile", () => {
-  it("writes the address parts and the composed address on the caller's own row", async () => {
+  it("sends the address parts and the composed address; no account id or extra field leaves Next.js", async () => {
     const result = await updateOwnProfile(
-      form({
-        full_name: " Juan Dela Cruz ",
-        phone: "09171234567",
-        ...address,
-        account_state: "x",
-      }),
+      form({ full_name: " Juan Dela Cruz ", phone: "09171234567", ...address, account_state: "x" }),
     );
 
     expect(result).toEqual({ success: true });
-    expect(update).toHaveBeenCalledWith({
+    expect(apiWrite).toHaveBeenCalledWith("PATCH", "/api/v1/me/profile", {
       full_name: "Juan Dela Cruz",
       phone: "09171234567",
       address: "Block 4 Lot 5, Bagong Kalsada, City of Calamba, Laguna, CALABARZON",
@@ -77,8 +52,6 @@ describe("updateOwnProfile", () => {
       city_code: "043405000",
       barangay_code: "043405001",
     });
-    expect(eq).toHaveBeenCalledWith("id", userId);
-    expect(updateUser).toHaveBeenCalledWith({ data: { full_name: "Juan Dela Cruz" } });
   });
 
   it("saves an NCR address without a province", async () => {
@@ -97,45 +70,39 @@ describe("updateOwnProfile", () => {
         barangay_name: "Barangay 1",
       }),
     );
+    expect(sentProfile()).toEqual(
+      expect.objectContaining({ address: "Block 4 Lot 5, Barangay 1, City of Manila, NCR", province_code: null }),
+    );
+  });
 
-    expect(update).toHaveBeenCalledWith(
+  it("sends an empty phone and block/lot as null", async () => {
+    await updateOwnProfile(form({ ...address, full_name: "Juan", phone: "", address_line: "" }));
+    expect(sentProfile()).toEqual(
       expect.objectContaining({
-        address: "Block 4 Lot 5, Barangay 1, City of Manila, NCR",
-        province_code: null,
+        phone: null,
+        address_line: null,
+        address: "Bagong Kalsada, City of Calamba, Laguna, CALABARZON",
       }),
     );
   });
 
-  it("stores an empty phone and block/lot as null", async () => {
-    await updateOwnProfile(form({ ...address, full_name: "Juan", phone: "", address_line: "" }));
-
-    expect(update).toHaveBeenCalledWith(
-      expect.objectContaining({ full_name: "Juan", phone: null, address_line: null }),
-    );
-    expect(update).toHaveBeenCalledWith(
-      expect.objectContaining({ address: "Bagong Kalsada, City of Calamba, Laguna, CALABARZON" }),
-    );
-  });
-
-  it("refuses an address with no barangay without writing", async () => {
+  it("refuses bad input without calling Laravel", async () => {
     expect(await updateOwnProfile(form({ ...address, full_name: "Juan", phone: "", barangay_code: "" }))).toEqual({
       error: "Choose your barangay.",
     });
-    expect(update).not.toHaveBeenCalled();
-  });
-
-  it("rejects a blank name and a bad phone without writing", async () => {
-    expect(await updateOwnProfile(form({ ...address, full_name: "  " }))).toEqual({
-      error: "Name is required.",
-    });
+    expect(await updateOwnProfile(form({ ...address, full_name: "  " }))).toEqual({ error: "Name is required." });
     expect(await updateOwnProfile(form({ ...address, full_name: "Juan", phone: "12345" }))).toHaveProperty("error");
-    expect(update).not.toHaveBeenCalled();
+    expect(apiWrite).not.toHaveBeenCalled();
   });
 
-  it("returns the database error", async () => {
-    eq.mockResolvedValue({ error: { message: "permission denied" } });
+  it("returns Laravel's validation message, and 'Not authenticated' for a dead session", async () => {
+    apiWrite.mockRejectedValueOnce(new ApiError(422, { code: "validation_error", message: "Choose your region." }));
     expect(await updateOwnProfile(form({ ...address, full_name: "Juan", phone: "" }))).toEqual({
-      error: "permission denied",
+      error: "Choose your region.",
+    });
+    apiWrite.mockRejectedValueOnce(new ApiError(401, { code: "not_authenticated" }));
+    expect(await updateOwnProfile(form({ ...address, full_name: "Juan", phone: "" }))).toEqual({
+      error: "Not authenticated",
     });
   });
 });
@@ -147,37 +114,34 @@ describe("changeOwnPassword", () => {
     confirm_password: "New-password-1",
   };
 
-  it("checks the current password, then sets the new one", async () => {
-    signInWithPassword.mockResolvedValue({ error: null });
-
+  it("sends current and new password, then relays the rotated session cookie", async () => {
     expect(await changeOwnPassword(form(valid))).toEqual({ success: true });
-    expect(signInWithPassword).toHaveBeenCalledWith({ email: "buyer@example.com", password: "old-password" });
-    expect(updateUser).toHaveBeenCalledWith({ password: "New-password-1" });
+    expect(apiWrite).toHaveBeenCalledWith("PUT", "/api/v1/me/password", {
+      current_password: "old-password",
+      new_password: "New-password-1",
+    });
+    expect(relaySetCookies).toHaveBeenCalledWith(["gce_session=new; path=/"]);
   });
 
-  it("refuses a wrong current password", async () => {
-    signInWithPassword.mockResolvedValue({ error: { message: "Invalid login credentials" } });
-
+  it("refuses a wrong current password with Laravel's message", async () => {
+    apiWrite.mockRejectedValue(
+      new ApiError(422, { code: "validation_error", message: "Your current password is not correct." }),
+    );
     expect(await changeOwnPassword(form(valid))).toEqual({ error: "Your current password is not correct." });
-    expect(updateUser).not.toHaveBeenCalled();
   });
 
-  it("refuses mismatched or too short new passwords", async () => {
+  it("refuses mismatched, short or weak new passwords before any request", async () => {
     expect(await changeOwnPassword(form({ ...valid, confirm_password: "different-1" }))).toEqual({
       error: "The new passwords do not match.",
     });
     expect(
       await changeOwnPassword(form({ ...valid, new_password: "short", confirm_password: "short" })),
     ).toHaveProperty("error");
-    expect(signInWithPassword).not.toHaveBeenCalled();
-  });
-
-  it("refuses a weak new password", async () => {
     expect(await changeOwnPassword(form({ ...valid, new_password: "abcdefgh", confirm_password: "abcdefgh" }))).toEqual(
       {
         error: "Add an uppercase letter.",
       },
     );
-    expect(updateUser).not.toHaveBeenCalled();
+    expect(apiWrite).not.toHaveBeenCalled();
   });
 });

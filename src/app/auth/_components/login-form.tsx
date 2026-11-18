@@ -39,6 +39,7 @@ export function LoginForm() {
     const formData = new FormData();
     formData.set("email", data.email);
     formData.set("password", data.password);
+    if (data.remember) formData.set("remember", "on");
 
     const result = await signIn(formData);
 

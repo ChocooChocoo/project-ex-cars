@@ -1,51 +1,37 @@
 import { type NextRequest, NextResponse } from "next/server";
 
+import { ApiError } from "@/lib/api/errors";
+import { apiGet, relaySetCookies } from "@/lib/api/server";
+import type { Me } from "@/lib/api/types";
 import { landingPath } from "@/lib/routing/paths";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
-
-const OTP_TYPES = ["signup", "invite", "magiclink", "recovery", "email_change", "email"] as const;
-type OtpType = (typeof OTP_TYPES)[number];
 
 const safeNext = (value: string | null) => (value?.startsWith("/") && !value.startsWith("//") ? value : null);
 
-// Gmail opens confirmation links in its own browser. The PKCE code-verifier cookie from signUp is not
-// there, so the token hash is verified on the server and the role cookie is set on this response.
+// Only Laravel's signed email-verification and email-change paths may be relayed.
+const SIGNED_PATH =
+  /^\/api\/v1\/auth\/email\/(verify\/[\w-]+\/[0-9a-f]{40}|change\/[\w-]+)\?[^#\s]*signature=[0-9a-f]+/;
+
+// Emailed links (verification, email change) land here, often in another browser (Gmail). Laravel checks
+// the signature, verifies the address and signs the user in; this handler relays that session cookie
+// and sets the routing hint before redirecting.
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
-  const tokenHash = searchParams.get("token_hash");
-  const type = (searchParams.get("type") ?? "signup") as OtpType;
+  const signedPath = searchParams.get("verify");
   const nextPath = safeNext(searchParams.get("next"));
-  const errorCode = searchParams.get("error_code") ?? searchParams.get("error");
 
-  if (errorCode) {
-    return NextResponse.redirect(`${origin}/auth/v1/login?error=${encodeURIComponent(errorCode)}`);
-  }
-  if (!tokenHash || !OTP_TYPES.includes(type)) {
+  if (!signedPath || !SIGNED_PATH.test(signedPath)) {
     return NextResponse.redirect(`${origin}/auth/v1/login?error=confirmation_failed`);
   }
 
-  const supabase = await createServerSupabaseClient();
-  const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
-  if (error) {
-    return NextResponse.redirect(`${origin}/auth/v1/login?error=confirmation_failed`);
+  try {
+    const result = await apiGet<Me>(signedPath);
+    await relaySetCookies(result.setCookies);
+    const role = result.data.role ?? "customer";
+    const response = NextResponse.redirect(`${origin}${nextPath ?? landingPath(role)}`);
+    response.cookies.set("gce-role", role, { path: "/", httpOnly: true, sameSite: "lax", maxAge: 60 * 60 * 24 * 7 });
+    return response;
+  } catch (error) {
+    const reason = error instanceof ApiError && error.status === 409 ? "email_taken" : "confirmation_failed";
+    return NextResponse.redirect(`${origin}/auth/v1/login?error=${reason}`);
   }
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.redirect(`${origin}/auth/v1/login?error=confirmation_failed`);
-
-  const { data: roles } = await supabase.rpc("get_user_roles");
-  const roleRecord = (roles as { account_id: string; role: string }[] | null)?.find(
-    (row) => row.account_id === user.id,
-  );
-  const role = roleRecord?.role ?? "customer";
-  const response = NextResponse.redirect(`${origin}${nextPath ?? landingPath(role)}`);
-  response.cookies.set("gce-role", role, {
-    path: "/",
-    httpOnly: true,
-    sameSite: "lax",
-    maxAge: 60 * 60 * 24 * 7,
-  });
-  return response;
 }

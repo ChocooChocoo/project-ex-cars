@@ -39,6 +39,13 @@ vi.mock("@/lib/supabase/server", () => ({
   })),
   createServerSupabaseClient: vi.fn(async () => ({ auth: { getUser }, from: db.from })),
 }));
+// Phase 3: authorizeAction reads the Laravel session; derive it from the same getUser mock.
+vi.mock("@/lib/auth/session", () => ({
+  getSession: vi.fn(async () => {
+    const { data } = await getUser();
+    return data?.user ? { id: data.user.id, email: "", email_verified: true, role: "customer", profile: {} } : null;
+  }),
+}));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn(() => ({ from: db.from })) }));
 
 import { cancelTransaction, saveBuyDetails, submitBuyRequest } from "./actions";

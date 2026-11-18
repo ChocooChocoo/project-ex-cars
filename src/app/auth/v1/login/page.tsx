@@ -46,9 +46,12 @@ export default async function LoginV1({
             {error && (
               <Alert variant="destructive">
                 <AlertDescription>
-                  {error === "auth_callback_failed"
-                    ? "Sign-in could not be completed. Please try again."
-                    : error === "confirmation_failed" || error === "otp_expired" || error === "access_denied"
+                  {error === "email_taken"
+                    ? "That email is already used by another account, so it was not changed."
+                    : error === "confirmation_failed" ||
+                        error === "link_expired" ||
+                        error === "otp_expired" ||
+                        error === "access_denied"
                       ? "This confirmation link is invalid or has expired. Register again or request a new link."
                       : "Sign-in could not be completed. Please try again."}
                 </AlertDescription>
@@ -59,7 +62,17 @@ export default async function LoginV1({
                 <AlertDescription>Your new email is confirmed. Sign in with it to continue.</AlertDescription>
               </Alert>
             )}
+            {notice === "password_reset" && (
+              <Alert>
+                <AlertDescription>Your password was changed. Log in with the new one.</AlertDescription>
+              </Alert>
+            )}
             <LoginForm />
+            <p className="text-center text-muted-foreground text-xs">
+              <Link prefetch={false} href="/auth/v1/forgot-password" className="text-primary">
+                Forgot your password?
+              </Link>
+            </p>
             <p className="text-center text-muted-foreground text-xs">
               Don&apos;t have an account?{" "}
               <Link prefetch={false} href="register" className="text-primary">

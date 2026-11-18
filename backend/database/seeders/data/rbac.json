@@ -1,0 +1,1450 @@
+{
+  "_source": "Rows inserted by supabase/migrations (final state after 20261116140000). Regenerate only if those migrations change.",
+  "areas": [
+    {
+      "key": "dashboard",
+      "label": "Dashboard",
+      "sort_order": 1
+    },
+    {
+      "key": "finance",
+      "label": "Finance",
+      "sort_order": 2
+    },
+    {
+      "key": "vehicles",
+      "label": "Vehicles",
+      "sort_order": 3
+    },
+    {
+      "key": "content",
+      "label": "Content",
+      "sort_order": 5
+    },
+    {
+      "key": "inspections",
+      "label": "Inspections",
+      "sort_order": 6
+    },
+    {
+      "key": "inquiries",
+      "label": "Inquiries",
+      "sort_order": 7
+    },
+    {
+      "key": "recommendations",
+      "label": "Recommendations",
+      "sort_order": 8
+    },
+    {
+      "key": "transactions",
+      "label": "Transactions",
+      "sort_order": 9
+    },
+    {
+      "key": "roadmap",
+      "label": "Roadmap",
+      "sort_order": 10
+    },
+    {
+      "key": "staff_records",
+      "label": "Staff Records",
+      "sort_order": 12
+    },
+    {
+      "key": "attendance",
+      "label": "Attendance",
+      "sort_order": 13
+    },
+    {
+      "key": "employee_requests",
+      "label": "Employee Requests",
+      "sort_order": 14
+    },
+    {
+      "key": "payroll",
+      "label": "Payroll",
+      "sort_order": 15
+    },
+    {
+      "key": "payslips",
+      "label": "Payslips",
+      "sort_order": 16
+    },
+    {
+      "key": "field_cases",
+      "label": "Field Cases",
+      "sort_order": 17
+    },
+    {
+      "key": "security_duty_checks",
+      "label": "Security Duty Checks",
+      "sort_order": 18
+    },
+    {
+      "key": "reports",
+      "label": "Reports",
+      "sort_order": 19
+    },
+    {
+      "key": "announcements",
+      "label": "Announcements",
+      "sort_order": 20
+    },
+    {
+      "key": "roles",
+      "label": "Roles",
+      "sort_order": 22
+    },
+    {
+      "key": "users",
+      "label": "Users",
+      "sort_order": 23
+    },
+    {
+      "key": "customer_showroom",
+      "label": "Customer Showroom",
+      "sort_order": 24
+    },
+    {
+      "key": "customer_recommendations",
+      "label": "Customer Recommendations",
+      "sort_order": 25
+    },
+    {
+      "key": "customer_inquiries",
+      "label": "Customer Inquiries",
+      "sort_order": 26
+    },
+    {
+      "key": "customer_transactions",
+      "label": "Customer Transactions",
+      "sort_order": 27
+    },
+    {
+      "key": "sell_vehicle",
+      "label": "Sell Vehicle",
+      "sort_order": 29
+    },
+    {
+      "key": "favourites",
+      "label": "Favourites",
+      "sort_order": 30
+    }
+  ],
+  "actions": [
+    {
+      "key": "read",
+      "label": "Read",
+      "sort_order": 1
+    },
+    {
+      "key": "create",
+      "label": "Create",
+      "sort_order": 2
+    },
+    {
+      "key": "update",
+      "label": "Update",
+      "sort_order": 3
+    },
+    {
+      "key": "delete",
+      "label": "Delete",
+      "sort_order": 4
+    },
+    {
+      "key": "submit",
+      "label": "Submit",
+      "sort_order": 5
+    },
+    {
+      "key": "review",
+      "label": "Review",
+      "sort_order": 6
+    },
+    {
+      "key": "approve",
+      "label": "Approve",
+      "sort_order": 7
+    },
+    {
+      "key": "reject",
+      "label": "Reject",
+      "sort_order": 8
+    },
+    {
+      "key": "assign",
+      "label": "Assign",
+      "sort_order": 9
+    },
+    {
+      "key": "verify",
+      "label": "Verify",
+      "sort_order": 10
+    },
+    {
+      "key": "upload",
+      "label": "Upload",
+      "sort_order": 11
+    },
+    {
+      "key": "publish",
+      "label": "Publish",
+      "sort_order": 12
+    },
+    {
+      "key": "archive",
+      "label": "Archive",
+      "sort_order": 13
+    },
+    {
+      "key": "expire",
+      "label": "Expire",
+      "sort_order": 14
+    },
+    {
+      "key": "release",
+      "label": "Release",
+      "sort_order": 15
+    },
+    {
+      "key": "receive",
+      "label": "Receive",
+      "sort_order": 16
+    },
+    {
+      "key": "mark_paid",
+      "label": "Mark Paid",
+      "sort_order": 17
+    },
+    {
+      "key": "complete",
+      "label": "Complete",
+      "sort_order": 18
+    },
+    {
+      "key": "cancel",
+      "label": "Cancel",
+      "sort_order": 19
+    },
+    {
+      "key": "schedule",
+      "label": "Schedule",
+      "sort_order": 20
+    },
+    {
+      "key": "send",
+      "label": "Send",
+      "sort_order": 21
+    },
+    {
+      "key": "finalize",
+      "label": "Finalize",
+      "sort_order": 22
+    },
+    {
+      "key": "record_payment",
+      "label": "Record Payment",
+      "sort_order": 23
+    },
+    {
+      "key": "waive",
+      "label": "Waive",
+      "sort_order": 24
+    },
+    {
+      "key": "instruct_repossession",
+      "label": "Instruct Repossession",
+      "sort_order": 25
+    },
+    {
+      "key": "propose",
+      "label": "Propose",
+      "sort_order": 26
+    },
+    {
+      "key": "handoff",
+      "label": "Handoff",
+      "sort_order": 27
+    },
+    {
+      "key": "accept",
+      "label": "Accept",
+      "sort_order": 28
+    },
+    {
+      "key": "start",
+      "label": "Start",
+      "sort_order": 29
+    },
+    {
+      "key": "print",
+      "label": "Print",
+      "sort_order": 30
+    }
+  ],
+  "permissions": [
+    {
+      "area": "announcements",
+      "action": "archive",
+      "access_label": "Archive Announcements",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "announcements",
+      "action": "create",
+      "access_label": "Create Announcements",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "announcements",
+      "action": "expire",
+      "access_label": "Expire Announcements",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "announcements",
+      "action": "publish",
+      "access_label": "Publish Announcements",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "announcements",
+      "action": "read",
+      "access_label": "Read Announcements",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "attendance",
+      "action": "complete",
+      "access_label": "Complete Attendance",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "attendance",
+      "action": "read",
+      "access_label": "Read Attendance",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "attendance",
+      "action": "review",
+      "access_label": "Review Attendance",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "attendance",
+      "action": "start",
+      "access_label": "Start Attendance",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "content",
+      "action": "create",
+      "access_label": "Create Content",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "content",
+      "action": "delete",
+      "access_label": "Delete Content",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "content",
+      "action": "publish",
+      "access_label": "Publish Content",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "content",
+      "action": "read",
+      "access_label": "Read Content",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "content",
+      "action": "update",
+      "access_label": "Update Content",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "customer_inquiries",
+      "action": "create",
+      "access_label": "Create Customer Inquiries",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "customer_inquiries",
+      "action": "read",
+      "access_label": "Read Customer Inquiries",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "customer_inquiries",
+      "action": "send",
+      "access_label": "Send Customer Inquiries",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "customer_inquiries",
+      "action": "submit",
+      "access_label": "Submit Customer Inquiries",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "customer_inquiries",
+      "action": "upload",
+      "access_label": "Upload Customer Inquiries",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "customer_recommendations",
+      "action": "read",
+      "access_label": "Read Customer Recommendations",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "customer_recommendations",
+      "action": "start",
+      "access_label": "Start Customer Recommendations",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "customer_recommendations",
+      "action": "submit",
+      "access_label": "Submit Customer Recommendations",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "customer_showroom",
+      "action": "read",
+      "access_label": "Read Customer Showroom",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "customer_transactions",
+      "action": "cancel",
+      "access_label": "Cancel Customer Transactions",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "customer_transactions",
+      "action": "create",
+      "access_label": "Create Customer Transactions",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "customer_transactions",
+      "action": "print",
+      "access_label": "Print Customer Transactions",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "customer_transactions",
+      "action": "read",
+      "access_label": "Read Customer Transactions",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "customer_transactions",
+      "action": "update",
+      "access_label": "Update Customer Transactions",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "customer_transactions",
+      "action": "upload",
+      "access_label": "Upload Customer Transactions",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "dashboard",
+      "action": "read",
+      "access_label": "Read Dashboard",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "employee_requests",
+      "action": "approve",
+      "access_label": "Approve Employee Requests",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "employee_requests",
+      "action": "cancel",
+      "access_label": "Cancel Employee Requests",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "employee_requests",
+      "action": "read",
+      "access_label": "Read Employee Requests",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "employee_requests",
+      "action": "reject",
+      "access_label": "Reject Employee Requests",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "employee_requests",
+      "action": "review",
+      "access_label": "Review Employee Requests",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "employee_requests",
+      "action": "submit",
+      "access_label": "Submit Employee Requests",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "favourites",
+      "action": "create",
+      "access_label": "Create Favourites",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "favourites",
+      "action": "delete",
+      "access_label": "Delete Favourites",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "favourites",
+      "action": "read",
+      "access_label": "Read Favourites",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "field_cases",
+      "action": "accept",
+      "access_label": "Accept Field Cases",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "field_cases",
+      "action": "assign",
+      "access_label": "Assign Field Cases",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "field_cases",
+      "action": "cancel",
+      "access_label": "Cancel Field Cases",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "field_cases",
+      "action": "complete",
+      "access_label": "Complete Field Cases",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "field_cases",
+      "action": "create",
+      "access_label": "Create Field Cases",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "field_cases",
+      "action": "read",
+      "access_label": "Read Field Cases",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "field_cases",
+      "action": "start",
+      "access_label": "Start Field Cases",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "field_cases",
+      "action": "update",
+      "access_label": "Update Field Cases",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "finance",
+      "action": "approve",
+      "access_label": "Approve Finance",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "finance",
+      "action": "create",
+      "access_label": "Create Finance",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "finance",
+      "action": "mark_paid",
+      "access_label": "Mark Paid Finance",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "finance",
+      "action": "read",
+      "access_label": "Read Finance",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "finance",
+      "action": "receive",
+      "access_label": "Receive Finance",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "finance",
+      "action": "reject",
+      "access_label": "Reject Finance",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "finance",
+      "action": "release",
+      "access_label": "Release Finance",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "finance",
+      "action": "submit",
+      "access_label": "Submit Finance",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "finance",
+      "action": "verify",
+      "access_label": "Verify Finance",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "inquiries",
+      "action": "accept",
+      "access_label": "Accept Inquiries",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "inquiries",
+      "action": "assign",
+      "access_label": "Assign Inquiries",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "inquiries",
+      "action": "handoff",
+      "access_label": "Handoff Inquiries",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "inquiries",
+      "action": "read",
+      "access_label": "Read Inquiries",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "inquiries",
+      "action": "review",
+      "access_label": "Review Inquiries",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "inquiries",
+      "action": "schedule",
+      "access_label": "Schedule Inquiries",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "inquiries",
+      "action": "send",
+      "access_label": "Send Inquiries",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "inquiries",
+      "action": "upload",
+      "access_label": "Upload Inquiries",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "inspections",
+      "action": "create",
+      "access_label": "Create Inspections",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "inspections",
+      "action": "print",
+      "access_label": "Print Inspections",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "inspections",
+      "action": "read",
+      "access_label": "Read Inspections",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "inspections",
+      "action": "submit",
+      "access_label": "Submit Inspections",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "payroll",
+      "action": "approve",
+      "access_label": "Approve Payroll",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "payroll",
+      "action": "create",
+      "access_label": "Create Payroll",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "payroll",
+      "action": "finalize",
+      "access_label": "Finalize Payroll",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "payroll",
+      "action": "read",
+      "access_label": "Read Payroll",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "payroll",
+      "action": "reject",
+      "access_label": "Reject Payroll",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "payroll",
+      "action": "review",
+      "access_label": "Review Payroll",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "payroll",
+      "action": "update",
+      "access_label": "Update Payroll",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "payslips",
+      "action": "mark_paid",
+      "access_label": "Mark Paid Payslips",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "payslips",
+      "action": "print",
+      "access_label": "Print Payslips",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "payslips",
+      "action": "read",
+      "access_label": "Read Payslips",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "payslips",
+      "action": "update",
+      "access_label": "Update Payslips",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "recommendations",
+      "action": "read",
+      "access_label": "Read Recommendations",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "reports",
+      "action": "read",
+      "access_label": "Read Reports",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "reports",
+      "action": "review",
+      "access_label": "Review Reports",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "reports",
+      "action": "submit",
+      "access_label": "Submit Reports",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "roadmap",
+      "action": "create",
+      "access_label": "Create Roadmap",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "roadmap",
+      "action": "delete",
+      "access_label": "Delete Roadmap",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "roadmap",
+      "action": "read",
+      "access_label": "Read Roadmap",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "roadmap",
+      "action": "update",
+      "access_label": "Update Roadmap",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "roles",
+      "action": "assign",
+      "access_label": "Assign Roles",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "roles",
+      "action": "create",
+      "access_label": "Create Roles",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "roles",
+      "action": "read",
+      "access_label": "Read Roles",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "roles",
+      "action": "update",
+      "access_label": "Update Roles",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "security_duty_checks",
+      "action": "complete",
+      "access_label": "Complete Security Duty Checks",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "security_duty_checks",
+      "action": "read",
+      "access_label": "Read Security Duty Checks",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "security_duty_checks",
+      "action": "start",
+      "access_label": "Start Security Duty Checks",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "security_duty_checks",
+      "action": "upload",
+      "access_label": "Upload Security Duty Checks",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "sell_vehicle",
+      "action": "cancel",
+      "access_label": "Cancel Sell Vehicle",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "sell_vehicle",
+      "action": "read",
+      "access_label": "Read Sell Vehicle",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "sell_vehicle",
+      "action": "submit",
+      "access_label": "Submit Sell Vehicle",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "staff_records",
+      "action": "read",
+      "access_label": "Read Staff Records",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "staff_records",
+      "action": "schedule",
+      "access_label": "Schedule Staff Records",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "staff_records",
+      "action": "submit",
+      "access_label": "Submit Staff Records",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "staff_records",
+      "action": "update",
+      "access_label": "Update Staff Records",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "transactions",
+      "action": "approve",
+      "access_label": "Approve Transactions",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "transactions",
+      "action": "assign",
+      "access_label": "Assign Transactions",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "transactions",
+      "action": "cancel",
+      "access_label": "Cancel Transactions",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "transactions",
+      "action": "complete",
+      "access_label": "Complete Transactions",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "transactions",
+      "action": "create",
+      "access_label": "Create Transactions",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "transactions",
+      "action": "instruct_repossession",
+      "access_label": "Instruct Repossession Transactions",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "transactions",
+      "action": "propose",
+      "access_label": "Propose Transactions",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "transactions",
+      "action": "read",
+      "access_label": "Read Transactions",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "transactions",
+      "action": "record_payment",
+      "access_label": "Record Payment Transactions",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "transactions",
+      "action": "reject",
+      "access_label": "Reject Transactions",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "transactions",
+      "action": "review",
+      "access_label": "Review Transactions",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "transactions",
+      "action": "start",
+      "access_label": "Start Transactions",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "transactions",
+      "action": "upload",
+      "access_label": "Upload Transactions",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "transactions",
+      "action": "verify",
+      "access_label": "Verify Transactions",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "transactions",
+      "action": "waive",
+      "access_label": "Waive Transactions",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "users",
+      "action": "create",
+      "access_label": "Create Users",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "users",
+      "action": "read",
+      "access_label": "Read Users",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "vehicles",
+      "action": "approve",
+      "access_label": "Approve Vehicles",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "vehicles",
+      "action": "archive",
+      "access_label": "Archive Vehicles",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "vehicles",
+      "action": "create",
+      "access_label": "Create Vehicles",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "vehicles",
+      "action": "delete",
+      "access_label": "Delete Vehicles",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "vehicles",
+      "action": "propose",
+      "access_label": "Propose Vehicles",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "vehicles",
+      "action": "publish",
+      "access_label": "Publish Vehicles",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "vehicles",
+      "action": "read",
+      "access_label": "Read Vehicles",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "vehicles",
+      "action": "reject",
+      "access_label": "Reject Vehicles",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "vehicles",
+      "action": "update",
+      "access_label": "Update Vehicles",
+      "description": null,
+      "status": "active"
+    },
+    {
+      "area": "vehicles",
+      "action": "upload",
+      "access_label": "Upload Vehicles",
+      "description": null,
+      "status": "active"
+    }
+  ],
+  "roles": [
+    {
+      "role_key": "head_accountant",
+      "description": "Handles finance verification, disbursements, transaction payments, reports, and recovery instructions.",
+      "status": "active",
+      "is_protected": true
+    },
+    {
+      "role_key": "confidential_informant",
+      "description": "Handles field acquisition, delivery, recovery requests, and related operational records.",
+      "status": "active",
+      "is_protected": true
+    },
+    {
+      "role_key": "marketing_specialist",
+      "description": "Maintains vehicle listings, media, pricing proposals, showroom content, and marketing content.",
+      "status": "active",
+      "is_protected": true
+    },
+    {
+      "role_key": "mechanic",
+      "description": "Creates vehicle inspections and records inspection checklist results.",
+      "status": "active",
+      "is_protected": true
+    },
+    {
+      "role_key": "sales_manager",
+      "description": "Handles inquiries, transaction decisions, showroom operations, and field cases.",
+      "status": "active",
+      "is_protected": true
+    },
+    {
+      "role_key": "head_security",
+      "description": "Records security duty checks and uses staff self-service modules.",
+      "status": "active",
+      "is_protected": true
+    },
+    {
+      "role_key": "account_manager",
+      "description": "Manages accounts, RBAC, staff records, inquiries, and payroll preparation.",
+      "status": "active",
+      "is_protected": true
+    }
+  ],
+  "role_permissions": {
+    "head_accountant": [
+      "announcements.read",
+      "attendance.complete",
+      "attendance.read",
+      "attendance.review",
+      "attendance.start",
+      "dashboard.read",
+      "employee_requests.cancel",
+      "employee_requests.read",
+      "employee_requests.submit",
+      "field_cases.create",
+      "field_cases.read",
+      "finance.approve",
+      "finance.create",
+      "finance.mark_paid",
+      "finance.read",
+      "finance.receive",
+      "finance.reject",
+      "finance.release",
+      "finance.verify",
+      "payroll.read",
+      "payslips.print",
+      "payslips.read",
+      "reports.read",
+      "reports.review",
+      "reports.submit",
+      "transactions.approve",
+      "transactions.complete",
+      "transactions.instruct_repossession",
+      "transactions.read",
+      "transactions.record_payment",
+      "transactions.verify",
+      "transactions.waive",
+      "vehicles.read"
+    ],
+    "confidential_informant": [
+      "announcements.read",
+      "attendance.complete",
+      "attendance.read",
+      "attendance.start",
+      "dashboard.read",
+      "employee_requests.cancel",
+      "employee_requests.read",
+      "employee_requests.submit",
+      "field_cases.read",
+      "finance.read",
+      "finance.submit",
+      "inspections.print",
+      "inspections.read",
+      "payslips.print",
+      "payslips.read",
+      "transactions.read",
+      "vehicles.read"
+    ],
+    "marketing_specialist": [
+      "announcements.read",
+      "attendance.complete",
+      "attendance.read",
+      "attendance.start",
+      "content.create",
+      "content.delete",
+      "content.publish",
+      "content.read",
+      "content.update",
+      "dashboard.read",
+      "employee_requests.cancel",
+      "employee_requests.read",
+      "employee_requests.submit",
+      "payslips.print",
+      "payslips.read",
+      "recommendations.read",
+      "vehicles.archive",
+      "vehicles.create",
+      "vehicles.propose",
+      "vehicles.publish",
+      "vehicles.read",
+      "vehicles.update",
+      "vehicles.upload"
+    ],
+    "mechanic": [
+      "announcements.read",
+      "attendance.complete",
+      "attendance.read",
+      "attendance.start",
+      "dashboard.read",
+      "employee_requests.cancel",
+      "employee_requests.read",
+      "employee_requests.submit",
+      "field_cases.read",
+      "inspections.create",
+      "inspections.print",
+      "inspections.read",
+      "inspections.submit",
+      "payslips.print",
+      "payslips.read",
+      "vehicles.read"
+    ],
+    "sales_manager": [
+      "announcements.read",
+      "attendance.complete",
+      "attendance.read",
+      "attendance.start",
+      "dashboard.read",
+      "employee_requests.cancel",
+      "employee_requests.read",
+      "employee_requests.submit",
+      "field_cases.accept",
+      "field_cases.assign",
+      "field_cases.cancel",
+      "field_cases.complete",
+      "field_cases.create",
+      "field_cases.read",
+      "field_cases.start",
+      "field_cases.update",
+      "inquiries.accept",
+      "inquiries.assign",
+      "inquiries.read",
+      "inquiries.schedule",
+      "inquiries.send",
+      "inquiries.upload",
+      "inspections.print",
+      "inspections.read",
+      "payslips.print",
+      "payslips.read",
+      "recommendations.read",
+      "roadmap.read",
+      "staff_records.read",
+      "transactions.approve",
+      "transactions.assign",
+      "transactions.cancel",
+      "transactions.complete",
+      "transactions.read",
+      "transactions.reject",
+      "transactions.review",
+      "transactions.upload",
+      "transactions.verify",
+      "users.create",
+      "vehicles.read"
+    ],
+    "head_security": [
+      "announcements.read",
+      "attendance.complete",
+      "attendance.read",
+      "attendance.start",
+      "dashboard.read",
+      "employee_requests.cancel",
+      "employee_requests.read",
+      "employee_requests.submit",
+      "payslips.print",
+      "payslips.read",
+      "security_duty_checks.complete",
+      "security_duty_checks.read",
+      "security_duty_checks.start",
+      "security_duty_checks.upload",
+      "vehicles.read"
+    ],
+    "account_manager": [
+      "announcements.read",
+      "attendance.complete",
+      "attendance.read",
+      "attendance.review",
+      "attendance.start",
+      "dashboard.read",
+      "employee_requests.approve",
+      "employee_requests.cancel",
+      "employee_requests.read",
+      "employee_requests.reject",
+      "employee_requests.review",
+      "employee_requests.submit",
+      "finance.create",
+      "finance.read",
+      "finance.submit",
+      "inquiries.assign",
+      "inquiries.handoff",
+      "inquiries.read",
+      "inquiries.review",
+      "inquiries.schedule",
+      "inquiries.send",
+      "inquiries.upload",
+      "inspections.print",
+      "inspections.read",
+      "payroll.create",
+      "payroll.read",
+      "payroll.update",
+      "payslips.print",
+      "payslips.read",
+      "payslips.update",
+      "recommendations.read",
+      "reports.read",
+      "reports.submit",
+      "roadmap.read",
+      "staff_records.read",
+      "staff_records.schedule",
+      "staff_records.submit",
+      "staff_records.update",
+      "transactions.cancel",
+      "transactions.read",
+      "transactions.review",
+      "transactions.start",
+      "transactions.upload",
+      "transactions.verify",
+      "transactions.waive",
+      "users.create",
+      "users.read",
+      "vehicles.read"
+    ]
+  },
+  "app_settings": [
+    {
+      "key": "financing_markup_pct",
+      "value": 10
+    }
+  ]
+}

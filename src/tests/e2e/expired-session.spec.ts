@@ -1,87 +1,68 @@
 import { expect, type Page, test } from "@playwright/test";
 
+// Phase 3: sessions are Laravel's (gce_session cookie). Needs the Laravel API running and seeded:
+// `php artisan migrate:fresh --seed --database=mysql_migrations` in backend/, then `php artisan serve`.
 const seedPassword = process.env.SEED_USER_PASSWORD;
+const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 async function signIn(page: Page, email: string) {
   await page.goto("/auth/v1/login");
   await page.getByLabel("Email Address", { exact: true }).fill(email);
   await page.getByLabel("Password", { exact: true }).fill(seedPassword ?? "");
   await page.getByRole("button", { name: "Login", exact: true }).click();
-  await page
-    .waitForURL((url) => !url.pathname.startsWith("/auth/v1/login"), { timeout: 15_000 })
-    .catch(() => undefined);
+  await page.waitForURL((url) => !url.pathname.startsWith("/auth/v1/login"), { timeout: 30_000 });
 }
 
-// Rewrites the stored Supabase session so the access token reads as expired while the
-// refresh token stays valid. This is the "returning user after >1h" state that used to
-// produce HTTP 500 from src/lib/supabase/server.ts:48.
-async function expireAccessToken(page: Page) {
-  const rewritten = await page.evaluate(() => {
-    const key = Object.keys(localStorage).find((k) => k.startsWith("sb-") && k.endsWith("-auth-token"));
-    if (!key) return null;
-    const session = JSON.parse(localStorage.getItem(key) ?? "null");
-    if (!session) return null;
-    session.expires_at = Math.floor(Date.now() / 1000) - 600;
-    localStorage.setItem(key, JSON.stringify(session));
-    return { key, hasRefreshToken: typeof session.refresh_token === "string" };
-  });
+async function sessionCookie(page: Page) {
+  const cookie = (await page.context().cookies()).find((c) => c.name === "gce_session");
+  expect(cookie?.httpOnly).toBe(true);
+  return cookie as NonNullable<typeof cookie>;
+}
 
-  // Cookie-based sessions are what the server reads; clear those so the next request
-  // presents an expired session rather than the still-fresh one the browser wrote.
-  const cookies = await page.context().cookies();
-  const authCookies = cookies.filter((c) => c.name.startsWith("sb-") && c.name.includes("auth-token"));
-  for (const cookie of authCookies) {
-    const decoded = Buffer.from(cookie.value.replace(/^base64-/, ""), "base64url").toString("utf8");
-    let session: Record<string, unknown>;
-    try {
-      session = JSON.parse(decoded);
-    } catch {
-      continue;
-    }
-    session.expires_at = Math.floor(Date.now() / 1000) - 600;
-    await page.context().addCookies([
-      {
-        ...cookie,
-        value: `base64-${Buffer.from(JSON.stringify(session), "utf8").toString("base64url")}`,
-      },
-    ]);
-  }
-
-  return { rewritten, authCookieCount: authCookies.length };
+function meStatus(page: Page) {
+  return page.evaluate(
+    async (url) =>
+      (await fetch(`${url}/api/v1/me`, { credentials: "include", headers: { Accept: "application/json" } })).status,
+    apiUrl,
+  );
 }
 
 test.describe("expired session handling", () => {
   test.skip(!seedPassword, "SEED_USER_PASSWORD required");
 
-  test("an expired access token renders the page instead of a 500", async ({ page }) => {
+  test("an expired or tampered session sends the user to login instead of a 500", async ({ page }) => {
     await signIn(page, "confidential_informant@gce.local");
-    await expect(page).not.toHaveURL(/\/auth\/v1\/login/);
+    const cookie = await sessionCookie(page);
 
-    const state = await expireAccessToken(page);
-    expect(state.authCookieCount).toBeGreaterThan(0);
-
+    // Laravel cannot decrypt this value, exactly as with an idle-expired session.
+    await page.context().addCookies([{ ...cookie, value: "expired" }]);
     const response = await page.goto("/confidential_informant/field-cases");
 
-    // The regression produced 500 here.
     expect(response?.status()).toBeLessThan(500);
-    await expect(page.getByRole("heading", { name: "Field Cases", exact: true })).toBeVisible();
-    await expect(page.getByText(/A server error occurred/i)).toHaveCount(0);
+    await expect(page).toHaveURL(/\/auth\/v1\/login/);
   });
 
-  test("the proxy refreshes the expired session and keeps the user signed in", async ({ page }) => {
+  test("signing out invalidates the session on the server, so a copied cookie stops working", async ({ page }) => {
     await signIn(page, "confidential_informant@gce.local");
-    await expect(page).not.toHaveURL(/\/auth\/v1\/login/);
+    const copied = await sessionCookie(page);
+    expect(await meStatus(page)).toBe(200);
 
-    await expireAccessToken(page);
-    await page.goto("/confidential_informant/field-cases");
+    // Sign out through the existing account menu. Seeded accounts first see the onboarding tour, and the
+    // dev-mode indicator can cover the sidebar avatar.
+    const skip = page.getByRole("button", { name: /^skip/i });
+    await skip
+      .first()
+      .waitFor({ timeout: 10_000 })
+      .catch(() => undefined);
+    if (await skip.count()) await skip.first().click();
+    await page.evaluate(() => document.querySelector("nextjs-portal")?.remove());
+    await page.locator("[data-slot='avatar']:visible").last().click();
+    await page.getByRole("menuitem", { name: /sign out/i }).click();
+    await page.waitForURL(/\/auth\/v1\/login/);
 
-    // Refreshed by the proxy, so no bounce to login.
-    await expect(page).not.toHaveURL(/\/auth\/v1\/login/);
-
-    // Reload again: a rotated refresh token must have been persisted, otherwise the
-    // second request would present a spent token and log the user out.
-    await page.reload();
-    await expect(page).not.toHaveURL(/\/auth\/v1\/login/);
-    await expect(page.getByRole("heading", { name: "Field Cases", exact: true })).toBeVisible();
+    await page.context().addCookies([copied]);
+    expect(await meStatus(page)).toBe(401);
+    await page.goto("/confidential_informant/dashboard");
+    await expect(page).toHaveURL(/\/auth\/v1\/login/);
   });
 });
