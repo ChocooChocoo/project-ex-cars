@@ -1,76 +1,38 @@
-import { redirect } from "next/navigation";
+"use client";
 
+import { useRequireRole } from "@/components/auth/session-provider";
+import { PageSkeleton } from "@/components/page-skeleton";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { STAFF_ROLES } from "@/lib/auth/roles";
-import { getCurrentRole } from "@/lib/auth/server-session";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { browserApi } from "@/lib/api/client";
+import { usePageData } from "@/lib/api/use-page-data";
+import type { GceRole } from "@/lib/auth/roles";
 
 import { EmployeeAccountForm } from "./_components/employee-account-form";
 import { type PerformanceReviewRow, PerformanceReviews } from "./_components/performance-reviews";
 import { StaffRecordsTable, type StaffTableRow } from "./_components/staff-table/table";
 import { WalkInForm } from "./_components/walk-in-form";
 
-export default async function StaffRecordsPage({
-  searchParams,
-}: {
-  readonly searchParams: Promise<{ createWalkIn?: string }>;
-}) {
-  const role = await getCurrentRole();
-  const { createWalkIn } = await searchParams;
-  if (!role || !["ceo", "account_manager", "sales_manager"].includes(role)) {
-    redirect("/unauthorized");
-  }
+const STAFF_RECORD_ROLES: GceRole[] = ["ceo", "account_manager", "sales_manager"];
 
-  const supabase = await createServerSupabase();
-  const { data: profiles, error: profilesError } = await supabase
-    .from("profiles")
-    .select("*")
-    .order("full_name", { ascending: true });
-
-  const { data: roles, error: rolesError } = await supabase.rpc("get_all_user_roles");
-  const { data: schedules, error: schedulesError } = await supabase
-    .from("employee_work_schedules")
-    .select("employee_id, workdays, start_time, end_time, grace_minutes");
-
-  const roleMap = new Map<string, string>();
-  for (const r of (roles as { account_id: string; role: string }[]) ?? []) {
-    roleMap.set(r.account_id, r.role);
-  }
-
-  const staffRoleIds = (roles as { account_id: string; role: string }[] | null)
-    ?.filter((r) => (STAFF_ROLES as readonly string[]).includes(r.role))
-    .map((r) => r.account_id);
-
-  const staffProfiles = (profiles ?? []).filter((p) => staffRoleIds?.includes(p.id as string));
-  const employeeOptions = staffProfiles.map((p) => ({ id: p.id as string, full_name: p.full_name as string | null }));
-  const accounts: StaffTableRow[] = staffProfiles.map((profile) => {
-    const schedule = (schedules as Record<string, unknown>[] | null)?.find((item) => item.employee_id === profile.id);
-    const workdays = schedule?.workdays;
-    return {
-      id: profile.id as string,
-      fullName: (profile.full_name as string | null) ?? null,
-      phone: (profile.phone as string | null) ?? null,
-      address: (profile.address as string | null) ?? null,
-      role: roleMap.get(profile.id as string) ?? null,
-      accountState: profile.account_state as string,
-      joined: (profile.created_at as string | null) ?? new Date().toISOString(),
-      schedule: null,
-      workdays: Array.isArray(workdays) ? workdays.filter((day): day is number => typeof day === "number") : null,
-      startTime: typeof schedule?.start_time === "string" ? schedule.start_time : null,
-      endTime: typeof schedule?.end_time === "string" ? schedule.end_time : null,
-      graceMinutes: typeof schedule?.grace_minutes === "number" ? schedule.grace_minutes : null,
-    };
-  });
-
-  const { data: reviews, error: reviewsError } = await supabase
-    .from("performance_reviews")
-    .select(
-      "*, profiles!performance_reviews_employee_id_fkey(full_name), reviewers:profiles!performance_reviews_reviewer_id_fkey(full_name)",
-    )
-    .order("created_at", { ascending: false });
-
-  const recordsError = profilesError ?? rolesError ?? schedulesError;
+export default function StaffRecordsPage() {
+  const allowed = useRequireRole(STAFF_RECORD_ROLES);
+  // Phase 7: Laravel returns the active staff accounts with role and schedule, and the reviews this role may read.
+  const page = usePageData(allowed ? "staff-records" : "staff-records:denied", () =>
+    allowed
+      ? browserApi<{
+          role: string;
+          accounts: StaffTableRow[];
+          employees: { id: string; full_name: string | null }[];
+          reviews: PerformanceReviewRow[];
+        }>("GET", "/api/v1/staff/staff-records")
+      : Promise.resolve(null),
+  );
+  if (page.error) throw page.error;
+  if (!allowed || !page.data) return <PageSkeleton />;
+  const { role, accounts, reviews } = page.data;
+  const employeeOptions = page.data.employees;
+  const createWalkIn = new URLSearchParams(window.location.search).get("createWalkIn");
 
   return (
     <Tabs defaultValue="staff" className="flex flex-col gap-6">
@@ -99,36 +61,17 @@ export default async function StaffRecordsPage({
             <CardDescription>Staff accounts with role, schedule, and status.</CardDescription>
           </CardHeader>
           <CardContent className="pt-0">
-            {recordsError ? (
-              <p role="alert" className="px-6 py-4 text-destructive text-sm">
-                Staff records are temporarily unavailable. Please refresh and try again.
-              </p>
-            ) : (
-              <StaffRecordsTable data={accounts} />
-            )}
+            <StaffRecordsTable data={accounts} />
           </CardContent>
         </Card>
       </TabsContent>
 
       <TabsContent value="reviews">
-        {reviewsError ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Performance Reviews</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p role="alert" className="text-destructive text-sm">
-                Performance reviews are temporarily unavailable. Please refresh and try again.
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          <PerformanceReviews
-            reviews={(reviews as unknown as PerformanceReviewRow[]) ?? []}
-            employees={employeeOptions}
-            canManage={["ceo", "account_manager"].includes(role)}
-          />
-        )}
+        <PerformanceReviews
+          reviews={reviews}
+          employees={employeeOptions}
+          canManage={["ceo", "account_manager"].includes(role)}
+        />
       </TabsContent>
     </Tabs>
   );

@@ -56,7 +56,8 @@ describe("Account Manager navigation (T03 R2, AM6)", () => {
   });
 
   it("is kept out of the Roles and Field Cases pages", () => {
-    expect(read("src/app/(staff)/roles/page.tsx")).toMatch(/requireRole\(\["ceo", "super_admin"\]\)/);
+    // Phase 7: the page guard is useRequireRole(RBAC_ROLES); Laravel refuses the AM on admin/rbac (AdministrationTest).
+    expect(read("src/app/(staff)/roles/page.tsx")).toMatch(/RBAC_ROLES: GceRole\[\] = \["ceo", "super_admin"\]/);
     expect(read("src/app/(staff)/field-cases/page.tsx")).not.toMatch(/"account_manager"/);
   });
 

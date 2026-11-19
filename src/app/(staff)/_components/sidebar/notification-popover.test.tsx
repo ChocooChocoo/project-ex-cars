@@ -22,7 +22,7 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-import type { NotificationRow } from "@/lib/notifications/actions";
+import type { NotificationRow } from "@/lib/notifications/with-hrefs";
 
 import { NotificationPopover } from "./notification-popover";
 

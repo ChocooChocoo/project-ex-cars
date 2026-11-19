@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { GCE_ROLES, type GceRole, ROLE_LABELS } from "@/lib/auth/roles";
-import { createClient } from "@/lib/supabase/client";
 
 interface UserRecord {
   id: string;
@@ -22,23 +21,11 @@ interface UserRecord {
 export function RolesManager({ users }: { readonly users: UserRecord[] }) {
   const [userList, setUserList] = useState(users);
   const [loading, setLoading] = useState<string | null>(null);
-  const supabase = createClient();
 
   async function handleRoleChange(accountId: string, newRole: string) {
     setLoading(accountId);
-    const { data: currentUser } = await supabase.auth.getUser();
-
-    if (!currentUser.user) {
-      toast.error("Not authenticated");
-      setLoading(null);
-      return;
-    }
-
-    const result = await assignRole({
-      accountId,
-      role: newRole,
-      assignedBy: currentUser.user.id,
-    });
+    // Laravel records the signed-in user as the assigner.
+    const result = await assignRole({ accountId, role: newRole });
 
     if (result.error) {
       toast.error(result.error);

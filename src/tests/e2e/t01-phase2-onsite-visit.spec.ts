@@ -162,8 +162,8 @@ test.describe
       await expect(page.getByText("Cancelled").first()).toBeVisible();
     });
 
-    // The finance records page moves to Laravel in Phase 7.
-    test.fixme("Head Accountant sees the sale in the records", async ({ page }) => {
+    // Phase 7: the finance records page reads from Laravel.
+    test("Head Accountant sees the sale in the records", async ({ page }) => {
       await signInAs(page, "head_accountant@gce.local");
       await page.goto("/head_accountant/finance");
       await expect(page.getByText("Sale records")).toBeVisible();

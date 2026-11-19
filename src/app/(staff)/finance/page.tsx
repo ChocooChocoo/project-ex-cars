@@ -1,125 +1,52 @@
-import { redirect } from "next/navigation";
+"use client";
 
-import { getCurrentRole } from "@/lib/auth/server-session";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { useRequireRole } from "@/components/auth/session-provider";
+import { PageSkeleton } from "@/components/page-skeleton";
+import { browserApi } from "@/lib/api/client";
+import { usePageData } from "@/lib/api/use-page-data";
+import type { GceRole } from "@/lib/auth/roles";
 
 import { type FieldExpenseRow, FieldExpensesCard } from "./_components/field-expenses-card";
-import { type DisbursementRow, FinanceClient, type FinancialEntryRow } from "./_components/finance-client";
+import {
+  type DisbursementRow,
+  FinanceClient,
+  type FinancialEntryRow,
+  type PurchaseTransactionRow,
+} from "./_components/finance-client";
 import { type ReconditioningFundRow, ReconditioningFundsCard } from "./_components/reconditioning-funds-card";
 import { type SaleRecordRow, SaleRecordsCard } from "./_components/sale-records-card";
 
-const FINANCE_ROLES = ["ceo", "head_accountant", "account_manager", "confidential_informant"];
+const FINANCE_ROLES: GceRole[] = ["ceo", "head_accountant", "account_manager", "confidential_informant"];
 
-export default async function FinancePage() {
-  const role = await getCurrentRole();
-  if (!role || !FINANCE_ROLES.includes(role)) redirect("/unauthorized");
+interface FinanceData {
+  role: string;
+  entries: FinancialEntryRow[];
+  disbursements: DisbursementRow[];
+  purchaseTransactions: PurchaseTransactionRow[];
+  saleRecords: SaleRecordRow[];
+  fieldExpenses: FieldExpenseRow[];
+  reconditioningFunds: ReconditioningFundRow[];
+}
 
-  const supabase = await createServerSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+export default function FinancePage() {
+  const allowed = useRequireRole(FINANCE_ROLES);
+  // Phase 7: Laravel applies the old row rules (ledger for CEO/HA/AM, own requests for the informant, records,
+  // field expenses and reconditioning funds for CEO/HA) and signs the receipt links.
+  const page = usePageData(allowed ? "finance" : "finance:denied", () =>
+    allowed ? browserApi<FinanceData>("GET", "/api/v1/staff/finance") : Promise.resolve(null),
+  );
+  if (page.error) throw page.error;
+  if (!allowed || !page.data) return <PageSkeleton />;
+  const data = page.data;
+  const role = data.role;
   const isInformant = role === "confidential_informant";
-
-  const entriesQuery = supabase
-    .from("financial_entries")
-    .select("*")
-    .order("recorded_at", { ascending: false })
-    .limit(1000);
-  let disbursementsQuery = supabase
-    .from("disbursement_requests")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(1000);
-
-  if (isInformant && user) {
-    disbursementsQuery = disbursementsQuery.eq("requested_by", user.id);
-  }
-
-  const [
-    { data: entries },
-    { data: disbursements },
-    { data: purchaseTransactions },
-    { data: clearedSells },
-    { data: fieldExpenses },
-    { data: saleRecords },
-  ] = await Promise.all([
-    entriesQuery,
-    disbursementsQuery,
-    supabase
-      .from("transactions")
-      .select("id, customer_id, transaction_kind")
-      .eq("transaction_kind", "buy")
-      .not("current_state", "in", "('cancelled','rejected')")
-      .order("created_at", { ascending: false })
-      .limit(50),
-    // Selling step 10: seller cars cleared by the inspection or the seller's answer, awaiting payment.
-    supabase
-      .from("transactions")
-      .select("id, customer_id, transaction_kind, sell_details!inner(cleared_for_payment_at)")
-      .eq("transaction_kind", "sell")
-      .eq("current_state", "approved")
-      .not("sell_details.cleared_for_payment_at", "is", null),
-    // Selling step 13: field expenses; RLS limits this to the CEO, Head Accountant and submitters.
-    supabase
-      .from("field_case_expenses")
-      .select(
-        "id, amount, description, submitted_at, reimbursed_at, field_cases(transaction_id, vehicles(make, model, year, listing_state))",
-      )
-      .is("reimbursed_at", null)
-      .order("submitted_at", { ascending: true }),
-    // §2 step 7: completed sales, for the Head Accountant's records.
-    supabase
-      .from("transactions")
-      .select(
-        "id, completed_at, vehicles(make, model, year, stock_code), profiles(full_name), purchase_details(final_price, payment_method), payment_records(amount, payment_kind, rejected_at)",
-      )
-      .eq("transaction_kind", "buy")
-      .eq("current_state", "completed")
-      .order("completed_at", { ascending: false })
-      .limit(1000),
-  ]);
-
-  let reconditioningFunds: ReconditioningFundRow[] = [];
-  if (["ceo", "head_accountant"].includes(role)) {
-    const admin = createAdminClient();
-    const { data: fundRows } = await admin
-      .from("reconditioning_fund_requests")
-      .select(
-        "id, amount_cents, reason, shortfall_reason, created_at, disbursement_requests(status), reconditioning_jobs(id, vehicle_id, state, refund_due_cents, refunded_at, vehicles(make, model, year)), reconditioning_fund_receipts(storage_path)",
-      )
-      .order("created_at", { ascending: false })
-      .limit(200);
-    reconditioningFunds = ((fundRows ?? []) as unknown as ReconditioningFundRow[]).map((request) => ({
-      ...request,
-      reconditioning_fund_receipts: request.reconditioning_fund_receipts?.map((receipt) => ({
-        ...receipt,
-        signed_url: null,
-      })),
-    }));
-    for (const request of reconditioningFunds) {
-      for (const receipt of request.reconditioning_fund_receipts ?? []) {
-        const { data } = await admin.storage
-          .from("reconditioning-receipts")
-          .createSignedUrl(receipt.storage_path, 3600);
-        receipt.signed_url = data?.signedUrl ?? null;
-      }
-    }
-  }
 
   return (
     <div className="flex flex-col gap-6">
       <FinanceClient
-        entries={(entries as unknown as FinancialEntryRow[]) ?? []}
-        disbursements={(disbursements as unknown as DisbursementRow[]) ?? []}
-        purchaseTransactions={
-          [...(clearedSells ?? []), ...(purchaseTransactions ?? [])] as {
-            id: string;
-            customer_id: string;
-            transaction_kind: string;
-          }[]
-        }
+        entries={data.entries}
+        disbursements={data.disbursements}
+        purchaseTransactions={data.purchaseTransactions}
         canRecord={!isInformant && ["ceo", "head_accountant", "account_manager"].includes(role)}
         canVerify={!isInformant && ["ceo", "head_accountant"].includes(role)}
         canRequest={["ceo", "account_manager", "confidential_informant"].includes(role)}
@@ -128,16 +55,13 @@ export default async function FinancePage() {
         canRequestPurchaseFunds={!isInformant && ["ceo", "account_manager"].includes(role)}
         isInformant={isInformant}
       />
+      {["ceo", "head_accountant"].includes(role) ? <SaleRecordsCard sales={data.saleRecords} /> : null}
       {["ceo", "head_accountant"].includes(role) ? (
-        <SaleRecordsCard sales={(saleRecords as unknown as SaleRecordRow[]) ?? []} />
+        <FieldExpensesCard expenses={data.fieldExpenses} canReimburse={role === "head_accountant"} />
       ) : null}
       {["ceo", "head_accountant"].includes(role) ? (
-        <FieldExpensesCard
-          expenses={(fieldExpenses as unknown as FieldExpenseRow[]) ?? []}
-          canReimburse={role === "head_accountant"}
-        />
+        <ReconditioningFundsCard requests={data.reconditioningFunds} />
       ) : null}
-      {["ceo", "head_accountant"].includes(role) ? <ReconditioningFundsCard requests={reconditioningFunds} /> : null}
     </div>
   );
 }

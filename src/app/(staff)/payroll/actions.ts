@@ -1,20 +1,10 @@
-"use server";
-
-import { revalidatePath } from "next/cache";
+"use client";
 
 import { z } from "zod";
 
-import { getCurrentRole } from "@/lib/auth/server-session";
-import {
-  computePayslip,
-  DEFAULT_SCHEDULED_HOURS,
-  OVERTIME_MULTIPLIER,
-  type OvertimeRange,
-  type PayslipAttendance,
-  scheduledHours,
-} from "@/lib/payroll/compute";
-import { rolePath } from "@/lib/routing/paths";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { apiAction } from "@/lib/api/action";
+import { browserApi } from "@/lib/api/client";
+import { errorMessage } from "@/lib/api/errors";
 import {
   compensationSchema,
   payrollApprovalSchema,
@@ -22,460 +12,64 @@ import {
   payslipItemSchema,
 } from "@/lib/validation/phase6";
 
+// Phase 7: browser adapters for the Laravel payroll endpoints (PayrollController). Laravel computes the payslips
+// (App\Services\Payroll\PayslipCalculator, same math as src/lib/payroll/compute.ts) and checks every role.
+
 type Phase6ActionResult = { error: string } | { success: true };
 
-const PAYROLL_PREPARERS = ["ceo", "account_manager"];
-const PAYROLL_REVIEWERS = ["ceo", "head_accountant"];
-const PAYROLL_VIEWERS = ["ceo", "account_manager", "head_accountant"];
-
-function groupByEmployee<T>(rows: unknown[] | null): Map<string, T[]> {
-  const groups = new Map<string, T[]>();
-  for (const row of (rows ?? []) as (T & { employee_id: string })[]) {
-    groups.set(row.employee_id, [...(groups.get(row.employee_id) ?? []), row]);
-  }
-  return groups;
+async function done(path: string, body: unknown): Promise<Phase6ActionResult> {
+  const result = await apiAction(path, body);
+  return result.error !== undefined ? { error: result.error } : { success: true };
 }
 
-// Pages are served at /{role}/payroll (rewritten to /payroll), so refresh both.
-function revalidatePayroll(role: string, page: "payroll" | "payslips", id?: string) {
-  const path = id ? `/${page}/${id}` : `/${page}`;
-  revalidatePath(path);
-  revalidatePath(rolePath(role, path));
+function parsed<T>(schema: z.ZodType<T>, formData: FormData, fallback: string): { data: T } | { error: string } {
+  const result = schema.safeParse(Object.fromEntries(formData));
+  return result.success ? { data: result.data } : { error: result.error.issues[0]?.message ?? fallback };
 }
 
 export async function saveCompensation(formData: FormData): Promise<Phase6ActionResult> {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
-
-  const role = await getCurrentRole();
-  if (!role || !PAYROLL_PREPARERS.includes(role)) {
-    return { error: "Not authorized to enter compensation" };
-  }
-
-  const raw = Object.fromEntries(formData) as Record<string, unknown>;
-  const parsed = compensationSchema.safeParse(raw);
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid compensation." };
-  }
-
-  const { error } = await supabase.rpc("add_staff_compensation", {
-    p_employee_id: parsed.data.employee_id,
-    p_base_salary_cents: parsed.data.base_salary_cents,
-    p_effective_from: parsed.data.effective_from,
-    p_effective_until: parsed.data.effective_until || null,
-    p_sss_contribution_cents: parsed.data.sss_contribution_cents,
-    p_pagibig_contribution_cents: parsed.data.pagibig_contribution_cents,
-    p_philhealth_contribution_cents: parsed.data.philhealth_contribution_cents,
-    p_tin_number: parsed.data.tin_number || null,
+  const input = parsed(compensationSchema, formData, "Invalid compensation.");
+  if ("error" in input) return input;
+  return done("/staff/payroll/compensation", {
+    ...input.data,
+    effective_until: input.data.effective_until || null,
+    tin_number: input.data.tin_number || null,
   });
-  if (error) return { error: error.message };
-
-  revalidatePayroll(role, "payroll");
-  return { success: true };
 }
 
 export async function markPayslipPaid(formData: FormData): Promise<Phase6ActionResult> {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
-
-  const role = await getCurrentRole();
-  if (!role || role !== "head_accountant") {
-    return { error: "Only the Head Accountant holds salary-payment responsibility" };
-  }
-
-  const payslipId = formData.get("payslip_id") as string;
-
-  const { data: payslip } = await supabase
-    .from("payslips")
-    .select("status, payment_status")
-    .eq("id", payslipId)
-    .single();
-  if (!payslip) return { error: "Payslip not found." };
-  if (payslip.status !== "finalized") return { error: "Only finalized payslips can be paid." };
-  if (payslip.payment_status === "paid") return { error: "This payslip is already marked paid." };
-
-  const { error: updateError } = await supabase
-    .from("payslips")
-    .update({ payment_status: "paid", paid_at: new Date().toISOString(), paid_by: user.user.id })
-    .eq("id", payslipId);
-  if (updateError) return { error: updateError.message };
-
-  revalidatePayroll(role, "payslips");
-  revalidatePayroll(role, "payslips", payslipId);
-  return { success: true };
+  return done("/staff/payroll/payslips/mark-paid", { payslip_id: formData.get("payslip_id") });
 }
 
 export async function createPayrollRun(formData: FormData): Promise<Phase6ActionResult> {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
-
-  const role = await getCurrentRole();
-  if (!role || !PAYROLL_PREPARERS.includes(role)) {
-    return { error: "Not authorized to prepare payroll" };
-  }
-
-  const raw = Object.fromEntries(formData) as Record<string, unknown>;
-  const parsed = payrollRunSchema.safeParse(raw);
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid payroll run." };
-  }
-
-  const { data: run, error: runError } = await supabase
-    .from("payroll_runs")
-    .insert({
-      period_start: parsed.data.period_start,
-      period_end: parsed.data.period_end,
-      status: "draft",
-      prepared_by: user.user.id,
-      notes: parsed.data.notes || null,
-    })
-    .select()
-    .single();
-  if (runError) {
-    if (runError.code === "23505") return { error: "A payroll run for this period already exists." };
-    return { error: runError.message };
-  }
-
-  // Only checked attendance feeds payroll input.
-  const { data: attendance } = await supabase
-    .from("attendance_entries")
-    .select("employee_id, attendance_date, status, hours_worked")
-    .gte("attendance_date", parsed.data.period_start)
-    .lte("attendance_date", parsed.data.period_end)
-    .not("checked_by", "is", null);
-
-  // Ordered by effective_from, so the latest record for an employee wins in the map below.
-  const { data: compensation, error: compensationError } = await supabase.rpc("list_staff_compensation", {
-    p_period_start: parsed.data.period_start,
-    p_period_end: parsed.data.period_end,
-  });
-  if (compensationError) return { error: compensationError.message };
-
-  const { data: schedules } = await supabase
-    .from("employee_work_schedules")
-    .select("employee_id, start_time, end_time");
-
-  // Requests ending before the period are filtered out by computePayslip's date check.
-  const { data: overtimeRequests } = await supabase
-    .from("employee_requests")
-    .select("employee_id, start_date, end_date, overtime_hours")
-    .eq("request_kind", "overtime")
-    .eq("status", "approved")
-    .lte("start_date", parsed.data.period_end);
-
-  const entriesByEmployee = groupByEmployee<PayslipAttendance>(attendance);
-  const overtimeByEmployee = groupByEmployee<OvertimeRange>(overtimeRequests);
-
-  const compensationByEmployee = new Map<string, Record<string, unknown>>();
-  for (const comp of compensation ?? []) {
-    compensationByEmployee.set(comp.employee_id as string, comp as Record<string, unknown>);
-  }
-
-  const scheduledHoursByEmployee = new Map<string, number>();
-  for (const schedule of schedules ?? []) {
-    scheduledHoursByEmployee.set(
-      schedule.employee_id as string,
-      scheduledHours(schedule.start_time as string, schedule.end_time as string),
-    );
-  }
-
-  let totalGross = 0;
-  let totalDeductions = 0;
-
-  for (const [employeeId, entries] of entriesByEmployee) {
-    const compRecord = compensationByEmployee.get(employeeId);
-    const baseSalaryCents = Number(compRecord?.base_salary_cents ?? 0);
-    if (!baseSalaryCents) continue;
-
-    const hasSchedule = scheduledHoursByEmployee.has(employeeId);
-    const hoursPerDay = scheduledHoursByEmployee.get(employeeId) ?? DEFAULT_SCHEDULED_HOURS;
-    const pay = computePayslip({
-      baseSalaryCents,
-      scheduledHoursPerDay: hoursPerDay,
-      entries,
-      overtimeRanges: overtimeByEmployee.get(employeeId) ?? [],
-    });
-    if (pay.regularHours === 0) continue;
-
-    const gross = pay.regularCents + pay.overtimeCents;
-    const rate = `₱${(pay.hourlyRateCents / 100).toFixed(2)}/h`;
-    const scheduleNote = hasSchedule ? `${hoursPerDay} h a day` : `${hoursPerDay} h a day, no work schedule on file`;
-    const hourItems = [
-      {
-        item_kind: "earning",
-        label: "Regular hours",
-        amount_cents: pay.regularCents,
-        source_value: pay.regularHours.toFixed(2),
-        calculation_note: `${pay.regularHours.toFixed(2)} h × ${rate} (base salary / 30 / ${scheduleNote})`,
-      },
-      {
-        item_kind: "earning",
-        label: "Overtime hours",
-        amount_cents: pay.overtimeCents,
-        source_value: pay.overtimeHours.toFixed(2),
-        calculation_note: `${pay.overtimeHours.toFixed(2)} h × ${rate} × ${OVERTIME_MULTIPLIER} (approved overtime)`,
-      },
-      {
-        item_kind: "deduction",
-        label: "Late / undertime",
-        amount_cents: pay.lateCents,
-        source_value: String(pay.shortMinutes),
-        calculation_note: `${pay.shortMinutes} min × ${rate} ÷ 60 (late arrival and early leave)`,
-      },
-    ].filter((item) => item.amount_cents > 0);
-
-    const statutoryDeductions = [
-      { label: "SSS contribution", cents: Number(compRecord?.sss_contribution_cents ?? 0) },
-      { label: "Pag-IBIG contribution", cents: Number(compRecord?.pagibig_contribution_cents ?? 0) },
-      { label: "PhilHealth contribution", cents: Number(compRecord?.philhealth_contribution_cents ?? 0) },
-    ].filter((item) => item.cents > 0);
-
-    const deductions = pay.lateCents + statutoryDeductions.reduce((sum, item) => sum + item.cents, 0);
-    const net = Math.max(0, gross - deductions);
-
-    totalGross += gross;
-    totalDeductions += deductions;
-
-    const { data: payslip, error: payslipError } = await supabase
-      .from("payslips")
-      .insert({
-        payroll_run_id: run.id,
-        employee_id: employeeId,
-        gross_cents: gross,
-        deductions_cents: deductions,
-        net_cents: net,
-        status: "draft",
-      })
-      .select()
-      .single();
-    if (payslipError) return { error: payslipError.message };
-
-    for (const item of hourItems) {
-      await supabase.from("payslip_items").insert({ payslip_id: payslip.id, ...item });
-    }
-
-    for (const item of statutoryDeductions) {
-      await supabase.from("payslip_items").insert({
-        payslip_id: payslip.id,
-        item_kind: "deduction",
-        label: item.label,
-        amount_cents: item.cents,
-        source_value: null,
-        calculation_note: "Auto-computed from the employee's compensation record.",
-      });
-    }
-  }
-
-  const { error: totalError } = await supabase
-    .from("payroll_runs")
-    .update({
-      total_gross_cents: totalGross,
-      total_deductions_cents: totalDeductions,
-      total_net_cents: totalGross - totalDeductions,
-    })
-    .eq("id", run.id);
-  if (totalError) return { error: totalError.message };
-
-  revalidatePayroll(role, "payroll");
-  revalidatePayroll(role, "payslips");
-  return { success: true };
+  const input = parsed(payrollRunSchema, formData, "Invalid payroll run.");
+  if ("error" in input) return input;
+  return done("/staff/payroll/runs", input.data);
 }
 
 export async function reviewPayrollRun(formData: FormData): Promise<Phase6ActionResult> {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
-
-  const role = await getCurrentRole();
-  if (!role || !PAYROLL_REVIEWERS.includes(role)) {
-    return { error: "Not authorized to review payroll" };
-  }
-
-  const raw = Object.fromEntries(formData) as Record<string, unknown>;
-  const parsed = payrollApprovalSchema.safeParse(raw);
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid review." };
-  }
-
-  const { data: run } = await supabase
-    .from("payroll_runs")
-    .select("status")
-    .eq("id", parsed.data.payroll_run_id)
-    .single();
-  if (!run) return { error: "Payroll run not found." };
-
-  if (parsed.data.decision === "rejected") {
-    if (run.status !== "pending_approval") {
-      return { error: "Only pending runs can be rejected." };
-    }
-    const { error: updateError } = await supabase
-      .from("payroll_runs")
-      .update({ status: "draft", updated_at: new Date().toISOString() })
-      .eq("id", parsed.data.payroll_run_id);
-    if (updateError) return { error: updateError.message };
-
-    await supabase.from("payroll_approvals").insert({
-      payroll_run_id: parsed.data.payroll_run_id,
-      sequence: role === "head_accountant" ? 1 : 2,
-      reviewer_id: user.user.id,
-      decision: "rejected",
-      notes: parsed.data.notes || null,
-    });
-
-    revalidatePayroll(role, "payroll");
-    return { success: true };
-  }
-
-  if (run.status !== "draft" && run.status !== "pending_approval") {
-    return { error: "Only draft or pending runs can be approved." };
-  }
-
-  const { data: approvals } = await supabase
-    .from("payroll_approvals")
-    .select("sequence")
-    .eq("payroll_run_id", parsed.data.payroll_run_id);
-
-  const approvedSequences = new Set((approvals ?? []).map((approval) => approval.sequence as number));
-
-  // Provisional Q-13: Head Accountant reviews first (sequence 1), CEO second (sequence 2).
-  const requiredSequence = role === "head_accountant" ? 1 : 2;
-
-  if (requiredSequence === 2 && !approvedSequences.has(1)) {
-    return { error: "The Head Accountant must approve the run before the CEO." };
-  }
-  if (approvedSequences.has(requiredSequence)) {
-    return { error: "This step has already been approved." };
-  }
-
-  const nextStatus = requiredSequence === 2 ? "approved" : "pending_approval";
-
-  const { error: updateError } = await supabase
-    .from("payroll_runs")
-    .update({ status: nextStatus, updated_at: new Date().toISOString() })
-    .eq("id", parsed.data.payroll_run_id);
-  if (updateError) return { error: updateError.message };
-
-  await supabase.from("payroll_approvals").insert({
-    payroll_run_id: parsed.data.payroll_run_id,
-    sequence: requiredSequence,
-    reviewer_id: user.user.id,
-    decision: "approved",
-    notes: parsed.data.notes || null,
-  });
-
-  revalidatePayroll(role, "payroll");
-  return { success: true };
+  const input = parsed(payrollApprovalSchema, formData, "Invalid review.");
+  if ("error" in input) return input;
+  return done("/staff/payroll/runs/review", input.data);
 }
 
 export async function finalizePayrollRun(formData: FormData): Promise<Phase6ActionResult> {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
-
-  const role = await getCurrentRole();
-  if (!role || role !== "head_accountant") {
-    return { error: "Only the Head Accountant can finalize payroll" };
-  }
-
-  const runId = formData.get("payroll_run_id") as string;
-
-  const { data: run } = await supabase.from("payroll_runs").select("status").eq("id", runId).single();
-  if (!run) return { error: "Payroll run not found." };
-  if (run.status !== "approved") return { error: "Only approved runs can be finalized." };
-
-  const { error: runError } = await supabase
-    .from("payroll_runs")
-    .update({ status: "finalized", updated_at: new Date().toISOString() })
-    .eq("id", runId);
-  if (runError) return { error: runError.message };
-
-  const { error: payslipError } = await supabase
-    .from("payslips")
-    .update({ status: "finalized", finalized_at: new Date().toISOString() })
-    .eq("payroll_run_id", runId)
-    .eq("status", "draft");
-  if (payslipError) return { error: payslipError.message };
-
-  revalidatePayroll(role, "payroll");
-  revalidatePayroll(role, "payslips");
-  return { success: true };
+  return done("/staff/payroll/runs/finalize", { payroll_run_id: formData.get("payroll_run_id") });
 }
 
 export async function addPayslipItem(formData: FormData): Promise<Phase6ActionResult> {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
-
-  const role = await getCurrentRole();
-  if (!role || !PAYROLL_PREPARERS.includes(role)) {
-    return { error: "Not authorized to edit payslips" };
-  }
-
-  const raw = Object.fromEntries(formData) as Record<string, unknown>;
-  const parsed = payslipItemSchema.safeParse(raw);
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid payslip item." };
-  }
-
-  const { data: payslip } = await supabase.from("payslips").select("status").eq("id", parsed.data.payslip_id).single();
-  if (!payslip) return { error: "Payslip not found." };
-  if (payslip.status !== "draft") return { error: "Finalized payslips cannot be edited." };
-
-  const { error: itemError } = await supabase.from("payslip_items").insert({
-    payslip_id: parsed.data.payslip_id,
-    item_kind: parsed.data.item_kind,
-    label: parsed.data.label,
-    amount_cents: parsed.data.amount_cents,
-    source_value: parsed.data.source_value || null,
-    calculation_note: parsed.data.calculation_note || null,
-  });
-  if (itemError) return { error: itemError.message };
-
-  const { data: items } = await supabase
-    .from("payslip_items")
-    .select("item_kind, amount_cents")
-    .eq("payslip_id", parsed.data.payslip_id);
-
-  let gross = 0;
-  let deductions = 0;
-  for (const item of items ?? []) {
-    if (item.item_kind === "earning") gross += item.amount_cents;
-    else deductions += item.amount_cents;
-  }
-  const net = Math.max(0, gross - deductions);
-
-  const { error: payslipError } = await supabase
-    .from("payslips")
-    .update({ gross_cents: gross, deductions_cents: deductions, net_cents: net })
-    .eq("id", parsed.data.payslip_id);
-  if (payslipError) return { error: payslipError.message };
-
-  revalidatePayroll(role, "payslips");
-  return { success: true };
+  const input = parsed(payslipItemSchema, formData, "Invalid payslip item.");
+  if ("error" in input) return input;
+  return done("/staff/payroll/payslip-items", input.data);
 }
 
 // Phase 6 T07: the payroll row opens this detail before any approval action.
 export async function getPayrollRunDetail(runId: string) {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
-  const role = await getCurrentRole();
-  if (!role || !PAYROLL_VIEWERS.includes(role)) return { error: "Not authorized to view payroll" };
-
-  const parsed = z.string().uuid().safeParse(runId);
-  if (!parsed.success) return { error: "Invalid payroll run." };
-
-  const { data: run, error } = await supabase
-    .from("payroll_runs")
-    .select(
-      "*, payslips(*, profiles!payslips_employee_id_fkey(full_name), payslip_items(*)), payroll_approvals(*, profiles!payroll_approvals_reviewer_id_fkey(full_name))",
-    )
-    .eq("id", parsed.data)
-    .maybeSingle();
-  if (error) return { error: error.message };
-  if (!run) return { error: "Payroll run not found." };
-  return { success: true as const, run };
+  if (!z.string().uuid().safeParse(runId).success) return { error: "Invalid payroll run." };
+  try {
+    const { run } = await browserApi<{ run: Record<string, unknown> }>("GET", `/api/v1/staff/payroll/runs/${runId}`);
+    return { success: true as const, run };
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
 }

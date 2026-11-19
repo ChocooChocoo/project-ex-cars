@@ -4,14 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 import { getPayrollSummary, type PayrollRunRow, PayslipsSummary } from "./payslips-summary";
 import type { PayslipTableRow } from "./payslips-table";
 
-const insertMock = vi.fn(() => Promise.resolve({ error: null }));
-vi.mock("@/lib/supabase/client", () => ({
-  createClient: () => ({
-    from: () => ({
-      insert: insertMock,
-    }),
-  }),
+const { insertMock } = vi.hoisted(() => ({
+  insertMock: vi.fn((..._args: unknown[]) => Promise.resolve({ success: true })),
 }));
+vi.mock("@/lib/api/client", () => ({ browserApi: insertMock }));
 
 function run(overrides: Partial<PayrollRunRow> = {}): PayrollRunRow {
   return {
@@ -72,7 +68,7 @@ describe("PayslipsSummary", () => {
     expect(screen.queryByText("All Payslips")).not.toBeInTheDocument();
   });
 
-  it("View all inserts audit_events and then shows PayslipsTable", async () => {
+  it("View all records the drill-down audit and then shows PayslipsTable", async () => {
     insertMock.mockClear();
     render(
       <PayslipsSummary
@@ -85,13 +81,10 @@ describe("PayslipsSummary", () => {
     const button = screen.getByTestId("view-all-payslips");
     fireEvent.click(button);
     await waitFor(() => expect(insertMock).toHaveBeenCalledTimes(1));
-    expect(insertMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        actor_id: "99999999-9999-4999-8999-999999999999",
-        action: "payslip_drilldown",
-        record_kind: "payslip",
-      }),
-    );
+    // Laravel writes the audit row (actor from the session).
+    expect(insertMock).toHaveBeenCalledWith("POST", "/api/v1/staff/payroll/payslips/drilldown", {
+      record_id: "11111111-1111-4111-8111-111111111111",
+    });
     expect(await screen.findByText("All Payslips")).toBeInTheDocument();
   });
 

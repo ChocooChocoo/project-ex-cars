@@ -1,48 +1,36 @@
-"use server";
-
-import { revalidatePath } from "next/cache";
+"use client";
 
 import { z } from "zod";
 
-import { getCurrentRole } from "@/lib/auth/server-session";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { apiAction } from "@/lib/api/action";
 import { performanceReviewSchema } from "@/lib/validation/phase6";
+
+// Phase 7: browser adapters for the Laravel staff-record endpoints (StaffRecordController). Laravel checks the
+// role (CEO/AM; Super Admin may change account state) and derives the reviewer from the session.
 
 type StaffRecordResult = { error: string } | { success: true };
 
-const REVIEW_MANAGERS = ["ceo", "account_manager"];
+function reviewBody(data: z.infer<typeof performanceReviewSchema>) {
+  return {
+    employee_id: data.employee_id,
+    review_period_start: data.review_period_start,
+    review_period_end: data.review_period_end,
+    rating: data.rating ?? null,
+    strengths: data.strengths || null,
+    areas_for_improvement: data.areas_for_improvement || null,
+    goals: data.goals || null,
+  };
+}
+
+async function done(path: string, body: unknown): Promise<StaffRecordResult> {
+  const result = await apiAction(path, body);
+  return result.error !== undefined ? { error: result.error } : { success: true };
+}
 
 export async function submitPerformanceReview(formData: FormData): Promise<StaffRecordResult> {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
-
-  const role = await getCurrentRole();
-  if (!role || !REVIEW_MANAGERS.includes(role)) {
-    return { error: "Not authorized to submit performance reviews" };
-  }
-
-  const raw = Object.fromEntries(formData) as Record<string, unknown>;
-  const parsed = performanceReviewSchema.safeParse(raw);
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid review." };
-  }
-
-  const { error } = await supabase.from("performance_reviews").insert({
-    employee_id: parsed.data.employee_id,
-    reviewer_id: user.user.id,
-    review_period_start: parsed.data.review_period_start,
-    review_period_end: parsed.data.review_period_end,
-    rating: parsed.data.rating ?? null,
-    strengths: parsed.data.strengths || null,
-    areas_for_improvement: parsed.data.areas_for_improvement || null,
-    goals: parsed.data.goals || null,
-    status: "submitted",
-  });
-  if (error) return { error: error.message };
-
-  revalidatePath("/dashboard/staff-records");
-  return { success: true };
+  const parsed = performanceReviewSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid review." };
+  return done("/staff/staff-records/performance-reviews", reviewBody(parsed.data));
 }
 
 const performanceReviewUpdateSchema = performanceReviewSchema.extend({
@@ -50,37 +38,12 @@ const performanceReviewUpdateSchema = performanceReviewSchema.extend({
 });
 
 export async function updatePerformanceReview(formData: FormData): Promise<StaffRecordResult> {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
-
-  const role = await getCurrentRole();
-  if (!role || !REVIEW_MANAGERS.includes(role)) {
-    return { error: "Not authorized to update performance reviews" };
-  }
-
-  const raw = Object.fromEntries(formData) as Record<string, unknown>;
-  const parsed = performanceReviewUpdateSchema.safeParse(raw);
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid review." };
-  }
-
-  const { error } = await supabase
-    .from("performance_reviews")
-    .update({
-      employee_id: parsed.data.employee_id,
-      review_period_start: parsed.data.review_period_start,
-      review_period_end: parsed.data.review_period_end,
-      rating: parsed.data.rating ?? null,
-      strengths: parsed.data.strengths || null,
-      areas_for_improvement: parsed.data.areas_for_improvement || null,
-      goals: parsed.data.goals || null,
-    })
-    .eq("id", parsed.data.review_id);
-  if (error) return { error: error.message };
-
-  revalidatePath("/dashboard/staff-records");
-  return { success: true };
+  const parsed = performanceReviewUpdateSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid review." };
+  return done("/staff/staff-records/performance-reviews/update", {
+    review_id: parsed.data.review_id,
+    ...reviewBody(parsed.data),
+  });
 }
 
 const ACCOUNT_STATES = ["invited", "active", "suspended", "archived"] as const;
@@ -167,8 +130,7 @@ export async function saveStaffRecord(formData: FormData): Promise<StaffRecordRp
     : null;
   if (schedule && !schedule.success) return { error: schedule.error.issues[0]?.message ?? "Invalid work schedule." };
 
-  const supabase = await createServerSupabaseClient();
-  const { data, error } = await supabase.rpc("save_staff_record", {
+  const result = await apiAction<{ row: unknown; schedule: unknown }>("/staff/staff-records/save", {
     account_id: parsed.data.accountId,
     full_name: parsed.data.fullName,
     phone: parsed.data.phone || null,
@@ -178,15 +140,13 @@ export async function saveStaffRecord(formData: FormData): Promise<StaffRecordRp
     end_time: schedule?.data.endTime ?? null,
     grace_minutes: schedule?.data.graceMinutes ?? null,
   });
-  if (error) return { error: error.message };
+  if (result.error !== undefined) return { error: result.error };
 
-  const response = saveStaffRecordResponseSchema.safeParse(data);
+  const response = saveStaffRecordResponseSchema.safeParse({ profile: result.row, schedule: result.schedule });
   if (!response.success) return { error: "Staff record returned invalid shape." };
   if (schedule?.data && response.data.schedule?.employee_id !== parsed.data.accountId) {
     return { error: "Staff record returned invalid shape." };
   }
-
-  revalidatePath("/dashboard/staff-records");
   return { success: true, row: response.data.profile, schedule: response.data.schedule };
 }
 
@@ -194,18 +154,14 @@ export async function setAccountState(formData: FormData): Promise<StaffRecordRp
   const parsed = updateAccountStateSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid account state." };
 
-  const supabase = await createServerSupabaseClient();
-  const { data, error } = await supabase.rpc("set_account_state", {
+  const result = await apiAction<{ row: unknown }>("/admin/account-state", {
     account_id: parsed.data.accountId,
     state: parsed.data.state,
   });
-  if (error) return { error: error.message };
+  if (result.error !== undefined) return { error: result.error };
 
-  const response = staffRecordProfileResponseSchema.safeParse(data);
+  const response = staffRecordProfileResponseSchema.safeParse(result.row);
   if (!response.success) return { error: "Account state returned invalid shape." };
-
-  revalidatePath("/dashboard/staff-records");
-  revalidatePath("/dashboard/users");
   return { success: true, row: response.data, schedule: null };
 }
 

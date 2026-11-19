@@ -1,42 +1,37 @@
-import { redirect } from "next/navigation";
+"use client";
 
-import { STAFF_ROLES } from "@/lib/auth/roles";
-import { getCurrentRole } from "@/lib/auth/server-session";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { useRequireRole } from "@/components/auth/session-provider";
+import { PageSkeleton } from "@/components/page-skeleton";
+import { browserApi } from "@/lib/api/client";
+import { usePageData } from "@/lib/api/use-page-data";
+import type { GceRole } from "@/lib/auth/roles";
 
 import { type CompensationRow, PayrollClient, type PayrollRunRow } from "./_components/payroll-client";
 
-const PAYROLL_ROLES = ["ceo", "account_manager", "head_accountant"];
+const PAYROLL_ROLES: GceRole[] = ["ceo", "account_manager", "head_accountant"];
 
-export default async function PayrollPage() {
-  const role = await getCurrentRole();
-  if (!role || !PAYROLL_ROLES.includes(role)) {
-    redirect("/unauthorized");
-  }
-
-  const supabase = await createServerSupabase();
-  const { data: runs } = await supabase.from("payroll_runs").select("*").order("created_at", { ascending: false });
-
-  const [{ data: profiles }, { data: roles }] = await Promise.all([
-    supabase.from("profiles").select("id, full_name").order("full_name", { ascending: true }),
-    ["ceo", "account_manager"].includes(role) ? supabase.rpc("get_all_user_roles") : Promise.resolve({ data: null }),
-  ]);
-
-  const employeeIds = new Set(
-    ((roles as { account_id: string; role: string }[] | null) ?? [])
-      .filter((userRole) => (STAFF_ROLES as readonly string[]).includes(userRole.role))
-      .map((userRole) => userRole.account_id),
+export default function PayrollPage() {
+  const allowed = useRequireRole(PAYROLL_ROLES);
+  // Phase 7: Laravel returns the runs, the private compensation records (CEO/AM/HA) and, for CEO/AM, the staff list.
+  const page = usePageData(allowed ? "payroll" : "payroll:denied", () =>
+    allowed
+      ? browserApi<{
+          role: string;
+          runs: PayrollRunRow[];
+          compensation: CompensationRow[];
+          employees: { id: string; full_name: string | null }[];
+        }>("GET", "/api/v1/staff/payroll")
+      : Promise.resolve(null),
   );
-  const employees = (profiles ?? []).filter((profile) => employeeIds.has(profile.id));
-
-  // Compensation lives in the private schema; the RPC checks the role in the database.
-  const { data: compensation } = await supabase.rpc("list_staff_compensation");
+  if (page.error) throw page.error;
+  if (!allowed || !page.data) return <PageSkeleton />;
+  const { role, runs, compensation, employees } = page.data;
 
   return (
     <PayrollClient
-      runs={(runs as unknown as PayrollRunRow[]) ?? []}
-      compensation={(compensation as unknown as CompensationRow[]) ?? []}
-      employees={(employees as unknown as { id: string; full_name: string | null }[]) ?? []}
+      runs={runs}
+      compensation={compensation}
+      employees={employees}
       canPrepare={["ceo", "account_manager"].includes(role)}
       canReview={["ceo", "head_accountant"].includes(role)}
       canFinalize={role === "head_accountant"}

@@ -12,6 +12,12 @@ use Illuminate\Support\Arr;
  */
 final class ApiRow
 {
+    /** A raw DB timestamp (stored UTC) as ISO-8601, like PostgREST sent timestamptz. */
+    public static function iso(mixed $value): ?string
+    {
+        return $value ? \Carbon\CarbonImmutable::parse($value, 'UTC')->toJSON() : null;
+    }
+
     /** @param  list<string>|null  $only */
     public static function of(?Model $model, ?array $only = null): ?array
     {

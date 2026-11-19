@@ -1,0 +1,495 @@
+[
+  {
+    "name": "full regular day",
+    "input": {
+      "baseSalaryCents": 2700000,
+      "scheduledHoursPerDay": 9,
+      "overtimeRanges": [],
+      "entries": [
+        {
+          "attendance_date": "2026-10-01",
+          "hours_worked": 9
+        }
+      ]
+    },
+    "expected": {
+      "hourlyRateCents": 10000,
+      "regularHours": 9,
+      "overtimeHours": 0,
+      "shortMinutes": 0,
+      "regularCents": 90000,
+      "overtimeCents": 0,
+      "lateCents": 0
+    }
+  },
+  {
+    "name": "half day undertime",
+    "input": {
+      "baseSalaryCents": 2700000,
+      "scheduledHoursPerDay": 9,
+      "overtimeRanges": [],
+      "entries": [
+        {
+          "attendance_date": "2026-10-01",
+          "hours_worked": 4
+        }
+      ]
+    },
+    "expected": {
+      "hourlyRateCents": 10000,
+      "regularHours": 9,
+      "overtimeHours": 0,
+      "shortMinutes": 300,
+      "regularCents": 90000,
+      "overtimeCents": 0,
+      "lateCents": 50000
+    }
+  },
+  {
+    "name": "late arrival charged once",
+    "input": {
+      "baseSalaryCents": 2700000,
+      "scheduledHoursPerDay": 9,
+      "overtimeRanges": [],
+      "entries": [
+        {
+          "attendance_date": "2026-10-01",
+          "hours_worked": 8.67
+        }
+      ]
+    },
+    "expected": {
+      "hourlyRateCents": 10000,
+      "regularHours": 9,
+      "overtimeHours": 0,
+      "shortMinutes": 20,
+      "regularCents": 90000,
+      "overtimeCents": 0,
+      "lateCents": 3333
+    }
+  },
+  {
+    "name": "overtime at 125% with approval",
+    "input": {
+      "baseSalaryCents": 2700000,
+      "scheduledHoursPerDay": 9,
+      "overtimeRanges": [
+        {
+          "start_date": "2026-10-01",
+          "end_date": null,
+          "overtime_hours": null
+        }
+      ],
+      "entries": [
+        {
+          "attendance_date": "2026-10-01",
+          "hours_worked": 11
+        },
+        {
+          "attendance_date": "2026-10-02",
+          "hours_worked": 10
+        }
+      ]
+    },
+    "expected": {
+      "hourlyRateCents": 10000,
+      "regularHours": 18,
+      "overtimeHours": 2,
+      "shortMinutes": 0,
+      "regularCents": 180000,
+      "overtimeCents": 25000,
+      "lateCents": 0
+    }
+  },
+  {
+    "name": "multi-day overtime request",
+    "input": {
+      "baseSalaryCents": 2700000,
+      "scheduledHoursPerDay": 9,
+      "overtimeRanges": [
+        {
+          "start_date": "2026-10-01",
+          "end_date": "2026-10-03",
+          "overtime_hours": null
+        }
+      ],
+      "entries": [
+        {
+          "attendance_date": "2026-10-01",
+          "hours_worked": 10
+        },
+        {
+          "attendance_date": "2026-10-02",
+          "hours_worked": 10
+        },
+        {
+          "attendance_date": "2026-10-04",
+          "hours_worked": 10
+        }
+      ]
+    },
+    "expected": {
+      "hourlyRateCents": 10000,
+      "regularHours": 27,
+      "overtimeHours": 2,
+      "shortMinutes": 0,
+      "regularCents": 270000,
+      "overtimeCents": 25000,
+      "lateCents": 0
+    }
+  },
+  {
+    "name": "overtime capped at approved hours",
+    "input": {
+      "baseSalaryCents": 2700000,
+      "scheduledHoursPerDay": 9,
+      "overtimeRanges": [
+        {
+          "start_date": "2026-10-01",
+          "end_date": null,
+          "overtime_hours": 2
+        }
+      ],
+      "entries": [
+        {
+          "attendance_date": "2026-10-01",
+          "hours_worked": 13
+        }
+      ]
+    },
+    "expected": {
+      "hourlyRateCents": 10000,
+      "regularHours": 9,
+      "overtimeHours": 2,
+      "shortMinutes": 0,
+      "regularCents": 90000,
+      "overtimeCents": 25000,
+      "lateCents": 0
+    }
+  },
+  {
+    "name": "overtime under approved hours",
+    "input": {
+      "baseSalaryCents": 2700000,
+      "scheduledHoursPerDay": 9,
+      "overtimeRanges": [
+        {
+          "start_date": "2026-10-01",
+          "end_date": null,
+          "overtime_hours": 3
+        }
+      ],
+      "entries": [
+        {
+          "attendance_date": "2026-10-01",
+          "hours_worked": 10
+        }
+      ]
+    },
+    "expected": {
+      "hourlyRateCents": 10000,
+      "regularHours": 9,
+      "overtimeHours": 1,
+      "shortMinutes": 0,
+      "regularCents": 90000,
+      "overtimeCents": 12500,
+      "lateCents": 0
+    }
+  },
+  {
+    "name": "legacy uncapped approval",
+    "input": {
+      "baseSalaryCents": 2700000,
+      "scheduledHoursPerDay": 9,
+      "overtimeRanges": [
+        {
+          "start_date": "2026-10-01",
+          "end_date": null,
+          "overtime_hours": null
+        }
+      ],
+      "entries": [
+        {
+          "attendance_date": "2026-10-01",
+          "hours_worked": 13
+        }
+      ]
+    },
+    "expected": {
+      "hourlyRateCents": 10000,
+      "regularHours": 9,
+      "overtimeHours": 4,
+      "shortMinutes": 0,
+      "regularCents": 90000,
+      "overtimeCents": 50000,
+      "lateCents": 0
+    }
+  },
+  {
+    "name": "extra hours without approval",
+    "input": {
+      "baseSalaryCents": 2700000,
+      "scheduledHoursPerDay": 9,
+      "overtimeRanges": [],
+      "entries": [
+        {
+          "attendance_date": "2026-10-01",
+          "hours_worked": 11
+        }
+      ]
+    },
+    "expected": {
+      "hourlyRateCents": 10000,
+      "regularHours": 9,
+      "overtimeHours": 0,
+      "shortMinutes": 0,
+      "regularCents": 90000,
+      "overtimeCents": 0,
+      "lateCents": 0
+    }
+  },
+  {
+    "name": "absence, leave, missing clock-out",
+    "input": {
+      "baseSalaryCents": 2700000,
+      "scheduledHoursPerDay": 9,
+      "overtimeRanges": [],
+      "entries": [
+        {
+          "attendance_date": "2026-10-01",
+          "hours_worked": null
+        },
+        {
+          "attendance_date": "2026-10-02",
+          "hours_worked": 0
+        }
+      ]
+    },
+    "expected": {
+      "hourlyRateCents": 10000,
+      "regularHours": 0,
+      "overtimeHours": 0,
+      "shortMinutes": 0,
+      "regularCents": 0,
+      "overtimeCents": 0,
+      "lateCents": 0
+    }
+  },
+  {
+    "name": "rounds rate and lines to cents",
+    "input": {
+      "baseSalaryCents": 3000000,
+      "scheduledHoursPerDay": 9,
+      "entries": [
+        {
+          "attendance_date": "2026-10-01",
+          "hours_worked": 9.5
+        },
+        {
+          "attendance_date": "2026-10-02",
+          "hours_worked": 8.75
+        }
+      ],
+      "overtimeRanges": [
+        {
+          "start_date": "2026-10-01",
+          "end_date": null,
+          "overtime_hours": null
+        }
+      ]
+    },
+    "expected": {
+      "hourlyRateCents": 11111,
+      "regularHours": 18,
+      "overtimeHours": 0.5,
+      "shortMinutes": 15,
+      "regularCents": 199998,
+      "overtimeCents": 6944,
+      "lateCents": 2778
+    }
+  },
+  {
+    "name": "two approvals on one day add up",
+    "input": {
+      "baseSalaryCents": 2500000,
+      "scheduledHoursPerDay": 8,
+      "entries": [
+        {
+          "attendance_date": "2026-10-05",
+          "hours_worked": 11.25
+        },
+        {
+          "attendance_date": "2026-10-06",
+          "hours_worked": 7.92
+        }
+      ],
+      "overtimeRanges": [
+        {
+          "start_date": "2026-10-05",
+          "end_date": null,
+          "overtime_hours": 1.5
+        },
+        {
+          "start_date": "2026-10-05",
+          "end_date": null,
+          "overtime_hours": 0.5
+        }
+      ]
+    },
+    "expected": {
+      "hourlyRateCents": 10417,
+      "regularHours": 16,
+      "overtimeHours": 2,
+      "shortMinutes": 5,
+      "regularCents": 166672,
+      "overtimeCents": 26043,
+      "lateCents": 868
+    }
+  },
+  {
+    "name": "odd salary, 8 h schedule, a month of days",
+    "input": {
+      "baseSalaryCents": 1833333,
+      "scheduledHoursPerDay": 8,
+      "entries": [
+        {
+          "attendance_date": "2026-10-01",
+          "hours_worked": 8
+        },
+        {
+          "attendance_date": "2026-10-02",
+          "hours_worked": 7.5
+        },
+        {
+          "attendance_date": "2026-10-03",
+          "hours_worked": 8.33
+        },
+        {
+          "attendance_date": "2026-10-04",
+          "hours_worked": 9.17
+        },
+        {
+          "attendance_date": "2026-10-05",
+          "hours_worked": 6.08
+        },
+        {
+          "attendance_date": "2026-10-06",
+          "hours_worked": 8
+        },
+        {
+          "attendance_date": "2026-10-07",
+          "hours_worked": 7.5
+        },
+        {
+          "attendance_date": "2026-10-08",
+          "hours_worked": 8.33
+        },
+        {
+          "attendance_date": "2026-10-09",
+          "hours_worked": 9.17
+        },
+        {
+          "attendance_date": "2026-10-10",
+          "hours_worked": 6.08
+        },
+        {
+          "attendance_date": "2026-10-11",
+          "hours_worked": 8
+        },
+        {
+          "attendance_date": "2026-10-12",
+          "hours_worked": 7.5
+        },
+        {
+          "attendance_date": "2026-10-13",
+          "hours_worked": 8.33
+        },
+        {
+          "attendance_date": "2026-10-14",
+          "hours_worked": 9.17
+        },
+        {
+          "attendance_date": "2026-10-15",
+          "hours_worked": 6.08
+        },
+        {
+          "attendance_date": "2026-10-16",
+          "hours_worked": 8
+        },
+        {
+          "attendance_date": "2026-10-17",
+          "hours_worked": 7.5
+        },
+        {
+          "attendance_date": "2026-10-18",
+          "hours_worked": 8.33
+        },
+        {
+          "attendance_date": "2026-10-19",
+          "hours_worked": 9.17
+        },
+        {
+          "attendance_date": "2026-10-20",
+          "hours_worked": 6.08
+        },
+        {
+          "attendance_date": "2026-10-21",
+          "hours_worked": 8
+        },
+        {
+          "attendance_date": "2026-10-22",
+          "hours_worked": 7.5
+        }
+      ],
+      "overtimeRanges": [
+        {
+          "start_date": "2026-10-04",
+          "end_date": "2026-10-09",
+          "overtime_hours": 0.75
+        }
+      ]
+    },
+    "expected": {
+      "hourlyRateCents": 7639,
+      "regularHours": 176,
+      "overtimeHours": 1.8333333333333333,
+      "shortMinutes": 610,
+      "regularCents": 1344464,
+      "overtimeCents": 17506,
+      "lateCents": 77663
+    }
+  },
+  {
+    "name": "half-hour schedule",
+    "input": {
+      "baseSalaryCents": 1500000,
+      "scheduledHoursPerDay": 3.5,
+      "entries": [
+        {
+          "attendance_date": "2026-10-01",
+          "hours_worked": 3.42
+        },
+        {
+          "attendance_date": "2026-10-02",
+          "hours_worked": 4.5
+        }
+      ],
+      "overtimeRanges": [
+        {
+          "start_date": "2026-10-02",
+          "end_date": null,
+          "overtime_hours": 0.5
+        }
+      ]
+    },
+    "expected": {
+      "hourlyRateCents": 14286,
+      "regularHours": 7,
+      "overtimeHours": 0.5,
+      "shortMinutes": 5,
+      "regularCents": 100002,
+      "overtimeCents": 8929,
+      "lateCents": 1191
+    }
+  }
+]

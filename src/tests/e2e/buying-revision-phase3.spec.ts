@@ -38,7 +38,7 @@ test.describe
   .serial("Buying revision phase 3", () => {
     test.skip(
       !seedPassword || !canCreateTestVehicle(),
-      "SEED_USER_PASSWORD and the Supabase service role are required",
+      "SEED_USER_PASSWORD and the Laravel test fixtures (e2e:fixture) are required",
     );
     test.use({ actionTimeout: 60_000 });
     test.beforeAll(resetCustomerStanding);

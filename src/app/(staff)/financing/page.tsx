@@ -1,51 +1,41 @@
-import { requireRole } from "@/lib/auth/guards";
-import { getCurrentRole } from "@/lib/auth/server-session";
-import { createServerSupabase } from "@/lib/supabase/server";
+"use client";
 
-import { type CashSale, FinancingMonitor } from "./_components/financing-monitor";
+import type { ComponentProps } from "react";
 
-export default async function FinancingPage() {
-  await requireRole(["ceo", "head_accountant"]);
-  const supabase = await createServerSupabase();
-  const [{ data, error }, { data: workers }, { data: cases }, { data: sold }] = await Promise.all([
-    supabase
-      .from("installment_accounts")
-      .select(
-        "*, transactions!purchase_transaction_id(id, profiles(full_name), vehicles(make, model, year)), installments(*)",
-      )
-      .eq("state", "active"),
-    supabase.rpc("list_field_case_workers"),
-    supabase
-      .from("field_cases")
-      .select("id, transaction_id")
-      .eq("case_kind", "recovery")
-      .in("state", ["assigned", "accepted", "in_progress"]),
-    // T10: cars sold outright count as inventory too.
-    supabase
-      .from("transactions")
-      .select(
-        "id, completed_at, profiles(full_name), vehicles(make, model, year), purchase_details!inner(payment_method, final_price)",
-      )
-      .eq("transaction_kind", "buy")
-      .eq("current_state", "completed")
-      .in("purchase_details.payment_method", ["cash", "bank_transfer"])
-      .order("completed_at", { ascending: false }),
-  ]);
+import { useRequireRole } from "@/components/auth/session-provider";
+import { PageSkeleton } from "@/components/page-skeleton";
+import { browserApi } from "@/lib/api/client";
+import { usePageData } from "@/lib/api/use-page-data";
+
+import { FinancingMonitor } from "./_components/financing-monitor";
+
+type MonitorProps = ComponentProps<typeof FinancingMonitor>;
+
+export default function FinancingPage() {
+  const allowed = useRequireRole(["ceo", "head_accountant"]);
+  // Phase 7: active financing accounts with their installments, open recovery cases and outright sales.
+  const page = usePageData(allowed ? "financing" : "financing:denied", () =>
+    allowed
+      ? browserApi<{
+          canRequest: boolean;
+          accounts: MonitorProps["accounts"];
+          cashSales: NonNullable<MonitorProps["cashSales"]>;
+          workers: MonitorProps["workers"];
+          cases: MonitorProps["cases"];
+        }>("GET", "/api/v1/staff/financing")
+      : Promise.resolve(null),
+  );
+  if (page.error) throw page.error;
+  if (!allowed || !page.data) return <PageSkeleton />;
+  const data = page.data;
+
   return (
     <FinancingMonitor
-      accounts={data ?? []}
-      cashSales={
-        (sold ?? []).map((row) => ({
-          ...row,
-          purchase_details: Array.isArray(row.purchase_details)
-            ? (row.purchase_details[0] ?? null)
-            : row.purchase_details,
-        })) as unknown as CashSale[]
-      }
-      workers={workers ?? []}
-      cases={cases ?? []}
-      canRequest={(await getCurrentRole()) === "head_accountant"}
-      error={error?.message}
+      accounts={data.accounts}
+      cashSales={data.cashSales}
+      workers={data.workers}
+      cases={data.cases}
+      canRequest={data.canRequest}
     />
   );
 }

@@ -1,36 +1,33 @@
-import { redirect } from "next/navigation";
+"use client";
 
+import { useRequireRole } from "@/components/auth/session-provider";
+import { PageSkeleton } from "@/components/page-skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { getCurrentRole } from "@/lib/auth/server-session";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { browserApi } from "@/lib/api/client";
+import { usePageData } from "@/lib/api/use-page-data";
+import type { GceRole } from "@/lib/auth/roles";
 
 import { type DutyCheckRow, SecurityDutyChecksClient } from "./_components/security-duty-checks-client";
 
-export default async function SecurityDutyChecksPage() {
-  const role = await getCurrentRole();
-  if (!role || !["ceo", "head_security"].includes(role)) {
-    redirect("/unauthorized");
-  }
+const DUTY_ROLES: GceRole[] = ["ceo", "head_security"];
 
-  const supabase = await createServerSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/auth/v1/login");
-
-  const query = supabase.from("security_duty_checks").select("*").order("duty_date", { ascending: false });
-  if (role === "head_security") {
-    query.eq("security_id", user.id);
-  }
-
-  const { data: checks } = await query;
-  const normalized = (checks as unknown as DutyCheckRow[]) ?? [];
+export default function SecurityDutyChecksPage() {
+  const allowed = useRequireRole(DUTY_ROLES);
+  // Phase 7: Head Security reads and writes their own checks; the CEO reads all.
+  const page = usePageData(allowed ? "security-duty-checks" : "security-duty-checks:denied", () =>
+    allowed
+      ? browserApi<{ canManage: boolean; checks: DutyCheckRow[] }>("GET", "/api/v1/staff/security-duty-checks")
+      : Promise.resolve(null),
+  );
+  if (page.error) throw page.error;
+  if (!allowed || !page.data) return <PageSkeleton />;
+  const { checks, canManage } = page.data;
 
   return (
     <div className="flex flex-col gap-6">
-      <SecurityComplianceStrip checks={normalized} />
-      <SecurityDutyChecksClient checks={normalized} canManage={role === "head_security"} />
+      <SecurityComplianceStrip checks={checks} />
+      <SecurityDutyChecksClient checks={checks} canManage={canManage} />
     </div>
   );
 }

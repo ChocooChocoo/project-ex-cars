@@ -5,7 +5,7 @@ import { canCreateTestVehicle } from "./support/test-vehicle";
 
 // T01 Selling (§1) branch: the inspection finds an issue → Inspection Issue Report → revised ceiling →
 // CEO approves → the seller agrees → purchase funds requested and paid → the offer completes → the
-// field expense is reimbursed once the car is sold. The resale is set through the service role (the
+// field expense is reimbursed once the car is sold. The resale is set through the Laravel test fixtures (the
 // resale flow itself is covered by the Phase 2 spec); every other step goes through the UI.
 
 const tag = Math.floor(100 + Math.random() * 899);
@@ -30,7 +30,7 @@ test.describe
   .serial("T01 selling issue path", () => {
     test.skip(
       !seedPassword || !canCreateTestVehicle(),
-      "SEED_USER_PASSWORD and the Supabase service role are required",
+      "SEED_USER_PASSWORD and the Laravel test fixtures (e2e:fixture) are required",
     );
     // A click that cannot land fails in a minute instead of holding the run until the test timeout.
     // T12: Meet Halfway sets its map point from the device location (Bacoor, Cavite here).

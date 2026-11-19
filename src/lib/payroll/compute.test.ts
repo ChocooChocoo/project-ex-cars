@@ -124,3 +124,15 @@ describe("scheduledHours", () => {
     expect(scheduledHours("08:30:00", "12:00:00")).toBe(3.5);
   });
 });
+
+// The same cases drive backend/tests/Unit/Payroll/PayslipCalculatorTest.php (Phase 7), so the Laravel port and this
+// helper must agree to the cent.
+import fixtures from "./fixtures.json";
+
+describe("shared payroll fixtures", () => {
+  it.each(
+    fixtures as unknown as { name: string; input: Parameters<typeof computePayslip>[0]; expected: object }[],
+  )("$name", ({ input, expected }) => {
+    expect(computePayslip(input)).toEqual(expected);
+  });
+});

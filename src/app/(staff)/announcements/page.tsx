@@ -1,28 +1,23 @@
-import { redirect } from "next/navigation";
+"use client";
 
-import { requireRole } from "@/lib/auth/guards";
+import { useRequireRole } from "@/components/auth/session-provider";
+import { PageSkeleton } from "@/components/page-skeleton";
+import { browserApi } from "@/lib/api/client";
+import { usePageData } from "@/lib/api/use-page-data";
 import { STAFF_ROLES } from "@/lib/auth/roles";
-import { getCurrentRole } from "@/lib/auth/server-session";
-import { createServerSupabase } from "@/lib/supabase/server";
 
 import { type AnnouncementRow, AnnouncementsClient } from "./_components/announcements-client";
 
-export default async function AnnouncementsPage() {
-  await requireRole(STAFF_ROLES);
-  const role = (await getCurrentRole()) as string;
-  if (!role) redirect("/unauthorized");
-
-  const supabase = await createServerSupabase();
-
-  const isCeo = role === "ceo";
-  const query = supabase.from("announcements").select("*").order("created_at", { ascending: false });
-  if (!isCeo) {
-    query.eq("status", "published").or("expires_at.is.null, expires_at.gte.now()");
-  }
-
-  const { data: announcements } = await query;
-
-  return (
-    <AnnouncementsClient announcements={(announcements as unknown as AnnouncementRow[]) ?? []} canManage={isCeo} />
+export default function AnnouncementsPage() {
+  const allowed = useRequireRole(STAFF_ROLES);
+  // Phase 7: the CEO sees every announcement; other staff see published, unexpired ones.
+  const page = usePageData(allowed ? "announcements" : "announcements:denied", () =>
+    allowed
+      ? browserApi<{ canManage: boolean; announcements: AnnouncementRow[] }>("GET", "/api/v1/staff/announcements")
+      : Promise.resolve(null),
   );
+  if (page.error) throw page.error;
+  if (!allowed || !page.data) return <PageSkeleton />;
+
+  return <AnnouncementsClient announcements={page.data.announcements} canManage={page.data.canManage} />;
 }

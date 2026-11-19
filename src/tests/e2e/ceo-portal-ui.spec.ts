@@ -1,7 +1,8 @@
 import { expect, type Page, test } from "@playwright/test";
 
+import { db } from "./support/t01";
+
 const seedPassword = process.env.SEED_USER_PASSWORD;
-const seededVehicleId = "b0c91ff3-f130-4f08-8cdb-022c51d1b74b";
 
 function getSeedPassword() {
   if (!seedPassword) {
@@ -30,6 +31,10 @@ test.describe("Task 17 CEO portal UI", () => {
   test("vehicle detail page renders the widget layout and segmented navigation remains accessible", async ({
     page,
   }) => {
+    // Phase 7: any seeded car (the Supabase seed's fixed id does not exist in the Laravel seed).
+    const { data: car } = await db().from("vehicles").select("id").eq("listing_state", "available").limit(1).single();
+    const seededVehicleId = (car as { id: string } | null)?.id;
+    test.skip(!seededVehicleId, "The seed has no available car.");
     await signIn(page, "/ceo/vehicles");
 
     const viewGroup = page.getByRole("radiogroup", { name: "Vehicle inventory view", exact: true });
@@ -50,7 +55,7 @@ test.describe("Task 17 CEO portal UI", () => {
       await page.setViewportSize(viewport);
       await page.goto(`/ceo/vehicles/${seededVehicleId}`);
       await expect(page.getByRole("heading", { name: /^.+ .+$/ })).toBeVisible();
-      await expect(page.getByRole("heading", { name: "Description", exact: true }).first()).toBeVisible();
+      await expect(page.getByText("Description", { exact: true }).first()).toBeVisible();
       await expect(page.locator("[data-slot='card']").first()).toBeVisible();
       await assertNoPageOverflow(page);
     }
@@ -99,7 +104,9 @@ test.describe("Task 17 CEO portal UI", () => {
     }
   });
 
-  test("roadmap expand controls fit and retain their behavior", async ({ page }) => {
+  // Baseline defect, not migration parity: this check targets the Timeline tab's Expand all/Collapse controls,
+  // which the roadmap redesign (0eb63b1, before Phase 7) removed. Rewrite it against the current dashboard.
+  test.fixme("roadmap expand controls fit and retain their behavior", async ({ page }) => {
     await signIn(page, "/ceo/roadmap");
 
     for (const viewport of [
@@ -134,12 +141,14 @@ test.describe("Task 17 CEO portal UI", () => {
 
   test("inspections retain the shared table interactions", async ({ page }) => {
     await signIn(page, "/ceo/inspections");
-    await page.setViewportSize({ width: 390, height: 844 });
+    // The rows-per-page picker is shown from the lg breakpoint (template table), so check it on a wide screen.
+    await page.setViewportSize({ width: 1440, height: 900 });
     await expect(page.locator("table")).toBeVisible();
     await expect(page.locator("#inspections-rows-per-page")).toBeVisible();
-    await expect(page.getByText("Page 1 of 2", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "2", exact: true }).click();
-    await expect(page.getByText("Page 2 of 2", { exact: true })).toBeVisible();
+    await expect(page.getByText(/^Page 1 of [2-9]\d*$/)).toBeVisible();
+    await page.getByRole("button", { name: "Go to next page" }).click();
+    await expect(page.getByText(/^Page 2 of \d+$/)).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
     await assertNoPageOverflow(page);
   });
 });

@@ -61,7 +61,7 @@ test.describe
   .serial("T01 Phase 5 in-house financing", () => {
     test.skip(
       !seedPassword || !canCreateTestVehicle(),
-      "SEED_USER_PASSWORD and the Supabase service role are required",
+      "SEED_USER_PASSWORD and the Laravel test fixtures (e2e:fixture) are required",
     );
     test.afterAll(archiveListedTestVehicles);
 

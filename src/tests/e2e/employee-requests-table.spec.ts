@@ -32,7 +32,8 @@ test.describe("CEO employee requests table", () => {
     expect(firstPageRows).toBeGreaterThan(0);
     expect(firstPageRows).toBeLessThanOrEqual(10);
 
-    await page.getByRole("navigation", { name: "pagination" }).getByRole("button", { name: "2", exact: true }).click();
+    // The shared table pages with first/previous/next/last buttons.
+    await page.getByRole("button", { name: "Go to next page" }).click();
     await expect(page.getByText(/^Page 2 of \d+$/, { exact: true })).toBeVisible();
     const secondPageRows = await page.locator("tbody tr").count();
     expect(secondPageRows).toBeGreaterThan(0);

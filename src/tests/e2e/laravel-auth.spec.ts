@@ -58,7 +58,8 @@ test.describe("Laravel sign-in for every seeded role", () => {
       if (await skip.count()) await skip.first().click();
 
       await page.evaluate(() => document.querySelector("nextjs-portal")?.remove()); // dev-only indicator
-      await page.locator("[data-slot='avatar']:visible").last().click();
+      // The account menu avatar, not the avatars in a page's table (e.g. Users).
+      await page.locator("[data-slot='avatar']:visible:not(table [data-slot='avatar'])").last().click();
       await page.getByRole("menuitem", { name: /sign out/i }).click();
       await page.waitForURL(/\/auth\/v1\/login/);
       expect(await laravelMe(page)).toBe(401);

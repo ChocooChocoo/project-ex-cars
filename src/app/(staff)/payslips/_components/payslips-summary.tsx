@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { createClient } from "@/lib/supabase/client";
+import { browserApi } from "@/lib/api/client";
 
 import { PayslipsTable, type PayslipTableRow } from "./payslips-table";
 
@@ -42,16 +42,10 @@ export function PayslipsSummary({ payrollRuns, ownRows, allRows, userId }: Paysl
 
   async function handleViewAll() {
     try {
-      const supabase = createClient();
       // biome-ignore lint/suspicious/noUnnecessaryConditions: fallback chain needed for audit record_id
       const recordId = payrollRuns[0]?.id ?? allRows[0]?.id ?? ownRows[0]?.id ?? userId;
-      await supabase.from("audit_events").insert({
-        actor_id: userId,
-        action: "payslip_drilldown",
-        record_kind: "payslip",
-        record_id: recordId,
-        summary: `Payslip drilldown by ${userId} to view all payslips`,
-      });
+      // Phase 7: Laravel writes the audit row with the session user as actor.
+      await browserApi("POST", "/api/v1/staff/payroll/payslips/drilldown", { record_id: recordId });
     } catch (error) {
       console.error("[payslip_drilldown] audit insert failed", error);
     }

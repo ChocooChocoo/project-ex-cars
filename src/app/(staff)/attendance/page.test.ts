@@ -1,51 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  ATTENDANCE_ENTRY_SELECT,
-  type AttendanceRpcState,
-  buildAttendanceRealtimeAccess,
-  getAttendanceDataError,
-  mapAttendanceRpcState,
-} from "./page";
+import { type AttendanceRpcState, mapAttendanceRpcState } from "./page";
 
 describe("attendance page data loading", () => {
-  it("qualifies the employee profile relationship in attendance queries", () => {
-    expect(ATTENDANCE_ENTRY_SELECT).toContain("profiles!attendance_entries_employee_id_fkey(full_name)");
-  });
-
-  it("surfaces a failed attendance dependency instead of treating it as missing data", () => {
-    const reason = getAttendanceDataError([
-      { error: null },
-      { error: { message: "schedule permission denied" } },
-      { error: null },
-      { error: null },
-    ]);
-
-    expect(reason).toBe("Attendance supporting data is temporarily unavailable. Please refresh and try again.");
-  });
-
-  it("returns no unavailable reason when every attendance dependency succeeds", () => {
-    expect(getAttendanceDataError([{ error: null }, { error: null }, { error: null }, { error: null }])).toBeNull();
-  });
-
-  it("gives attendance readers full realtime scopes for oversight", () => {
-    for (const role of ["account_manager", "ceo", "head_accountant"]) {
-      expect(buildAttendanceRealtimeAccess(role, "employee-1")).toEqual({
-        attendanceEmployeeId: null,
-        leaveEmployeeId: null,
-        scheduleEmployeeId: null,
-      });
-    }
-  });
-
-  it("scopes other staff realtime access to their own employee id", () => {
-    expect(buildAttendanceRealtimeAccess("sales_manager", "employee-1")).toEqual({
-      attendanceEmployeeId: "employee-1",
-      leaveEmployeeId: "employee-1",
-      scheduleEmployeeId: "employee-1",
-    });
-  });
-
   it("maps the database-time RPC state into authoritative UI availability", () => {
     const state: AttendanceRpcState = {
       now: "2026-08-09T00:00:00.000Z",

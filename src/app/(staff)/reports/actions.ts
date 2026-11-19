@@ -1,67 +1,28 @@
-"use server";
+"use client";
 
-import { revalidatePath } from "next/cache";
-
-import { getCurrentRole } from "@/lib/auth/server-session";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { apiAction } from "@/lib/api/action";
 import { reportSchema } from "@/lib/validation/phase6";
+
+// Phase 7: browser adapters for the Laravel report endpoints (ReportController). The submitter is the session user.
 
 type Phase6ActionResult = { error: string } | { success: true };
 
-const REPORT_CREATORS = ["ceo", "head_accountant", "account_manager"];
-const REPORT_REVIEWERS = ["ceo", "head_accountant"];
+async function done(path: string, body: unknown): Promise<Phase6ActionResult> {
+  const result = await apiAction(path, body);
+  return result.error !== undefined ? { error: result.error } : { success: true };
+}
 
 export async function submitReport(formData: FormData): Promise<Phase6ActionResult> {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
-
-  const role = await getCurrentRole();
-  if (!role || !REPORT_CREATORS.includes(role)) {
-    return { error: "Not authorized to submit reports" };
-  }
-
-  const raw = Object.fromEntries(formData) as Record<string, unknown>;
-  const parsed = reportSchema.safeParse(raw);
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid report." };
-  }
-
-  const { error } = await supabase.from("reports").insert({
-    report_kind: parsed.data.report_kind,
-    title: parsed.data.title,
+  const parsed = reportSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid report." };
+  return done("/staff/reports", {
+    ...parsed.data,
     description: parsed.data.description || null,
-    submitted_by: user.user.id,
-    status: "submitted",
     period_start: parsed.data.period_start || null,
     period_end: parsed.data.period_end || null,
   });
-  if (error) return { error: error.message };
-
-  revalidatePath("/dashboard/reports");
-  return { success: true };
 }
 
 export async function reviewReport(formData: FormData): Promise<Phase6ActionResult> {
-  const supabase = await createServerSupabaseClient();
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user) return { error: "Not authenticated" };
-
-  const role = await getCurrentRole();
-  if (!role || !REPORT_REVIEWERS.includes(role)) {
-    return { error: "Not authorized to review reports" };
-  }
-
-  const reportId = formData.get("report_id") as string;
-  const { data: updatedReport, error } = await supabase
-    .from("reports")
-    .update({ status: "reviewed", updated_at: new Date().toISOString() })
-    .eq("id", reportId)
-    .select("id")
-    .maybeSingle();
-  if (error) return { error: error.message };
-  if (!updatedReport) return { error: "Report not found or not authorized to review it." };
-
-  revalidatePath("/dashboard/reports");
-  return { success: true };
+  return done("/staff/reports/review", { report_id: formData.get("report_id") });
 }

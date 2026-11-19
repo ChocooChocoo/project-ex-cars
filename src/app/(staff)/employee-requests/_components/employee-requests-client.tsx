@@ -33,7 +33,6 @@ import { toast } from "sonner";
 
 import {
   cancelEmployeeRequest,
-  prepareRequestUploads,
   reviewEmployeeRequest,
   submitEmployeeRequest,
 } from "@/app/(staff)/employee-requests/actions";
@@ -59,9 +58,7 @@ import {
   attachmentMimeType,
   MESSAGE_ATTACHMENT_ACCEPT,
   REQUEST_ATTACHMENT_MAX_COUNT,
-  REQUEST_ATTACHMENTS_BUCKET,
 } from "@/lib/inquiries/attachments";
-import { createClient } from "@/lib/supabase/client";
 import { compressImage } from "@/lib/uploads/compress-image";
 import { LEAVE_REASONS, type LeaveReason, REQUEST_KINDS, type RequestKind } from "@/lib/validation/phase6";
 
@@ -133,28 +130,6 @@ export function EmployeeRequestsClient({ requests, canReview, canSubmit }: Emplo
 
     setLoading(true);
     try {
-      // The files go straight to storage: a Server Action body is capped at 4 MB.
-      const prepared = await prepareRequestUploads(
-        proofFiles.map((file) => ({ name: file.name, type: file.type, size: file.size })),
-      );
-      if ("error" in prepared) {
-        setFormError(prepared.error);
-        return;
-      }
-
-      const bucket = createClient().storage.from(REQUEST_ATTACHMENTS_BUCKET);
-      const proofs: { path: string; name: string; type: string; size: number }[] = [];
-      for (const [index, file] of proofFiles.entries()) {
-        const { path, token } = prepared.uploads[index];
-        const type = attachmentMimeType(file);
-        const { error } = await bucket.uploadToSignedUrl(path, token, file, { contentType: type });
-        if (error) {
-          setFormError(`${error.message} Your request was not saved — please try again.`);
-          return;
-        }
-        proofs.push({ path, name: file.name, type, size: file.size });
-      }
-
       const fd = new FormData();
       fd.set("request_kind", kind);
       fd.set("start_date", startDate);
@@ -169,7 +144,10 @@ export function EmployeeRequestsClient({ requests, canReview, canSubmit }: Emplo
       } else if (!isOvertime) {
         fd.set("reason", reason);
       }
-      if (proofs.length > 0) fd.set("proofs", JSON.stringify(proofs));
+      // Phase 7: the proof files go to Laravel with the form (max 3, each already under 2 MB).
+      for (const file of proofFiles) {
+        fd.append("proofs[]", new File([file], file.name, { type: attachmentMimeType(file) }));
+      }
 
       const result = await submitEmployeeRequest(fd);
       if ("error" in result && result.error) {

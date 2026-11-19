@@ -19,7 +19,7 @@ import { archiveListedTestVehicles, canCreateTestVehicle, createTestVehicle } fr
 // T01 branches for §4 (Cash Delivery) that the main spec does not walk: an address that cannot be
 // served, a missed downpayment deadline, and a delivery that is rescheduled, runs late and finds the
 // buyer unavailable (no-show, downpayment forfeited). The deadline is reached by backdating it through
-// the service role; every flow step goes through the UI.
+// the Laravel test fixtures; every flow step goes through the UI.
 
 async function requestDelivery(page: Page, label: string): Promise<string> {
   await signInAs(page, "customer@gce.local");
@@ -54,7 +54,7 @@ test.describe
   .serial("T01 delivery branches", () => {
     test.skip(
       !seedPassword || !canCreateTestVehicle(),
-      "SEED_USER_PASSWORD and the Supabase service role are required",
+      "SEED_USER_PASSWORD and the Laravel test fixtures (e2e:fixture) are required",
     );
     // A click that cannot land fails in a minute instead of holding the run until the test timeout.
     test.use({ actionTimeout: 60_000 });

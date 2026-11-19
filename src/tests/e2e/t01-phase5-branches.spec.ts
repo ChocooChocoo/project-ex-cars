@@ -24,7 +24,7 @@ import { archiveListedTestVehicles, canCreateTestVehicle, createTestVehicle } fr
 // Accountant and the CEO, a buyer who declines the offer, a Potential Buyer who later claims the car
 // and pays every installment, and missed installments leading to repossession, reconditioning,
 // repricing and relisting. Missed installments are reached by backdating their due dates through the
-// service role; every flow step goes through the UI.
+// Laravel test fixtures; every flow step goes through the UI.
 
 const tag = Math.floor(100 + Math.random() * 899);
 
@@ -82,7 +82,7 @@ test.describe
   .serial("T01 financing branches", () => {
     test.skip(
       !seedPassword || !canCreateTestVehicle(),
-      "SEED_USER_PASSWORD and the Supabase service role are required",
+      "SEED_USER_PASSWORD and the Laravel test fixtures (e2e:fixture) are required",
     );
     // A click that cannot land fails in a minute instead of holding the run until the test timeout.
     test.use({ actionTimeout: 60_000 });
@@ -174,7 +174,9 @@ test.describe
         .select("id, installments(id, sequence_no)")
         .eq("purchase_transaction_id", id)
         .single();
-      const first4 = (account?.installments ?? []).sort((a, b) => a.sequence_no - b.sequence_no).slice(0, 4);
+      const first4 = (account?.installments ?? [])
+        .sort((a: { sequence_no: number }, b: { sequence_no: number }) => a.sequence_no - b.sequence_no)
+        .slice(0, 4);
       for (const [index, installment] of first4.entries()) {
         const due = new Date();
         due.setMonth(due.getMonth() - (5 - index));

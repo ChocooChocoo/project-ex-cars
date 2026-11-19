@@ -7,7 +7,6 @@ import { type EmployeeRequestRow, EmployeeRequestsClient } from "./employee-requ
 
 const mocks = vi.hoisted(() => ({
   cancelEmployeeRequest: vi.fn(),
-  prepareRequestUploads: vi.fn(),
   refresh: vi.fn(),
   reviewEmployeeRequest: vi.fn(),
   submitEmployeeRequest: vi.fn(),
@@ -15,12 +14,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
-vi.mock("@/lib/supabase/client", () => ({
-  createClient: () => ({ storage: { from: () => ({ uploadToSignedUrl: vi.fn() }) } }),
-}));
 vi.mock("@/app/(staff)/employee-requests/actions", () => ({
   cancelEmployeeRequest: mocks.cancelEmployeeRequest,
-  prepareRequestUploads: mocks.prepareRequestUploads,
   reviewEmployeeRequest: mocks.reviewEmployeeRequest,
   submitEmployeeRequest: mocks.submitEmployeeRequest,
 }));
@@ -56,7 +51,6 @@ function renderRequests(options: Partial<ComponentProps<typeof EmployeeRequestsC
 describe("EmployeeRequestsClient", () => {
   beforeEach(() => {
     mocks.refresh.mockReset();
-    mocks.prepareRequestUploads.mockReset().mockResolvedValue({ uploads: [] });
     mocks.submitEmployeeRequest.mockReset().mockResolvedValue({ success: true });
     mocks.reviewEmployeeRequest.mockReset().mockResolvedValue({ success: true });
     mocks.cancelEmployeeRequest.mockReset().mockResolvedValue({ success: true });

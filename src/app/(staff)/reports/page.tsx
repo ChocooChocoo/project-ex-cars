@@ -1,25 +1,31 @@
-import { redirect } from "next/navigation";
+"use client";
 
-import { getCurrentRole } from "@/lib/auth/server-session";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { useRequireRole } from "@/components/auth/session-provider";
+import { PageSkeleton } from "@/components/page-skeleton";
+import { browserApi } from "@/lib/api/client";
+import { usePageData } from "@/lib/api/use-page-data";
+import type { GceRole } from "@/lib/auth/roles";
 
 import { type ReportRow, ReportsClient } from "./_components/reports-client";
 
-const REPORT_ROLES = ["ceo", "head_accountant", "account_manager"];
+const REPORT_ROLES: GceRole[] = ["ceo", "head_accountant", "account_manager"];
 
-export default async function ReportsPage() {
-  const role = await getCurrentRole();
-  if (!role || !REPORT_ROLES.includes(role)) {
-    redirect("/unauthorized");
-  }
-
-  const supabase = await createServerSupabase();
-  const { data: reports } = await supabase.from("reports").select("*").order("created_at", { ascending: false });
+export default function ReportsPage() {
+  const allowed = useRequireRole(REPORT_ROLES);
+  // Phase 7: CEO/HA read every report; the Account Manager reads their own.
+  const page = usePageData(allowed ? "reports" : "reports:denied", () =>
+    allowed
+      ? browserApi<{ role: string; reports: ReportRow[] }>("GET", "/api/v1/staff/reports")
+      : Promise.resolve(null),
+  );
+  if (page.error) throw page.error;
+  if (!allowed || !page.data) return <PageSkeleton />;
+  const { role, reports } = page.data;
 
   return (
     <ReportsClient
-      reports={(reports as unknown as ReportRow[]) ?? []}
-      canCreate={["ceo", "head_accountant", "account_manager"].includes(role)}
+      reports={reports}
+      canCreate={REPORT_ROLES.includes(role as GceRole)}
       canReview={["ceo", "head_accountant"].includes(role)}
     />
   );

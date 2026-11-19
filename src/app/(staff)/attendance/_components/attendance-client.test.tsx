@@ -4,6 +4,7 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  ATTENDANCE_POLL_MS,
   AttendanceClient,
   type AttendanceEntry,
   type AttendanceState,
@@ -11,10 +12,7 @@ import {
 } from "./attendance-client";
 
 const refresh = vi.fn();
-const removeChannel = vi.fn();
-const subscribe = vi.fn();
-const on = vi.fn();
-const channel = { on, subscribe };
+const { revalidatePath } = vi.hoisted(() => ({ revalidatePath: vi.fn() }));
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
 vi.mock("@/app/(staff)/attendance/actions", () => ({
@@ -22,9 +20,7 @@ vi.mock("@/app/(staff)/attendance/actions", () => ({
   clockIn: vi.fn(),
   clockOut: vi.fn(),
 }));
-vi.mock("@/lib/supabase/client", () => ({
-  createClient: () => ({ channel: vi.fn(() => channel), removeChannel }),
-}));
+vi.mock("@/lib/api/revalidate", () => ({ revalidatePath }));
 
 const now = "2026-08-09T00:00:00.000Z";
 
@@ -72,11 +68,7 @@ describe("AttendanceClient", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(now));
     refresh.mockReset();
-    removeChannel.mockReset();
-    subscribe.mockReset();
-    on.mockReset();
-    on.mockReturnValue(channel);
-    subscribe.mockReturnValue(channel);
+    revalidatePath.mockReset();
   });
 
   afterEach(() => {
@@ -115,7 +107,7 @@ describe("AttendanceClient", () => {
     const refreshButton = screen.getByRole("button", { name: "Refresh attendance" });
     expect(refreshButton).toBeInTheDocument();
     fireEvent.click(refreshButton);
-    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(revalidatePath).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("button", { name: "Clock In" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Clock Out" })).toBeDisabled();
   });
@@ -196,15 +188,13 @@ describe("AttendanceClient", () => {
     expect(screen.getByText("Approved leave today.")).toBeInTheDocument();
   });
 
-  it("refreshes only authorized realtime changes and removes every channel on unmount", () => {
+  it("reloads the page data every 30 seconds while open and stops on unmount", () => {
     const { unmount } = renderAttendance();
-    const callbacks = on.mock.calls.map((call) => call[2] as () => void);
-
-    expect(on).toHaveBeenCalledTimes(3);
-    act(() => callbacks[0]?.());
-    expect(refresh).toHaveBeenCalledTimes(1);
+    act(() => vi.advanceTimersByTime(ATTENDANCE_POLL_MS));
+    expect(revalidatePath).toHaveBeenCalledTimes(1);
     unmount();
-    expect(removeChannel).toHaveBeenCalledTimes(1);
+    act(() => vi.advanceTimersByTime(ATTENDANCE_POLL_MS * 2));
+    expect(revalidatePath).toHaveBeenCalledTimes(1);
   });
 
   it("renders AttendanceSummaryStrip with today present/late/absent/unchecked/pending counts", () => {

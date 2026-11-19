@@ -1,68 +1,10 @@
-import { redirect } from "next/navigation";
+import { PayslipDetailPage } from "./_components/payslip-detail-page";
 
-import { getCurrentRole } from "@/lib/auth/server-session";
-import { createServerSupabase } from "@/lib/supabase/server";
+// Static export: one shell for every payslip id; the client reads the id from the URL.
+export function generateStaticParams() {
+  return [{ id: "_" }];
+}
 
-import { PayslipDetailClient, type PayslipItemRow } from "./_components/payslip-detail-client";
-
-export default async function PayslipDetailPage({ params }: { readonly params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const role = await getCurrentRole();
-  if (!role) redirect("/unauthorized");
-
-  const supabase = await createServerSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/auth/v1/login");
-
-  const { data: payslip } = await supabase.from("payslips").select("*, payroll_runs(*)").eq("id", id).single();
-
-  if (!payslip) {
-    return (
-      <div className="flex flex-col gap-6">
-        <h1 className="font-semibold text-3xl tracking-tight">Payslip Not Found</h1>
-      </div>
-    );
-  }
-
-  const isEmployee = payslip.employee_id === user.id;
-  const isAuthorized = ["ceo", "account_manager", "head_accountant"].includes(role);
-  if (!isEmployee && !isAuthorized) redirect("/unauthorized");
-
-  const { data: items } = await supabase.from("payslip_items").select("*").eq("payslip_id", id);
-
-  const earnings = (items ?? []).filter((i) => i.item_kind === "earning");
-  const deductions = (items ?? []).filter((i) => i.item_kind === "deduction");
-  // Hours payslips (Phase 8) carry the hours in source_value; older day-based payslips have no such item.
-  const hoursOf = (label: string) => {
-    const item = earnings.find((i) => i.label === label);
-    return item ? Number(item.source_value) : null;
-  };
-  const regularHours = hoursOf("Regular hours");
-
-  const payrollRun = payslip.payroll_runs as Record<string, unknown> | null;
-  const periodLabel = payrollRun
-    ? `${new Date(payrollRun.period_start as string).toLocaleDateString()} — ${new Date(payrollRun.period_end as string).toLocaleDateString()}`
-    : "No period";
-
-  return (
-    <div className="flex w-full flex-col gap-6">
-      <PayslipDetailClient
-        payslipId={id}
-        status={(payslip.status as "draft" | "finalized") ?? "draft"}
-        paymentStatus={(payslip.payment_status as "pending" | "paid") ?? "pending"}
-        grossCents={(payslip.gross_cents as number) ?? 0}
-        deductionsCents={(payslip.deductions_cents as number) ?? 0}
-        netCents={(payslip.net_cents as number) ?? 0}
-        earnings={(earnings as unknown as PayslipItemRow[]) ?? []}
-        deductions={(deductions as unknown as PayslipItemRow[]) ?? []}
-        hours={regularHours === null ? null : { regular: regularHours, overtime: hoursOf("Overtime hours") ?? 0 }}
-        canEdit={["ceo", "account_manager"].includes(role)}
-        canPay={role === "head_accountant"}
-        periodLabel={periodLabel}
-        employeeLabel={isEmployee ? "You" : (payslip.employee_id as string).slice(0, 8)}
-      />
-    </div>
-  );
+export default function Page() {
+  return <PayslipDetailPage />;
 }

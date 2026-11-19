@@ -54,7 +54,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { createClient } from "@/lib/supabase/client";
+import { revalidatePath } from "@/lib/api/revalidate";
 import { ATTENDANCE_STATUSES, type AttendanceStatus } from "@/lib/validation/phase6";
 
 const TIME_ZONE = "Asia/Manila";
@@ -150,12 +150,6 @@ export interface AttendanceState {
   clockOut: { allowed: boolean; reason: string | null };
 }
 
-export interface AttendanceRealtimeAccess {
-  attendanceEmployeeId: string | null | undefined;
-  leaveEmployeeId: string | null | undefined;
-  scheduleEmployeeId: string | null | undefined;
-}
-
 interface AttendanceClientProps {
   entries: AttendanceEntry[];
   canCheck: boolean;
@@ -163,7 +157,6 @@ interface AttendanceClientProps {
   todayEntry: AttendanceEntry | null;
   attendanceState?: AttendanceState;
   realtimeEnabled?: boolean;
-  realtimeAccess?: AttendanceRealtimeAccess;
 }
 
 function formatTime(value: string) {
@@ -250,30 +243,16 @@ function useServerClock(serverNow: string) {
   return now;
 }
 
-function useAttendanceRealtime(enabled: boolean, access: AttendanceRealtimeAccess, refresh: () => void) {
+// Phase 7: Supabase Realtime is gone (static frontend, no websockets on Hostinger). While the page is open it
+// reloads its data every 30 seconds instead, so another reviewer's check or a schedule change still shows up.
+export const ATTENDANCE_POLL_MS = 30_000;
+
+function useAttendanceRealtime(enabled: boolean) {
   useEffect(() => {
     if (!enabled) return;
-    const supabase = createClient();
-    let channel = supabase.channel("attendance");
-    const subscriptions = [
-      ["attendance_entries", access.attendanceEmployeeId],
-      ["employee_requests", access.leaveEmployeeId],
-      ["employee_work_schedules", access.scheduleEmployeeId],
-    ] as const;
-    for (const [table, employeeId] of subscriptions) {
-      if (employeeId === undefined) continue;
-      channel = channel.on(
-        "postgres_changes",
-        { event: "*", schema: "public", table, ...(employeeId ? { filter: `employee_id=eq.${employeeId}` } : {}) },
-        refresh,
-      );
-    }
-    channel.subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [access, enabled, refresh]);
+    const timer = window.setInterval(() => revalidatePath("/"), ATTENDANCE_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [enabled]);
 }
 
 export function AttendanceClient({
@@ -283,7 +262,6 @@ export function AttendanceClient({
   todayEntry,
   attendanceState: providedState,
   realtimeEnabled = false,
-  realtimeAccess,
 }: AttendanceClientProps) {
   const router = useRouter();
   const attendanceState = providedState ?? defaultAttendanceState(todayEntry);
@@ -303,15 +281,7 @@ export function AttendanceClient({
     checkedFilter: false,
   });
 
-  const defaultRealtimeAccess = useMemo<AttendanceRealtimeAccess>(
-    () => ({
-      attendanceEmployeeId: canCheck ? null : attendanceState.currentEntry?.employee_id,
-      leaveEmployeeId: canCheck ? null : attendanceState.currentEntry?.employee_id,
-      scheduleEmployeeId: canCheck ? null : attendanceState.currentEntry?.employee_id,
-    }),
-    [attendanceState.currentEntry?.employee_id, canCheck],
-  );
-  useAttendanceRealtime(realtimeEnabled, realtimeAccess ?? defaultRealtimeAccess, router.refresh);
+  useAttendanceRealtime(realtimeEnabled);
 
   async function runAction(
     action: () => Promise<{ error?: string } | { success?: boolean }>,
@@ -600,7 +570,7 @@ export function AttendanceClient({
           </div>
           {attendanceState.reason ? <p className="text-muted-foreground text-sm">{attendanceState.reason}</p> : null}
           {attendanceState.isDataUnavailable ? (
-            <Button variant="outline" size="sm" className="w-fit" onClick={() => router.refresh()}>
+            <Button variant="outline" size="sm" className="w-fit" onClick={() => revalidatePath("/")}>
               Refresh attendance
             </Button>
           ) : null}

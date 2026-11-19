@@ -30,7 +30,8 @@ const WEBHOOK_SECRET = process.env.PAYMONGO_WEBHOOK_SECRET ?? "";
 // What PayMongo sends when the Checkout is paid.
 async function paymongoPaid(page: Page, id: string) {
   const { data } = await db().from("payment_records").select("paymongo_checkout_id").eq("transaction_id", id);
-  const checkoutId = data?.find((row) => row.paymongo_checkout_id)?.paymongo_checkout_id as string;
+  const checkoutId = data?.find((row: { paymongo_checkout_id: string | null }) => row.paymongo_checkout_id)
+    ?.paymongo_checkout_id as string;
   const body = JSON.stringify({
     data: {
       id: `evt_${Date.now()}`,
@@ -67,7 +68,7 @@ test.describe
   .serial("Buying revision phase 5", () => {
     test.skip(
       !seedPassword || !canCreateTestVehicle() || !SECRET || !WEBHOOK_SECRET,
-      "SEED_USER_PASSWORD, the Supabase service role and the PayMongo test keys are required",
+      "SEED_USER_PASSWORD, the Laravel test fixtures (e2e:fixture) and the PayMongo test keys are required",
     );
     test.use({ actionTimeout: 60_000 });
     test.beforeAll(resetCustomerStanding);

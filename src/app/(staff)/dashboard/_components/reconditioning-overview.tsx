@@ -2,9 +2,8 @@ import { Wrench } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { createServerSupabase } from "@/lib/supabase/server";
 
-interface ReconditioningVehicle {
+export interface ReconditioningVehicle {
   id: string;
   make: string;
   model: string;
@@ -14,43 +13,8 @@ interface ReconditioningVehicle {
   replacement_count: number;
 }
 
-export async function ReconditioningOverview() {
-  const supabase = await createServerSupabase();
-
-  const { data: rows } = await supabase
-    .from("inspection_checklist_results")
-    .select("status, vehicle_inspections!inner(vehicle_id, vehicles!inner(id, make, model, year, listing_state))")
-    .in("status", ["for_repair", "for_replacement"]);
-
-  const byVehicle = new Map<string, ReconditioningVehicle>();
-  for (const row of (rows ?? []) as unknown as {
-    status: string;
-    vehicle_inspections: {
-      vehicle_id: string;
-      vehicles: { id: string; make: string; model: string; year: number; listing_state: string };
-    };
-  }[]) {
-    const inspection = row.vehicle_inspections;
-    const vehicle = inspection.vehicles;
-    if (!vehicle || vehicle.listing_state === "sold" || vehicle.listing_state === "archived") continue;
-    const entry = byVehicle.get(vehicle.id) ?? {
-      id: vehicle.id,
-      make: vehicle.make,
-      model: vehicle.model,
-      year: vehicle.year,
-      listing_state: vehicle.listing_state,
-      repair_count: 0,
-      replacement_count: 0,
-    };
-    if (row.status === "for_repair") entry.repair_count += 1;
-    else entry.replacement_count += 1;
-    byVehicle.set(vehicle.id, entry);
-  }
-
-  const vehicles = [...byVehicle.values()].sort(
-    (a, b) => b.repair_count + b.replacement_count - (a.repair_count + a.replacement_count),
-  );
-
+// Phase 7: Laravel groups the flagged checklist items per car (most flagged first) for the roles that read inspections.
+export function ReconditioningOverview({ vehicles }: { readonly vehicles: ReconditioningVehicle[] }) {
   if (vehicles.length === 0) return null;
 
   return (

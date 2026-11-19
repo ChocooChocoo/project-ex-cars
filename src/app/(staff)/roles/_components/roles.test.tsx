@@ -14,7 +14,6 @@ const { createRbacRole, createRbacPermission, updateRbacRole } = vi.hoisted(() =
 vi.mock("../actions", () => ({ createRbacRole, createRbacPermission, updateRbacRole }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
-vi.mock("@/lib/supabase/client", () => ({ createClient: () => ({}) }));
 
 globalThis.ResizeObserver = class {
   observe() {

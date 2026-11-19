@@ -32,6 +32,8 @@ test.describe("expired session handling", () => {
 
   test("an expired or tampered session sends the user to login instead of a 500", async ({ page }) => {
     await signIn(page, "confidential_informant@gce.local");
+    // Leave the app first: a polling response still in flight would set a fresh session cookie after the tamper.
+    await page.goto("about:blank");
     const cookie = await sessionCookie(page);
 
     // Laravel cannot decrypt this value, exactly as with an idle-expired session.
@@ -39,7 +41,9 @@ test.describe("expired session handling", () => {
     const response = await page.goto("/confidential_informant/field-cases");
 
     expect(response?.status()).toBeLessThan(500);
-    await expect(page).toHaveURL(/\/auth\/v1\/login/);
+    // The static page loads, /api/v1/me answers 401, then the client redirects: over the staging CDN that can take
+    // longer than the default 5 s.
+    await expect(page).toHaveURL(/\/auth\/v1\/login/, { timeout: 20_000 });
   });
 
   test("signing out invalidates the session on the server, so a copied cookie stops working", async ({ page }) => {
@@ -56,7 +60,8 @@ test.describe("expired session handling", () => {
       .catch(() => undefined);
     if (await skip.count()) await skip.first().click();
     await page.evaluate(() => document.querySelector("nextjs-portal")?.remove());
-    await page.locator("[data-slot='avatar']:visible").last().click();
+    // The account menu avatar, not the avatars in a page's table (e.g. Users).
+    await page.locator("[data-slot='avatar']:visible:not(table [data-slot='avatar'])").last().click();
     await page.getByRole("menuitem", { name: /sign out/i }).click();
     await page.waitForURL(/\/auth\/v1\/login/);
 

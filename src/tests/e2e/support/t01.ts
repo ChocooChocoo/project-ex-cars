@@ -1,5 +1,4 @@
 import { expect as baseExpect, type Page } from "@playwright/test";
-import { createClient } from "@supabase/supabase-js";
 
 import { canUseLaravelFixtures, laravelFixture } from "./laravel-fixture";
 
@@ -276,12 +275,6 @@ export async function drawSignature(page: Page) {
   await page.mouse.up();
 }
 
-function testAdmin() {
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL as string, process.env.SUPABASE_SERVICE_ROLE_KEY as string, {
-    auth: { persistSession: false },
-  });
-}
-
 // PayMongo checkout is external, so the financing downpayment is recorded as a verified bank transfer
 // for the rest of the browser chain.
 export async function recordFinancingDownpayment(transactionId: string) {
@@ -289,18 +282,7 @@ export async function recordFinancingDownpayment(transactionId: string) {
 }
 
 export async function markFinancingFullyPaid(transactionId: string) {
-  const admin = testAdmin();
-  const { data: account } = await admin
-    .from("installment_accounts")
-    .select("id")
-    .eq("purchase_transaction_id", transactionId)
-    .maybeSingle();
-  if (!account) throw new Error("Financing account not found.");
-  const today = new Date().toISOString().slice(0, 10);
-  await admin.from("installments").update({ state: "paid", payment_date: today }).eq("account_id", account.id);
-  await admin.from("installment_accounts").update({ state: "closed", closed_date: today }).eq("id", account.id);
-  await admin.from("payment_terms").update({ state: "completed" }).eq("purchase_transaction_id", transactionId);
-  await admin.from("transactions").update({ flow_status: "financing_completed" }).eq("id", transactionId);
+  laravelFixture("mark-financing-paid", transactionId);
 }
 
 // The delivery fee and downpayment are paid online through PayMongo; record the same verified rows a
@@ -382,13 +364,106 @@ export async function ciClosesFieldCase(
 }
 
 // ---------------------------------------------------------------------------------------------
-// Service-role helpers. Used only to move the clock forward for time-based rules (backdating a
-// meet-up, a deadline or installments) and to reset test state; never to perform a flow step.
+// Test-data helpers. Used only to move the clock forward for time-based rules (backdating a meet-up, a deadline
+// or installments), to reset test state and to read results; never to perform a flow step.
+// Phase 7: db() keeps the PostgREST-style calls the specs make (from/select/update/eq/neq/in/is/order/limit/
+// single) but runs them through Laravel's test-only `e2e:fixture query` (local, testing or staging only).
 // ---------------------------------------------------------------------------------------------
+type QuerySpec = {
+  table: string;
+  select?: string;
+  filters: [string, string, unknown][];
+  order?: [string, boolean];
+  limit?: number;
+  update?: Record<string, unknown>;
+  single?: boolean;
+};
+
+// biome-ignore lint/suspicious/noExplicitAny: spec assertions read arbitrary columns, as with the Supabase client.
+type QueryResult = { data: any; error: Error | null };
+
+class FixtureQuery implements PromiseLike<QueryResult> {
+  private readonly spec: QuerySpec;
+
+  constructor(table: string) {
+    this.spec = { table, filters: [] };
+  }
+
+  select(columns = "*") {
+    this.spec.select = columns;
+    return this;
+  }
+
+  update(values: Record<string, unknown>) {
+    this.spec.update = values;
+    return this;
+  }
+
+  eq(column: string, value: unknown) {
+    this.spec.filters.push(["eq", column, value]);
+    return this;
+  }
+
+  neq(column: string, value: unknown) {
+    this.spec.filters.push(["neq", column, value]);
+    return this;
+  }
+
+  in(column: string, values: unknown[]) {
+    this.spec.filters.push(["in", column, values]);
+    return this;
+  }
+
+  is(column: string, value: null) {
+    this.spec.filters.push(["is", column, value]);
+    return this;
+  }
+
+  /** Only `.not(column, "is", null)`, the one form the specs use. */
+  not(column: string, _operator: "is", _value: null) {
+    this.spec.filters.push(["notnull", column, null]);
+    return this;
+  }
+
+  order(column: string, options: { ascending?: boolean } = {}) {
+    this.spec.order = [column, options.ascending ?? true];
+    return this;
+  }
+
+  limit(count: number) {
+    this.spec.limit = count;
+    return this;
+  }
+
+  single() {
+    this.spec.single = true;
+    return this;
+  }
+
+  maybeSingle() {
+    return this.single();
+  }
+
+  private run(): QueryResult {
+    try {
+      const encoded = Buffer.from(JSON.stringify(this.spec)).toString("base64url");
+      return { data: JSON.parse(laravelFixture("query", encoded)).data, error: null };
+    } catch (error) {
+      return { data: null, error: error as Error };
+    }
+  }
+
+  // biome-ignore lint/suspicious/noThenProperty: awaitable like the Supabase query builder the specs were written for.
+  then<A = QueryResult, B = never>(
+    onFulfilled?: ((value: QueryResult) => A | PromiseLike<A>) | null,
+    onRejected?: ((reason: unknown) => B | PromiseLike<B>) | null,
+  ): PromiseLike<A | B> {
+    return Promise.resolve(this.run()).then(onFulfilled, onRejected);
+  }
+}
+
 export function db() {
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL as string, process.env.SUPABASE_SERVICE_ROLE_KEY as string, {
-    auth: { persistSession: false },
-  });
+  return { from: (table: string) => new FixtureQuery(table) };
 }
 
 export async function customerId(): Promise<string> {

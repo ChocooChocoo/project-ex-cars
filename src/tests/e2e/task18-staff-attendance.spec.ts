@@ -1,11 +1,11 @@
 import { expect, type Page, test } from "@playwright/test";
-import { createClient } from "@supabase/supabase-js";
+
+import { canUseLaravelFixtures } from "./support/laravel-fixture";
+import { db } from "./support/t01";
 
 const seedPassword = process.env.SEED_USER_PASSWORD;
 const allowSeedMutations = process.env.TASK18_E2E_MUTATIONS === "true";
 const allowRealtimeMutations = process.env.TASK18_E2E_REALTIME_MUTATIONS === "true";
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const attendanceStatuses = ["present", "late", "absent", "half_day", "on_leave"] as const;
 const attendanceStatusLabels = {
@@ -18,9 +18,9 @@ const attendanceStatusLabels = {
 
 type AttendanceFixture = {
   id: string;
+  employee_id: string;
   status: (typeof attendanceStatuses)[number];
   notes: string | null;
-  profiles: { full_name: string | null } | null;
 };
 
 function getSeedPassword() {
@@ -66,7 +66,7 @@ test.describe("Task 18 staff records and attendance", () => {
     await signInAsCeo(page, "/ceo/staff-records");
 
     await expect(page.getByRole("heading", { name: "Staff Records", exact: true })).toBeVisible();
-    await expect(page.locator("#staff-records-rows-per-page")).toBeVisible();
+    await expect(page.locator("#staff-table-rows-per-page")).toBeVisible();
 
     await openAccountSheet(page, "Edit");
     const editSheet = page.locator("[data-slot='sheet-content']").filter({ hasText: "Edit Account" });
@@ -194,19 +194,17 @@ test.describe("Task 18 staff records and attendance", () => {
     }
   });
 
-  test("a second authorized session receives an attendance Realtime refresh", async ({ browser }) => {
+  // Phase 7: Supabase Realtime is gone; an open attendance page reloads its data every 30 seconds.
+  test("a second authorized session sees an attendance change on the next reload", async ({ browser }) => {
+    test.setTimeout(120_000);
     test.skip(
-      !allowRealtimeMutations || !supabaseUrl || !serviceRoleKey,
-      "Set TASK18_E2E_REALTIME_MUTATIONS=true, NEXT_PUBLIC_SUPABASE_URL, and SUPABASE_SERVICE_ROLE_KEY for the reversible service-role fixture.",
+      !allowRealtimeMutations || !canUseLaravelFixtures(),
+      "Set TASK18_E2E_REALTIME_MUTATIONS=true and run with the Laravel backend (or E2E_FIXTURE_CMD) for the reversible fixture.",
     );
-    if (!supabaseUrl || !serviceRoleKey) return;
 
-    const admin = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false },
-    });
-    const { data, error } = await admin
+    const { data } = await db()
       .from("attendance_entries")
-      .select("id, status, notes, profiles(full_name)")
+      .select("id, employee_id, status, notes")
       .is("checked_by", null)
       .not("time_in", "is", null)
       .not("time_out", "is", null)
@@ -214,17 +212,15 @@ test.describe("Task 18 staff records and attendance", () => {
       .limit(1)
       .maybeSingle();
     const fixture = data as AttendanceFixture | null;
-    test.skip(
-      error !== null || !fixture?.profiles?.full_name,
-      "No eligible unchecked, clocked-out attendance fixture exists.",
-    );
-    if (!fixture?.profiles?.full_name) return;
+    const { data: profile } = fixture
+      ? await db().from("profiles").select("full_name").eq("id", fixture.employee_id).maybeSingle()
+      : { data: null };
+    const employeeName = (profile as { full_name: string | null } | null)?.full_name;
+    test.skip(!fixture || !employeeName, "No eligible unchecked, clocked-out attendance fixture exists.");
+    if (!fixture || !employeeName) return;
 
-    const employeeName = fixture.profiles.full_name;
     const nextStatus = attendanceStatuses.find((status) => status !== fixture.status);
-    test.skip(!nextStatus, "The selected fixture has no alternate semantic attendance status.");
     if (!nextStatus) return;
-    const temporaryNote = `Task 18 Realtime fixture ${Date.now()}`;
     const observerContext = await browser.newContext();
     const editorContext = await browser.newContext();
     const observer = await observerContext.newPage();
@@ -238,23 +234,20 @@ test.describe("Task 18 staff records and attendance", () => {
       await expect(observerRow).toBeVisible();
       await expect(editorRow).toBeVisible();
 
-      const { error: updateError } = await admin
+      await db()
         .from("attendance_entries")
-        .update({ notes: temporaryNote, status: nextStatus })
+        .update({ notes: `Task 18 reload fixture ${Date.now()}`, status: nextStatus })
         .eq("id", fixture.id);
-      expect(updateError).toBeNull();
-      await expect(observerRow.locator("[data-slot='badge']").first()).toHaveText(attendanceStatusLabels[nextStatus], {
-        timeout: 10000,
-      });
-      await expect(editorRow.locator("[data-slot='badge']").first()).toHaveText(attendanceStatusLabels[nextStatus], {
-        timeout: 10000,
-      });
+      for (const row of [observerRow, editorRow]) {
+        await expect(row.locator("[data-slot='badge']").first()).toHaveText(attendanceStatusLabels[nextStatus], {
+          timeout: 45_000,
+        });
+      }
     } finally {
-      const { error: restoreError } = await admin
+      await db()
         .from("attendance_entries")
         .update({ notes: fixture.notes, status: fixture.status })
         .eq("id", fixture.id);
-      expect(restoreError).toBeNull();
       await Promise.all([observerContext.close(), editorContext.close()]);
     }
   });

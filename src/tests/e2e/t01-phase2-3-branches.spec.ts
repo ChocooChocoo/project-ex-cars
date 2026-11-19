@@ -17,7 +17,7 @@ import { archiveListedTestVehicles, canCreateTestVehicle, createTestVehicle } fr
 // T01 branches for §2 (onsite visit) and §3 (Meet Halfway) that the main specs do not walk:
 // a rejection frees the slot, an onsite decline, the 5-hour cancellation cut-off, no-shows leading to
 // the GCE-Visit-only restriction, and a Not Legit decline. Time-based rules are reached by backdating
-// the meet-up through the service role; every flow step itself goes through the UI.
+// the meet-up through the Laravel test fixtures; every flow step itself goes through the UI.
 
 async function backdateMeetup(transactionId: string, when: Date) {
   await db()
@@ -40,7 +40,7 @@ test.describe
   .serial("T01 onsite and halfway branches", () => {
     test.skip(
       !seedPassword || !canCreateTestVehicle(),
-      "SEED_USER_PASSWORD and the Supabase service role are required",
+      "SEED_USER_PASSWORD and the Laravel test fixtures (e2e:fixture) are required",
     );
     // A click that cannot land fails in a minute instead of holding the run until the test timeout.
     test.use({ actionTimeout: 60_000 });

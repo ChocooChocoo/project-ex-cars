@@ -13,52 +13,38 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { createServerSupabase } from "@/lib/supabase/server";
 
-export async function Phase6Overview() {
-  const supabase = await createServerSupabase();
-  const today = new Date().toISOString().slice(0, 10);
+export interface OperationsCounts {
+  attendanceToday: number;
+  pendingRequests: number;
+  pendingRuns: number;
+  openCases: number;
+  activeDisbursements: number;
+  publishedAnnouncements: number;
+  availableInventory: number;
+  pendingApprovals: number;
+  soldVehicles: number;
+  verifiedRevenueCents: number;
+}
 
-  const [
-    { count: attendanceToday },
-    { count: pendingRequests },
-    { count: pendingRuns },
-    { count: openCases },
-    { count: activeDisbursements },
-    { count: publishedAnnouncements },
-    { count: availableInventory },
-    { count: pendingApprovals },
-    { count: soldVehicles },
-    { data: revenueRows },
-  ] = await Promise.all([
-    supabase.from("attendance_entries").select("id", { count: "exact", head: true }).eq("attendance_date", today),
-    supabase.from("employee_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
-    supabase
-      .from("payroll_runs")
-      .select("id", { count: "exact", head: true })
-      .in("status", ["draft", "pending_approval", "approved"]),
-    supabase.from("field_cases").select("id", { count: "exact", head: true }).neq("state", "completed"),
-    supabase
-      .from("disbursement_requests")
-      .select("id", { count: "exact", head: true })
-      .in("status", ["submitted", "approved", "released", "received"]),
-    supabase.from("announcements").select("id", { count: "exact", head: true }).eq("status", "published"),
-    supabase.from("vehicles").select("id", { count: "exact", head: true }).eq("listing_state", "available"),
-    supabase.from("reports").select("id", { count: "exact", head: true }).eq("status", "submitted"),
-    supabase.from("transactions").select("id", { count: "exact", head: true }).eq("current_state", "completed"),
-    supabase
-      .from("financial_entries")
-      .select("amount_cents")
-      .eq("entry_kind", "revenue")
-      .not("verified_by", "is", null),
-  ]);
-
-  const totalRevenueCents = (revenueRows ?? []).reduce((sum, row) => sum + Number(row.amount_cents ?? 0), 0);
+export function Phase6Overview({ counts }: { readonly counts: OperationsCounts }) {
+  const {
+    attendanceToday,
+    pendingRequests,
+    pendingRuns,
+    openCases,
+    activeDisbursements,
+    publishedAnnouncements,
+    availableInventory,
+    pendingApprovals,
+    soldVehicles,
+  } = counts;
+  const totalRevenueCents = counts.verifiedRevenueCents;
 
   const metrics = [
     {
       label: "Completed Sales",
-      value: soldVehicles ?? 0,
+      value: soldVehicles,
       icon: ShoppingCart,
       href: "/dashboard/transactions?state=completed",
     },
@@ -70,49 +56,49 @@ export async function Phase6Overview() {
     },
     {
       label: "Available Inventory",
-      value: availableInventory ?? 0,
+      value: availableInventory,
       icon: Car,
       href: "/dashboard/vehicles",
     },
     {
       label: "Pending Report Approvals",
-      value: pendingApprovals ?? 0,
+      value: pendingApprovals,
       icon: Stamp,
       href: "/dashboard/reports",
     },
     {
       label: "Attendance Today",
-      value: attendanceToday ?? 0,
+      value: attendanceToday,
       icon: CalendarClock,
       href: "/dashboard/attendance",
     },
     {
       label: "Pending Requests",
-      value: pendingRequests ?? 0,
+      value: pendingRequests,
       icon: Users,
       href: "/dashboard/employee-requests",
     },
     {
       label: "Active Payroll Runs",
-      value: pendingRuns ?? 0,
+      value: pendingRuns,
       icon: BriefcaseBusiness,
       href: "/dashboard/payroll",
     },
     {
       label: "Open Field Cases",
-      value: openCases ?? 0,
+      value: openCases,
       icon: FileCheck2,
       href: "/dashboard/field-cases",
     },
     {
       label: "Active Disbursements",
-      value: activeDisbursements ?? 0,
+      value: activeDisbursements,
       icon: Banknote,
       href: "/dashboard/finance",
     },
     {
       label: "Published Announcements",
-      value: publishedAnnouncements ?? 0,
+      value: publishedAnnouncements,
       icon: Megaphone,
       href: "/dashboard/announcements",
     },

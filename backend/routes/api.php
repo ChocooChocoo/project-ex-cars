@@ -18,9 +18,21 @@ use App\Enums\Role;
 use App\Http\Controllers\Field\FieldCaseActionController;
 use App\Http\Controllers\Field\FieldReadController;
 use App\Http\Controllers\Messaging\InquiryWorkflowController;
+use App\Http\Controllers\Staff\AdminController;
+use App\Http\Controllers\Staff\AnnouncementController;
+use App\Http\Controllers\Staff\AttendanceController;
+use App\Http\Controllers\Staff\DashboardController;
+use App\Http\Controllers\Staff\EmployeeRequestController;
+use App\Http\Controllers\Staff\PayrollController;
+use App\Http\Controllers\Staff\ReportController;
+use App\Http\Controllers\Staff\RoadmapController;
+use App\Http\Controllers\Staff\SecurityDutyController;
+use App\Http\Controllers\Staff\StaffRecordController;
 use App\Http\Controllers\ThumbnailController;
 use App\Http\Controllers\Finance\CheckoutController;
+use App\Http\Controllers\Finance\FieldBudgetController;
 use App\Http\Controllers\Finance\FinanceController;
+use App\Http\Controllers\Finance\FinanceReadController;
 use App\Http\Controllers\Finance\FinancingTermsController;
 use App\Http\Controllers\Finance\PaymentController;
 use App\Http\Controllers\Finance\PayMongoWebhookController;
@@ -117,6 +129,17 @@ Route::prefix('v1')->group(function () {
         Route::post('admin/accounts/walk-in', [AccountAdminController::class, 'storeWalkIn'])->middleware('role:account_manager,ceo');
         Route::post('admin/accounts/employee', [AccountAdminController::class, 'storeEmployee'])->middleware('role:ceo,account_manager');
         Route::post('admin/roles', [AccountAdminController::class, 'assignRole'])->middleware('role:ceo,super_admin');
+        Route::post('admin/account-state', [StaffRecordController::class, 'accountState'])->middleware('role:ceo,account_manager,super_admin');
+        // Administration (Phase 7): accounts, RBAC catalogue and settings. Super Admin is allowed here, never on business data.
+        Route::get('admin/users', [AdminController::class, 'users'])->middleware('role:ceo,account_manager,super_admin');
+        Route::middleware('role:ceo,super_admin')->group(function () {
+            Route::get('admin/rbac', [AdminController::class, 'rbac']);
+            Route::post('admin/rbac/roles', [AdminController::class, 'createRole']);
+            Route::post('admin/rbac/roles/update', [AdminController::class, 'updateRole']);
+            Route::post('admin/rbac/permissions', [AdminController::class, 'createPermission']);
+            Route::get('admin/settings', [AdminController::class, 'settings']);
+            Route::post('admin/settings/financing-markup', [AdminController::class, 'updateMarkup']);
+        });
 
         // Trading, scheduling and field workflows (Phase 5). One POST per former Server Action; each
         // controller method re-checks the exact role and record rule of the action it replaces.
@@ -152,6 +175,61 @@ Route::prefix('v1')->group(function () {
 
         Route::middleware('role:'.implode(',', Role::STAFF))->prefix('staff')->group(function () {
             Route::get('field-workers', [StaffTradingReadController::class, 'fieldWorkers']);
+
+            Route::get('dashboard', [DashboardController::class, 'index']);
+            Route::get('insights', [DashboardController::class, 'insights'])->middleware('role:ceo,account_manager,sales_manager');
+            // Staff operations (Phase 7). Each service re-checks the role rule of the Postgres function it replaces.
+            Route::get('attendance', [AttendanceController::class, 'index']);
+            Route::get('attendance/state', [AttendanceController::class, 'state']);
+            Route::post('attendance/clock-in', [AttendanceController::class, 'clockIn'])->middleware('throttle:20,1');
+            Route::post('attendance/clock-out', [AttendanceController::class, 'clockOut'])->middleware('throttle:20,1');
+            Route::post('attendance/review', [AttendanceController::class, 'review'])->middleware('role:ceo,account_manager,head_accountant');
+            Route::get('employee-requests', [EmployeeRequestController::class, 'index']);
+            Route::post('employee-requests', [EmployeeRequestController::class, 'submit'])->middleware('throttle:20,1');
+            Route::post('employee-requests/cancel', [EmployeeRequestController::class, 'cancel']);
+            Route::post('employee-requests/review', [EmployeeRequestController::class, 'review'])->middleware('role:ceo,account_manager');
+            Route::middleware('role:ceo,account_manager,head_accountant')->group(function () {
+                Route::get('payroll', [PayrollController::class, 'index']);
+                Route::get('payroll/runs/{id}', [PayrollController::class, 'runDetail']);
+                Route::post('payroll/compensation', [PayrollController::class, 'saveCompensation']);
+                Route::post('payroll/runs', [PayrollController::class, 'createRun']);
+                Route::post('payroll/runs/review', [PayrollController::class, 'review']);
+                Route::post('payroll/runs/finalize', [PayrollController::class, 'finalize']);
+                Route::post('payroll/payslip-items', [PayrollController::class, 'addItem']);
+                Route::post('payroll/payslips/mark-paid', [PayrollController::class, 'markPaid']);
+                Route::post('payroll/payslips/drilldown', [PayrollController::class, 'drilldown']);
+            });
+            Route::get('payslips', [PayrollController::class, 'payslips']);
+            Route::get('payslips/{id}', [PayrollController::class, 'payslip']);
+            Route::middleware('role:ceo,head_accountant,account_manager')->group(function () {
+                Route::get('reports', [ReportController::class, 'index']);
+                Route::post('reports', [ReportController::class, 'submit']);
+                Route::post('reports/review', [ReportController::class, 'review']);
+            });
+            Route::get('announcements', [AnnouncementController::class, 'index']);
+            Route::middleware('role:ceo')->group(function () {
+                Route::post('announcements', [AnnouncementController::class, 'create']);
+                Route::post('announcements/{status}', [AnnouncementController::class, 'setStatus'])->whereIn('status', ['published', 'expired', 'archived']);
+            });
+            Route::get('security-duty-checks', [SecurityDutyController::class, 'index'])->middleware('role:ceo,head_security');
+            Route::middleware('role:head_security')->group(function () {
+                Route::post('security-duty-checks', [SecurityDutyController::class, 'start']);
+                Route::post('security-duty-checks/evidence', [SecurityDutyController::class, 'upload'])->middleware('throttle:30,1');
+                Route::post('security-duty-checks/complete', [SecurityDutyController::class, 'complete']);
+            });
+            Route::middleware('role:ceo,account_manager,sales_manager')->group(function () {
+                Route::get('roadmap', [RoadmapController::class, 'index']);
+                Route::get('roadmap/{id}', [RoadmapController::class, 'show']);
+            });
+            Route::middleware('role:ceo')->group(function () {
+                Route::post('roadmap', [RoadmapController::class, 'create']);
+                Route::post('roadmap/update', [RoadmapController::class, 'update']);
+                Route::delete('roadmap/{id}', [RoadmapController::class, 'destroy']);
+            });
+            Route::get('staff-records', [StaffRecordController::class, 'index'])->middleware('role:ceo,account_manager,sales_manager');
+            Route::post('staff-records/save', [StaffRecordController::class, 'save']);
+            Route::post('staff-records/performance-reviews', [StaffRecordController::class, 'submitReview']);
+            Route::post('staff-records/performance-reviews/update', [StaffRecordController::class, 'updateReview']);
             Route::get('vehicle-papers', [PapersReadController::class, 'index'])->middleware('role:confidential_informant,ceo');
             Route::get('transactions', [StaffTradingReadController::class, 'index'])->middleware('role:'.implode(',', Role::TRANSACTION_VIEWERS));
             Route::get('transactions/{id}', [StaffTradingReadController::class, 'show'])->middleware('role:'.implode(',', Role::TRANSACTION_VIEWERS));
@@ -199,6 +277,11 @@ Route::prefix('v1')->group(function () {
             foreach (['recordEntry', 'verifyEntry', 'createDisbursement', 'requestPurchaseFunds', 'recordSellerPaid', 'advance', 'markExpenseReimbursed'] as $action) {
                 Route::post('finance/'.Str::kebab($action), [FinanceController::class, $action]);
             }
+            Route::get('finance', [FinanceReadController::class, 'finance'])->middleware('role:ceo,head_accountant,account_manager,confidential_informant');
+            Route::get('financing', [FinanceReadController::class, 'financing'])->middleware('role:ceo,head_accountant');
+            Route::post('field-budget/request', [FieldBudgetController::class, 'request']);
+            Route::post('field-budget/return', [FieldBudgetController::class, 'recordReturn']);
+            Route::post('field-budget/confirm-return', [FieldBudgetController::class, 'confirmReturn']);
             Route::post('reconditioning/request-funds', [ReconditioningController::class, 'requestFunds']);
             Route::post('reconditioning/refund-returned', [ReconditioningController::class, 'markRefundReturned']);
             Route::post('trading/vehicle-recovered', [FinancingVisitController::class, 'recordVehicleRecovered']);

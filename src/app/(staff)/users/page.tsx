@@ -1,46 +1,46 @@
-import { redirect } from "next/navigation";
+"use client";
 
 import { format } from "date-fns";
 
-import { getCurrentRole } from "@/lib/auth/server-session";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { useRequireRole } from "@/components/auth/session-provider";
+import { PageSkeleton } from "@/components/page-skeleton";
+import { browserApi } from "@/lib/api/client";
+import { usePageData } from "@/lib/api/use-page-data";
+import type { GceRole } from "@/lib/auth/roles";
 
 import { GCE_ROLE_LABELS, mapAccountState, type UserRow } from "./_components/data";
 import { Users } from "./_components/users";
 
-export default async function Page() {
-  const role = await getCurrentRole();
-  if (!role || !["ceo", "account_manager", "super_admin"].includes(role)) {
-    redirect("/unauthorized");
-  }
+const USER_ADMIN_ROLES: GceRole[] = ["ceo", "account_manager", "super_admin"];
 
-  const supabase = await createServerSupabase();
-  const [{ data: profiles }, { data: roles }] = await Promise.all([
-    supabase.from("profiles").select("id, full_name, account_state, created_at"),
-    supabase.rpc("get_all_user_roles"),
-  ]);
+interface AccountRow {
+  id: string;
+  email: string;
+  fullName: string | null;
+  accountState: string;
+  role: string;
+  createdAt: string | null;
+}
 
-  const admin = createAdminClient();
-  const { data: authUsers } = await admin.auth.admin.listUsers();
-  const emailById = new Map((authUsers?.users ?? []).map((u) => [u.id, u.email]));
+export default function Page() {
+  const allowed = useRequireRole(USER_ADMIN_ROLES);
+  // Phase 7: Laravel lists every account with its email, state and active role (was auth.admin.listUsers).
+  const page = usePageData(allowed ? "admin-users" : "admin-users:denied", () =>
+    allowed ? browserApi<{ users: AccountRow[] }>("GET", "/api/v1/admin/users") : Promise.resolve(null),
+  );
+  if (page.error) throw page.error;
+  if (!allowed || !page.data) return <PageSkeleton />;
 
-  const users: UserRow[] = (profiles ?? []).map((profile) => {
-    const roleRecord = (roles as { account_id: string; role: string }[] | null)?.find(
-      (r) => r.account_id === profile.id,
-    );
-    const roleKey = roleRecord?.role ?? "customer";
-    return {
-      email: emailById.get(profile.id) ?? "",
-      joinedDate: profile.created_at ? format(new Date(profile.created_at as string), "dd MMM yyyy, h:mm a") : "",
-      lastActive: 0,
-      name: profile.full_name ?? "Unknown user",
-      role: GCE_ROLE_LABELS[roleKey] ?? roleKey,
-      status: mapAccountState(profile.account_state as string),
-      team: "GCE",
-      workspace: ["GCE"],
-    };
-  });
+  const users: UserRow[] = page.data.users.map((account) => ({
+    email: account.email,
+    joinedDate: account.createdAt ? format(new Date(account.createdAt), "dd MMM yyyy, h:mm a") : "",
+    lastActive: 0,
+    name: account.fullName ?? "Unknown user",
+    role: GCE_ROLE_LABELS[account.role] ?? account.role,
+    status: mapAccountState(account.accountState),
+    team: "GCE",
+    workspace: ["GCE"],
+  }));
 
   return <Users users={users} />;
 }

@@ -14,7 +14,7 @@ use Illuminate\Http\Request;
  */
 class TradingRace extends Command
 {
-    protected $signature = 'trading:race {user} {method} {uri} {payload={}} {--raw : send the payload as the raw request body} {--header=* : extra "Name: value" headers}';
+    protected $signature = 'trading:race {user} {method} {uri} {payload={}} {--raw : send the payload as the raw request body} {--header=* : extra "Name: value" headers} {--now= : frozen clock (ISO-8601), for time-window rules}';
 
     protected $description = 'Test-only: send one API request as a user (concurrency tests).';
 
@@ -24,6 +24,10 @@ class TradingRace extends Command
             $this->error('trading:race only runs in local or testing.');
 
             return self::FAILURE;
+        }
+        if ($now = $this->option('now')) {
+            \Carbon\Carbon::setTestNow($now);
+            \Carbon\CarbonImmutable::setTestNow($now);
         }
         // "guest" sends the request without a session (the PayMongo webhook).
         if ($this->argument('user') !== 'guest') {

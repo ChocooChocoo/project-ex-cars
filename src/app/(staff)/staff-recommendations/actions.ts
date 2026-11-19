@@ -1,7 +1,47 @@
-"use server";
+"use client";
 
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { browserApi } from "@/lib/api/client";
+import { errorMessage } from "@/lib/api/errors";
 import { formatCurrency } from "@/lib/utils";
+
+// Phase 7: the six cards share one Laravel read (GET /staff/insights, CEO/AM/SM) and keep their aggregation here.
+interface InsightRows {
+  vehicles: {
+    id: string;
+    listing_state: string;
+    current_price: number | null;
+    posted_at: string | null;
+    make: string;
+    model: string;
+    body_type: string | null;
+  }[];
+  favourites: { vehicle_id: string }[];
+  inquiries: { vehicle_id: string; created_at: string }[];
+  completedBuys: { id: string; completed_at: string }[];
+  purchases: { transaction_id: string; final_price: number | null }[];
+}
+
+let pending: { at: number; rows: Promise<InsightRows> } | null = null;
+
+// One request for the cards that load together; a later visit reads fresh rows.
+function insights(): Promise<InsightRows> {
+  if (!pending || Date.now() - pending.at > 5_000) {
+    const rows = browserApi<InsightRows>("GET", "/api/v1/staff/insights");
+    pending = { at: Date.now(), rows };
+    rows.catch(() => {
+      pending = null;
+    });
+  }
+  return pending.rows;
+}
+
+async function load(): Promise<{ data: InsightRows } | { error: string }> {
+  try {
+    return { data: await insights() };
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
+}
 
 const FOUR_WEEKS_MS = 4 * 7 * 24 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -65,26 +105,17 @@ function formatCount(value: number) {
 const ALLOCATION_COLORS = ["var(--chart-2)", "var(--chart-4)", "var(--chart-1)", "var(--chart-3)"] as const;
 
 export async function getRecommendationKpis(): Promise<ActionResult<KpiStat[]>> {
-  const supabase = await createServerSupabaseClient();
+  const loaded = await load();
+  if ("error" in loaded) return { success: false, error: loaded.error };
+  const rows = loaded.data;
 
-  const { data: vehicles, error: vehicleError } = await supabase
-    .from("vehicles")
-    .select("id, listing_state, current_price, posted_at");
-  if (vehicleError) return { success: false, error: vehicleError.message };
+  const vehicles = rows.vehicles;
 
-  const { data: favourites, error: favouriteError } = await supabase.from("favourites").select("vehicle_id");
-  if (favouriteError) return { success: false, error: favouriteError.message };
+  const favourites = rows.favourites;
 
-  const { data: inquiries, error: inquiryError } = await supabase.from("inquiries").select("vehicle_id");
-  if (inquiryError) return { success: false, error: inquiryError.message };
+  const inquiries = rows.inquiries;
 
-  const { data: completedBuys, error: buysError } = await supabase
-    .from("transactions")
-    .select("completed_at")
-    .eq("transaction_kind", "buy")
-    .eq("current_state", "completed")
-    .not("completed_at", "is", null);
-  if (buysError) return { success: false, error: buysError.message };
+  const completedBuys = rows.completedBuys;
 
   const vehicleList = vehicles ?? [];
   const favouriteList = favourites ?? [];
@@ -169,20 +200,13 @@ export async function getRecommendationKpis(): Promise<ActionResult<KpiStat[]>> 
 }
 
 export async function getSalesOverview(): Promise<ActionResult<SalesOverviewPoint[]>> {
-  const supabase = await createServerSupabaseClient();
+  const loaded = await load();
+  if ("error" in loaded) return { success: false, error: loaded.error };
+  const rows = loaded.data;
 
-  const { data: buys, error: buysError } = await supabase
-    .from("transactions")
-    .select("id, completed_at")
-    .eq("transaction_kind", "buy")
-    .eq("current_state", "completed")
-    .not("completed_at", "is", null);
-  if (buysError) return { success: false, error: buysError.message };
+  const buys = rows.completedBuys;
 
-  const { data: purchases, error: purchasesError } = await supabase
-    .from("purchase_details")
-    .select("transaction_id, final_price");
-  if (purchasesError) return { success: false, error: purchasesError.message };
+  const purchases = rows.purchases;
 
   const priceByTransactionId = new Map<string, number>(
     (purchases ?? []).map((p) => [p.transaction_id, Number(p.final_price) || 0]),
@@ -226,16 +250,15 @@ export async function getSalesOverview(): Promise<ActionResult<SalesOverviewPoin
 export async function getTopVehicles(): Promise<
   ActionResult<{ categories: TopVehicleCategory[]; summary: number; products: TopVehicleProduct[] }>
 > {
-  const supabase = await createServerSupabaseClient();
+  const loaded = await load();
+  if ("error" in loaded) return { success: false, error: loaded.error };
+  const rows = loaded.data;
 
-  const { data: vehicles, error: vehicleError } = await supabase.from("vehicles").select("id, make, model, body_type");
-  if (vehicleError) return { success: false, error: vehicleError.message };
+  const vehicles = rows.vehicles;
 
-  const { data: favourites, error: favouriteError } = await supabase.from("favourites").select("vehicle_id");
-  if (favouriteError) return { success: false, error: favouriteError.message };
+  const favourites = rows.favourites;
 
-  const { data: inquiries, error: inquiryError } = await supabase.from("inquiries").select("vehicle_id");
-  if (inquiryError) return { success: false, error: inquiryError.message };
+  const inquiries = rows.inquiries;
 
   const vehicleById = new Map((vehicles ?? []).map((v) => [v.id, v]));
   const demandByVehicleId = new Map<string, number>();
@@ -288,10 +311,11 @@ export async function getTopVehicles(): Promise<
 export async function getInventoryStatus(): Promise<
   ActionResult<{ available: number; reserved: number; sold: number }>
 > {
-  const supabase = await createServerSupabaseClient();
+  const loaded = await load();
+  if ("error" in loaded) return { success: false, error: loaded.error };
+  const rows = loaded.data;
 
-  const { data, error } = await supabase.from("vehicles").select("listing_state");
-  if (error) return { success: false, error: error.message };
+  const data = rows.vehicles;
 
   let available = 0;
   let reserved = 0;
@@ -306,13 +330,13 @@ export async function getInventoryStatus(): Promise<
 }
 
 export async function getInventoryAllocation(): Promise<ActionResult<AllocationItem[]>> {
-  const supabase = await createServerSupabaseClient();
+  const loaded = await load();
+  if ("error" in loaded) return { success: false, error: loaded.error };
+  const rows = loaded.data;
 
-  const { data: vehicles, error } = await supabase
-    .from("vehicles")
-    .select("body_type, current_price")
-    .not("body_type", "is", null);
-  if (error) return { success: false, error: error.message };
+  const vehicles = rows.vehicles.filter(
+    (vehicle): vehicle is InsightRows["vehicles"][number] & { body_type: string } => vehicle.body_type !== null,
+  );
 
   const valueByBodyType = new Map<string, number>();
   for (const vehicle of vehicles ?? []) {
@@ -340,18 +364,13 @@ export async function getInventoryAllocation(): Promise<ActionResult<AllocationI
 export async function getMarketActivity(): Promise<
   ActionResult<{ points: MarketActivityPoint[]; weekStart: number; weekEnd: number }>
 > {
-  const supabase = await createServerSupabaseClient();
+  const loaded = await load();
+  if ("error" in loaded) return { success: false, error: loaded.error };
+  const rows = loaded.data;
 
-  const { data: inquiries, error: inquiryError } = await supabase.from("inquiries").select("created_at");
-  if (inquiryError) return { success: false, error: inquiryError.message };
+  const inquiries = rows.inquiries;
 
-  const { data: buys, error: buysError } = await supabase
-    .from("transactions")
-    .select("completed_at")
-    .eq("transaction_kind", "buy")
-    .eq("current_state", "completed")
-    .not("completed_at", "is", null);
-  if (buysError) return { success: false, error: buysError.message };
+  const buys = rows.completedBuys;
 
   const now = new Date();
   const weekStartDate = new Date(now);

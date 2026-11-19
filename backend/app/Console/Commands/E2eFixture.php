@@ -41,6 +41,8 @@ class E2eFixture extends Command
             'record-delivery-payments' => $this->recordPayments($tx(), ['delivery_fee', 'downpayment'], 'paymongo'),
             'record-financing-downpayment' => $this->recordFinancingDownpayment($tx()),
             'record-verified-payment' => $this->recordVerifiedPayment($tx(), (float) $this->argument('extra')),
+            'mark-financing-paid' => $this->markFinancingPaid($tx()),
+            'query' => $this->line(json_encode(['data' => $this->query(json_decode(base64_decode(strtr((string) $arg, '-_', '+/')), true, 32, JSON_THROW_ON_ERROR))])),
             default => throw new \InvalidArgumentException('Unknown fixture action.'),
         };
 
@@ -97,5 +99,81 @@ class E2eFixture extends Command
             'verified_by' => $tx->customer_id, 'settlement_date' => now()->toDateString(), 'payment_kind' => 'downpayment', 'created_at' => now(),
         ]);
         DB::table('transactions')->where('id', $tx->id)->update(['flow_status' => 'initial_dp_confirmed', 'updated_at' => now()]);
+    }
+
+    /** Closes a financing plan as fully paid (moves the clock past every installment; Phase 6 owns the real flow). */
+    private function markFinancingPaid(object $tx): void
+    {
+        $account = DB::table('installment_accounts')->where('purchase_transaction_id', $tx->id)->value('id') ?? throw new \RuntimeException('Financing account not found.');
+        $today = now('Asia/Manila')->toDateString();
+        DB::table('installments')->where('account_id', $account)->update(['state' => 'paid', 'payment_date' => $today]);
+        DB::table('installment_accounts')->where('id', $account)->update(['state' => 'closed', 'closed_date' => $today]);
+        DB::table('payment_terms')->where('purchase_transaction_id', $tx->id)->update(['state' => 'completed']);
+        DB::table('transactions')->where('id', $tx->id)->update(['flow_status' => 'financing_completed']);
+    }
+
+    /** Child tables the specs embed, with their key back to the parent row (PostgREST-style `child(cols)`). */
+    private const EMBEDS = ['transactions.purchase_details' => 'transaction_id', 'installment_accounts.installments' => 'account_id'];
+
+    /**
+     * Test-only read/update for the specs' assertions and clock moves (was the Supabase service-role client in
+     * src/tests/e2e/support/t01.ts db()). Spec: {table, select, filters: [[op, column, value]], order, limit, update, single}.
+     * Identifiers are checked against the schema; values are bound.
+     */
+    private function query(array $spec): mixed
+    {
+        $name = fn (mixed $id) => is_string($id) && preg_match('/^[a-z_]+$/', $id) ? $id : throw new \InvalidArgumentException('Bad identifier.');
+        $table = $name($spec['table'] ?? null);
+        abort_unless(\Illuminate\Support\Facades\Schema::hasTable($table), 422, 'Unknown table.');
+        $query = DB::table($table);
+        foreach ($spec['filters'] ?? [] as [$op, $column, $value]) {
+            match ($op) {
+                'eq' => $query->where($name($column), $value),
+                'neq' => $query->where($name($column), '!=', $value),
+                'in' => $query->whereIn($name($column), (array) $value),
+                'is' => $value === null ? $query->whereNull($name($column)) : $query->where($name($column), $value),
+                'notnull' => $query->whereNotNull($name($column)),
+                default => throw new \InvalidArgumentException('Bad filter.'),
+            };
+        }
+        if (isset($spec['update'])) {
+            $values = [];
+            foreach ($spec['update'] as $column => $value) {
+                $values[$name($column)] = $value;
+            }
+
+            return $query->update($values);
+        }
+        if (isset($spec['order'])) {
+            $query->orderBy($name($spec['order'][0]), ($spec['order'][1] ?? true) ? 'asc' : 'desc');
+        }
+        if (isset($spec['limit'])) {
+            $query->limit((int) $spec['limit']);
+        }
+        // "a, b, child(c, d)": plain columns plus one level of embedded children.
+        $columns = [];
+        $embeds = [];
+        preg_match_all('/([a-z_*]+)(?:\(([^)]*)\))?/', (string) ($spec['select'] ?? '*'), $parts, PREG_SET_ORDER);
+        foreach ($parts as $part) {
+            if (isset($part[2])) {
+                $embeds[$name($part[1])] = array_map('trim', explode(',', $part[2]));
+            } else {
+                $columns[] = $part[1] === '*' ? '*' : $name($part[1]);
+            }
+        }
+        $rows = $query->get($columns ?: ['*'])->map(fn ($r) => (array) $r);
+        foreach ($embeds as $child => $childColumns) {
+            $key = self::EMBEDS["{$table}.{$child}"] ?? throw new \InvalidArgumentException('Unknown embed.');
+            $rows = $rows->map(function ($row) use ($child, $childColumns, $key, $table, $name) {
+                $parentId = $row['id'] ?? DB::table($table)->where('id', $row['id'] ?? null)->value('id');
+                $children = DB::table($child)->where($key, $parentId)->get(array_map($name, $childColumns))->map(fn ($c) => (array) $c);
+                // purchase_details is one row per transaction: PostgREST returned it as an object.
+                $row[$child] = $child === 'purchase_details' ? $children->first() : $children->all();
+
+                return $row;
+            });
+        }
+
+        return ($spec['single'] ?? false) ? $rows->first() : $rows->all();
     }
 }
