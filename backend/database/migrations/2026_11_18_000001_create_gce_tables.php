@@ -189,7 +189,9 @@ return new class extends Migration
             $table->dateTime('returned_at', 6)->nullable();
             $table->uuid('return_confirmed_by')->nullable();
             $table->dateTime('return_confirmed_at', 6)->nullable();
-            $table->uuid('uq_live_field_case_id')->nullable()->virtualAs("IF(field_case_id IS NOT NULL AND status <> 'rejected', field_case_id, NULL)")->invisible();
+            // RTRIM: MariaDB refuses to index a generated column that returns a CHAR column as-is (its value depends on
+            // PAD_CHAR_TO_FULL_LENGTH). UUIDs never end in spaces, so RTRIM changes nothing on MySQL or MariaDB.
+            $table->uuid('uq_live_field_case_id')->nullable()->virtualAs("IF(field_case_id IS NOT NULL AND status <> 'rejected', RTRIM(field_case_id), NULL)")->invisible();
             $table->primary(['id']);
             $table->unique(['uq_live_field_case_id'], 'disbursement_requests_one_live_field_budget');
         });
@@ -485,7 +487,7 @@ return new class extends Migration
             $table->uuid('approved_by')->nullable();
             $table->dateTime('approved_at', 6)->nullable();
             $table->smallInteger('part_no')->default(1);
-            $table->uuid('uq_live_installment_id')->nullable()->virtualAs("IF(installment_id IS NOT NULL AND rejected_at IS NULL, installment_id, NULL)")->invisible();
+            $table->uuid('uq_live_installment_id')->nullable()->virtualAs("IF(installment_id IS NOT NULL AND rejected_at IS NULL, RTRIM(installment_id), NULL)")->invisible();
             $table->string('uq_once_kind')->nullable()->virtualAs("IF(installment_id IS NULL AND rejected_at IS NULL AND payment_kind <> 'reschedule_fee', payment_kind, NULL)")->invisible();
             $table->primary(['id']);
             $table->unique(['transaction_id', 'uq_live_installment_id'], 'payment_records_live_installment_unique');
@@ -772,7 +774,7 @@ return new class extends Migration
             $table->dateTime('created_at', 6)->useCurrent();
             $table->bigInteger('refund_due_cents')->default(0);
             $table->dateTime('refunded_at', 6)->nullable();
-            $table->uuid('uq_open_vehicle_id')->nullable()->virtualAs("IF(state <> 'completed', vehicle_id, NULL)")->invisible();
+            $table->uuid('uq_open_vehicle_id')->nullable()->virtualAs("IF(state <> 'completed', RTRIM(vehicle_id), NULL)")->invisible();
             $table->primary(['id']);
             $table->unique(['uq_open_vehicle_id'], 'reconditioning_jobs_one_open_per_vehicle');
         });
@@ -944,7 +946,7 @@ return new class extends Migration
             $table->string('flag')->nullable();
             $table->dateTime('review_due_at', 6)->nullable();
             $table->string('queue_state')->nullable();
-            $table->uuid('uq_active_vehicle_id')->nullable()->virtualAs("IF(queue_state = 'active', vehicle_id, NULL)")->invisible();
+            $table->uuid('uq_active_vehicle_id')->nullable()->virtualAs("IF(queue_state = 'active', RTRIM(vehicle_id), NULL)")->invisible();
             $table->primary(['id']);
             $table->unique(['uq_active_vehicle_id'], 'transactions_one_active_buyer_per_vehicle');
         });
@@ -1001,7 +1003,7 @@ return new class extends Migration
             $table->string('proposal_kind')->default('selling_price');
             $table->uuid('transaction_id')->nullable();
             $table->text('decision_notes')->nullable();
-            $table->uuid('uq_pending_vehicle_id')->nullable()->virtualAs("IF(decision = 'pending', vehicle_id, NULL)")->invisible();
+            $table->uuid('uq_pending_vehicle_id')->nullable()->virtualAs("IF(decision = 'pending', RTRIM(vehicle_id), NULL)")->invisible();
             $table->primary(['id']);
             $table->unique(['uq_pending_vehicle_id', 'proposal_kind'], 'vehicle_price_proposals_one_pending_per_kind');
         });
@@ -1052,7 +1054,7 @@ return new class extends Migration
             $table->text('notes')->nullable();
             $table->dateTime('created_at', 6)->useCurrent();
             $table->uuid('vehicle_id');
-            $table->uuid('uq_slot_vehicle_id')->nullable()->virtualAs("IF(confirmation_state IN ('pending', 'confirmed') AND arrangement_kind = 'gce_visit', vehicle_id, NULL)")->invisible();
+            $table->uuid('uq_slot_vehicle_id')->nullable()->virtualAs("IF(confirmation_state IN ('pending', 'confirmed') AND arrangement_kind = 'gce_visit', RTRIM(vehicle_id), NULL)")->invisible();
             $table->primary(['id']);
             $table->unique(['uq_slot_vehicle_id', 'schedule'], 'viewing_arrangements_gce_visit_slot_lock');
         });
@@ -1066,7 +1068,7 @@ return new class extends Migration
         DB::statement('CREATE INDEX customer_reviews_created_idx ON customer_reviews (`created_at` DESC)');
         DB::statement('CREATE INDEX customer_reviews_vehicle_idx ON customer_reviews (`vehicle_id`)');
         DB::statement('CREATE INDEX idx_employee_request_attachments_request ON employee_request_attachments (`request_id`)');
-        DB::statement('CREATE INDEX idx_employee_requests_approved_leave_lookup ON employee_requests (employee_id, start_date, (COALESCE(end_date, start_date)))');
+        DB::statement('CREATE INDEX idx_employee_requests_approved_leave_lookup ON employee_requests (employee_id, start_date)'); // MariaDB has no functional indexes; COALESCE(end_date, ...) part dropped
         DB::statement('CREATE INDEX idx_favourites_customer ON favourites (`customer_id`)');
         DB::statement('CREATE INDEX idx_field_case_expenses_case ON field_case_expenses (`field_case_id`)');
         DB::statement('CREATE INDEX idx_field_case_expenses_unreimbursed ON field_case_expenses (`field_case_id`)');

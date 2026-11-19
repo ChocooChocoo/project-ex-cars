@@ -20,8 +20,8 @@ return new class extends Migration
 
     public function down(): void
     {
-        DB::statement('ALTER TABLE sell_details DROP CHECK sell_details_meetup_lat_check');
-        DB::statement('ALTER TABLE sell_details DROP CHECK sell_details_meetup_lng_check');
+        DB::statement('ALTER TABLE sell_details DROP CONSTRAINT sell_details_meetup_lat_check');
+        DB::statement('ALTER TABLE sell_details DROP CONSTRAINT sell_details_meetup_lng_check');
         Schema::table('sell_details', fn (Blueprint $table) => $table->dropColumn(['meetup_lat', 'meetup_lng']));
     }
 };

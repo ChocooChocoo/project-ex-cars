@@ -9,14 +9,14 @@ return new class extends Migration
 {
     public function up(): void
     {
-        DB::statement('ALTER TABLE transaction_documents DROP CHECK transaction_documents_auto_check_status_check');
+        DB::statement('ALTER TABLE transaction_documents DROP CONSTRAINT transaction_documents_auto_check_status_check');
         DB::statement("ALTER TABLE transaction_documents ADD CONSTRAINT transaction_documents_auto_check_status_check CHECK ((auto_check_status IN ('pending', 'verified', 'failed', 'manual_review')))");
     }
 
     public function down(): void
     {
         DB::table('transaction_documents')->where('auto_check_status', 'pending')->update(['auto_check_status' => 'manual_review']);
-        DB::statement('ALTER TABLE transaction_documents DROP CHECK transaction_documents_auto_check_status_check');
+        DB::statement('ALTER TABLE transaction_documents DROP CONSTRAINT transaction_documents_auto_check_status_check');
         DB::statement("ALTER TABLE transaction_documents ADD CONSTRAINT transaction_documents_auto_check_status_check CHECK ((auto_check_status IN ('verified', 'failed', 'manual_review')))");
     }
 };

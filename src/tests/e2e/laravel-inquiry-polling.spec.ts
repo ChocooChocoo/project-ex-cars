@@ -42,6 +42,13 @@ async function sharedThreadId(customer: Page): Promise<string> {
 async function openThread(page: Page, path: string) {
   await page.goto(path);
   await page.waitForLoadState("networkidle");
+  // Freshly seeded staff see the onboarding tour, a modal that hides the thread from role queries.
+  const skip = page.getByRole("button", { name: /^skip/i });
+  await skip
+    .first()
+    .waitFor({ timeout: 5_000 })
+    .then(() => skip.first().click())
+    .catch(() => undefined);
   await expect(page.getByPlaceholder("Type a message...", { exact: true })).toBeVisible({ timeout: 30_000 });
 }
 

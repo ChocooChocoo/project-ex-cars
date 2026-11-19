@@ -120,7 +120,9 @@ for (const t of tables) {
   }
   for (const [col, , expr] of conditionalUnique[name] ?? []) {
     const type = col === "uq_once_kind" ? "string" : "uuid";
-    body += `            $table->${type}('${col}')->nullable()->virtualAs("${expr}")->invisible();\n`;
+    // RTRIM: MariaDB will not index a generated column that returns a CHAR column as-is.
+    const vexpr = type === "uuid" ? expr.replace(/, (\w+), NULL\)$/, ", RTRIM($1), NULL)") : expr;
+    body += `            $table->${type}('${col}')->nullable()->virtualAs("${vexpr}")->invisible();\n`;
   }
   const pk = consOf(t, "p")[0];
   body += `            $table->primary([${keyCols(pk.def).map((c) => `'${c}'`).join(", ")}]);\n`;
@@ -141,7 +143,7 @@ for (const i of idx) {
     continue;
   }
   const expr = colsExpr.includes("COALESCE")
-    ? colsExpr.replace(/COALESCE\(end_date, start_date\)/, "(COALESCE(end_date, start_date))")
+    ? colsExpr.replace(/, COALESCE\(end_date, start_date\)/, "") // MariaDB has no functional indexes
     : colsExpr.split(", ").map((p) => p.replace(/^(\w+)/, "`$1`")).join(", ");
   body += `        DB::statement('CREATE INDEX ${iname} ON ${i.t} (${expr})');\n`;
   if (where) skippedIdx.push(`${i.t}.${iname}: partial predicate${where} dropped (plain index)`);
@@ -187,7 +189,7 @@ const toMysql = (def) =>
     .replace(/(\w+) <> ALL \(ARRAY\[(.*?)\]\)/g, "$1 NOT IN ($2)")
     .replace(/btrim\(/g, "TRIM(")
     .replace(/length\(TRIM\(BOTH FROM (\w+)\)\)/g, "CHAR_LENGTH(TRIM($1))")
-    .replace(/(\w+) ~ ('[^']*')/g, "REGEXP_LIKE($1, $2)")
+    .replace(/(\w+) ~ ('[^']*')/g, "($1 REGEXP $2)") // MariaDB rejects REGEXP_LIKE in CHECK
     .replace(/\brank\b/g, "`rank`");
 let chk = "";
 let chkDown = "";
@@ -198,7 +200,7 @@ for (const k of cons.filter((x) => x.type === "c")) {
   if (/cardinality|<@/.test(k.def)) { skippedChecks.push(`${k.t}.${k.name}: ${k.def} (array check; enforce JSON shape in app)`); continue; }
   const sql = toMysql(k.def).replace(/'/g, "\\'");
   chk += `        DB::statement('ALTER TABLE ${k.t} ADD CONSTRAINT ${k.name} ${sql}');\n`;
-  chkDown += `        DB::statement('ALTER TABLE ${k.t} DROP CHECK ${k.name}');\n`;
+  chkDown += `        DB::statement('ALTER TABLE ${k.t} DROP CONSTRAINT ${k.name}');\n`;
 }
 writeFileSync(`${out}/2026_11_18_000003_add_gce_check_constraints.php`, php(chk.trimEnd(), chkDown.trimEnd()));
 

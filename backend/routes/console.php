@@ -12,4 +12,6 @@ Artisan::command('inspire', function () {
 Artisan::command('trading:deadlines', function () {
     $this->info(\App\Services\Trading\Deadlines::notify().' notice(s) sent.');
 })->purpose('Send trading deadline notices once per lapse');
-\Illuminate\Support\Facades\Schedule::command('trading:deadlines')->hourly()->withoutOverlapping();
+// Hostinger disables proc_open, so Schedule::command (which spawns a process) fails there; run in-process instead.
+\Illuminate\Support\Facades\Schedule::call(fn () => \App\Services\Trading\Deadlines::notify())
+    ->name('trading:deadlines')->hourly()->withoutOverlapping();
