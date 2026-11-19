@@ -1,5 +1,6 @@
 import { type Browser, expect, type Page, test } from "@playwright/test";
 
+import { execSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -7,7 +8,13 @@ import { resolve } from "node:path";
 const seedPassword = process.env.SEED_USER_PASSWORD ?? "";
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 // Local Laravel writes mail to its log (MAIL_MAILER=log); the reset test reads the emailed link there.
+// Against a remote Laravel (staging), set E2E_MAIL_LOG_CMD to a command that prints that server's log, e.g.
+// `ssh -p 65002 user@host cat gce-api/storage/logs/laravel.log`.
 const mailLog = resolve(process.cwd(), "backend/storage/logs/laravel.log");
+const mailLogCmd = process.env.E2E_MAIL_LOG_CMD;
+const hasMailLog = () => Boolean(mailLogCmd) || existsSync(mailLog);
+const readMailLog = () =>
+  mailLogCmd ? execSync(mailLogCmd, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }) : readFileSync(mailLog, "utf8");
 
 async function signIn(page: Page, email: string, password = seedPassword) {
   await page.goto("/auth/v1/login");
@@ -27,7 +34,7 @@ function laravelMe(page: Page) {
 
 /** Request a reset link through the UI and return the link Laravel "emailed" (from the mail log). */
 async function requestResetLink(page: Page, email: string): Promise<string> {
-  const before = existsSync(mailLog) ? readFileSync(mailLog, "utf8").length : 0;
+  const before = hasMailLog() ? readMailLog().length : 0;
   await page.goto("/auth/v1/login");
   await page.getByRole("link", { name: "Forgot your password?" }).click();
   await page.waitForURL(/\/auth\/v1\/forgot-password/);
@@ -39,7 +46,7 @@ async function requestResetLink(page: Page, email: string): Promise<string> {
   let link: string | undefined;
   await expect
     .poll(() => {
-      const fresh = readFileSync(mailLog, "utf8").slice(before).replaceAll("&amp;", "&");
+      const fresh = readMailLog().slice(before).replaceAll("&amp;", "&");
       link = fresh.match(/https?:\/\/[^\s"<>)\]]+\/auth\/v1\/reset-password\?token=[^\s"<>)\]]+/)?.[0];
       return link;
     })
@@ -59,7 +66,7 @@ async function setNewPassword(page: Page, path: string, password: string) {
 
 test.describe("password reset through the app's screens", () => {
   test.skip(!seedPassword, "SEED_USER_PASSWORD required");
-  test.skip(!existsSync(mailLog), "needs a local Laravel writing mail to backend/storage/logs/laravel.log");
+  test.skip(!hasMailLog(), "needs Laravel mail in backend/storage/logs/laravel.log or E2E_MAIL_LOG_CMD");
 
   test("forgot password → emailed link → new password → log in with it", async ({ page }) => {
     const email = "head_security@gce.local";

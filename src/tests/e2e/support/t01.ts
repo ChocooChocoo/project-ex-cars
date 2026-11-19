@@ -42,6 +42,23 @@ export async function signInAs(page: Page, email: string) {
   await page
     .waitForURL((url) => !url.pathname.startsWith("/auth/v1/login"), { timeout: 30_000 })
     .catch(() => undefined);
+  await finishOnboarding(page);
+}
+
+// Freshly seeded staff get the onboarding tour, a modal that hides every page from role queries. Mark it done
+// through the same endpoint the tour's Skip button calls, so the specs see the pages they drive.
+export async function finishOnboarding(page: Page) {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+  await page
+    .evaluate(async (url) => {
+      const xsrf = document.cookie.split("; ").find((c) => c.startsWith("XSRF-TOKEN="));
+      await fetch(`${url}/api/v1/me/tutorial`, {
+        method: "POST",
+        credentials: "include",
+        headers: { Accept: "application/json", "X-XSRF-TOKEN": decodeURIComponent(xsrf?.slice(11) ?? "") },
+      });
+    }, apiUrl)
+    .catch(() => undefined);
 }
 
 // Opens a page and waits for hydration, so the first fill or click is not lost.

@@ -8,7 +8,8 @@ use Illuminate\Support\Str;
 
 /**
  * Test data for the Playwright specs (was the Supabase service-role helpers in src/tests/e2e/support). Only moves
- * the clock or stands in for an external payment provider; never performs a flow step. Refused outside local/testing.
+ * the clock or stands in for an external payment provider; never performs a flow step. Refused outside
+ * local/testing/staging (staging holds demo data only; production is never allowed).
  */
 class E2eFixture extends Command
 {
@@ -18,8 +19,8 @@ class E2eFixture extends Command
 
     public function handle(): int
     {
-        if (! app()->environment(['local', 'testing'])) {
-            $this->error('e2e:fixture only runs in local or testing.');
+        if (! app()->environment(['local', 'testing', 'staging'])) {
+            $this->error('e2e:fixture only runs in local, testing or staging.');
 
             return self::FAILURE;
         }

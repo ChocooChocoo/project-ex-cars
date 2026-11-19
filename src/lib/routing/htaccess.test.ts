@@ -11,6 +11,14 @@ describe("buildHtaccess (src/proxy.ts parity for the static build)", () => {
     for (const role of GCE_ROLES) expect(text).toContain(`RewriteRule ^$ ${landingPath(role)}/ [R=302,L]`);
   });
 
+  it("marks the 404 page no-store, so the CDN never serves one user's 404 instead of another's redirect", () => {
+    expect(text).toContain('<Files "404.html">\n  Header always set Cache-Control "no-store"\n</Files>');
+  });
+
+  it("maps segment files before the auth/ exclusion, so login and reset pages get their page data", () => {
+    expect(text.indexOf("(__next\\.")).toBeLessThan(text.indexOf("RewriteRule ^(_next|auth|template|unauthorized)"));
+  });
+
   it("serves role-prefixed paths from the shared folders, like resolveInternalPath", () => {
     expect(text).toContain("RewriteRule ^ceo/dashboard/(.*)$ dashboard/$1 [L]");
     expect(text).toContain("RewriteRule ^ceo/recommendations(.*)$ staff-recommendations$1 [L]");

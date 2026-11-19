@@ -1,6 +1,6 @@
 import { expect as baseExpect, type Page, test } from "@playwright/test";
 
-import { verifyAll } from "./support/t01";
+import { finishOnboarding, verifyAll } from "./support/t01";
 
 // The dev server compiles each route on first use, so a refresh after a server action can take
 // longer than Playwright's default 5 s.
@@ -33,6 +33,7 @@ async function signInAs(page: Page, email: string) {
   await page
     .waitForURL((url) => !url.pathname.startsWith("/auth/v1/login"), { timeout: 15_000 })
     .catch(() => undefined);
+  await finishOnboarding(page);
 }
 
 // Clicks a button and, when it asks "Are you sure", confirms in the dialog (T03 confirmations came after this spec).

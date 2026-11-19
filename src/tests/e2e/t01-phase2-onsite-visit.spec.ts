@@ -2,6 +2,7 @@ import { expect as baseExpect, type Page, test } from "@playwright/test";
 
 import {
   fillSlot,
+  finishOnboarding,
   papersThenSold,
   recordVerifiedPayment,
   uploadBuyerBilling,
@@ -44,6 +45,7 @@ async function signInAs(page: Page, email: string) {
   await page
     .waitForURL((url) => !url.pathname.startsWith("/auth/v1/login"), { timeout: 15_000 })
     .catch(() => undefined);
+  await finishOnboarding(page);
 }
 
 // T03: the transition asks for confirmation first.
