@@ -24,6 +24,12 @@ return [
         'webhook_secret' => env('PAYMONGO_WEBHOOK_SECRET'),
     ],
 
+    // OCR.space auto-check for uploaded OR/CR and IDs (CheckTransactionDocument). Empty provider = manual review.
+    'document_check' => [
+        'orcr' => ['provider' => env('ORCR_VERIFY_PROVIDER'), 'key' => env('ORCR_VERIFY_API_KEY')],
+        'valid_id' => ['provider' => env('ID_VERIFY_PROVIDER'), 'key' => env('ID_VERIFY_API_KEY')],
+    ],
+
     'resend' => [
         'key' => env('RESEND_API_KEY'),
     ],

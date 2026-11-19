@@ -290,21 +290,16 @@ class TransitionTest extends TestCase
         $doc = (string) Str::uuid();
         DB::table('transaction_documents')->insert(['id' => $doc, 'transaction_id' => $id, 'document_kind' => 'valid_id', 'id_type' => 'passport', 'id_side' => 'front',
             'storage_path' => $path, 'uploader_id' => $buyer->id, 'verification_state' => 'pending', 'auto_check_status' => 'pending', 'upload_date' => now()]);
-        putenv('ID_VERIFY_PROVIDER=ocrspace');
-        putenv('ID_VERIFY_API_KEY=test-key');
-        try {
-            Http::fake(['api.ocr.space/*' => Http::sequence()->push(['ParsedResults' => [['ParsedText' => 'REPUBLIC OF THE PHILIPPINES PASAPORTE PASSPORT']]])->push(['ParsedResults' => [['ParsedText' => 'GROCERY RECEIPT']]])]);
-            app()->call([new CheckTransactionDocument($doc, 'valid_id', 'passport'), 'handle']);
-            $this->assertSame('verified', DB::table('transaction_documents')->where('id', $doc)->value('auto_check_status'));
+        // Config, not env(): hosts run config:cache, which leaves env() empty outside config files.
+        config(['services.document_check.valid_id' => ['provider' => 'ocrspace', 'key' => 'test-key']]);
+        Http::fake(['api.ocr.space/*' => Http::sequence()->push(['ParsedResults' => [['ParsedText' => 'REPUBLIC OF THE PHILIPPINES PASAPORTE PASSPORT']]])->push(['ParsedResults' => [['ParsedText' => 'GROCERY RECEIPT']]])]);
+        app()->call([new CheckTransactionDocument($doc, 'valid_id', 'passport'), 'handle']);
+        $this->assertSame('verified', DB::table('transaction_documents')->where('id', $doc)->value('auto_check_status'));
 
-            app()->call([new CheckTransactionDocument($doc, 'valid_id', 'passport'), 'handle']);
-            $this->assertSame('failed', DB::table('transaction_documents')->where('id', $doc)->value('auto_check_status'));
+        app()->call([new CheckTransactionDocument($doc, 'valid_id', 'passport'), 'handle']);
+        $this->assertSame('failed', DB::table('transaction_documents')->where('id', $doc)->value('auto_check_status'));
 
-            (new CheckTransactionDocument($doc, 'valid_id', 'passport'))->failed(new \RuntimeException('timeout'));
-            $this->assertSame('manual_review', DB::table('transaction_documents')->where('id', $doc)->value('auto_check_status'));
-        } finally {
-            putenv('ID_VERIFY_PROVIDER');
-            putenv('ID_VERIFY_API_KEY');
-        }
+        (new CheckTransactionDocument($doc, 'valid_id', 'passport'))->failed(new \RuntimeException('timeout'));
+        $this->assertSame('manual_review', DB::table('transaction_documents')->where('id', $doc)->value('auto_check_status'));
     }
 }

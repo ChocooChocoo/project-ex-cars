@@ -49,8 +49,8 @@ class CheckTransactionDocument implements ShouldQueue
         if (! $document) {
             return;
         }
-        $env = $this->kind === 'orcr' ? ['ORCR_VERIFY_PROVIDER', 'ORCR_VERIFY_API_KEY'] : ['ID_VERIFY_PROVIDER', 'ID_VERIFY_API_KEY'];
-        $provider = trim((string) env($env[0]));
+        $service = config('services.document_check.'.($this->kind === 'orcr' ? 'orcr' : 'valid_id'), []);
+        $provider = trim((string) ($service['provider'] ?? ''));
         if ($provider === '') {
             $this->save('manual_review', null, 'No verification service is set up.');
 
@@ -61,7 +61,7 @@ class CheckTransactionDocument implements ShouldQueue
 
             return;
         }
-        $key = trim((string) env($env[1]));
+        $key = trim((string) ($service['key'] ?? ''));
         if ($key === '') {
             $this->save('manual_review', $provider, 'The verification service did not answer.');
 
