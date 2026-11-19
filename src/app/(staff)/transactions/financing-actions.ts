@@ -2,7 +2,7 @@
 
 // Phase 5: the financing visit decision and the recovered car call Laravel
 // (backend/app/Http/Controllers/Trading/FinancingVisitController.php). Terms, the agreement and the installment
-// account stay on Supabase until Phase 6 (./financing-terms-actions.ts).
+// account call Laravel too (./financing-terms-actions.ts, Phase 6).
 
 import { apiAction } from "@/lib/api/action";
 

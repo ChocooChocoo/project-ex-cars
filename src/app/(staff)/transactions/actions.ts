@@ -3,7 +3,7 @@
 // Phase 5: the staff buy-request actions run in the browser and call Laravel
 // (backend/app/Http/Controllers/Trading/StaffTransactionController.php), which re-checks the role, the record
 // and the state under row locks. Exports, arguments and results are the same as the old Server Actions.
-// Payment recording, verification and waivers stay on Supabase until Phase 6 (./payment-actions.ts).
+// Payment recording, verification and waivers call Laravel too (./payment-actions.ts, Phase 6).
 
 import { apiAction, laravelForm } from "@/lib/api/action";
 

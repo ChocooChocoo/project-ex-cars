@@ -316,7 +316,11 @@ class StaffTransactionController extends Controller
         abort_unless(in_array($this->role($request), ['ceo', 'sales_manager', 'account_manager', 'head_accountant'], true), 403, 'Not authorized');
         $data = $request->validate(['transaction_id' => ['required', 'uuid'], 'document_kind' => ['required', 'in:'.implode(',', self::PAPERWORK_KINDS)]], ['*' => 'Invalid paperwork.']);
         abort_if(in_array($data['document_kind'], ['valid_id', 'proof_of_billing'], true), 422, 'The buyer uploads the valid ID and proof of billing. Staff verify them.');
-        abort_unless(DB::table('transactions')->where('id', $data['transaction_id'])->exists(), 404, 'Transaction not found.');
+        $tx = DB::table('transactions')->where('id', $data['transaction_id'])->first(['transaction_kind', 'current_state']);
+        abort_unless($tx, 404, 'Transaction not found.');
+        // Policy gap 2 (Phase 1 decision: tighten): staff paperwork belongs to a completed purchase, the one place the
+        // transaction page offers it; it can no longer be attached to any other transaction.
+        abort_unless($tx->transaction_kind === 'buy' && $tx->current_state === 'completed', 422, 'Paperwork is recorded on a completed purchase.');
         $file = $request->file('file');
         abort_if($request->has('file') && (! $file || $file->getSize() === 0), 422, 'Select a file to upload.');
         $stored = $file ? $files->store($file, 'transaction-documents', $data['transaction_id']) : null;

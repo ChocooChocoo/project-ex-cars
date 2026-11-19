@@ -19,6 +19,11 @@ use App\Http\Controllers\Field\FieldCaseActionController;
 use App\Http\Controllers\Field\FieldReadController;
 use App\Http\Controllers\Messaging\InquiryWorkflowController;
 use App\Http\Controllers\ThumbnailController;
+use App\Http\Controllers\Finance\CheckoutController;
+use App\Http\Controllers\Finance\FinanceController;
+use App\Http\Controllers\Finance\FinancingTermsController;
+use App\Http\Controllers\Finance\PaymentController;
+use App\Http\Controllers\Finance\PayMongoWebhookController;
 use App\Http\Controllers\Trading\CustomerTradingController;
 use App\Http\Controllers\Trading\CustomerTradingReadController;
 use App\Http\Controllers\Trading\DeliveryController;
@@ -54,6 +59,9 @@ Route::prefix('v1')->group(function () {
     Route::get('files/{bucket}/{path}', [FileController::class, 'show'])->where('path', '.*')
         ->middleware('signed:relative')->name('files.show');
     Route::get('thumbnail', [ThumbnailController::class, 'show'])->middleware('throttle:120,1');
+
+    // PayMongo's webhook (Phase 6): no session; the HMAC signature over the raw body is the credential.
+    Route::post('paymongo/webhook', PayMongoWebhookController::class)->middleware('throttle:120,1');
 
     Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::get('me', [MeController::class, 'show']);
@@ -129,6 +137,9 @@ Route::prefix('v1')->group(function () {
             Route::post('trading/sign-contract', [CustomerTradingController::class, 'signContract']);
             Route::post('trading/cancel', [CustomerTradingController::class, 'cancelTransaction']);
             Route::post('trading/review', [CustomerTradingController::class, 'submitReview']);
+            // Payments (Phase 6).
+            Route::post('payments/checkout', [CheckoutController::class, 'startOnline'])->middleware('throttle:20,1');
+            Route::post('payments/installment-checkout', [CheckoutController::class, 'startInstallment'])->middleware('throttle:20,1');
             Route::post('inquiries', [InquiryWorkflowController::class, 'create']);
         });
         Route::get('field-cases/{id}/location', [FieldCaseActionController::class, 'location'])->middleware('throttle:polling');
@@ -171,6 +182,25 @@ Route::prefix('v1')->group(function () {
                 Route::post('trading/handover/'.Str::kebab($action), [HandoverController::class, $action]);
             }
             Route::post('trading/visit-decision', [FinancingVisitController::class, 'recordVisitDecision']);
+
+            // Payments (Phase 6, payment-actions.ts and payment-review-actions.ts).
+            Route::post('payments/record', [PaymentController::class, 'record']);
+            Route::post('payments/advance', [PaymentController::class, 'recordAdvance']);
+            Route::post('payments/verify', [PaymentController::class, 'verify']);
+            Route::post('payments/waive-installment', [PaymentController::class, 'waive']);
+            Route::post('payments/approve-online', [PaymentController::class, 'approveOnline']);
+            Route::post('payments/reject', [PaymentController::class, 'reject']);
+            // Financing terms (financing-terms-actions.ts).
+            Route::post('financing/propose', [FinancingTermsController::class, 'propose']);
+            Route::post('financing/review', [FinancingTermsController::class, 'review']);
+            Route::post('financing/confirm', [FinancingTermsController::class, 'confirm']);
+            Route::post('financing/complete', [FinancingTermsController::class, 'complete']);
+            // Finance page writes (finance/actions.ts) and reconditioning funds (reconditioning-fund-actions.ts).
+            foreach (['recordEntry', 'verifyEntry', 'createDisbursement', 'requestPurchaseFunds', 'recordSellerPaid', 'advance', 'markExpenseReimbursed'] as $action) {
+                Route::post('finance/'.Str::kebab($action), [FinanceController::class, $action]);
+            }
+            Route::post('reconditioning/request-funds', [ReconditioningController::class, 'requestFunds']);
+            Route::post('reconditioning/refund-returned', [ReconditioningController::class, 'markRefundReturned']);
             Route::post('trading/vehicle-recovered', [FinancingVisitController::class, 'recordVehicleRecovered']);
 
             // Sell offers (sell-actions.ts).

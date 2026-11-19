@@ -3,7 +3,7 @@
 // Phase 5: the customer buy and sell actions run in the browser and call Laravel
 // (backend/app/Http/Controllers/Trading/CustomerTradingController.php and SellIntakeController.php), which
 // checks ownership, states and locks. Exports, arguments and results are the same as the old Server Actions.
-// The PayMongo checkout actions stay on Supabase until Phase 6 (./online-payment-actions.ts).
+// The PayMongo checkout actions call Laravel too (./online-payment-actions.ts, Phase 6).
 
 import { z } from "zod";
 

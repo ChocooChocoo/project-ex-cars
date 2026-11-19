@@ -14,7 +14,7 @@ use Illuminate\Http\Request;
  */
 class TradingRace extends Command
 {
-    protected $signature = 'trading:race {user} {method} {uri} {payload={}}';
+    protected $signature = 'trading:race {user} {method} {uri} {payload={}} {--raw : send the payload as the raw request body} {--header=* : extra "Name: value" headers}';
 
     protected $description = 'Test-only: send one API request as a user (concurrency tests).';
 
@@ -25,10 +25,20 @@ class TradingRace extends Command
 
             return self::FAILURE;
         }
-        $user = User::query()->findOrFail($this->argument('user'));
-        auth()->guard('sanctum')->setUser($user);
-        auth()->shouldUse('sanctum');
-        $request = Request::create($this->argument('uri'), strtoupper($this->argument('method')), json_decode($this->argument('payload'), true) ?? [], server: ['HTTP_ACCEPT' => 'application/json']);
+        // "guest" sends the request without a session (the PayMongo webhook).
+        if ($this->argument('user') !== 'guest') {
+            $user = User::query()->findOrFail($this->argument('user'));
+            auth()->guard('sanctum')->setUser($user);
+            auth()->shouldUse('sanctum');
+        }
+        $server = ['HTTP_ACCEPT' => 'application/json'];
+        foreach ($this->option('header') as $header) {
+            [$name, $value] = array_map('trim', explode(':', $header, 2));
+            $server['HTTP_'.strtoupper(str_replace('-', '_', $name))] = $value;
+        }
+        $raw = $this->option('raw');
+        $request = Request::create($this->argument('uri'), strtoupper($this->argument('method')), $raw ? [] : (json_decode($this->argument('payload'), true) ?? []),
+            server: $server + ($raw ? ['CONTENT_TYPE' => 'application/json'] : []), content: $raw ? $this->argument('payload') : null);
         $response = $kernel->handle($request);
         $this->line((string) $response->getStatusCode());
         if ($response->getStatusCode() >= 500) {

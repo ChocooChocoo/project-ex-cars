@@ -6,14 +6,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { api, revalidate } = vi.hoisted(() => ({ api: vi.fn(), revalidate: vi.fn() }));
 vi.mock("@/lib/api/client", () => ({ browserApi: api }));
 vi.mock("@/lib/api/revalidate", () => ({ revalidatePath: revalidate }));
-// The Phase 6 payment actions are re-exported unchanged from their Supabase files.
+// Phase 6 payment actions are covered by payment-adapters.test.ts; stubbed here.
 vi.mock("@/app/(customer)/my-transactions/online-payment-actions", () => ({
   startOnlinePayment: vi.fn(),
   startInstallmentCheckout: vi.fn(),
 }));
 vi.mock("@/app/(staff)/transactions/payment-actions", () => ({}));
-vi.mock("@/app/(staff)/transactions/financing-terms-actions", () => ({}));
-vi.mock("@/app/(staff)/vehicles/reconditioning-fund-actions", () => ({}));
 
 import * as inquiries from "@/app/(customer)/my-inquiries/server-actions";
 import * as customer from "@/app/(customer)/my-transactions/actions";

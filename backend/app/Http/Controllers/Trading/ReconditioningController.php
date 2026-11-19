@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Trading;
 
 use App\Http\Controllers\Controller;
 use App\Services\FileService;
+use App\Services\Finance\Money;
 use App\Services\Trading\Trading;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -11,8 +12,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
- * Reconditioning workflow (was src/app/(staff)/vehicles/reconditioning-actions.ts). The report creates the
- * fund request (submitted); releasing it, shortfall requests and refund confirmation are Phase 6.
+ * Reconditioning workflow (was src/app/(staff)/vehicles/reconditioning-actions.ts and, from Phase 6,
+ * reconditioning-fund-actions.ts). The report creates the fund request; the Head Accountant releases it from
+ * Finance (FinanceController::advance); a shortfall needs another itemised request with receipts.
  */
 class ReconditioningController extends Controller
 {
@@ -89,7 +91,7 @@ class ReconditioningController extends Controller
                 $job = $this->lockJob($request->input('job_id'));
                 abort_if($job->state !== 'awaiting_report', 409, 'This car is not waiting for a status report.');
                 abort_if($job->mechanic_id && $job->mechanic_id !== $userId, 403, 'Only the assigned Mechanic can report on this car.');
-                $total = (int) array_sum(array_map(fn ($p) => (int) round((float) $p['estimated_cost'] * 100), $parts));
+                $total = (int) array_sum(array_map(fn ($p) => Money::cents($p['estimated_cost']), $parts));
                 $summary = implode(', ', array_map(fn ($p) => trim($p['part_name']).' ('.trim($p['replacement_brand']).')', $parts));
                 foreach ($photos as $photo) {
                     $stored[] = $files->store($photo, 'reconditioning-receipts', "parts/{$job->id}")['path'];
@@ -98,7 +100,7 @@ class ReconditioningController extends Controller
                 foreach (array_values($parts) as $i => $part) {
                     DB::table('reconditioning_parts')->insert([
                         'id' => (string) Str::uuid(), 'job_id' => $job->id, 'part_name' => trim($part['part_name']), 'replacement_brand' => trim($part['replacement_brand']),
-                        'estimated_cost_cents' => (int) round((float) $part['estimated_cost'] * 100), 'photo_path' => $stored[$i], 'created_at' => now(), 'updated_at' => now(),
+                        'estimated_cost_cents' => Money::cents($part['estimated_cost']), 'photo_path' => $stored[$i], 'created_at' => now(), 'updated_at' => now(),
                     ]);
                 }
                 $requestId = (string) Str::uuid();
@@ -184,6 +186,74 @@ class ReconditioningController extends Controller
             $job = $this->lockJob($request->input('job_id'));
             abort_if((bool) $job->papers_processed_at, 409, 'The papers are already re-processed.');
             DB::table('reconditioning_jobs')->where('id', $job->id)->update(['papers_processed_at' => now(), 'papers_processed_by' => $userId]);
+        });
+
+        return response()->json(['success' => true]);
+    }
+
+    /** §6 step 32: a shortfall during the work needs another itemised request with receipt photos. */
+    public function requestFunds(Request $request, FileService $files): JsonResponse
+    {
+        abort_unless($request->user()->hasRole('mechanic'), 403, 'Not authorized for this reconditioning step.');
+        abort_unless(is_numeric($request->input('amount')) && (float) $request->input('amount') > 0, 422, 'Enter the extra amount needed.');
+        $reason = trim((string) $request->input('shortfall_reason'));
+        abort_if(mb_strlen($reason) < 10, 422, 'Explain why the funds ran short.');
+        abort_if(mb_strlen($reason) > 2000, 422, 'Invalid request.');
+        // One photo arrives as `receipts`, several as `receipts[]` (laravelForm).
+        $sent = $request->file('receipts');
+        $receipts = array_values(array_filter(is_array($sent) ? $sent : ($sent ? [$sent] : []), fn ($f) => $f && $f->getSize() > 0));
+        abort_if($receipts === [], 422, 'Attach at least one receipt photo.');
+        foreach ($receipts as $file) {
+            abort_unless(in_array((new \finfo(FILEINFO_MIME_TYPE))->file($file->getRealPath()), ['image/jpeg', 'image/png', 'image/webp'], true), 422, 'Receipts must be JPEG, PNG or WebP photos.');
+            abort_if($file->getSize() > FileService::MAX_BYTES, 422, 'Each receipt must be 2 MB or smaller.');
+        }
+        $cents = Money::cents($request->input('amount'));
+        $userId = $request->user()->id;
+        $stored = [];
+        try {
+            Trading::run(function () use ($request, $files, $receipts, $reason, $cents, $userId, &$stored) {
+                $job = $this->lockJob($request->input('job_id'));
+                abort_if($job->state !== 'in_progress', 409, 'Request extra funds only while repairs are in progress.');
+                abort_if($job->mechanic_id && $job->mechanic_id !== $userId, 403, 'Only the assigned Mechanic can request funds.');
+                foreach ($receipts as $file) {
+                    $stored[] = $files->store($file, 'reconditioning-receipts', $job->id, 'receipts')['path'];
+                }
+                $requestId = (string) Str::uuid();
+                DB::table('disbursement_requests')->insert(['id' => $requestId, 'title' => 'Reconditioning shortfall', 'amount_cents' => $cents,
+                    'purpose' => mb_substr($reason, 0, 200), 'status' => 'submitted', 'requested_by' => $userId, 'created_at' => now(), 'updated_at' => now()]);
+                $fundId = (string) Str::uuid();
+                DB::table('reconditioning_fund_requests')->insert(['id' => $fundId, 'job_id' => $job->id, 'disbursement_id' => $requestId, 'amount_cents' => $cents,
+                    'reason' => 'Reconditioning shortfall', 'shortfall_reason' => $reason, 'state' => 'submitted', 'created_by' => $userId, 'created_at' => now()]);
+                foreach ($stored as $path) {
+                    DB::table('reconditioning_fund_receipts')->insert(['id' => (string) Str::uuid(), 'fund_request_id' => $fundId, 'storage_path' => $path, 'uploaded_by' => $userId, 'created_at' => now()]);
+                }
+                self::notifyRole('head_accountant', 'Reconditioning shortfall', 'The Mechanic needs ₱'.Money::peso($cents)." more. {$reason}", 'transactions', $job->transaction_id);
+            });
+        } catch (\Throwable $e) {
+            foreach ($stored as $path) {
+                $files->delete('reconditioning-receipts', $path);
+            }
+            throw $e;
+        }
+
+        return response()->json(['success' => true]);
+    }
+
+    /** The Mechanic (or the Head Accountant) records the leftover of a completed job returned to GCE. */
+    public function markRefundReturned(Request $request): JsonResponse
+    {
+        $role = (string) $request->user()->role()?->value;
+        abort_unless(in_array($role, ['mechanic', 'head_accountant'], true), 403, 'Not authorized for this reconditioning step.');
+        $userId = $request->user()->id;
+        Trading::run(function () use ($request, $role, $userId) {
+            $job = $this->lockJob($request->input('job_id'));
+            abort_if($job->state !== 'completed', 409, 'This job is not completed.');
+            abort_if($role === 'mechanic' && $job->mechanic_id && $job->mechanic_id !== $userId, 403, 'Only the assigned Mechanic can return the leftover funds.');
+            abort_if((int) $job->refund_due_cents <= 0, 422, 'There is no leftover to return.');
+            abort_if($job->refunded_at, 409, 'The leftover is already marked returned.');
+            DB::table('reconditioning_jobs')->where('id', $job->id)->whereNull('refunded_at')->update(['refunded_at' => now()]);
+            self::notifyRole('head_accountant', 'Reconditioning refund returned',
+                ($role === 'head_accountant' ? 'The Head Accountant' : 'The Mechanic').' recorded ₱'.Money::peso((int) $job->refund_due_cents).' returned to GCE.', 'transactions', $job->transaction_id);
         });
 
         return response()->json(['success' => true]);

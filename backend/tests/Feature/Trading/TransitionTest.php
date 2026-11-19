@@ -281,15 +281,6 @@ class TransitionTest extends TestCase
     }
 
     #[Test]
-    public function money_completion_stays_unavailable_until_phase_6(): void
-    {
-        $ha = $this->account('head_accountant');
-        foreach (['trading/record-payment', 'trading/verify-payment', 'trading/waive-installment', 'finance/release'] as $path) {
-            $this->act($ha)->postJson("/api/v1/staff/{$path}", [])->assertNotFound();
-        }
-    }
-
-    #[Test]
     public function document_check_records_pending_then_the_ocr_result(): void
     {
         $buyer = $this->customer();

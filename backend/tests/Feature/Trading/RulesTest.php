@@ -64,10 +64,18 @@ class RulesTest extends TestCase
         foreach (['valid_id', 'proof_of_billing'] as $kind) {
             $this->act($sm)->postJson('/api/v1/staff/trading/paperwork', ['transaction_id' => $id, 'document_kind' => $kind])->assertStatus(422);
         }
-        $this->act($sm)->post('/api/v1/staff/trading/paperwork', ['transaction_id' => $id, 'document_kind' => 'invoice', 'file' => UploadedFile::fake()->createWithContent('i.pdf', "%PDF-1.4
+        $invoice = fn () => UploadedFile::fake()->createWithContent('i.pdf', "%PDF-1.4
 1 0 obj<<>>endobj
 trailer<<>>
-%%EOF")])->assertOk();
+%%EOF");
+        // Policy gap 2: paperwork only on a completed purchase, never on an open request or a sell offer.
+        $this->act($sm)->post('/api/v1/staff/trading/paperwork', ['transaction_id' => $id, 'document_kind' => 'invoice', 'file' => $invoice()])
+            ->assertStatus(422)->assertJson(['message' => 'Paperwork is recorded on a completed purchase.']);
+        DB::table('transactions')->where('id', $id)->update(['current_state' => 'completed']);
+        $this->act($sm)->post('/api/v1/staff/trading/paperwork', ['transaction_id' => $id, 'document_kind' => 'invoice', 'file' => $invoice()])->assertOk();
+        DB::table('transactions')->where('id', $id)->update(['transaction_kind' => 'sell']);
+        $this->act($this->account('account_manager'))->post('/api/v1/staff/trading/paperwork', ['transaction_id' => $id, 'document_kind' => 'receipt', 'file' => $invoice()])->assertStatus(422);
+        DB::table('transactions')->where('id', $id)->update(['transaction_kind' => 'buy', 'current_state' => 'under_review']);
         $idDoc = DB::table('transaction_documents')->where('transaction_id', $id)->where('document_kind', 'valid_id')->value('id');
         foreach (['ceo', 'account_manager'] as $role) {
             $this->act($this->account($role))->postJson('/api/v1/staff/trading/verify-document', ['document_id' => $idDoc, 'decision' => 'verified'])->assertForbidden();

@@ -1,7 +1,7 @@
 "use client";
 
 // Phase 5: the reconditioning workflow calls Laravel (backend/app/Http/Controllers/Trading/ReconditioningController.php).
-// Shortfall fund requests and refund returns stay on Supabase until Phase 6 (./reconditioning-fund-actions.ts).
+// Shortfall fund requests and refund returns call Laravel too (./reconditioning-fund-actions.ts, Phase 6).
 
 import { apiAction, laravelForm } from "@/lib/api/action";
 

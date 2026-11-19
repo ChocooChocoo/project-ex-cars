@@ -146,14 +146,13 @@ final class BuyRules
     /** Money paid toward the car and confirmed by GCE; fees and rejected payments never count. */
     public static function verifiedTowardPrice(iterable $payments): float
     {
-        return (float) collect($payments)
-            ->filter(fn ($p) => $p->verified_by && ! $p->rejected_at && ! in_array($p->payment_kind, ['delivery_fee', 'reschedule_fee'], true))
-            ->sum(fn ($p) => (float) $p->amount);
+        return \App\Services\Finance\PaymentRules::verifiedTowardPrice($payments) / 100;
     }
 
+    /** Summed in centavos (Money), so many DECIMAL rows add up exactly before the float comparison. */
     public static function verifiedPaid(iterable $payments, string $kind): float
     {
-        return (float) collect($payments)->filter(fn ($p) => $p->payment_kind === $kind && $p->verified_by)->sum(fn ($p) => (float) $p->amount);
+        return \App\Services\Finance\Money::sum(collect($payments)->filter(fn ($p) => $p->payment_kind === $kind && $p->verified_by)) / 100;
     }
 
     public static function upfrontPaymentsCleared(?object $d, iterable $payments): bool
