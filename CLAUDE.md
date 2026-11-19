@@ -15,6 +15,7 @@ npm run generate:presets   # regenerate theme preset metadata into src/lib/prefe
 npm run test               # vitest unit tests, single run (jsdom)
 npm run test:watch         # vitest in watch mode
 npm run test:e2e           # playwright e2e (requires dev server on :3000)
+npx vitest run <path>      # one test file (add -t "name" for one test)
 ```
 
 Tests are configured: Vitest unit tests (`npm run test`, jsdom environment, setup at `src/tests/setup.ts`) and Playwright e2e (`npm run test:e2e`, specs in `src/tests/e2e/`, requires the dev server on :3000). Run `check:fix` before tests; tests are not part of pre-commit.
@@ -83,3 +84,10 @@ Use native Node.js 24, PHP 8.4 with `pdo_mysql`, `intl` and `gd`, Composer 2, an
 Build locally with `NEXT_PUBLIC_API_URL` pointing at the deployed Laravel API. Upload `out/`, including `.htaccess`. The API document root must point only to `backend/public`; keep `storage/` and `bootstrap/cache/` writable and `.env` outside the public root. Set `APP_DEBUG=false` and configure `FRONTEND_URL` and `SANCTUM_STATEFUL_DOMAINS` for the frontend origin. Keep the existing app key on redeploy. Leave Remote MySQL disabled.
 
 On Hostinger, run `composer install --no-dev --optimize-autoloader --no-scripts`, then `php artisan package:discover`, `php artisan migrate --force`, `php artisan config:cache`, and `php artisan route:cache`. Run one-time demo seeding before caching config. One hPanel cron entry runs a shell script every minute: `php artisan schedule:run`, then `php artisan queue:work --stop-when-empty --max-time=50`. Use `Schedule::call`; Hostinger disables `proc_open` and `exec`.
+
+## Working notes
+
+- Task specs live in `docs/tasks/T*.md`. Shared dropdown/option data for the customer forms is in `src/lib/vehicles/catalog.ts` (brands, body types, `SEATS_BY_BODY`, `SELL_CONDITIONS`); zod rules for the sell form are in `src/lib/validation/transactions.ts`, and Laravel validates the same fields in `backend/app/Http/Controllers/Trading/SellIntakeController.php`. Change the catalog, the schema and the controller rules together.
+- Sell Vehicle "Meet Halfway" map (`sell-vehicle/_components/meetup-map.tsx`) uses Leaflet, which needs `window`: load it only through `next/dynamic` with `ssr: false`. `GCE_LOCATION` and `halfwayPoint` are in `src/lib/transactions/sell-flow.ts`; the saved pin is `sell_details.meetup_lat/meetup_lng`.
+- Seeded accounts are `<role>@gce.local` (for example `customer@gce.local`). On the deployed site each account has its own rotated password, kept outside Git on the host. In the dev server, wait for `networkidle` before driving a form with a browser: controls are not hydrated right after navigation.
+- The manual test sheets for the client are single-file HTML pages in `docs/test-sheets/`, published as claude.ai artifacts.
