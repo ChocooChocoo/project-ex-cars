@@ -1,8 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { apiWrite, relaySetCookies, cookieSet, cookieDelete, redirect } = vi.hoisted(() => ({
+const { apiWrite, cookieSet, cookieDelete, redirect } = vi.hoisted(() => ({
   apiWrite: vi.fn(),
-  relaySetCookies: vi.fn(),
   cookieSet: vi.fn(),
   cookieDelete: vi.fn(),
   redirect: vi.fn((path: string) => {
@@ -22,7 +21,6 @@ vi.mock("@/lib/api/client", () => ({
     return Promise.resolve(apiWrite(...args)).then((result: { data?: unknown } | undefined) => result?.data);
   },
 }));
-vi.mock("@/lib/auth/session", () => ({ getSession: vi.fn() }));
 
 import { ApiError } from "@/lib/api/errors";
 

@@ -1,9 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { authorizeAction, apiWrite } = vi.hoisted(() => ({ authorizeAction: vi.fn(), apiWrite: vi.fn() }));
+const { apiWrite } = vi.hoisted(() => ({ apiWrite: vi.fn() }));
 
 vi.mock("@/lib/api/revalidate", () => ({ revalidatePath: vi.fn() }));
-vi.mock("@/lib/auth/action-guard", () => ({ authorizeAction }));
 vi.mock("@/lib/api/client", () => ({
   // Phase 4b: the actions call Laravel from the browser; delegate to the apiWrite mock so the request
   // assertions below stay as they were (trailing undefined arguments dropped).
@@ -12,7 +11,6 @@ vi.mock("@/lib/api/client", () => ({
     return Promise.resolve(apiWrite(...args)).then((result: { data?: unknown } | undefined) => result?.data);
   },
 }));
-vi.mock("@/lib/auth/session", () => ({ getSession: vi.fn() }));
 
 import { ApiError } from "@/lib/api/errors";
 
@@ -28,7 +26,6 @@ function form(values: Record<string, string>) {
 describe("customer email change", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    authorizeAction.mockResolvedValue({ ok: true, data: { userId: "u1", role: "customer" } });
     apiWrite.mockResolvedValue({ status: 200, data: { ok: true, email: "new@example.com" }, setCookies: [] });
   });
 

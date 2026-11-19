@@ -1,8 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { apiWrite, getSession, revalidatePath } = vi.hoisted(() => ({
+const { apiWrite, revalidatePath } = vi.hoisted(() => ({
   apiWrite: vi.fn(),
-  getSession: vi.fn(),
   revalidatePath: vi.fn(),
 }));
 
@@ -15,7 +14,6 @@ vi.mock("@/lib/api/client", () => ({
     return Promise.resolve(apiWrite(...args)).then((result: { data?: unknown } | undefined) => result?.data);
   },
 }));
-vi.mock("@/lib/auth/session", () => ({ getSession }));
 
 import { ApiError } from "@/lib/api/errors";
 
@@ -26,7 +24,6 @@ const input = { fullName: "Walk In", email: "walkin@gce.test", password: "Secret
 describe("createWalkInAccount Task 33", () => {
   beforeEach(() => {
     apiWrite.mockReset().mockResolvedValue({ status: 201, data: { id: "c1" }, setCookies: [] });
-    getSession.mockReset().mockResolvedValue({ id: "am-1", role: "account_manager" });
     revalidatePath.mockReset();
   });
 

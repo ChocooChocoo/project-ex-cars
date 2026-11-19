@@ -1,9 +1,8 @@
 import { GCE_ROLES } from "../auth/roles";
 import { isStaffRole, landingPath, resolveInternalPath } from "./paths";
 
-// Static frontend (Phase 4b): Apache does what src/proxy.ts did on the Node server. Every mapping comes
-// from resolveInternalPath()/landingPath(), so the two cannot drift. The `gce-role` cookie is still only a
-// routing hint; Laravel authorises every request and SessionProvider checks the session in the browser.
+// Apache maps role-prefixed browser URLs to shared static files. The `gce-role` cookie is only a routing
+// hint; Laravel authorises every request and SessionProvider checks the session in the browser.
 
 /** Customer URL segments with their own route (see resolveInternalPath); anything else falls back like it. */
 export const CUSTOMER_SEGMENTS = [

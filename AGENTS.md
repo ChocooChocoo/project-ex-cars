@@ -4,14 +4,12 @@
 
 ```bash
 npm run dev                # dev server on :3000
-npm run build              # next build
-npm run start              # serve the production build
+npm run build:static       # export out/ and generate .htaccess (also npm run build)
 npm run lint               # biome lint (report only)
 npm run format             # biome format --write
 npm run check:fix          # biome lint + format + organize imports (run before committing)
 npm run check              # same, report only
 npm run generate:presets   # regenerate src/lib/preferences/theme.ts from CSS presets
-npm run seed:data          # seed demo data (.env.local required)
 npm run test               # vitest unit tests (jsdom)
 npm run test:watch         # vitest watch mode
 npm run test:e2e           # playwright e2e (requires dev server on :3000)
@@ -21,14 +19,14 @@ Pre-commit hook: `generate:presets` → `git add src/lib/preferences/theme.ts` �
 
 ## Stack
 
-Next.js 16 App Router, React 19 + React Compiler, Tailwind v4 (CSS-first, no config file), shadcn/ui, TypeScript strict, Supabase. Alias `@/*` → `src/*`.
+Next.js 16 App Router, React 19 + React Compiler, Tailwind v4 (CSS-first, no config file), shadcn/ui, TypeScript strict, Laravel 13, and MySQL/MariaDB. Alias `@/*` → `src/*`. Production frontend is an Apache static export, with no Next.js server features.
 
 ## Route groups
 
 - `src/app/(staff)/` — staff dashboard routes (~40 route folders; includes the nested `src/app/(staff)/(legacy)/` group of deprecated v1 dashboard variants, kept for reference only)
 - `src/app/(customer)/` — customer-only shopping portal (showroom, recommendations, inquiries, transactions, favourites, sell-vehicle)
 - `src/app/(external)/` — public landing pages
-- Top-level non-grouped routes: `src/app/auth/` (four auth screens), `src/app/unauthorized/`, and `src/app/template/` (upstream-template design previews — `src/proxy.ts` skips them, so they are publicly reachable; reference only, not GCE product surface)
+- Top-level non-grouped routes: `src/app/auth/`, `src/app/unauthorized/`, and `src/app/template/` (public design previews, not GCE product surface)
 
 Routes are colocated: each route folder owns its `_components/`. Shared UI goes in `src/components/`. `src/components/ui/` is shadcn-generated — excluded from biome, don't hand-format.
 
@@ -51,9 +49,9 @@ Adding a preference touches all four layers + CSS that reads the attribute.
 - Line width 120, double quotes, semicolons, trailing commas
 - `noImportCycles` is an error; `noFloatingPromises`/`noMisusedPromises` are errors
 
-## Supabase
+## Laravel
 
-Real backend with versioned SQL in `supabase/migrations/`. Tables use RLS extensively. Server-side data access through `src/server/server-actions.ts` and server actions colocated as `src/app/**/actions.ts`. `scripts/run-migration.mjs` uses `DATABASE_URL` from `.env.local`. Before destructive changes, back up public/private tables with `node scripts/backup-before-t07.mjs`; backups stay outside Git under `backups/`.
+Laravel owns sessions, authorization, storage, writes and scheduled jobs. Its migrations live in `backend/database/migrations/`; `supabase/migrations/` is historical. Use the browser API adapters and keep private storage outside the public root. See `CLAUDE.md` for local setup and host commands.
 
 ## Tests
 

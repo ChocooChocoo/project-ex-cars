@@ -6,14 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 npm run dev                # dev server on :3000
-npm run build              # next build
-npm run start              # serve the production build
+npm run build:static       # export out/ and generate out/.htaccess (also npm run build)
 npm run lint               # biome lint (report only)
 npm run format             # biome format --write
 npm run check              # biome check (report only)
 npm run check:fix          # biome check --write: lint + format + organize imports (run before committing)
 npm run generate:presets   # regenerate theme preset metadata into src/lib/preferences/theme.ts
-npm run seed:data          # seed demo data (.env.local required)
 npm run test               # vitest unit tests, single run (jsdom)
 npm run test:watch         # vitest in watch mode
 npm run test:e2e           # playwright e2e (requires dev server on :3000)
@@ -25,24 +23,26 @@ Husky `pre-commit` runs `generate:presets`, stages `src/lib/preferences/theme.ts
 
 ## Architecture
 
-Next.js 16 App Router, React 19 + React Compiler (`reactCompiler: true`), Tailwind v4 (CSS-first, no tailwind config file), shadcn/ui, TypeScript strict. Alias `@/*` → `src/*`.
+Next.js 16 App Router, React 19 + React Compiler, Tailwind v4, shadcn/ui, and TypeScript strict. Alias `@/*` → `src/*`. The production frontend is a static export served by Apache on Hostinger Premium. Do not add Next.js Server Actions, route handlers, or pages that render per request.
+
+The browser calls Laravel 13 (`backend/`) using `NEXT_PUBLIC_API_URL`. Laravel controls sessions via Sanctum, permissions via middleware and policies, and all writes to MySQL 8.4 or MariaDB 11.8. Chat and notifications poll Laravel. PayMongo webhooks go to `/api/v1/paymongo/webhook` on the Laravel origin; Laravel also owns verification and reset mail. Versioned schema changes live in `backend/database/migrations/`. `supabase/migrations/` is historical only.
 
 ### Colocation routing
 
-Routes live directly under `src/app` in three groups: `(staff)` (dashboard for eight staff roles plus the restricted Super Admin shell), `(customer)`, and `(external)`, plus top-level `src/app/auth/`, `src/app/template/`, and `src/app/unauthorized/`. Each route folder owns its own `_components/`, and only genuinely shared UI goes to `src/components/`. `src/components/ui/` is shadcn-generated and **excluded from biome**: don't hand-format it, regenerate via shadcn instead. v1 dashboard variants live in a nested group at `src/app/(staff)/(legacy)/`. `/dashboard*` is redirected by `src/proxy.ts` (`next.config.mjs`'s `redirects()` is empty) to role-prefixed paths (`/{role}/…`) resolved by `src/lib/routing/paths.ts` from the `gce-role` cookie set at sign-in. `src/app/template/**` holds upstream-template preview routes that `src/proxy.ts` skips entirely: publicly reachable design references, not part of the GCE product surface. Customer routes and purchase actions reject employee roles; actions use `authorizeAction(["customer"])`, not redirecting page guards.
+Routes live under `src/app`: `(staff)` (eight staff roles plus Super Admin), `(customer)`, `(external)`, and top-level `auth`, `template`, and `unauthorized`. Each route owns its `_components/`; shared UI goes in `src/components/`. Regenerate `src/components/ui/` via shadcn rather than hand-formatting. The `(staff)/(legacy)` and `template` pages are design references.
+
+`src/scripts/generate-htaccess.ts` generates Apache rules for role-prefixed paths (`/{role}/…`) and dynamic detail URLs. Dynamic pages export one `_` shell and read the real ID in the browser. `gce-role` is a routing hint, not authorization; client layouts check `/api/v1/me` and Laravel checks access on every protected request.
 
 ### Preferences system (theme, fonts, layout) — the core non-obvious piece
 
 Every preference is expressed as a `data-*` attribute on `<html>`; CSS reacts to those attributes. Four layers must stay in sync:
 
-1. `src/lib/preferences/preferences-config.ts` — single source of truth: `PreferenceValueMap` (key → type), `PREFERENCE_DEFAULTS`, `PREFERENCE_PERSISTENCE` (per key: `client-cookie` | `server-cookie` | `localStorage` | `none`). Keys in `LAYOUT_CRITICAL_KEYS` (`sidebar_variant`, `sidebar_collapsible`) are type-forbidden from `localStorage` because SSR reads them.
+1. `src/lib/preferences/preferences-config.ts` defines `PreferenceValueMap`, `PREFERENCE_DEFAULTS`, and `PREFERENCE_PERSISTENCE`.
 2. `src/scripts/theme-boot.tsx` — inline `<script>` in `<head>` that reads cookies/localStorage and stamps the `data-*` attributes + `.dark` class before hydration. This is why `src/app/layout.tsx` can render `PREFERENCE_DEFAULTS` statically and stay fully static — no flicker, no per-request rerender.
 3. `src/stores/preferences/` — zustand vanilla store + provider. The provider reads the already-stamped DOM back into the store on mount (`readDomState`) and owns the `system` theme media-query subscription.
 4. `src/lib/preferences/preferences-storage.ts` — `persistPreference(key, value)` dispatches on the configured persistence mode.
 
 A preference change from a UI control does three things: `setX()` on the store, `applyX()` from `theme-utils.ts` / `layout-utils.ts` to write the DOM attribute, and `persistPreference()`. See `theme-switcher.tsx` for the canonical pattern.
-
-Server side, layout-critical prefs are read with `getPreference(key, allowedValues, fallback)` from `src/server/server-actions.ts` (validates against the allowed list) — used in the dashboard layout to pass sidebar `variant`/`collapsible` into `AppSidebar`.
 
 Adding a preference means touching all four layers plus the option list in `layout.ts`/`theme.ts` and the CSS that reads the attribute in `globals.css`.
 
@@ -65,6 +65,21 @@ Adding a preset: create the CSS file (header comment required), `@import` it in 
 - Biome enforces `useFilenamingConvention` (kebab-case), sorted Tailwind classes, no floating/misused promises, no import cycles, and a fixed import group order (react → next → packages → `@/` aliases → relative). Run `npm run check:fix` rather than fighting it manually.
 - Line width 120, double quotes, semicolons, trailing commas, 2-space indent.
 - Prefer real types over `any`; conventional commit prefixes (`feat:`, `fix:`, `chore:`).
-- Data in `src/data/` is mock/demo data — do not treat as production seed. The real backend is Supabase (free plan, project ref `ajpajvvyfjgbppiwodhw`): migrations in `supabase/migrations/` with RLS throughout; server access goes through server actions (`src/app/**/actions.ts`) and `src/server/server-actions.ts`.
-- Uploads are capped at 2 MB: every storage bucket enforces it, and the free plan has 1 GB of storage in total. Run picked files through `compressImage` / `compressFormFiles` (`src/lib/uploads/compress-image.ts`) before upload; it shrinks photos over 2 MB, while PDFs over 2 MB are rejected. Server-side size checks use `MAX_UPLOAD_BYTES` from the same file.
-- Fresh Supabase project: `node scripts/reset-and-migrate.mjs` (drops `public`/`private`, applies every migration), then `node --env-file=.env.local scripts/seed-users.cjs`, run `scripts/seed-roles.sql`, then `SEED_CONFIRM_WIPE=<project ref> npm run seed:data`. The seed's `staff_compensation` step needs the CLI linked (`npx supabase link`).
+- `src/data/` is mock data. The Laravel seeders load demo rows and files from `backend/database/seeders/`.
+- Uploads are limited to 2 MiB per file. Use `compressImage` or `compressFormFiles` from `src/lib/uploads/compress-image.ts` for photos; reject oversized PDFs. Laravel's `App\Services\FileService` checks size and content. Only showroom media and avatars use public storage. Private documents and attachments stay outside the web root and use short-lived signed download URLs.
+
+## Local setup
+
+Use native Node.js 24, PHP 8.4 with `pdo_mysql`, `intl` and `gd`, Composer 2, and MySQL 8.4. Create `gce` for local development and a separate `gce_test` for PHP tests.
+
+1. Run `npm ci` at the repository root. Copy `.env.example` to `.env.local` with `NEXT_PUBLIC_API_URL=http://localhost:8000`.
+2. In `backend/`, run `composer install`. Copy `.env.example` to `.env`, configure MySQL, and run `php artisan key:generate` for this new local environment only.
+3. Set `SEED_USER_PASSWORD` in `backend/.env` to seed demo accounts. Set the same value in `.env.local` only if running the Playwright specs. Never commit either env file.
+4. From `backend/`, run `php artisan migrate --database=mysql_migrations`, `php artisan db:seed`, and `php artisan storage:link`. Use `DB_MIGRATION_*` for a separate schema user; leave both blank if the app user also runs migrations.
+5. Start `php artisan serve --host=localhost` from `backend/` and `npm run dev` from the root. Keep both browser origins on `localhost` for Sanctum. Use `php artisan test` with the isolated test database, and `php artisan schedule:work` and `php artisan queue:work` when testing background work.
+
+## Hostinger
+
+Build locally with `NEXT_PUBLIC_API_URL` pointing at the deployed Laravel API. Upload `out/`, including `.htaccess`. The API document root must point only to `backend/public`; keep `storage/` and `bootstrap/cache/` writable and `.env` outside the public root. Set `APP_DEBUG=false` and configure `FRONTEND_URL` and `SANCTUM_STATEFUL_DOMAINS` for the frontend origin. Keep the existing app key on redeploy. Leave Remote MySQL disabled.
+
+On Hostinger, run `composer install --no-dev --optimize-autoloader --no-scripts`, then `php artisan package:discover`, `php artisan migrate --force`, `php artisan config:cache`, and `php artisan route:cache`. Run one-time demo seeding before caching config. One hPanel cron entry runs a shell script every minute: `php artisan schedule:run`, then `php artisan queue:work --stop-when-empty --max-time=50`. Use `Schedule::call`; Hostinger disables `proc_open` and `exec`.

@@ -1,4 +1,4 @@
-// Writes out/.htaccess after `STATIC_EXPORT=1 next build` (Phase 4b). Run: npm run build:static
+// Writes out/.htaccess after the static export. Run: npm run build:static
 
 import { buildHtaccess } from "../lib/routing/htaccess";
 import { existsSync, readdirSync, statSync, writeFileSync } from "node:fs";

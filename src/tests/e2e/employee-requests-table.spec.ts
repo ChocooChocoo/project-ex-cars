@@ -16,7 +16,7 @@ async function signInAsCeo(page: Page) {
   await page.getByRole("button", { name: "Login", exact: true }).click();
   await page.waitForURL((url) => !url.pathname.startsWith("/auth/v1/login"), { timeout: 15000 });
   await page.goto("/ceo/employee-requests");
-  await expect(page).toHaveURL(/\/ceo\/employee-requests$/);
+  await expect(page).toHaveURL(/\/ceo\/employee-requests\/?$/);
 }
 
 test.describe("CEO employee requests table", () => {

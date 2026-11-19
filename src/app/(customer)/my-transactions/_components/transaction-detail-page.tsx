@@ -26,7 +26,6 @@ export function TransactionDetailPage() {
   if (page.error) throw page.error;
   if (!page.data) return <PageSkeleton />;
 
-  // The profile the buy form starts from, as getProfileAutoFill() read it from the session.
   const autofill: ProfileAutoFill = {
     full_name: me.profile.full_name,
     email: me.email,

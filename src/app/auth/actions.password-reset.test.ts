@@ -18,7 +18,6 @@ vi.mock("@/lib/api/client", () => ({
     return Promise.resolve(apiWrite(...args)).then((result: { data?: unknown } | undefined) => result?.data);
   },
 }));
-vi.mock("@/lib/auth/session", () => ({ getSession: vi.fn() }));
 
 import { ApiError } from "@/lib/api/errors";
 

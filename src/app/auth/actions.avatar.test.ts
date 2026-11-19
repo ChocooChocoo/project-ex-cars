@@ -41,11 +41,15 @@ describe("profile photo actions", () => {
   });
 
   it.each([
-    [null, "Choose a photo to upload."],
-    [photo("image/gif"), "Use a JPG, PNG or WebP photo."],
-    [photo("image/png", 2 * 1024 * 1024 + 1), "The photo must be 2 MB or smaller."],
-  ])("rejects %s before calling Laravel", async (file, error) => {
-    expect(await updateOwnAvatar(form(file))).toEqual({ error });
+    { name: "a missing file", file: () => null, error: "Choose a photo to upload." },
+    { name: "a GIF", file: () => photo("image/gif"), error: "Use a JPG, PNG or WebP photo." },
+    {
+      name: "a file larger than 2 MiB",
+      file: () => photo("image/png", 2 * 1024 * 1024 + 1),
+      error: "The photo must be 2 MB or smaller.",
+    },
+  ])("rejects $name before calling Laravel", async ({ file, error }) => {
+    expect(await updateOwnAvatar(form(file()))).toEqual({ error });
     expect(apiWrite).not.toHaveBeenCalled();
   });
 
@@ -58,7 +62,7 @@ describe("profile photo actions", () => {
 
   it("removes the photo", async () => {
     expect(await removeOwnAvatar()).toEqual({ success: true });
-    expect(apiWrite).toHaveBeenCalledWith("DELETE", "/api/v1/me/avatar", undefined);
+    expect(apiWrite).toHaveBeenCalledWith("DELETE", "/api/v1/me/avatar");
   });
 
   it("reports a signed-out session", async () => {

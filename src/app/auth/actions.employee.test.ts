@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { apiWrite, getSession } = vi.hoisted(() => ({ apiWrite: vi.fn(), getSession: vi.fn() }));
+const { apiWrite } = vi.hoisted(() => ({ apiWrite: vi.fn() }));
 
 vi.mock("@/lib/api/revalidate", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/api/client", () => ({
@@ -11,7 +11,6 @@ vi.mock("@/lib/api/client", () => ({
     return Promise.resolve(apiWrite(...args)).then((result: { data?: unknown } | undefined) => result?.data);
   },
 }));
-vi.mock("@/lib/auth/session", () => ({ getSession }));
 
 import { ApiError } from "@/lib/api/errors";
 
@@ -24,7 +23,6 @@ const input = { fullName: "New Hire", email: "hire@gce.test", password: "Secret#
 describe("createEmployeeAccount (T04 E6)", () => {
   beforeEach(() => {
     apiWrite.mockReset().mockResolvedValue({ status: 201, data: { id: "u1" }, setCookies: [] });
-    getSession.mockReset().mockResolvedValue({ id: "am-1", role: "account_manager" });
   });
 
   it("asks Laravel to create the account with the chosen role and no actor field", async () => {

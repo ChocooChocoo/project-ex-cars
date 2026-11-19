@@ -15,10 +15,10 @@ async function signIn(page: Page, email: string) {
   await page.getByLabel("Email Address", { exact: true }).fill(email);
   await page.getByLabel("Password", { exact: true }).fill(getSeedPassword());
   await page.getByRole("button", { name: "Login", exact: true }).click();
-  await page.waitForURL((url) => !url.pathname.startsWith("/auth/v1/login"), { timeout: 15000 }).catch(() => undefined);
+  await page.waitForURL((url) => !url.pathname.startsWith("/auth/v1/login"), { timeout: 30000 });
   await page.goto(SECURITY_DUTY_PATH);
   const rolePath = email === "head_security@gce.local" ? "/head_security/security-duty-checks" : SECURITY_DUTY_PATH;
-  await expect(page).toHaveURL(new RegExp(`${rolePath.replaceAll("/", "\\/")}$`));
+  await expect(page).toHaveURL((url) => url.pathname.replace(/\/$/, "") === rolePath);
   await expect(page.getByRole("heading", { name: "Security Duty Checks", exact: true })).toBeVisible();
 }
 
@@ -80,14 +80,19 @@ test.describe("security duty checks views", () => {
     }
   });
 
-  test("CEO is read-only while Head Security receives duty actions", async ({ page }) => {
+  test("CEO is read-only while Head Security receives duty actions", async ({ browser, page }) => {
     await signIn(page, "ceo@gce.local");
     await expect(page.getByRole("button", { name: "Start Check", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: /Choose .* evidence/ })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Complete Check", exact: true })).toHaveCount(0);
 
-    await signIn(page, "head_security@gce.local");
-    await expect(page.getByRole("button", { name: "Start Check", exact: true })).toBeVisible();
-    await expect(page.getByRole("radiogroup", { name: "Duty check view", exact: true })).toBeVisible();
+    const securityPage = await browser.newPage({ baseURL: new URL(page.url()).origin });
+    try {
+      await signIn(securityPage, "head_security@gce.local");
+      await expect(securityPage.getByRole("button", { name: "Start Check", exact: true })).toBeVisible();
+      await expect(securityPage.getByRole("radiogroup", { name: "Duty check view", exact: true })).toBeVisible();
+    } finally {
+      await securityPage.close();
+    }
   });
 });

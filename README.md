@@ -1,12 +1,12 @@
 # Global Car Exchange (GCE)
 
-A role-based vehicle marketplace platform: a customer shopping experience and a staff dashboard covering sales, inspections, inquiries, transactions, payroll, finance records, field operations, and management reporting. Built on Next.js 16 and Supabase.
+A role-based vehicle marketplace with a customer portal and a staff dashboard, built on Next.js 16, Laravel 13, and MySQL/MariaDB.
 
 ## Portals
 
 | Portal | Route group | Who | Notes |
 |---|---|---|---|
-| Staff dashboard | `src/app/(staff)/` | CEO, Account Manager, Head Accountant, Confidential Informant, Marketing Specialist, Mechanic, Sales Manager, Head Security | Role-prefixed URLs (`/ceo/…`, `/mechanic/…`) are rewritten by `src/proxy.ts` onto shared pages; access is filtered by `ROLE_NAV_ACCESS` in `src/lib/auth/roles.ts`, page-level role checks, action allowlists, and Supabase RLS |
+| Staff dashboard | `src/app/(staff)/` | Eight staff roles and Super Admin | Apache maps role-prefixed URLs (`/ceo/…`, `/mechanic/…`) to shared static pages. Laravel enforces access. |
 | Customer portal | `src/app/(customer)/` | Customer | Showroom, Find Your Car (recommendations), inquiries chat, buy/sell transactions, favourites, sell-vehicle |
 | Public/auth | `src/app/(external)/`, `src/app/auth/`, `src/app/unauthorized/` | — | The app is login-first; four auth screens under `/auth/v1` and `/auth/v2`; `src/app/template/**` holds publicly reachable upstream-template design previews that are not part of the product surface |
 
@@ -14,74 +14,24 @@ A role-based vehicle marketplace platform: a customer shopping experience and a 
 
 - **Framework:** Next.js 16 (App Router), React 19 + React Compiler, TypeScript strict
 - **UI:** Tailwind CSS v4 (CSS-first), shadcn/ui
-- **Backend:** Supabase (Postgres with row-level security, Auth, Storage, Realtime) — versioned SQL in `supabase/migrations/`
+- **Backend:** Laravel 13 with Sanctum sessions, MySQL/MariaDB, and private file storage. See `backend/database/migrations/`.
 - **State/forms:** Zustand, React Hook Form, Zod validation
 - **Tooling:** Biome, Husky, Vitest, Playwright
 
 ## Getting Started
 
-### Prerequisites
-
-- Node.js and npm
-- A Supabase project (local or hosted) and the [Supabase CLI](https://supabase.com/docs/guides/cli) linked for migration pushes
-
-### Setup
-
-```bash
-npm install
-```
-
-Configure `.env.local` (git-ignored) with:
-
-```
-NEXT_PUBLIC_SUPABASE_URL=<your project url>
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<your anon/publishable key>
-# Optional, server-only: needed for admin seeding and some e2e specs
-SUPABASE_SERVICE_ROLE_KEY=<service role key>
-# Shared password for the seeded test accounts — quote it so trailing '#' is not treated as a comment
-SEED_USER_PASSWORD="..."
-```
-
-Apply migrations and seed:
-
-```bash
-npx supabase db push            # or: npx supabase migration up
-npm run seed:data               # demo data via scripts/seed-data.cjs
-node --env-file=.env.local scripts/seed-users.cjs   # creates the ten test accounts (Admin API)
-npx supabase db query --linked --file scripts/seed-roles.sql   # assigns their roles
-```
-
-### Email confirmation links
-
-Set `NEXT_PUBLIC_SITE_URL` to the deployed origin and, in the hosted Supabase dashboard, set the same **Site URL** plus these **Redirect URLs**:
-
-```
-https://<deployed-origin>/auth/callback
-https://<deployed-origin>/auth/confirm
-http://localhost:3000/auth/callback
-http://localhost:3000/auth/confirm
-```
-
-The confirmation template in `supabase/templates/confirmation.html` links to `/auth/confirm?token_hash=…`, so a Gmail link works even when it opens in a different browser. Hosted Supabase projects must paste the same template into **Authentication → Email Templates → Confirm signup** (local config alone does not change the hosted project).
-
-Run the app:
-
-```bash
-npm run dev    # http://localhost:3000
-```
-
-Seeded accounts (e.g. `ceo@gce.local`, `customer@gce.local`) are defined in `scripts/seed-users.cjs`. Staff cannot use the customer showroom to buy cars.
+Follow [Local setup](CLAUDE.md#local-setup) for Node.js, PHP, Composer and MySQL. Run Next.js on `localhost:3000` and Laravel on `localhost:8000`. The Laravel demo seed accounts are defined in `backend/database/seeders/UserSeeder.php`.
 
 ## Commands
 
 | Command | What it does |
 |---|---|
 | `npm run dev` | Dev server on :3000 |
-| `npm run build` / `npm run start` | Production build / serve |
+| `npm run build` / `npm run build:static` | Build the Apache static export in `out/` |
 | `npm run lint` / `npm run format` | Biome lint / format |
 | `npm run check` / `npm run check:fix` | Biome check, report only / autofix (run before committing) |
 | `npm run generate:presets` | Regenerate theme preset metadata in `src/lib/preferences/theme.ts` |
-| `npm run seed:data` | Seed demo data |
+| `php artisan db:seed` (in `backend/`) | Load demo rows and files |
 | `npm run test` / `npm run test:watch` | Vitest unit tests (jsdom), single run / watch mode |
 | `npm run test:e2e` | Playwright e2e (requires dev server on :3000) |
 
@@ -89,7 +39,7 @@ Husky pre-commit runs `generate:presets`, stages `src/lib/preferences/theme.ts`,
 
 ## Architecture in one paragraph
 
-Routes live directly under `src/app` in three groups (`(staff)`, `(customer)`, `(external)`) plus top-level `auth/`, `template/`, and `unauthorized/`; each route folder owns its `_components/`. Middleware resolves the signed-in role from the `gce-role` cookie and rewrites role-prefixed URLs onto shared internal pages (`src/lib/routing/paths.ts`). Authorization is layered: navigation filtering (`ROLE_NAV_ACCESS`), per-page role checks, non-redirecting customer action gates through `authorizeAction`, and Postgres RLS across all public tables. Data access runs through server actions and `src/server/server-actions.ts`; `src/data/` contains mock/demo content only.
+Next.js exports React pages and Apache serves them without Node.js. The browser reads and writes data through Laravel, which owns authorization, payments, files, and scheduled jobs. Chat and notifications use polling. `src/data/` contains mock content only.
 
 ## Documentation
 

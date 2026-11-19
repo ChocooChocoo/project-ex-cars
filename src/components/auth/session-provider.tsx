@@ -14,8 +14,7 @@ import type { GceRole } from "@/lib/auth/roles";
 const SessionContext = createContext<Me | null>(null);
 
 /**
- * Client replacement for the server layouts' session check (and src/proxy.ts's login redirect): loads
- * /api/v1/me once, sends a signed-out or inactive user to login, and renders children only when signed in.
+ * Loads /api/v1/me, redirects signed-out or inactive users to login, and renders children only when signed in.
  * Laravel still authorises every request; this only decides what to show.
  */
 export function SessionProvider({
@@ -62,7 +61,7 @@ export function useSession(): Me {
   return me;
 }
 
-/** Client form of requireRole(): sends other roles to /unauthorized. Returns whether the page may render. */
+/** Sends other roles to /unauthorized. Returns whether the page may render. */
 export function useRequireRole(allowed: readonly GceRole[]): boolean {
   const me = useSession();
   const router = useRouter();
