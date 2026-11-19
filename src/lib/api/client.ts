@@ -10,8 +10,7 @@ function readXsrf(): string | null {
   return match ? decodeURIComponent(match.slice(XSRF_COOKIE.length + 1)) : null;
 }
 
-async function ensureCsrf(): Promise<void> {
-  if (readXsrf()) return;
+async function refreshCsrf(): Promise<void> {
   await fetch(`${apiBaseUrl()}/sanctum/csrf-cookie`, { credentials: "include" });
 }
 
@@ -19,8 +18,9 @@ export async function browserApi<T>(
   method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
   path: string,
   body?: unknown,
+  retried = false,
 ): Promise<T> {
-  if (method !== "GET") await ensureCsrf();
+  if (method !== "GET" && !readXsrf()) await refreshCsrf();
   const headers: Record<string, string> = { Accept: "application/json", "X-Requested-With": "XMLHttpRequest" };
   const xsrf = readXsrf();
   if (xsrf && method !== "GET") headers["X-XSRF-TOKEN"] = xsrf;
@@ -38,6 +38,11 @@ export async function browserApi<T>(
     });
   } catch {
     throw new ApiError(0, { message: "Laravel API unreachable" });
+  }
+  // A leftover XSRF cookie whose server session is gone gets 419: fetch a fresh token and retry once.
+  if (response.status === 419 && method !== "GET" && !retried) {
+    await refreshCsrf();
+    return browserApi<T>(method, path, body, true);
   }
   const text = await response.text();
   const data = text ? JSON.parse(text) : null;
