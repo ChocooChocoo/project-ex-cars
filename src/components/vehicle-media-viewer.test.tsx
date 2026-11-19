@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { type VehicleMediaItem, VehicleMediaViewer } from "./vehicle-media-viewer";
+import { frameAt, type VehicleMediaItem, VehicleMediaViewer } from "./vehicle-media-viewer";
 
 const item = (id: string, media_kind: VehicleMediaItem["media_kind"], display_order = 0): VehicleMediaItem => ({
   id,
@@ -55,5 +55,32 @@ describe("VehicleMediaViewer", () => {
 
     expect(imageSrcs()[0]).toContain("veh/i1.jpg");
     expect(screen.queryByRole("button", { name: "Interior" })).not.toBeInTheDocument();
+  });
+
+  it("mounts every 360 frame up front so rotating never waits on a download", () => {
+    const spin = [0, 1, 2, 3].map((n) => item(`s${n}`, "360_view", n));
+    render(<VehicleMediaViewer media={spin} />);
+
+    const srcs = imageSrcs();
+    expect(srcs).toHaveLength(4);
+    for (const n of [0, 1, 2, 3]) expect(srcs.some((src) => src.includes(`veh/s${n}.jpg`))).toBe(true);
+  });
+});
+
+describe("frameAt", () => {
+  it("snaps to the nearest whole frame, with no blend between frames", () => {
+    expect(frameAt(2, 8)).toBe(2);
+    expect(frameAt(2.4, 8)).toBe(2);
+    expect(frameAt(2.6, 8)).toBe(3);
+  });
+
+  it("wraps from the last frame back to the first", () => {
+    expect(frameAt(7.6, 8)).toBe(0);
+    expect(frameAt(17, 8)).toBe(1);
+  });
+
+  it("handles rotating backwards past zero", () => {
+    expect(frameAt(-1, 8)).toBe(7);
+    expect(frameAt(-0.6, 8)).toBe(7);
   });
 });
