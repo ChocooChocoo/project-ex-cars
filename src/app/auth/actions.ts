@@ -53,6 +53,10 @@ export async function signIn(formData: FormData) {
     });
     me = result.data;
   } catch (error) {
+    // The form offers a new verification link for this one case.
+    if (error instanceof ApiError && error.code === "email_not_verified") {
+      return { error: errorMessage(error), code: error.code };
+    }
     return { error: errorMessage(error) };
   }
 
@@ -204,16 +208,13 @@ export async function updateOwnProfile(formData: FormData): Promise<{ error: str
 
 // Forgot password: Laravel emails a link to /auth/v1/reset-password. The answer is the same whether or
 // not the email has an account, so the form cannot be used to find out who is registered.
-export async function requestPasswordReset(formData: FormData): Promise<{ error: string } | { notice: string }> {
-  const parsed = emailSchema.safeParse(
-    String(formData.get("email") ?? "")
-      .trim()
-      .toLowerCase(),
-  );
+/** POSTs `{ email }` to a Laravel endpoint that emails a link and answers with a neutral notice. */
+async function requestEmailLink(path: string, rawEmail: string): Promise<{ error: string } | { notice: string }> {
+  const parsed = emailSchema.safeParse(rawEmail.trim().toLowerCase());
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Please enter a valid email address." };
 
   try {
-    const result = await apiWrite<{ notice: string }>("POST", "/api/v1/auth/password/forgot", { email: parsed.data });
+    const result = await apiWrite<{ notice: string }>("POST", path, { email: parsed.data });
     return { notice: result.data.notice };
   } catch (error) {
     if (error instanceof ApiError && error.code === "rate_limited") {
@@ -221,6 +222,14 @@ export async function requestPasswordReset(formData: FormData): Promise<{ error:
     }
     return { error: errorMessage(error) };
   }
+}
+
+export async function requestPasswordReset(formData: FormData): Promise<{ error: string } | { notice: string }> {
+  return requestEmailLink("/api/v1/auth/password/forgot", String(formData.get("email") ?? ""));
+}
+
+export async function resendVerificationEmail(email: string): Promise<{ error: string } | { notice: string }> {
+  return requestEmailLink("/api/v1/auth/email/resend", email);
 }
 
 const resetPasswordSchema = z

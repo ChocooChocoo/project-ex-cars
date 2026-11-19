@@ -117,7 +117,11 @@ describe("signIn", () => {
       error: "Invalid login credentials",
     });
     apiWrite.mockRejectedValueOnce(new ApiError(403, { code: "email_not_verified", message: "Email not confirmed" }));
-    expect(await signIn(form({ email: "a@b.co", password: "Secret#123" }))).toEqual({ error: "Email not confirmed" });
+    // The code lets the form offer a new verification link.
+    expect(await signIn(form({ email: "a@b.co", password: "Secret#123" }))).toEqual({
+      error: "Email not confirmed",
+      code: "email_not_verified",
+    });
     expect(cookieSet).not.toHaveBeenCalled();
   });
 

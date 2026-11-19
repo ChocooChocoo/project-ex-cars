@@ -7,7 +7,7 @@ import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { signIn } from "@/app/auth/actions";
+import { resendVerificationEmail, signIn } from "@/app/auth/actions";
 import { PasswordInput } from "@/components/password-input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -23,6 +23,18 @@ const formSchema = z.object({
 
 export function LoginForm() {
   const [loading, setLoading] = useState(false);
+  // Set when Laravel refuses the login because the email is not verified yet.
+  const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
+
+  const onResend = async () => {
+    if (!unverifiedEmail) return;
+    setResending(true);
+    const result = await resendVerificationEmail(unverifiedEmail);
+    setResending(false);
+    if ("error" in result) toast.error(result.error);
+    else toast.success(result.notice);
+  };
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -44,7 +56,9 @@ export function LoginForm() {
     const result = await signIn(formData);
 
     if (result?.error) {
-      toast.error(result.error);
+      const unverified = "code" in result && result.code === "email_not_verified";
+      setUnverifiedEmail(unverified ? data.email : null);
+      if (!unverified) toast.error(result.error);
       setLoading(false);
     }
   };
@@ -109,6 +123,14 @@ export function LoginForm() {
           )}
         />
       </FieldGroup>
+      {unverifiedEmail && (
+        <div role="alert" className="rounded-lg border px-3 py-2.5 text-sm">
+          <p>Verify your email before you log in. Open the link we sent to {unverifiedEmail}.</p>
+          <Button type="button" variant="link" className="h-auto p-0 text-sm" disabled={resending} onClick={onResend}>
+            {resending ? "Sending..." : "Resend verification email"}
+          </Button>
+        </div>
+      )}
       <Button className="w-full" type="submit" disabled={loading}>
         {loading ? "Signing in..." : "Login"}
       </Button>
