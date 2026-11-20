@@ -39,6 +39,8 @@ export interface InquiryConversationProps {
   readonly beforeMessages?: ReactNode;
   readonly fillHeight?: boolean;
   readonly onBack?: () => void;
+  /** Notes line 62: the CEO and the Confidential Informant read a supplier chat but do not write in it. */
+  readonly readOnly?: boolean;
 }
 
 function formatSize(bytes: number | null): string {
@@ -124,6 +126,7 @@ export function InquiryConversation({
   beforeMessages,
   fillHeight = false,
   onBack,
+  readOnly = false,
 }: InquiryConversationProps) {
   const [msgs, setMsgs] = useState(initialMessages);
   const [text, setText] = useState("");
@@ -374,7 +377,10 @@ export function InquiryConversation({
         </div>
       </ScrollArea>
 
-      <div className="px-2">
+      {readOnly ? (
+        <p className="px-2 text-muted-foreground text-xs">You can read this conversation but not reply.</p>
+      ) : null}
+      <div className={cn("px-2", readOnly && "hidden")}>
         <div className="rounded-md border">
           <div className="flex items-center gap-2 p-2">
             <input
@@ -410,7 +416,7 @@ export function InquiryConversation({
         </div>
       </div>
 
-      {file || fileError ? (
+      {readOnly ? null : file || fileError ? (
         <div className="flex flex-col gap-1 px-2">
           {file ? (
             <div className="flex items-center gap-1">

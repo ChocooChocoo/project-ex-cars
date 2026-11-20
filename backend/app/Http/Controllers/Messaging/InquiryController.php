@@ -36,7 +36,7 @@ class InquiryController extends Controller
         $query = Inquiry::query()->with('vehicle:id,make,model,year');
         match (true) {
             $user->hasRole('customer') => $query->where('customer_id', $user->id),
-            $user->hasRole('ceo', 'account_manager') => $query->where('intention_kind', '!=', 'sell_negotiation'),
+            $user->hasRole('ceo', 'account_manager') => $query->whereNotIn('intention_kind', ['sell_negotiation', 'supplier_offer']),
             $user->hasRole('sales_manager') => $query->whereIn('intention_kind', ['buy_now', 'buy_financing']),
             default => abort(403),
         };
@@ -59,11 +59,13 @@ class InquiryController extends Controller
     {
         $inquiry = $this->viewable($request, $id);
         $messages = InquiryMessage::query()->where('inquiry_id', $id)->orderBy('sent_at')->orderBy('id')->get();
+        // A supplier thread names its post, which has no showroom vehicle yet.
+        $post = $inquiry->supplier_post_id ? DB::table('supplier_vehicle_posts')->where('id', $inquiry->supplier_post_id)->first(['make', 'model', 'year']) : null;
         $arrangement = ViewingArrangement::query()->where('inquiry_id', $id)->orderByDesc('created_at')->first();
 
         return response()->json([
             'inquiry' => ApiRow::of($inquiry) + [
-                'vehicles' => ApiRow::of($inquiry->vehicle, ['make', 'model', 'year', 'stock_code']),
+                'vehicles' => $post ? (array) $post : ApiRow::of($inquiry->vehicle, ['make', 'model', 'year', 'stock_code']),
                 'profiles' => ['full_name' => Profile::query()->whereKey($inquiry->customer_id)->value('full_name')],
             ],
             'messages' => $this->messageRows($files, $messages),
@@ -95,7 +97,10 @@ class InquiryController extends Controller
     /** POST /inquiries/{id}/messages (multipart): text and/or one attachment, stored in one DB transaction. */
     public function storeMessage(Request $request, FileService $files, string $id): JsonResponse
     {
-        $this->viewable($request, $id);
+        $inquiry = $this->viewable($request, $id);
+        // Notes line 62: only the supplier and the Marketing Specialist write in a supplier thread.
+        abort_if($inquiry->intention_kind === 'supplier_offer' && $inquiry->customer_id !== $request->user()->id
+            && ! $request->user()->hasRole('marketing_specialist'), 403, 'You can read this conversation but not reply.');
         $data = $request->validate([
             'message_text' => ['nullable', 'string', 'max:2000'],
             'attachment' => ['nullable', 'file'],

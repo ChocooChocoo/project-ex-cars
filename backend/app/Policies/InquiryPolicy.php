@@ -10,6 +10,11 @@ class InquiryPolicy
 {
     public function view(User $user, Inquiry $inquiry): bool
     {
+        // Notes line 62: a supplier thread is the supplier's and the Marketing Specialist's; the CEO and the CI read it.
+        if ($inquiry->intention_kind === 'supplier_offer') {
+            return $inquiry->customer_id === $user->id || $user->hasRole('marketing_specialist', 'ceo', 'confidential_informant');
+        }
+
         return match (true) {
             $user->hasRole('customer') => $inquiry->customer_id === $user->id,
             $user->hasRole('ceo', 'account_manager') => true,

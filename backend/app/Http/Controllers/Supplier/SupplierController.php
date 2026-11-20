@@ -145,8 +145,13 @@ class SupplierController extends Controller
             foreach ($photos as $photo) {
                 $stored[] = $this->files->store($photo, 'supplier-posts', $request->user()->id, 'photos')['path'];
             }
-            DB::table('supplier_vehicle_posts')->insert($data + ['id' => $id, 'supplier_id' => $request->user()->id, 'photos' => json_encode($stored),
-                'state' => 'posted', 'created_at' => now(), 'updated_at' => now()]);
+            DB::transaction(function () use ($data, $id, $request, $stored) {
+                DB::table('supplier_vehicle_posts')->insert($data + ['id' => $id, 'supplier_id' => $request->user()->id, 'photos' => json_encode($stored),
+                    'state' => 'posted', 'created_at' => now(), 'updated_at' => now()]);
+                // Notes line 62: the post's chat between the supplier and the Marketing Specialist.
+                DB::table('inquiries')->insert(['id' => (string) Str::uuid(), 'customer_id' => $request->user()->id, 'vehicle_id' => null,
+                    'intention_kind' => 'supplier_offer', 'supplier_post_id' => $id, 'state' => 'open', 'created_at' => now(), 'updated_at' => now()]);
+            });
         } catch (\Throwable $e) {
             foreach ($stored as $path) {
                 $this->files->delete('supplier-posts', $path);
@@ -209,6 +214,54 @@ class SupplierController extends Controller
         return $post;
     }
 
+    /** MS, notes line 63: propose the purchase to the CEO with the market value. */
+    public function propose(Request $request, string $id): JsonResponse
+    {
+        $data = $request->validate([
+            'market_value' => ['required', 'numeric', 'min:1', 'max:9999999999'],
+            'reason' => ['required', 'string', 'max:1000'],
+        ], ['market_value.*' => 'Enter the market value.', 'reason.*' => 'Say why GCE should buy this vehicle.']);
+        $post = self::post($id);
+        $updated = DB::table('supplier_vehicle_posts')->where('id', $post->id)->where('state', 'posted')->update([
+            'state' => 'proposed', 'market_value' => $data['market_value'], 'proposal_reason' => trim($data['reason']),
+            'proposed_by' => $request->user()->id, 'proposed_at' => now(), 'updated_at' => now(),
+        ]);
+        abort_if($updated === 0, 409, 'Only a posted vehicle can be proposed to the CEO.');
+        $this->notifications->send(['role' => 'ceo'], 'supplier_proposal', 'Supplier vehicle to approve',
+            "The Marketing Specialist proposes buying a {$post->year} {$post->make} {$post->model} from {$post->company_name}.", 'supplier_vehicle_posts', $post->id);
+
+        return response()->json(['success' => true]);
+    }
+
+    /** CEO, notes lines 65-68: approve (back to the MS) or reject (ends here, reason optional). */
+    public function ceoDecide(Request $request, string $id): JsonResponse
+    {
+        $data = $request->validate([
+            'decision' => ['required', 'in:approved,rejected'],
+            'reason' => ['nullable', 'string', 'max:1000'],
+        ], ['*' => 'Invalid decision.']);
+        $post = self::post($id);
+        $reason = trim((string) ($data['reason'] ?? ''));
+        $updated = DB::table('supplier_vehicle_posts')->where('id', $post->id)->where('state', 'proposed')->update([
+            'state' => $data['decision'], 'decision_reason' => $reason !== '' ? $reason : null,
+            'decided_by' => $request->user()->id, 'decided_at' => now(), 'updated_at' => now(),
+        ]);
+        abort_if($updated === 0, 409, 'Only a proposed vehicle can be decided.');
+        $title = "{$post->year} {$post->make} {$post->model}";
+        $because = $reason !== '' ? " Reason: {$reason}" : '';
+        if ($data['decision'] === 'approved') {
+            $this->notifications->send(['role' => 'marketing_specialist'], 'supplier_approved', 'Supplier vehicle approved',
+                "The CEO approved buying the {$title}. Assign a Mechanic and a Confidential Informant.", 'supplier_vehicle_posts', $post->id);
+        } else {
+            $this->notifications->send(['role' => 'marketing_specialist'], 'supplier_rejected', 'Supplier vehicle rejected',
+                "The CEO decided not to buy the {$title}.{$because}", 'supplier_vehicle_posts', $post->id);
+            $this->notifications->send(['userId' => $post->supplier_id], 'supplier_rejected', 'GCE will not buy this vehicle',
+                "GCE decided not to buy your {$title}.{$because}", 'supplier_vehicle_posts', $post->id);
+        }
+
+        return response()->json(['success' => true]);
+    }
+
     /** The supplier's own profile, or 403 while it is pending or rejected. */
     public static function approvedSupplierProfile(User $user): object
     {
@@ -244,6 +297,9 @@ class SupplierController extends Controller
             'id' => $p->id, 'make' => $p->make, 'model' => $p->model, 'year' => (int) $p->year, 'mileage' => (int) $p->mileage,
             'asking_price' => (float) $p->asking_price, 'description' => $p->description, 'state' => $p->state,
             'photos' => array_map(fn ($path) => $this->files->signedUrl('supplier-posts', $path), $photos),
+            'market_value' => isset($p->market_value) ? (float) $p->market_value : null, 'proposal_reason' => $p->proposal_reason ?? null,
+            'decision_reason' => $p->decision_reason ?? null,
+            'thread_id' => DB::table('inquiries')->where('supplier_post_id', $p->id)->value('id'),
             'created_at' => self::iso($p->created_at), 'updated_at' => self::iso($p->updated_at),
         ];
     }

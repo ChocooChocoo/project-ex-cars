@@ -3,14 +3,18 @@
 namespace App\Notifications;
 
 use Illuminate\Auth\Notifications\ResetPassword;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 
 /**
  * Notes lines 36-39: the Account Manager creates the supplier's account and the supplier is told by email. The
- * mail carries a set-password link (the reset-password flow), never a password.
+ * mail carries a set-password link (the reset-password flow), never a password. Queued: the cron worker sends it.
  */
-class SupplierAccountCreated extends ResetPassword
+class SupplierAccountCreated extends ResetPassword implements ShouldQueue
 {
+    use Queueable;
+
     public function toMail($notifiable): MailMessage
     {
         return (new MailMessage)

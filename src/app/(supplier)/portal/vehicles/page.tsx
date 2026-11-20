@@ -5,6 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { PageSkeleton } from "@/components/page-skeleton";
+import { SupplierPostChat } from "@/components/suppliers/supplier-post-chat";
 import { SupplierPostDetails } from "@/components/suppliers/supplier-post-details";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +21,9 @@ export default function SupplierVehiclesPage() {
   const page = usePageData("supplier-dashboard", getSupplierDashboard);
   const [editing, setEditing] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [chatFor, setChatFor] = useState<string | null>(() =>
+    typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("post"),
+  );
   if (page.error) return <SupplierAccessNotice error={page.error} />;
   if (!page.data) return <PageSkeleton />;
   const selected = new URLSearchParams(window.location.search).get("post");
@@ -102,12 +106,26 @@ export default function SupplierVehiclesPage() {
                       Edit
                     </Button>
                   ) : null}
+                  {post.thread_id ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setChatFor(chatFor === post.id ? null : post.id)}
+                      aria-expanded={chatFor === post.id}
+                    >
+                      {chatFor === post.id ? "Hide messages" : "Messages with GCE"}
+                    </Button>
+                  ) : null}
                   {post.state !== "assigned" ? (
                     <Button size="sm" variant="ghost" disabled={busy} onClick={() => withdraw(post)}>
                       Withdraw
                     </Button>
                   ) : null}
                 </div>
+              ) : null}
+              {/* Notes line 62: the Marketing Specialist talks with the supplier about this vehicle. */}
+              {chatFor === post.id && post.thread_id ? (
+                <SupplierPostChat threadId={post.thread_id} perspective="customer" />
               ) : null}
             </CardContent>
           </Card>

@@ -198,6 +198,7 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
   ]),
   ceo: new Set([
     "default",
+    "supplier-vehicles",
     "finance",
     "financing",
     "vehicles",
@@ -259,6 +260,7 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
   // T04 E1/E5: every staff role has Attendance and Requests (clock in/out, leave requests).
   confidential_informant: new Set([
     "default",
+    "supplier-vehicles",
     "finance",
     "vehicles",
     "inspections",
@@ -272,6 +274,7 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
   ]),
   marketing_specialist: new Set([
     "default",
+    "supplier-vehicles",
     "vehicles",
     "content",
     "transactions",

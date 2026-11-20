@@ -257,6 +257,12 @@ export const sidebarItems: NavGroup[] = [
         icon: ScrollText,
       },
       {
+        id: "supplier-vehicles",
+        title: "Supplier Vehicles",
+        url: "/supplier-vehicles",
+        icon: Forklift,
+      },
+      {
         id: "security-duty-checks",
         title: "Security Checks",
         url: "/security-duty-checks",

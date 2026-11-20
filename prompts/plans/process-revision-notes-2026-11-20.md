@@ -202,26 +202,32 @@ Next: Phase 2 →
 
 ## Phase 2 — Supplier review, chat and CEO proposal
 
-Status: 🔲 Not Started
+Status: ✅ Done
 
 Goal: the Marketing Specialist reviews supplier posts, talks to the supplier and proposes purchases to the CEO.
 
 Tasks
-- [ ] Marketing Specialist "Supplier Vehicles" tab: list of all `posted` posts with supplier company name; detail page
+- [x] Marketing Specialist "Supplier Vehicles" tab: list of all `posted` posts with supplier company name; detail page
   with photos and details.
-- [ ] Chat on the detail page between the MS and the supplier, scoped to the post. Reuse the existing polling chat
+- [x] Chat on the detail page between the MS and the supplier, scoped to the post. Reuse the existing polling chat
   (threads and messages) with a thread linked to the post; participants are the supplier and MS, read-only for CEO
   and CI.
-- [ ] "Propose to CEO": required market value (₱) and reason. Post goes to `proposed`; CEO is notified.
-- [ ] CEO decision: Approve → `approved`, MS notified. Reject → `rejected` with optional reason, MS and supplier
+- [x] "Propose to CEO": required market value (₱) and reason. Post goes to `proposed`; CEO is notified.
+- [x] CEO decision: Approve → `approved`, MS notified. Reject → `rejected` with optional reason, MS and supplier
   notified, no further action allowed on the post.
+
+Implementation notes
+- The chat is an `inquiries` row with `intention_kind = supplier_offer` and `supplier_post_id`, created with the post
+  (`vehicle_id` is now nullable). `InquiryPolicy` lets the supplier, MS, CEO and CI read it; `storeMessage` lets only
+  the supplier and the MS write. The shared `InquiryConversation` got a `readOnly` mode for the CEO and CI.
+- The CEO and Account Manager inbox (`GET /inquiries`) leaves supplier threads out.
 
 Dependencies: Phase 1.
 
 Done when
-- [ ] A proposal without market value is rejected (422).
-- [ ] A rejected post cannot be proposed again or assigned (PHP test).
-- [ ] The supplier sees chat messages for their post only.
+- [x] A proposal without market value is rejected (422).
+- [x] A rejected post cannot be proposed again or assigned (PHP test).
+- [x] The supplier sees chat messages for their post only.
 
 ← Previous: Phase 1 | Next: Phase 3 →
 
