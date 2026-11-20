@@ -68,12 +68,12 @@ class ModelMappingTest extends TestCase
     public function casts_keep_money_dates_and_json_exact(): void
     {
         $vehicle = Vehicle::query()->where('stock_code', 'GCE-001')->firstOrFail();
-        $this->assertSame('548000.00', $vehicle->current_price);
+        $this->assertSame('495000.00', $vehicle->current_price);
         $this->assertSame('Toyota', $vehicle->make);
 
         $tx = Transaction::query()->whereNotNull('completed_at')->firstOrFail();
         $this->assertSame('UTC', $tx->opened_at->timezoneName);
-        $this->assertInstanceOf(Vehicle::class, $tx->vehicle()->first() ?? new Vehicle);
+        $this->assertInstanceOf(Vehicle::class, $tx->vehicle()->first());
 
         $schedule = EmployeeWorkSchedule::query()->firstOrFail();
         $this->assertIsArray($schedule->workdays);

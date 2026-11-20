@@ -9,9 +9,7 @@ use Illuminate\Support\Str;
 use RuntimeException;
 
 /**
- * Demo accounts: replaces scripts/seed-users.cjs + scripts/seed-roles.sql.
- * One known account per role (all ten), plus the extra field staff the demo data assigns work to.
- * Also does what Supabase's handle_new_user / handle_new_user_role triggers did: profile + role row.
+ * Sign-in accounts, field staff and customer profiles for a fresh database.
  */
 class UserSeeder extends Seeder
 {
@@ -48,12 +46,22 @@ class UserSeeder extends Seeder
         }
         $hash = Hash::make($password);
 
+        $customers = CustomerSeedData::profiles();
+        $users = self::USERS;
+        foreach (array_diff_key($customers, $users) as $key => $customer) {
+            $name = $customer['name'];
+            $users[$key] = ['customer', $name, Str::slug($name, '.').'@gce.local'];
+        }
         $ids = [];
-        foreach (self::USERS as $key => [$role, $name, $email]) {
+        foreach ($users as $key => [$role, $name, $email]) {
             $id = (string) Str::uuid();
             $ids[$key] = $id;
             DB::table('users')->insert(['id' => $id, 'email' => $email, 'password' => $hash, 'email_verified_at' => now()]);
-            DB::table('profiles')->insert(['id' => $id, 'full_name' => $name, 'account_state' => 'active', 'activated_at' => now()]);
+            DB::table('profiles')->insert([
+                'id' => $id, 'full_name' => $name, 'account_state' => 'active', 'activated_at' => now(),
+                'phone' => $customers[$key]['phone'] ?? null, 'address' => $customers[$key]['address'] ?? null,
+                'region_code' => isset($customers[$key]) ? '040000000' : null,
+            ]);
             DB::table('user_roles')->insert(['account_id' => $id, 'role' => $role, 'active' => true]);
             if ($role === 'supplier') {
                 self::supplierProfile($id);

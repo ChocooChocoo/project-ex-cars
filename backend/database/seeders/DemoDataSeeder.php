@@ -9,16 +9,14 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
- * Demo dataset: PHP port of scripts/seed-data.cjs (same tables, counts, states and wording).
- * Dates are relative to now, so the demo always looks current. Values come from a fixed-seed
- * RNG, so every run gives the same data apart from UUIDs and the clock.
- *
- * Supabase triggers that filled columns (viewing_arrangements.vehicle_id) are done here explicitly.
+ * Local business records. A fixed seed keeps values reproducible apart from UUIDs and dates relative to today.
  */
 class DemoDataSeeder extends Seeder
 {
     /** @var array<string, string> */
     private array $u;
+
+    private array $buyers;
 
     private CarbonImmutable $now;
 
@@ -26,6 +24,10 @@ class DemoDataSeeder extends Seeder
     public function run(array $users): void
     {
         $this->u = $users;
+        $this->buyers = [];
+        foreach (CustomerSeedData::profiles() as $key => $profile) {
+            $this->buyers[$users[$key]] = $profile;
+        }
         $this->now = CarbonImmutable::now('UTC');
         mt_srand(20260809);
 
@@ -64,6 +66,24 @@ class DemoDataSeeder extends Seeder
     private function pick(array $items): mixed
     {
         return $items[mt_rand(0, count($items) - 1)];
+    }
+
+    private function preferredVehicles(array $buyer, array $vehicles): array
+    {
+        $score = static function (array $car) use ($buyer): int {
+            $outsideBand = max(0, $buyer['budget_min'] - $car['price'], $car['price'] - $buyer['budget_max']);
+
+            return $outsideBand * 4 + ($car['body_type'] === $buyer['body_type'] ? 0 : 130000)
+                + intdiv(abs($buyer['budget_max'] - $car['price']), 8);
+        };
+        usort($vehicles, fn ($a, $b) => $score($a) <=> $score($b));
+
+        return $vehicles;
+    }
+
+    private function availableVehicles(array $vehicles): array
+    {
+        return array_values(array_filter($vehicles, fn ($car) => $car['listing_state'] === 'available'));
     }
 
     private function daysAgo(int $n): CarbonImmutable
@@ -159,7 +179,7 @@ class DemoDataSeeder extends Seeder
         ['Nissan', 'Almera', 2022, 21000, 'Excellent', 'Sedan', 'Gasoline', 'CVT'],
         ['Nissan', 'Terra', 2021, 40000, 'Good', 'SUV', 'Diesel', 'Automatic'],
         ['Suzuki', 'Ertiga', 2021, 38000, 'Good', 'MPV', 'Gasoline', 'Manual'],
-        ['Suzuki', 'Swift', 2022, 25000, 'Excellent', 'Hatchback', 'Gasoline', 'Automatic'],
+        ['Suzuki', 'Swift', 2022, 25000, 'Excellent', 'Hatchback', 'Gasoline', 'CVT'],
         ['Hyundai', 'Accent', 2020, 62000, 'Good', 'Sedan', 'Diesel', 'Manual'],
         ['Kia', 'Stonic', 2022, 20000, 'Excellent', 'SUV', 'Gasoline', 'Automatic'],
         ['Isuzu', 'mu-X', 2021, 47000, 'Good', 'SUV', 'Diesel', 'Automatic'],
@@ -169,8 +189,23 @@ class DemoDataSeeder extends Seeder
         ['Nissan', 'Navara', 2019, 88000, 'Fair', 'Pickup', 'Diesel', 'Manual'],
         ['Ford', 'Fiesta', 2018, 102000, 'Fair', 'Hatchback', 'Gasoline', 'Manual'],
         ['Toyota', 'Corolla Altis', 2019, 74000, 'Good', 'Sedan', 'Gasoline', 'CVT'],
-        ['Honda', 'Accord', 2018, 91000, 'Good', 'Sedan', 'Gasoline', 'CVT'],
+        ['Honda', 'Accord', 2018, 91000, 'Good', 'Sedan', 'Gasoline', 'Automatic'],
         ['Mitsubishi', 'Outlander', 2020, 57000, 'Good', 'SUV', 'Gasoline', 'CVT'],
+        ['Toyota', 'Raize', 2023, 36000, 'Good', 'SUV', 'Gasoline', 'CVT'],
+        ['Hyundai', 'Stargazer', 2023, 40000, 'Good', 'MPV', 'Gasoline', 'CVT'],
+        ['Honda', 'BR-V', 2022, 52000, 'Good', 'SUV', 'Gasoline', 'CVT'],
+        ['Toyota', 'Wigo', 2021, 69000, 'Good', 'Hatchback', 'Gasoline', 'Automatic'],
+        ['Suzuki', 'Dzire', 2022, 55000, 'Good', 'Sedan', 'Gasoline', 'Automatic'],
+        ['Toyota', 'Rush', 2021, 67000, 'Good', 'SUV', 'Gasoline', 'Automatic'],
+        ['Mitsubishi', 'Strada', 2021, 70000, 'Good', 'Pickup', 'Diesel', 'Automatic'],
+        ['Toyota', 'Avanza', 2022, 57000, 'Good', 'MPV', 'Gasoline', 'CVT'],
+        ['Nissan', 'Almera', 2021, 67000, 'Good', 'Sedan', 'Gasoline', 'CVT'],
+        ['Hyundai', 'Reina', 2022, 51000, 'Fair', 'Sedan', 'Gasoline', 'Manual'],
+        ['Honda', 'Jazz', 2019, 93000, 'Fair', 'Hatchback', 'Gasoline', 'CVT'],
+        ['Toyota', 'Innova', 2022, 57000, 'Good', 'MPV', 'Diesel', 'Automatic'],
+        ['Ford', 'Ranger', 2023, 39000, 'Good', 'Pickup', 'Diesel', 'Automatic'],
+        ['Toyota', 'Vios', 2020, 82000, 'Good', 'Sedan', 'Gasoline', 'Manual'],
+        ['Mitsubishi', 'Mirage G4', 2021, 65000, 'Fair', 'Sedan', 'Gasoline', 'CVT'],
     ];
 
     private const LISTING_POOL = [
@@ -178,12 +213,27 @@ class DemoDataSeeder extends Seeder
         'available', 'available', 'available', 'available', 'reserved', 'reserved', 'reserved', 'reserved',
         'sold', 'sold', 'sold', 'sold', 'sold', 'sold', 'draft', 'draft', 'draft', 'draft',
         'awaiting_price_approval', 'inspecting', 'repairing', 'archived',
+        'available', 'available', 'available', 'available', 'available', 'available', 'available',
+        'sold', 'sold', 'sold', 'sold', 'reserved', 'reserved', 'draft', 'archived',
     ];
 
     private const PRICE_POOL = [
-        548000, 1250000, 1180000, 1680000, 1180000, 798000, 1080000, 1580000, 698000, 1380000, 1280000, 698000, 898000,
-        1480000, 1780000, 748000, 1480000, 898000, 798000, 648000, 1180000, 1580000, 1680000, 1080000, 1180000, 980000,
-        598000, 998000, 1180000, 1280000,
+        495000, 1070000, 950000, 1430000, 930000, 429000, 758000, 1160000, 475000, 1210000, 820000, 518000, 605000,
+        990000, 1180000, 590000, 1150000, 655000, 565000, 487000, 560000, 1095000, 1050000, 638000, 748000, 745000,
+        350000, 615000, 650000, 780000,
+        675000, 825000, 795000, 398000, 472000, 718000, 830000, 685000, 530000, 360000, 535000, 1060000, 1460000,
+        395000, 348000,
+    ];
+
+    private const VARIANTS = [
+        '1.3 E CVT', '2.4 G 4x2 MT', '2.8 E AT', '2.4 V 4x2 AT', '2.5 V AT', '1.2 GLX MT', '1.5 GLS AT',
+        '2.4 GLS 4x2 AT', '2.2 Cab & Chassis', '1.5 V Turbo CVT', '1.8 E CVT', '1.2 S MT', '1.5 V CVT',
+        '2.2 XLT 4x2 AT', '2.0 Titanium 4x2 AT', '1.0 VE Turbo CVT', '2.5 VE 4x2 AT', '1.5 GL MT', '1.2 GL CVT',
+        '1.6 CRDi MT', '1.4 EX AT', '3.0 LS-A 4x2 AT', '2.0 Pro AT', '1.3 Turbo Trophy CVT', '1.5 Sport DCT',
+        '2.5 EL 4x2 MT', '1.5 Trend MT', '1.6 V CVT', '2.4 S AT', '2.0 GLS CVT',
+        '1.2 G CVT', '1.5 GLS IVT', '1.5 V CVT', '1.0 G AT', '1.2 GL+ AGS', '1.5 G AT', '2.4 GLS 4x2 AT',
+        '1.5 G CVT', '1.0 VE Turbo CVT', '1.4 GL MT', '1.5 VX CVT', '2.8 G AT', '2.0 Wildtrak 4x2 AT',
+        '1.3 J MT', '1.2 GLX CVT',
     ];
 
     private const COLORS = ['White', 'Black', 'Silver', 'Gray', 'Red', 'Blue', 'Green', 'Maroon', 'Beige', 'Orange'];
@@ -208,8 +258,8 @@ class DemoDataSeeder extends Seeder
                 'exterior_color' => $this->pick(self::COLORS),
                 'interior_color' => $this->pick(self::COLORS),
                 'body_type' => $bodyType,
-                'engine' => $this->pick(['1.3L', '1.5L', '1.6L', '2.0L', '2.4L', '2.5L', '2.8L', '3.0L']),
-                'description' => "{$year} {$make} {$model} in ".strtolower($condition)." condition. {$bodyType} with ".strtolower($transmission).' transmission. Well-maintained and ready for the road.',
+                'engine' => explode(' ', self::VARIANTS[$i], 2)[0].'L',
+                'description' => "{$year} {$make} {$model} ".self::VARIANTS[$i].'. '.ucfirst(strtolower($condition)).' condition, '.number_format($mileage).' km.',
                 'current_price' => in_array($state, ['awaiting_price_approval', 'draft'], true) ? null : self::PRICE_POOL[$i],
                 'warranty_details' => $i % 2 === 0 ? '6-month powertrain warranty' : '1-year limited warranty',
                 'offer_details' => $i % 4 === 0 ? 'Free 1-year comprehensive insurance' : null,
@@ -243,7 +293,10 @@ class DemoDataSeeder extends Seeder
         }
         $this->insert('vehicle_media', $media);
 
-        return array_map(fn ($r) => ['id' => $r['id'], 'listing_state' => $r['listing_state']], $rows);
+        return array_map(fn ($r, $i) => [
+            'id' => $r['id'], 'listing_state' => $r['listing_state'], 'price' => self::PRICE_POOL[$i],
+            'body_type' => $r['body_type'], 'make' => $r['make'], 'model' => $r['model'],
+        ], $rows, array_keys($rows));
     }
 
     // ---------------------------------------------------------------- 4. checklist template
@@ -362,7 +415,7 @@ class DemoDataSeeder extends Seeder
             }
         }
         $this->insert('vehicle_document_items', $docs);
-        // Every seeded path points to a real file (Phase 4): one sample PDF fixture, private disk.
+        // Each seeded path points to a file on the private disk.
         $pdf = file_get_contents(database_path('seeders/files/sample-document.pdf'));
         foreach ($docs as $doc) {
             if ($doc['storage_path']) {
@@ -391,13 +444,17 @@ class DemoDataSeeder extends Seeder
     private function seedInquiries(array $vehicles): void
     {
         $inquiries = [];
-        for ($i = 0; $i < 20; $i++) {
+        $vehicles = $this->availableVehicles($vehicles);
+        foreach ($this->buyers as $customerId => $buyer) {
+            $i = count($inquiries);
             $isBuyNow = $i % 3 === 0;
             $state = $this->pick(['open', 'assigned', 'scheduled', 'handed_off', 'closed']);
+            $car = $this->preferredVehicles($buyer, $vehicles)[$i % 3];
             $inquiries[] = [
                 'id' => $this->id(),
-                'customer_id' => $this->u['customer'],
-                'vehicle_id' => $vehicles[$i % count($vehicles)]['id'],
+                'customer_id' => $customerId,
+                'vehicle_id' => $car['id'],
+                'created_at' => $this->ts($this->daysAgo($this->randInt(8, 70))),
                 'intention_kind' => $isBuyNow ? 'buy_now' : 'inquiry',
                 'assigned_account_manager' => ! $isBuyNow && $state !== 'open' ? $this->u['account_manager'] : null,
                 'assigned_sales_manager' => $isBuyNow && $state !== 'open' ? $this->u['sales_manager'] : null,
@@ -407,24 +464,32 @@ class DemoDataSeeder extends Seeder
         }
         $this->insert('inquiries', $inquiries);
 
-        $customerLines = ['Hello, is this vehicle still available?', 'What is the final price?', 'Can I schedule a viewing this week?', 'Is financing available for this unit?', 'What is the mileage and condition?', 'Are the service records available?', 'Can you deliver to Cavite?', 'What warranty comes with this?'];
-        $staffLines = ['Good day! Yes, the vehicle is still available.', 'The final price is negotiable. We can discuss in person.', 'We can schedule a viewing — when works best for you?', 'Financing is available with flexible terms.', 'Full service records are available for review.', 'Delivery within CALABARZON can be arranged.', 'The unit comes with a 6-month warranty.', 'We can hold the unit with a reservation fee.'];
         $messages = [];
         foreach ($inquiries as $inquiry) {
-            $turns = $this->randInt(3, 9);
-            $sender = $this->u['customer'];
-            for ($t = 0; $t < $turns; $t++) {
-                $isCustomer = $sender === $this->u['customer'];
+            $buyer = $this->buyers[$inquiry['customer_id']];
+            [$question, $answer] = match ($buyer['payment_method']) {
+                'financing' => ['Can you send me the monthly amount and the downpayment?', 'I can go over the downpayment and monthly terms with you before you decide.'],
+                'cash' => ['Is the listed price the total if I pay cash at the office?', 'We can confirm the cash price and go over the papers at the office.'],
+                default => ['Can I inspect the car before paying by bank transfer?', 'Yes, you can inspect the car first. We will send the PayMongo checkout when you are ready.'],
+            };
+            $lines = [
+                "Hello! I'm in {$buyer['city']}. Is this car still available?",
+                'Yes, it is still available. Which day works for you to see it?',
+                $question, $answer, 'Thank you. Saturday morning works for me.',
+                'I will confirm the time here once I have checked the showroom schedule.',
+            ];
+            $opened = CarbonImmutable::parse($inquiry['created_at'], 'UTC');
+            foreach ($lines as $t => $line) {
+                $isCustomer = $t % 2 === 0;
+                $sent = $opened->addHours($t * 3);
                 $messages[] = [
                     'id' => $this->id(),
                     'inquiry_id' => $inquiry['id'],
-                    'sender_id' => $sender,
-                    'message_text' => $this->pick($isCustomer ? $customerLines : $staffLines),
-                    // Never in the future (the Supabase seed could produce future-dated messages).
-                    'sent_at' => $this->ts($this->daysAgo($this->randInt(1, 14))->addDays($t)->min($this->now)),
-                    'read_at' => $this->rand() < 0.7 ? $this->ts($this->daysAgo($this->randInt(1, 14))->addDays($t)) : null,
+                    'sender_id' => $isCustomer ? $inquiry['customer_id'] : ($inquiry['assigned_sales_manager'] ?? $this->u['account_manager']),
+                    'message_text' => $line,
+                    'sent_at' => $this->ts($sent),
+                    'read_at' => $t < 5 ? $this->ts($sent->addMinutes(20)) : null,
                 ];
-                $sender = $isCustomer ? ($this->rand() < 0.7 ? $this->u['account_manager'] : $this->u['sales_manager']) : $this->u['customer'];
             }
         }
         $this->insert('inquiry_messages', $messages);
@@ -458,18 +523,19 @@ class DemoDataSeeder extends Seeder
                 'storage_path' => $path,
                 'original_name' => $this->pick(['vehicle-photo.png', 'documents.png', 'odometer.png', 'plate.png']),
                 'file_size' => strlen($png),
-                'uploader_id' => $this->u['customer'],
+                'uploader_id' => $msg['sender_id'],
             ];
         }
         $this->insert('message_attachments', $attachments);
 
         $reports = [];
         for ($i = 0; $i < 3; $i++) {
+            $msg = $messages[$i * 6 + 1];
             $reports[] = [
-                'reported_message_id' => $messages[$i * 5]['id'] ?? null,
+                'reported_message_id' => $msg['id'],
                 'reported_inquiry_id' => $inquiries[$i]['id'],
-                'reporter_id' => $this->u['customer'],
-                'reason' => $this->pick(['Spam message', 'Inappropriate language', 'Suspicious offer']),
+                'reporter_id' => $inquiries[$i]['customer_id'],
+                'reason' => ['This is the second reply I received for the same listing.', 'Please confirm this account handles the vehicle.', 'The listing price and the price I was quoted differ.'][$i],
                 'state' => $this->pick(['open', 'reviewed', 'upheld', 'dismissed']),
                 'reviewer_id' => $this->rand() < 0.5 ? $this->u['account_manager'] : null,
                 'decision_date' => $this->rand() < 0.5 ? $this->ts($this->daysAgo($this->randInt(1, 8))) : null,
@@ -484,129 +550,225 @@ class DemoDataSeeder extends Seeder
     private function seedTransactions(array $vehicles): array
     {
         $created = [];
-        $buyVehicles = array_slice($vehicles, 12, 12);
-        $buyStates = ['pending', 'under_review', 'approved', 'completed', 'completed', 'cancelled', 'pending', 'approved', 'completed', 'under_review', 'approved', 'pending'];
+        $buyStates = [
+            'approved', 'completed', 'under_review', 'completed', 'pending', 'completed', 'approved', 'rejected',
+            'completed', 'under_review', 'completed', 'cancelled', 'approved', 'completed', 'under_review',
+            'completed', 'pending', 'completed', 'rejected', 'approved', 'under_review', 'completed', 'cancelled',
+        ];
+        $buyerIds = array_keys($this->buyers);
         $txRows = [];
+        $used = [];
         foreach ($buyStates as $i => $state) {
             $id = $this->id();
-            $txRows[] = $this->txRow($id, 'buy', $state, $buyVehicles[$i]['id']);
-            $created[] = ['id' => $id, 'kind' => 'buy', 'state' => $state];
+            $customer = $buyerIds[$i];
+            $listing = match ($state) {
+                'completed' => 'sold',
+                'approved' => 'reserved',
+                default => 'available',
+            };
+            $pool = array_values(array_filter($vehicles, fn ($car) => $car['listing_state'] === $listing && ! isset($used[$car['id']])));
+            $car = $this->preferredVehicles($this->buyers[$customer], $pool)[0];
+            $used[$car['id']] = true;
+            $age = $state === 'completed' ? $this->randInt(200, 260) : $this->randInt(6, 125);
+            $txRows[] = $this->txRow($id, 'buy', $state, $car['id'], $customer, $age);
+            $created[] = ['id' => $id, 'kind' => 'buy', 'state' => $state, 'customer' => $customer, 'car' => $car, 'age' => $age];
         }
-        for ($i = 0; $i < 6; $i++) {
+        $sellVehicles = array_values(array_filter($vehicles, fn ($car) => ! isset($used[$car['id']]) && $car['listing_state'] !== 'sold'));
+        usort($sellVehicles, fn ($a, $b) => ($a['listing_state'] === 'available') <=> ($b['listing_state'] === 'available'));
+        foreach (['pending', 'under_review', 'pending', 'rejected', 'approved', 'under_review', 'approved', 'cancelled', 'completed', 'completed'] as $i => $state) {
             $id = $this->id();
-            $state = $this->pick(['pending', 'under_review', 'approved', 'rejected', 'completed']);
-            $txRows[] = $this->txRow($id, 'sell', $state, null);
-            $created[] = ['id' => $id, 'kind' => 'sell', 'state' => $state];
+            $customer = $buyerIds[1 + $i * 3];
+            $car = $sellVehicles[$i];
+            $age = $this->randInt(7, 260);
+            $txRows[] = $this->txRow($id, 'sell', $state, $car['id'], $customer, $age);
+            $created[] = ['id' => $id, 'kind' => 'sell', 'state' => $state, 'customer' => $customer, 'car' => $car, 'age' => $age];
         }
         $this->insert('transactions', $txRows);
 
         $history = [];
-        $flows = ['pending' => ['pending', 'under_review'], 'under_review' => ['under_review', 'approved'], 'approved' => ['approved', 'completed'], 'rejected' => ['pending', 'rejected'], 'completed' => ['pending', 'under_review', 'approved', 'completed'], 'cancelled' => ['pending', 'cancelled']];
+        $flows = [
+            'pending' => ['pending'], 'under_review' => ['pending', 'under_review'], 'approved' => ['pending', 'under_review', 'approved'],
+            'rejected' => ['pending', 'under_review', 'rejected'], 'completed' => ['pending', 'under_review', 'approved', 'completed'],
+            'cancelled' => ['pending', 'cancelled'],
+        ];
+        $reviews = [];
         foreach ($created as $t) {
             $prev = 'pending';
-            foreach ($flows[$t['state']] ?? ['pending'] as $s) {
-                if ($s === $prev && $s !== 'pending') {
-                    continue;
-                }
+            foreach ($flows[$t['state']] as $step => $s) {
+                $reason = match ($s) {
+                    'pending' => 'Request opened by customer.',
+                    'under_review' => 'GCE received the request and began checking the submitted documents.',
+                    'approved' => 'Documents and transaction details verified.',
+                    'completed' => $t['kind'] === 'buy' ? 'Payment settled and vehicle handed over.' : 'Seller paid and original papers received.',
+                    'rejected' => $t['kind'] === 'buy' ? 'The proof of billing could not be matched to the address on the request.' : 'The seller could not supply the original certificate of registration.',
+                    'cancelled' => $t['kind'] === 'buy' ? 'The buyer chose a different vehicle before the appointment.' : 'The owner decided to keep the vehicle.',
+                };
                 $history[] = [
                     'transaction_id' => $t['id'],
                     'from_state' => $prev,
                     'to_state' => $s,
-                    'actor_id' => in_array($s, ['completed', 'approved'], true) ? $this->u['sales_manager'] : $this->u['customer'],
-                    'reason' => $this->pick(['Created by customer', 'Under staff review', 'Approved after review', 'Transaction completed', 'Cancelled by customer']),
-                    'changed_at' => $this->ts($this->daysAgo($this->randInt(1, 45))),
+                    'actor_id' => in_array($s, ['pending', 'cancelled'], true) ? $t['customer'] : $this->u[$t['kind'] === 'buy' ? 'sales_manager' : 'marketing_specialist'],
+                    'reason' => $reason,
+                    'changed_at' => $this->ts($s === 'completed'
+                        ? $this->completedAt($t['kind'], $t['customer'], $t['age'])
+                        : $this->daysAgo($t['age'] - $step)),
                 ];
                 $prev = $s;
             }
-        }
-        $this->insert('transaction_status_history', $history);
-
-        $buyTxs = array_values(array_filter($created, fn ($t) => $t['kind'] === 'buy'));
-        $purchases = [];
-        foreach ($buyTxs as $t) {
-            $method = $this->pick(['cash', 'financing', 'bank_transfer']);
-            $done = $t['state'] === 'completed';
-            $purchases[] = [
-                'transaction_id' => $t['id'],
-                'payment_method' => $method,
-                'final_price' => $this->randInt(500000, 1800000),
-                'arrangement_kind' => $this->pick(['delivery', 'meetup', 'gce_visit']),
-                'location' => $this->pick(['GCE Office, Dasmariñas', 'SM Mall of Asia', 'Tagaytay', 'Bacoor, Cavite']),
-                'document_check_state' => $done ? 'verified' : $this->pick(['pending', 'verified']),
-                'checked_by' => $done ? $this->u['sales_manager'] : null,
-                'checked_at' => $done ? $this->ts($this->daysAgo($this->randInt(1, 9))) : null,
-                'payment_option' => $method === 'financing' ? 'financing' : 'full',
-            ];
-        }
-        $this->insert('purchase_details', $purchases);
-
-        $sells = [];
-        foreach (array_filter($created, fn ($t) => $t['kind'] === 'sell') as $t) {
-            $decided = in_array($t['state'], ['approved', 'rejected'], true);
-            $sells[] = [
-                'transaction_id' => $t['id'],
-                'offered_amount' => $this->randInt(300000, 1500000),
-                'valuation_amount' => $this->rand() < 0.6 ? $this->randInt(280000, 1400000) : null,
-                'review_notes' => in_array($t['state'], ['under_review', 'approved'], true) ? 'Vehicle inspected; valuation within range.' : null,
-                'decision' => $t['state'] === 'approved' ? 'accepted' : ($t['state'] === 'rejected' ? 'rejected' : null),
-                'decision_maker_id' => $decided ? $this->u['sales_manager'] : null,
-                'decision_date' => $decided ? $this->ts($this->daysAgo($this->randInt(1, 20))) : null,
-            ];
-        }
-        $this->insert('sell_details', $sells);
-
-        // Financing: up to 4 installment accounts from financing purchases.
-        $accounts = [];
-        $financed = array_values(array_filter($buyTxs, fn ($t, $i) => $purchases[$i]['payment_method'] === 'financing', ARRAY_FILTER_USE_BOTH));
-        foreach (array_slice($financed, 0, 4) as $t) {
-            $total = $this->randInt(600000, 1600000);
-            $down = (int) round($total * 0.2);
-            $accounts[] = [
-                'id' => $this->id(),
-                'purchase_transaction_id' => $t['id'],
-                'financed_total' => $total,
-                'down_payment' => $down,
-                'opening_balance' => $total - $down,
-                'start_date' => $this->date($this->daysAgo($this->randInt(30, 120))),
-                'state' => $this->pick(['active', 'active', 'closed']),
-                'closed_date' => $this->rand() < 0.2 ? $this->date($this->daysAgo($this->randInt(5, 30))) : null,
-            ];
-        }
-        $this->insert('installment_accounts', $accounts);
-
-        $installments = [];
-        foreach ($accounts as $acc) {
-            $count = $this->randInt(6, 12);
-            $per = (int) round($acc['opening_balance'] / $count);
-            $paidCount = $this->randInt(0, $count - 2);
-            for ($s = 1; $s <= $count; $s++) {
-                $due = $this->now->addDays(($s - $count) * 30);
-                $isPaid = $s <= $paidCount;
-                $isOverdue = ! $isPaid && $s === $paidCount + 1 && $this->rand() < 0.5;
-                $installments[] = [
-                    'id' => $this->id(),
-                    'account_id' => $acc['id'],
-                    'sequence_no' => $s,
-                    'due_date' => $this->date($due),
-                    'amount_due' => $per,
-                    'state' => $isPaid ? 'paid' : ($isOverdue ? 'overdue' : 'upcoming'),
-                    'payment_date' => $isPaid ? $this->date($due) : null,
+            if ($t['state'] === 'completed' && $t['kind'] === 'buy') {
+                $reviews[] = [
+                    'transaction_id' => $t['id'], 'customer_id' => $t['customer'], 'vehicle_id' => $t['car']['id'],
+                    'rating' => count($reviews) % 3 === 0 ? 4 : 5,
+                    'body' => $this->pick(['The staff explained the papers before we paid.', 'We had time to inspect the car and check the service history.', 'Pick-up took a little longer than planned, but the price matched the agreement.']),
+                    'created_at' => $this->ts($this->completedAt('buy', $t['customer'], $t['age'])->addDays(2)->min($this->now)),
                 ];
             }
         }
-        $this->insert('installments', $installments);
+        $this->insert('transaction_status_history', $history);
+        $this->insert('customer_reviews', $reviews);
 
-        $payments = [];
-        $txOfAccount = array_column($accounts, 'purchase_transaction_id', 'id');
-        foreach ($installments as $inst) {
-            if ($inst['state'] === 'paid') {
-                $payments[] = $this->paymentRow($txOfAccount[$inst['account_id']], $inst['id'], $inst['amount_due'], ['cash', 'bank_transfer', 'paymongo'], $inst['payment_date']);
+        $buyTxs = array_values(array_filter($created, fn ($t) => $t['kind'] === 'buy'));
+        $purchases = [];
+        $documents = [];
+        $pdf = file_get_contents(database_path('seeders/files/sample-document.pdf'));
+        foreach ($buyTxs as $i => $t) {
+            $buyer = $this->buyers[$t['customer']];
+            $method = $buyer['payment_method'];
+            $arrangement = ['gce_visit', 'meetup', 'delivery'][$i % 3];
+            $verified = in_array($t['state'], ['approved', 'completed'], true);
+            $documentState = $verified ? 'verified' : ($t['state'] === 'rejected' ? 'rejected' : 'pending');
+            $purchases[] = [
+                'transaction_id' => $t['id'],
+                'payment_method' => $method,
+                'final_price' => $t['car']['price'],
+                'arrangement_kind' => $arrangement,
+                'location' => match ($arrangement) {
+                    'gce_visit' => 'GCE Office, Dasmariñas',
+                    'delivery' => $buyer['address'],
+                    default => 'City Hall parking area, '.$buyer['city'],
+                },
+                'document_check_state' => $documentState,
+                'checked_by' => $documentState !== 'pending' ? $this->u['sales_manager'] : null,
+                'checked_at' => $documentState !== 'pending' ? $this->ts($this->daysAgo($t['age'] - 1)) : null,
+                'payment_option' => $method === 'financing' ? 'financing' : 'full',
+                'requested_term_months' => $method === 'financing' ? 6 : null,
+            ];
+            foreach ([
+                ['valid_id', 'drivers_license', 'front'], ['valid_id', 'drivers_license', 'back'],
+                ['valid_id', 'national_id', 'front'], ['valid_id', 'national_id', 'back'],
+                ['proof_of_billing', null, null], ['payslip', null, null],
+            ] as $j => [$kind, $type, $side]) {
+                $path = "{$t['id']}/{$kind}-".($j + 1).'.pdf';
+                $rejected = $documentState === 'rejected' && $kind === 'proof_of_billing';
+                Storage::disk('local')->put('transaction-documents/'.$path, $pdf);
+                $documents[] = [
+                    'transaction_id' => $t['id'], 'document_kind' => $kind, 'storage_path' => $path,
+                    'id_type' => $type, 'id_side' => $side, 'uploader_id' => $t['customer'],
+                    'verification_state' => $rejected ? 'rejected' : ($verified ? 'verified' : 'pending'),
+                    'verifier_id' => $verified || $rejected ? $this->u['sales_manager'] : null,
+                    'rejection_reason' => $rejected ? 'The utility account address does not match this request.' : null,
+                    'upload_date' => $this->ts($this->daysAgo($t['age'])),
+                ];
             }
         }
-        $financedIds = array_column($accounts, 'purchase_transaction_id');
-        foreach (array_slice(array_values(array_filter($buyTxs, fn ($t) => ! in_array($t['id'], $financedIds, true))), 0, 6) as $t) {
-            $payments[] = $this->paymentRow($t['id'], null, $this->randInt(500000, 1600000), ['cash', 'paymongo', 'bank_transfer'], $this->date($this->daysAgo($this->randInt(2, 30))));
+        $this->insert('purchase_details', $purchases);
+        $this->insert('transaction_documents', $documents);
+
+        $sells = [];
+        $ceilings = [];
+        foreach (array_values(array_filter($created, fn ($t) => $t['kind'] === 'sell')) as $i => $t) {
+            $decided = in_array($t['state'], ['approved', 'completed', 'rejected'], true);
+            $accepted = in_array($t['state'], ['approved', 'completed'], true);
+            $ceiling = (int) (round($t['car']['price'] * 0.79 / 1000) * 1000);
+            $issue = [null, 'Aircon is not cold at idle.', 'Small dent on the rear bumper.', 'The right rear window is slow.', null][$i % 5];
+            $sells[] = [
+                'transaction_id' => $t['id'],
+                'offered_amount' => (int) (round($ceiling * (1.06 + $i * 0.009) / 1000) * 1000),
+                'valuation_amount' => $ceiling,
+                'agreed_price' => $accepted ? $ceiling - 5000 : null,
+                'has_known_issues' => $issue !== null,
+                'declared_issues' => $issue,
+                'meetup_method' => $i % 2 === 0 ? 'gce_visit' : 'meet_halfway',
+                'meetup_address' => $i % 2 === 0 ? null : $this->buyers[$t['customer']]['address'],
+                'owner_number' => 1 + $i % 3,
+                'review_notes' => $t['state'] === 'rejected' ? 'Original certificate of registration was not supplied.' : ($decided ? 'Valuation confirmed against recent sales.' : null),
+                'decision' => $accepted ? 'accepted' : ($t['state'] === 'rejected' ? 'rejected' : null),
+                'decision_maker_id' => $decided ? $this->u['ceo'] : null,
+                'decision_date' => $decided ? $this->ts($this->daysAgo($t['age'] - 2)) : null,
+            ];
+            $ceilings[] = [
+                'vehicle_id' => $t['car']['id'], 'transaction_id' => $t['id'], 'proposal_kind' => 'purchase_ceiling',
+                'proposed_amount' => $ceiling, 'proposer_id' => $this->u['marketing_specialist'],
+                'decision' => $accepted ? 'approved' : ($t['state'] === 'rejected' ? 'rejected' : 'pending'),
+                'decider_id' => $decided ? $this->u['ceo'] : null,
+                'decision_date' => $decided ? $this->ts($this->daysAgo($t['age'] - 2)) : null,
+            ];
         }
+        $this->insert('sell_details', $sells);
+        $this->insert('vehicle_price_proposals', $ceilings);
+
+        $accounts = [];
+        $terms = [];
+        $installments = [];
+        $payments = [];
+        foreach ($buyTxs as $i => $t) {
+            $method = $purchases[$i]['payment_method'];
+            $price = $purchases[$i]['final_price'];
+            $done = $t['state'] === 'completed';
+            $agreement = $this->daysAgo($t['age'] - 3);
+            if ($method !== 'financing') {
+                if ($done) {
+                    $payments[] = $this->paymentRow($t['id'], null, $price, $method, 'full', $agreement);
+                }
+
+                continue;
+            }
+            if (! in_array($t['state'], ['approved', 'completed'], true)) {
+                continue;
+            }
+            $down = (int) round($price * 0.2);
+            $total = (int) round($price * 1.1);
+            $balance = $total - $down;
+            $count = 6;
+            $per = intdiv($balance, $count);
+            $accountId = $this->id();
+            $accounts[] = [
+                'id' => $accountId, 'purchase_transaction_id' => $t['id'], 'financed_total' => $total,
+                'down_payment' => $down, 'opening_balance' => $balance, 'start_date' => $this->date($agreement),
+                'state' => $done ? 'closed' : 'active',
+                'closed_date' => $done ? $this->date($agreement->addMonthsNoOverflow($count)) : null,
+            ];
+            $terms[] = [
+                'purchase_transaction_id' => $t['id'], 'arrangement_description' => 'Monthly installments with 20% downpayment.',
+                'total_amount' => $total, 'down_payment' => $down, 'number_of_payments' => $count,
+                'payment_frequency' => 'monthly', 'duration_months' => $count, 'monthly_payment' => $per,
+                'first_due_date' => $this->date($agreement->addMonthNoOverflow()), 'agreed_by' => $this->u['sales_manager'],
+                'approver_id' => $this->u['ceo'], 'approval_date' => $this->ts($agreement),
+                'state' => $done ? 'completed' : 'active',
+            ];
+            $payments[] = $this->paymentRow($t['id'], null, $down, 'paymongo', 'downpayment', $agreement);
+            for ($s = 1; $s <= $count; $s++) {
+                $due = $agreement->addMonthsNoOverflow($s);
+                $isPaid = $done || $due->lt($this->now->subDays(30));
+                $amount = $s === $count ? $balance - $per * ($count - 1) : $per;
+                $installmentId = $this->id();
+                $installments[] = [
+                    'id' => $installmentId,
+                    'account_id' => $accountId,
+                    'sequence_no' => $s,
+                    'due_date' => $this->date($due),
+                    'amount_due' => $amount,
+                    'state' => $isPaid ? 'paid' : ($due->lt($this->now) ? 'overdue' : 'upcoming'),
+                    'payment_date' => $isPaid ? $this->date($due) : null,
+                ];
+                if ($isPaid) {
+                    $payments[] = $this->paymentRow($t['id'], $installmentId, $amount, 'paymongo', 'installment', $due);
+                }
+            }
+        }
+        $this->insert('installment_accounts', $accounts);
+        $this->insert('payment_terms', $terms);
+        $this->insert('installments', $installments);
         $this->insert('payment_records', $payments);
 
         $collections = [];
@@ -623,41 +785,32 @@ class DemoDataSeeder extends Seeder
         }
         $this->insert('collection_actions', $collections);
 
-        $terms = [];
-        foreach ($accounts as $acc) {
-            $balance = $acc['opening_balance'];
-            $terms[] = [
-                'purchase_transaction_id' => $acc['purchase_transaction_id'],
-                'arrangement_description' => 'Monthly installment arrangement with 20% down payment.',
-                'total_amount' => $balance + (int) round($balance * 0.1),
-                'down_payment' => (int) round($balance * 0.2),
-                'number_of_payments' => $this->randInt(6, 12),
-                'payment_frequency' => $this->pick(['weekly', 'monthly']),
-                'first_due_date' => $this->date($this->now->addDays(30)),
-                'agreed_by' => $this->u['sales_manager'],
-                'approver_id' => $this->u['head_accountant'],
-                'approval_date' => $this->ts($this->daysAgo($this->randInt(1, 15))),
-                'state' => $this->pick(['approved', 'active']),
-            ];
-        }
-        $this->insert('payment_terms', $terms);
-
         $cases = [];
         $cis = [$this->u['confidential_informant'], $this->u['confidential_informant2'], $this->u['confidential_informant3'], $this->u['confidential_informant4']];
         $mechanics = [$this->u['mechanic'], $this->u['mechanic2'], $this->u['mechanic3'], $this->u['mechanic4']];
-        for ($i = 0; $i < 10; $i++) {
+        $purchaseById = array_column($purchases, null, 'transaction_id');
+        foreach ($created as $t) {
+            if (! in_array($t['state'], ['approved', 'completed', 'under_review'], true)) {
+                continue;
+            }
+            $arrangement = $purchaseById[$t['id']]['arrangement_kind'] ?? null;
+            if ($arrangement === 'gce_visit' || ($t['kind'] === 'buy' && $t['state'] === 'under_review')) {
+                continue;
+            }
+            $kind = $t['kind'] === 'sell' ? 'acquisition' : ($arrangement === 'delivery' ? 'delivery' : 'buyer_meetup');
+            $done = $t['state'] === 'completed';
             $cases[] = [
-                'vehicle_id' => $this->pick($vehicles)['id'],
-                'transaction_id' => $created[$i % count($created)]['id'],
-                'case_kind' => $this->pick(['acquisition', 'delivery', 'recovery']),
+                'vehicle_id' => $t['car']['id'],
+                'transaction_id' => $t['id'],
+                'case_kind' => $kind,
                 'assigned_confidential_informant' => $this->pick($cis),
                 'mechanic_id' => $this->rand() < 0.4 ? $this->pick($mechanics) : null,
-                'schedule' => $this->ts($this->now->addDays($this->randInt(1, 10))),
-                'location' => $this->pick(['Cavite', 'Laguna', 'Batangas', 'Rizal', 'Quezon']),
-                'state' => $this->pick(['assigned', 'accepted', 'in_progress', 'completed', 'cancelled']),
-                'completion_date' => $this->rand() < 0.4 ? $this->ts($this->daysAgo($this->randInt(1, 12))) : null,
-                'expenses_cents' => $this->rand() < 0.5 ? $this->randInt(500, 15000) * 100 : 0,
-                'notes' => 'Field work assigned through the dashboard.',
+                'schedule' => $this->ts($done ? $this->daysAgo($t['age'] - 4) : $this->now->addDays($this->randInt(1, 10))),
+                'location' => $purchaseById[$t['id']]['location'] ?? $this->buyers[$t['customer']]['address'],
+                'state' => $done ? 'completed' : $this->pick(['assigned', 'accepted', 'in_progress']),
+                'completion_date' => $done ? $this->ts($this->daysAgo($t['age'] - 4)) : null,
+                'expenses_cents' => $done ? $this->randInt(500, 2500) * 100 : 0,
+                'notes' => $t['kind'] === 'sell' ? 'Bring the inspection checklist and confirm the original papers.' : 'Call the buyer before departure and bring the vehicle papers.',
             ];
         }
         $this->insert('field_cases', $cases);
@@ -665,31 +818,45 @@ class DemoDataSeeder extends Seeder
         return array_column($created, 'id');
     }
 
-    private function txRow(string $id, string $kind, string $state, ?string $vehicleId): array
+    private function completedAt(string $kind, string $customer, int $age): CarbonImmutable
+    {
+        $agreement = $this->daysAgo($age - 3);
+
+        return $kind === 'buy' && $this->buyers[$customer]['payment_method'] === 'financing'
+            ? $agreement->addMonthsNoOverflow(6)
+            : $agreement;
+    }
+
+    private function txRow(string $id, string $kind, string $state, string $vehicleId, string $customer, int $age): array
     {
         return [
             'id' => $id,
-            'customer_id' => $this->u['customer'],
+            'customer_id' => $customer,
             'transaction_kind' => $kind,
             'vehicle_id' => $vehicleId,
             'current_state' => $state,
-            'created_by' => $this->u['customer'],
-            'opened_at' => $this->ts($this->daysAgo($this->randInt(5, 50))),
-            'completed_at' => $state === 'completed' ? $this->ts($this->daysAgo($this->randInt(1, 10))) : null,
+            'created_by' => $customer,
+            'opened_at' => $this->ts($this->daysAgo($age)),
+            'completed_at' => $state === 'completed' ? $this->ts($this->completedAt($kind, $customer, $age))
+                : (in_array($state, ['cancelled', 'rejected'], true) ? $this->ts($this->daysAgo($age - ($state === 'rejected' ? 2 : 1))) : null),
         ];
     }
 
-    private function paymentRow(string $txId, ?string $installmentId, int $amount, array $methods, string $settled): array
+    private function paymentRow(string $txId, ?string $installmentId, int $amount, string $method, string $kind, CarbonImmutable $settled): array
     {
         return [
             'transaction_id' => $txId,
             'installment_id' => $installmentId,
             'amount' => $amount,
-            'method' => $this->pick($methods),
+            'method' => $method,
+            'payment_kind' => $kind,
             'external_reference' => sprintf('REF-%05d', (int) floor($this->rand() * 100000)),
             'recorded_by' => $this->u['head_accountant'],
-            'verified_by' => $this->rand() < 0.8 ? $this->u['head_accountant'] : null,
-            'settlement_date' => $settled,
+            'verified_by' => $this->u['head_accountant'],
+            'approved_by' => $kind === 'installment' ? $this->u['sales_manager'] : null,
+            'approved_at' => $kind === 'installment' ? $this->ts($settled) : null,
+            'settlement_date' => $this->date($settled),
+            'paid_at' => $this->ts($settled),
         ];
     }
 
@@ -698,9 +865,10 @@ class DemoDataSeeder extends Seeder
     private function seedFavourites(array $vehicles): void
     {
         $rows = [];
-        foreach ($vehicles as $v) {
-            if ($v['listing_state'] === 'available' && count($rows) < 30) {
-                $rows[] = ['customer_id' => $this->u['customer'], 'vehicle_id' => $v['id']];
+        $available = $this->availableVehicles($vehicles);
+        foreach ($this->buyers as $customerId => $buyer) {
+            foreach (array_slice($this->preferredVehicles($buyer, $available), 0, $this->randInt(1, 4)) as $car) {
+                $rows[] = ['customer_id' => $customerId, 'vehicle_id' => $car['id']];
             }
         }
         $this->insert('favourites', $rows);
@@ -736,30 +904,33 @@ class DemoDataSeeder extends Seeder
 
     private function seedRecommendations(array $vehicles): void
     {
-        $budgets = [800000, 1000000, 1200000, 1500000, 700000, 900000];
-        $prefs = ['Sedan, automatic, low mileage', 'SUV, diesel, good condition', 'Pickup for business use', 'Family MPV, automatic', 'Fuel-efficient hatchback', 'Reliable commuter sedan'];
         $runs = [];
-        foreach ($budgets as $i => $budget) {
+        foreach ($this->buyers as $customerId => $buyer) {
             $runs[] = [
                 'id' => $this->id(),
-                'customer_id' => $this->u['customer'],
-                'budget' => $budget,
-                'stated_preferences' => $prefs[$i],
+                'customer_id' => $customerId,
+                'budget' => $buyer['budget_max'],
+                'stated_preferences' => json_encode(array_intersect_key($buyer, array_flip([
+                    'budget_min', 'budget_max', 'body_type', 'intended_use', 'payment_method', 'income_band', 'occupation',
+                ])), JSON_UNESCAPED_UNICODE),
                 'criteria_version' => '1.0',
                 'run_date' => $this->ts($this->daysAgo($this->randInt(2, 40))),
             ];
         }
         $this->insert('recommendation_runs', $runs);
 
-        $eligible = array_slice(array_values(array_filter($vehicles, fn ($v) => $v['listing_state'] === 'available')), 0, 8);
+        $eligible = $this->availableVehicles($vehicles);
         $results = [];
+        $feedback = [];
         foreach ($runs as $run) {
-            foreach ($eligible as $rank => $v) {
+            $buyer = $this->buyers[$run['customer_id']];
+            $ranked = array_slice($this->preferredVehicles($buyer, $eligible), 0, 8);
+            foreach ($ranked as $rank => $v) {
                 $base = 100 - $rank * 6 - $this->randInt(0, 4);
                 $results[] = [
                     'run_id' => $run['id'],
                     'vehicle_id' => $v['id'],
-                    'budget_score' => max(55, $base - $this->randInt(0, 8)),
+                    'budget_score' => max(0, 100 - (int) round(max(0, $v['price'] - $buyer['budget_max']) / 10000)),
                     'condition_score' => max(55, $base - $this->randInt(0, 6)),
                     'fuel_score' => max(55, $base - $this->randInt(0, 10)),
                     'demand_score' => max(55, $base - $this->randInt(0, 8)),
@@ -768,19 +939,15 @@ class DemoDataSeeder extends Seeder
                     'rank' => $rank + 1,
                 ];
             }
-        }
-        $this->insert('recommendation_results', $results);
-
-        $feedback = [];
-        foreach ($runs as $i => $run) {
             $feedback[] = [
                 'run_id' => $run['id'],
-                'selected_vehicle_id' => $vehicles[$i % count($vehicles)]['id'],
+                'selected_vehicle_id' => $ranked[$this->randInt(0, 2)]['id'],
                 'helpful_state' => $this->pick(['helpful', 'helpful', 'not_helpful', 'unknown']),
-                'outcome' => $this->pick(['Contacted seller', 'Purchased vehicle', 'Still comparing options', null]),
-                'feedback_date' => $this->ts($this->daysAgo($this->randInt(1, 30))),
+                'outcome' => $this->pick(['Asked about a viewing', 'Saved the vehicle to compare', 'Still comparing prices', null]),
+                'feedback_date' => $this->ts(CarbonImmutable::parse($run['run_date'], 'UTC')->addDay()),
             ];
         }
+        $this->insert('recommendation_results', $results);
         $this->insert('recommendation_feedback', $feedback);
     }
 
@@ -924,8 +1091,16 @@ class DemoDataSeeder extends Seeder
             'verified_at' => $this->rand() < $verifyOdds ? $this->ts($this->daysAgo($this->randInt(1, $maxVerifyAgo))) : null,
         ];
         $n = count($txIds);
-        for ($i = 0; $i < 18; $i++) {
-            $entries[] = $entry('revenue', $this->randInt(500000, 1800000) * 100, $txIds[$i % $n], ['Vehicle sale proceeds', 'Reservation fee', 'Trade-in valuation adjustment'], 0.7, 40, 30);
+        foreach (DB::table('payment_records')->whereNotNull('verified_by')->get() as $payment) {
+            $entries[] = [
+                'entry_kind' => 'revenue', 'amount_cents' => (int) round((float) $payment->amount * 100),
+                'transaction_id' => $payment->transaction_id,
+                'description' => match ($payment->payment_kind) {
+                    'downpayment' => 'Vehicle downpayment', 'installment' => 'Monthly vehicle installment', default => 'Vehicle sale proceeds',
+                },
+                'recorded_by' => $payment->recorded_by, 'recorded_at' => $payment->paid_at,
+                'verified_by' => $payment->verified_by, 'verified_at' => $payment->paid_at,
+            ];
         }
         for ($i = 0; $i < 14; $i++) {
             $entries[] = $entry('expense', $this->randInt(2000, 120000) * 100, $txIds[($i + 3) % $n], ['Reconditioning parts', 'Fuel and transport', 'Advertising expense', 'Vehicle detailing'], 0.7, 40, 30);

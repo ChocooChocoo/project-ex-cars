@@ -254,7 +254,16 @@ class SchemaParityTest extends TestCase
         $first = $snapshot();
         $second = $snapshot();
         $this->assertSame($first, $second);
-        $this->assertSame(17, $first['users'][0], 'one account per role plus the extra field staff');
+        $this->assertSame(47, $first['users'][0]);
+        $this->assertSame(31, DB::table('user_roles')->where('role', 'customer')->count());
+        $this->assertSame(45, $first['vehicles'][0]);
+        $this->assertGreaterThanOrEqual(20, DB::table('transactions')->distinct()->count('customer_id'));
+        $this->assertSame(10, DB::table('transactions')->where('transaction_kind', 'sell')->distinct()->count('customer_id'));
+        $this->assertSame(31, DB::table('recommendation_runs')->distinct()->count('customer_id'));
+        $this->assertGreaterThan(0, DB::table('customer_reviews')->count());
+        $this->assertFalse(DB::table('transactions as t')->where('t.transaction_kind', 'buy')->whereNotExists(
+            fn ($q) => $q->selectRaw('1')->from('transaction_documents as d')->whereColumn('d.transaction_id', 't.id')->where('d.document_kind', 'payslip'),
+        )->exists());
         $this->assertSame(11, DB::table('user_roles')->distinct()->count('role'), 'all eleven roles seeded');
         $this->assertSame(129, $first['rbac_permissions'][0]);
     }
