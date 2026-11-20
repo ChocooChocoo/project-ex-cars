@@ -13,19 +13,19 @@ const STEPS = [
     step: "Step 1",
     title: "Prepare two valid IDs",
     details:
-      "GCE needs two different valid IDs from the list below. They must be current (not expired), clearly readable, and in your name. Bring the originals and have clear photos or photocopies ready to upload.",
+      "Prepare two different valid IDs. Bring the originals and two printed back-to-back photocopies of each ID, each copy signed three times. Both IDs must come from the list below, current (not expired) and in your name.",
   },
   {
     step: "Step 2",
     title: "Prepare one proof of billing",
     details:
-      "Bring one recent proof of billing in your name, such as an electric, water, or internet bill. Staff must verify it before your purchase can be completed.",
+      "Prepare one recent proof of billing in your name (electric, water or internet bill). Staff must verify it before your purchase can be completed.",
   },
   {
     step: "Step 3",
     title: "View the car and agree on payment",
     details:
-      "Browse the showroom and agree on the price. Pay in cash, by bank transfer through PayMongo, or through In-House Financing (the Showroom price plus GCE's financing charge, over 6 to 60 months). Financing also needs your latest payslip.",
+      "Browse the showroom and agree on the price. Pay in cash, by bank transfer through PayMongo, or through In-House Financing (the Showroom price plus GCE's financing charge, over 6 to 60 months). Bring your latest payslip; GCE checks it during the financing review.",
   },
   {
     step: "Step 4",

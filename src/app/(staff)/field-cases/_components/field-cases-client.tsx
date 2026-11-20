@@ -13,6 +13,7 @@ import { assignMechanic, createFieldCase } from "@/app/(staff)/transactions/acti
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -28,9 +29,9 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { isFutureManilaInput, manilaInputInstant, manilaInputValue } from "@/lib/transactions/buy-flow";
 import { TRANSACTION_STATE_LABELS, transactionKindLabel } from "@/lib/transactions/labels";
 import type { TransactionKind, TransactionState } from "@/lib/transactions/state-machine";
-import { toCents } from "@/lib/utils";
 import { FIELD_CASE_STATES, type FieldCaseState } from "@/lib/validation/phase6";
 
 import { FieldCasesTable } from "./field-cases-table";
@@ -41,6 +42,7 @@ export interface FieldCaseRow {
   state: FieldCaseState;
   vehicle_id: string | null;
   location: string | null;
+  /** SN-6: the sum of `field_case_expenses.amount`, written by the server; never typed here. */
   expenses_cents: number | null;
   notes: string | null;
   completion_date: string | null;
@@ -49,6 +51,8 @@ export interface FieldCaseRow {
   mechanic_id?: string | null;
   head_security_id?: string | null;
   price_status?: string | null;
+  /** SN-8: the Confidential Informant's "No expenses for this trip" confirmation. */
+  no_expenses_at?: string | null;
 }
 
 export interface VehicleLookup {
@@ -155,6 +159,27 @@ type FieldCasesQuickFilter = "all" | "needs_assignment" | "assigned_to_me";
 // T11: once RLS scopes the list to their own cases, a field worker's useful default is their own work.
 const FIELD_WORKER_ROLES = ["confidential_informant", "mechanic", "head_security"];
 
+/**
+ * SN-5: a field worker picks one of these; `assigned` comes from the creation dialog and `accepted` is stamped
+ * automatically when the worker first opens or updates the case, so neither is offered. Overseers keep the full
+ * FIELD_CASE_STATES list.
+ */
+export const FIELD_WORKER_NEXT_STATES: FieldCaseState[] = ["in_progress", "completed", "cancelled"];
+
+export function fieldCaseStateOptions(userRole: string): readonly FieldCaseState[] {
+  return FIELD_WORKER_ROLES.includes(userRole) ? FIELD_WORKER_NEXT_STATES : FIELD_CASE_STATES;
+}
+
+/**
+ * SN-8: the "No expenses for this trip" answer is the assigned Confidential Informant's, and only for a Meet
+ * Halfway seller meet-up whose travel costs nothing. Kept beside the card that renders the control, and mirrored
+ * server-side in FieldCaseActionController::updateFieldCase.
+ */
+export function canConfirmNoExpenses(row: FieldCaseRow, currentUserId: string | null = null): boolean {
+  if (row.case_kind !== "acquisition" || row.no_expenses_at || (row.expenses_cents ?? 0) > 0) return false;
+  return currentUserId === null || row.assigned_confidential_informant === currentUserId;
+}
+
 export function defaultQuickFilter(userRole: string): FieldCasesQuickFilter {
   return FIELD_WORKER_ROLES.includes(userRole) ? "assigned_to_me" : "all";
 }
@@ -190,7 +215,7 @@ export function FieldCasesClient({
   }, [cases, quickFilter, currentUserId]);
   const [editTarget, setEditTarget] = useState<FieldCaseRow | null>(null);
   const [state, setState] = useState<FieldCaseState>("assigned");
-  const [expenses, setExpenses] = useState("");
+  const [noExpenses, setNoExpenses] = useState(false);
   const [notes, setNotes] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -255,7 +280,9 @@ export function FieldCasesClient({
     const fd = new FormData();
     fd.set("field_case_id", editTarget.id);
     fd.set("state", state);
-    fd.set("expenses_cents", toCents(expenses));
+    // SN-8: the explicit "No expenses for this trip" answer, which the guard accepts in place of filed expenses.
+    if (noExpenses) fd.set("no_expenses", "1");
+    // SN-6: the total is the sum of the filed expenses; the client never sends `expenses_cents`.
     fd.set("notes", notes);
     const result = await updateFieldCase(fd);
     setLoading(false);
@@ -277,6 +304,11 @@ export function FieldCasesClient({
       setCreateError("Assign an informant or a mechanic to this field case.");
       return;
     }
+    // SH-12: a past schedule is refused here as well as on the server, so nothing is half-created.
+    if (createSchedule && !isFutureManilaInput(createSchedule)) {
+      setCreateError("Set a future schedule date and time.");
+      return;
+    }
     setLoading(true);
     setCreateError(null);
     const fd = new FormData();
@@ -287,7 +319,7 @@ export function FieldCasesClient({
       if (createWorkerKind === "mechanic") fd.set("mechanic_id", createWorker);
       else fd.set("assigned_confidential_informant", createWorker);
     }
-    if (createSchedule) fd.set("schedule", createSchedule);
+    if (createSchedule) fd.set("schedule", manilaInputInstant(createSchedule));
     if (createLocation) fd.set("location", createLocation);
     if (createNotes) fd.set("notes", createNotes);
     const result = await createFieldCase(fd);
@@ -390,8 +422,11 @@ export function FieldCasesClient({
               }}
               onUpdate={(fieldCase) => {
                 setEditTarget(fieldCase);
-                setState(fieldCase.state);
-                setExpenses(fieldCase.expenses_cents ? String(fieldCase.expenses_cents / 100) : "");
+                // SN-5: a field worker never lands on Assigned/Accepted, so an unstarted case opens on In progress.
+                setState(
+                  fieldCase.state === "assigned" || fieldCase.state === "accepted" ? "in_progress" : fieldCase.state,
+                );
+                setNoExpenses(false);
                 setNotes(fieldCase.notes ?? "");
                 setFormError(null);
               }}
@@ -419,7 +454,7 @@ export function FieldCasesClient({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    {FIELD_CASE_STATES.map((s) => (
+                    {fieldCaseStateOptions(userRole).map((s) => (
                       <SelectItem key={s} value={s} className="capitalize">
                         {s.replace(/_/g, " ")}
                       </SelectItem>
@@ -429,15 +464,24 @@ export function FieldCasesClient({
               </Select>
             </Field>
             <Field>
+              {/* SN-6: the total is read from the itemised expenses the team files on the case page. */}
               <FieldLabel>Expenses (₱)</FieldLabel>
-              <Input
-                type="number"
-                min="0"
-                value={expenses}
-                onChange={(e) => setExpenses(e.target.value)}
-                placeholder="0.00"
-              />
+              <p className="text-muted-foreground text-sm">
+                {editTarget && (editTarget.expenses_cents ?? 0) > 0
+                  ? `${((editTarget.expenses_cents ?? 0) / 100).toLocaleString("en-PH", { minimumFractionDigits: 2 })} — filed expenses on this case`
+                  : "No expenses filed yet. File them from the case page."}
+              </p>
             </Field>
+            {editTarget && canConfirmNoExpenses(editTarget, currentUserId) ? (
+              <div className="flex items-center gap-2 text-sm">
+                <Checkbox
+                  id="no-expenses"
+                  checked={noExpenses}
+                  onCheckedChange={(checked) => setNoExpenses(checked === true)}
+                />
+                <label htmlFor="no-expenses">No expenses for this trip</label>
+              </div>
+            ) : null}
             <Field>
               <FieldLabel>Notes</FieldLabel>
               <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} />
@@ -594,8 +638,16 @@ export function FieldCasesClient({
               </Field>
             ) : null}
             <Field>
-              <FieldLabel>Schedule (optional)</FieldLabel>
-              <Input type="datetime-local" value={createSchedule} onChange={(e) => setCreateSchedule(e.target.value)} />
+              <FieldLabel htmlFor="case-schedule">Schedule (optional)</FieldLabel>
+              {/* SH-12: a schedule in the past would send the team nowhere, so the picker opens on today in
+                  Manila and the browser refuses an earlier hour. */}
+              <Input
+                id="case-schedule"
+                type="datetime-local"
+                min={manilaInputValue()}
+                value={createSchedule}
+                onChange={(e) => setCreateSchedule(e.target.value)}
+              />
             </Field>
             <Field>
               <FieldLabel>Location (optional)</FieldLabel>

@@ -194,10 +194,12 @@ export const fieldCaseCreateSchema = z
     message: "Assign an informant or a mechanic to this field case.",
   });
 
+// SN-6: `expenses_cents` is no longer accepted from the client — the server writes the sum of
+// `field_case_expenses.amount`. SN-8: `no_expenses` is the explicit "No expenses for this trip" confirmation.
 export const fieldCaseUpdateSchema = z.object({
   field_case_id: z.string().uuid(),
-  state: z.enum(FIELD_CASE_STATES),
-  expenses_cents: z.coerce.number().int().min(0).optional(),
+  state: z.enum(FIELD_CASE_STATES).optional(),
+  no_expenses: z.coerce.boolean().optional(),
   notes: z.string().max(1000).optional().or(z.literal("")),
 });
 

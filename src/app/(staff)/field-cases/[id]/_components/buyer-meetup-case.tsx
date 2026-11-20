@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { format } from "date-fns";
 
+import { MeetupMap } from "@/components/maps/lazy-maps";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { PapersStatus } from "@/lib/transactions/buy-flow";
 
@@ -12,6 +13,7 @@ import { ReceiveCaseButton } from "./receive-case-button";
 type Row = Record<string, unknown>;
 
 // Meet Halfway: who the team meets, where and when, and the papers the Confidential Informant carries.
+// BH-2: the contract card is the Confidential Informant's; the Mechanic's view is the vehicle check only.
 export function BuyerMeetupCase({
   fieldCase,
   transaction,
@@ -27,7 +29,7 @@ export function BuyerMeetupCase({
   readonly transaction: Row;
   readonly papersStatus: PapersStatus | null;
   readonly handover: Row;
-  readonly member: "informant" | "mechanic" | null;
+  readonly member: "informant" | null;
   readonly canRecordPapers: boolean;
   readonly papers: PaperDocumentRow[];
   readonly canUpload: boolean;
@@ -38,6 +40,10 @@ export function BuyerMeetupCase({
   const received = (at: unknown) => (at ? format(new Date(at as string), "MMM d, yyyy h:mm a") : "Not yet");
   const detailsRaw = transaction.purchase_details as Row | Row[] | null;
   const details = (Array.isArray(detailsRaw) ? detailsRaw[0] : detailsRaw) ?? null;
+  const meetupPoint =
+    details?.meetup_lat != null && details?.meetup_lng != null
+      ? { lat: Number(details.meetup_lat), lng: Number(details.meetup_lng) }
+      : null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -75,9 +81,7 @@ export function BuyerMeetupCase({
               <span className="text-muted-foreground">Received by the Mechanic: </span>
               {received(fieldCase.mechanic_received_at)}
             </p>
-            {member && !fieldCase[member === "informant" ? "ci_received_at" : "mechanic_received_at"] ? (
-              <ReceiveCaseButton fieldCaseId={fieldCase.id as string} />
-            ) : null}
+            {member && !fieldCase.ci_received_at ? <ReceiveCaseButton fieldCaseId={fieldCase.id as string} /> : null}
           </CardContent>
         </Card>
         <PapersCard
@@ -89,6 +93,19 @@ export function BuyerMeetupCase({
           deedHref={deedHref}
         />
         <ContractCard transactionId={transaction.id as string} details={details} handover={handover} member={member} />
+        {/* BH-8: the pin the buyer set, read-only, right here in the app (SH-8: no external map link). */}
+        {meetupPoint ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Meet-up point</CardTitle>
+              <CardDescription>Where the buyer set the halfway point. Meet-ups stay inside CALABARZON.</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2 text-sm">
+              <MeetupMap value={meetupPoint} editable={false} />
+              {details?.meetup_address ? <p>{String(details.meetup_address)}</p> : null}
+            </CardContent>
+          </Card>
+        ) : null}
       </div>
     </div>
   );

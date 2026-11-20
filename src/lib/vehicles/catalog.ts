@@ -85,6 +85,42 @@ export const SELL_CONDITIONS = [
 
 export const SELL_CONDITION_VALUES = ["Like New", "Good", "Fair"] as const;
 
+/**
+ * SN-13: the seller declares the car's papers instead of uploading them, and brings the originals to the meet-up.
+ * The OR and the CR may be expired; a deed of sale either exists or does not.
+ */
+export const SELL_PAPER_STATUSES = ["has", "does_not_have", "expired"] as const;
+
+export type SellPaperStatus = (typeof SELL_PAPER_STATUSES)[number];
+
+export const SELL_PAPER_STATUS_LABELS: Record<SellPaperStatus, string> = {
+  has: "I have it",
+  does_not_have: "I don't have it",
+  expired: "It is expired",
+};
+
+export const SELL_PAPER_FIELDS = [
+  {
+    key: "official_receipt",
+    label: "Official Receipt (OR)",
+    statuses: SELL_PAPER_STATUSES,
+  },
+  {
+    key: "certificate_of_registration",
+    label: "Certificate of Registration (CR)",
+    statuses: SELL_PAPER_STATUSES,
+  },
+  {
+    key: "deed_of_sale",
+    label: "Deed of Sale",
+    // A deed of sale is a contract, so it cannot expire: it was either signed or never existed.
+    statuses: ["has", "does_not_have"] as const,
+  },
+] as const;
+
+export type SellPaperKind = (typeof SELL_PAPER_FIELDS)[number]["key"];
+export type SellPapersChecklist = Record<SellPaperKind, SellPaperStatus>;
+
 export const OLDEST_LISTED_YEAR = 1980;
 
 /** Years from the current year down to 1980, newest first. */

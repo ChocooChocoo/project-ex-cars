@@ -118,3 +118,45 @@ describe("TransactionDocumentsCard (T03 SM1, HA1, HA3)", () => {
     expect(screen.getByText("Auto-check: needs manual review")).toBeInTheDocument();
   });
 });
+
+describe("TransactionDocumentsCard papers (SN-11, SN-13)", () => {
+  // SN-13: the Marketing Specialist reads the seller's answers instead of an OR/CR/Deed upload.
+  it("shows a seller's papers checklist above the ID cards", () => {
+    renderCard([pendingId], {
+      kind: "sell",
+      userRole: "marketing_specialist",
+      papersChecklist: {
+        official_receipt: "has",
+        certificate_of_registration: "expired",
+        deed_of_sale: "does_not_have",
+      },
+    });
+
+    const checklist = screen.getByRole("region", { name: "Seller's papers checklist" });
+    expect(within(checklist).getByText("Seller's papers checklist")).toBeInTheDocument();
+    expect(within(checklist).getByText("I have it")).toBeInTheDocument();
+    expect(within(checklist).getByText("It is expired")).toBeInTheDocument();
+    expect(within(checklist).getByText("I don't have it")).toBeInTheDocument();
+    // The IDs still offer Verify / Ask to resubmit below it.
+    expect(screen.getByRole("button", { name: "Verify" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ask to resubmit Valid ID" })).toBeInTheDocument();
+  });
+
+  it("marks a paper the seller did not answer, and shows nothing for a buy", () => {
+    renderCard([], { kind: "sell", userRole: "marketing_specialist", papersChecklist: { official_receipt: "has" } });
+
+    const checklist = screen.getByRole("region", { name: "Seller's papers checklist" });
+    expect(within(checklist).getAllByText("Not answered")).toHaveLength(2);
+    expect(within(checklist).getByText("Deed of Sale")).toBeInTheDocument();
+  });
+
+  it("keeps an older offer's uploaded papers rendering with no checklist", () => {
+    renderCard([{ ...pendingId, document_kind: "deed_of_sale" }], {
+      kind: "sell",
+      userRole: "marketing_specialist",
+    });
+
+    expect(screen.queryByRole("region", { name: "Seller's papers checklist" })).not.toBeInTheDocument();
+    expect(screen.getByText("Deed of sale")).toBeInTheDocument();
+  });
+});

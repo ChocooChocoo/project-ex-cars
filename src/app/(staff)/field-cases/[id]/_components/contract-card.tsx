@@ -17,16 +17,18 @@ import { ContractProgress } from "@/components/contract-progress";
 import { SignaturePad } from "@/components/signature-pad";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { isHalfwayCashRequest, signsInApp } from "@/lib/transactions/buy-flow";
+import { signsInApp } from "@/lib/transactions/buy-flow";
 import { MISSED_PAYMENT_POLICY, MISSED_PAYMENT_POLICY_LABEL } from "@/lib/transactions/missed-payment-policy";
 
 type Row = Record<string, unknown>;
 type Result = { error: string } | { success: true };
 
-// Meet-up or delivery day: the team records the buyer met, the signing and the signed copies they keep, in
-// that order. T10: no payment is recorded in the field; the buyer pays in the app or at GCE. Each button appears only for the person who may press it, when it is due.
+// Meet-up or delivery day: the team records the buyer met, the signing and the signed copy the Confidential
+// Informant keeps, in that order. T10: no payment is recorded in the field; the buyer pays in the app or at GCE. Each button appears only for the person who may press it, when it is due.
 // T11: the buyer and the Confidential Informant sign on the device here, and both signature images are kept
 // with the sale.
+// BH-2: the contract belongs to the Confidential Informant on a field arrangement; the Mechanic keeps no signed
+// copy, so `member` is only ever "informant" (or null for a reader who may not act).
 export function ContractCard({
   transactionId,
   details,
@@ -36,15 +38,15 @@ export function ContractCard({
   readonly transactionId: string;
   readonly details: Row | null;
   readonly handover: Row;
-  readonly member: "informant" | "mechanic" | null;
+  readonly member: "informant" | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [buyerSignature, setBuyerSignature] = useState<HTMLCanvasElement | null>(null);
   const [ciSignature, setCiSignature] = useState<HTMLCanvasElement | null>(null);
   const signed = handover.contract_state === "signed";
-  const keepsCopy = member === "informant" || (member === "mechanic" && isHalfwayCashRequest(details));
-  const ownCopy = member === "informant" ? handover.ci_copy_at : handover.mechanic_copy_at;
+  const keepsCopy = member === "informant";
+  const ownCopy = handover.ci_copy_at;
   const waitsForApp = signsInApp(details) && !signed;
   const financed = details?.payment_method === "financing";
   const canSign = member === "informant" && !signed;

@@ -10,7 +10,7 @@ import { RejectReasonDialog } from "@/components/reject-reason-dialog";
 import { Button } from "@/components/ui/button";
 
 // T06: the CEO decides a price inside the vehicle view. Request Revision sends it back to the Marketing
-// Specialist with a reason; the car returns to draft (or to repairing for a reprice).
+// Specialist with a reason; the car stays in "awaiting_price_approval" (SH-1: never back to "repairing").
 export function ProposalReviewActions({
   proposalId,
   amount,

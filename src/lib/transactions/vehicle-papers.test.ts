@@ -21,6 +21,7 @@ describe("vehicle paper rows", () => {
       buyer: "Maria Santos",
       status: "requested",
       arrangementKind: "gce_visit",
+      paymentMethod: null,
       updatedAt: "2026-10-20T08:00:00.000Z",
       vehicleId: "vehicle-1",
     });

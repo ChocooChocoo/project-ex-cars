@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { transactionDocumentLabel } from "@/lib/transactions/document-media";
 import { SELL_PAPER_KINDS } from "@/lib/transactions/sell-flow";
+import { SELL_PAPER_FIELDS, SELL_PAPER_STATUS_LABELS } from "@/lib/vehicles/catalog";
 
 // T03 C11/SM2: result of the automatic OR/CR and ID check. Advisory only; staff Verify stays the decision.
 const AUTO_CHECK_LABELS: Record<string, string> = {
@@ -16,18 +17,56 @@ const AUTO_CHECK_LABELS: Record<string, string> = {
   manual_review: "Auto-check: needs manual review",
 };
 
+// SN-13: the seller now declares the OR, the CR and the deed of sale instead of uploading them, so the Marketing
+// Specialist reads the answers here and inspects the originals at the meet-up.
+function SellerPapersChecklist({ checklist }: { readonly checklist: Record<string, unknown> }) {
+  return (
+    <section className="flex flex-col gap-2 rounded-md border bg-muted/20 p-3" aria-label="Seller's papers checklist">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="font-medium text-sm">Seller&apos;s papers checklist</h3>
+        <span className="text-muted-foreground text-xs">Originals are checked at the meet-up.</span>
+      </div>
+      <dl className="grid gap-2 sm:grid-cols-3">
+        {SELL_PAPER_FIELDS.map((paper) => {
+          const status = checklist[paper.key];
+          return (
+            <div key={paper.key} className="flex flex-col gap-1 text-sm">
+              <dt className="text-muted-foreground text-xs">{paper.label}</dt>
+              <dd>
+                {typeof status === "string" && status in SELL_PAPER_STATUS_LABELS ? (
+                  <Badge
+                    variant={status === "does_not_have" ? "destructive" : "secondary"}
+                    className="h-5 px-2 text-[11px]"
+                  >
+                    {SELL_PAPER_STATUS_LABELS[status as keyof typeof SELL_PAPER_STATUS_LABELS]}
+                  </Badge>
+                ) : (
+                  <span className="text-muted-foreground text-xs">Not answered</span>
+                )}
+              </dd>
+            </div>
+          );
+        })}
+      </dl>
+    </section>
+  );
+}
+
 // T03 SM1/HA1: customer documents get the full page width (was the narrow sidebar), in a 1/2/3-column grid,
 // so staff can check several IDs and papers side by side.
 export function TransactionDocumentsCard({
   kind,
   userRole,
   documents,
+  papersChecklist = null,
   onVerifyDocument,
   onRejectDocument,
 }: {
   readonly kind: string;
   readonly userRole: string;
   readonly documents: Record<string, unknown>[];
+  /** SN-13: `sell_details.papers_checklist` of a sell offer, when the seller answered one. */
+  readonly papersChecklist?: Record<string, unknown> | null;
   readonly onVerifyDocument: (documentId: string) => Promise<void>;
   readonly onRejectDocument: (documentId: string, reason: string) => Promise<void>;
 }) {
@@ -55,6 +94,8 @@ export function TransactionDocumentsCard({
         </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
+        {/* SN-13: the seller's answers above the uploads; an older offer that sent OR/CR/Deed files has none. */}
+        {kind === "sell" && papersChecklist ? <SellerPapersChecklist checklist={papersChecklist} /> : null}
         {/* T10: only the buyer uploads IDs and proof of billing; staff verify them here. */}
         {documents.length === 0 ? (
           <p className="text-muted-foreground text-sm">No documents.</p>

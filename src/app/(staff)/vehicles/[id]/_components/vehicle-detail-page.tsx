@@ -7,6 +7,7 @@ import { ArrowLeft } from "lucide-react";
 
 import { useSession } from "@/components/auth/session-provider";
 import { PageSkeleton } from "@/components/page-skeleton";
+import type { InspectionResultData } from "@/components/transactions/inspection-result";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { type VehicleMediaItem, VehicleMediaViewer } from "@/components/vehicle-media-viewer";
@@ -42,6 +43,7 @@ export function VehicleDetailPage() {
       media: Record<string, unknown>[];
       proposal: Record<string, unknown> | null;
       reconditioning: Record<string, unknown> | null;
+      inspection: Record<string, unknown> | null;
       revision: Record<string, unknown> | null;
     }>("GET", `/api/v1/staff/vehicles/${encodeURIComponent(id)}`),
   );
@@ -97,7 +99,13 @@ export function VehicleDetailPage() {
 
       <VehicleDescriptionCard vehicle={v} />
 
-      {reconditioningJob ? <ReconditioningPanel job={reconditioningJob} userRole={role ?? ""} /> : null}
+      {reconditioningJob ? (
+        <ReconditioningPanel
+          job={reconditioningJob}
+          userRole={role ?? ""}
+          inspection={(data.inspection as unknown as InspectionResultData | null) ?? null}
+        />
+      ) : null}
 
       {MEDIA_MANAGER_ROLES.includes(role ?? "") ? (
         <VehicleMediaManager vehicleId={id} media={(media as unknown as StaffMediaRow[]) ?? []} />

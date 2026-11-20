@@ -64,19 +64,18 @@ export function VehicleForm({
       make: "",
       model: "",
       year: new Date().getFullYear(),
-      condition: "used",
       mileage: undefined,
       fuel_type: "",
       transmission: "",
       exterior_color: "",
       interior_color: "",
+      interior_features: "",
       body_type: "",
       purpose: "",
       engine: "",
       description: "",
       current_price: undefined,
       financing_markup_pct: "",
-      warranty_details: "",
       offer_details: "",
     }) as never,
   });
@@ -280,28 +279,6 @@ export function VehicleForm({
                     </Field>
                   )}
                 />
-                <Controller
-                  control={form.control}
-                  name="condition"
-                  render={({ field, fieldState }) => (
-                    <Field data-invalid={fieldState.invalid}>
-                      <FieldLabel>Condition</FieldLabel>
-                      <Select value={field.value} onValueChange={field.onChange}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            <SelectItem value="new">New</SelectItem>
-                            <SelectItem value="used">Used</SelectItem>
-                            <SelectItem value="certified">Certified Pre-Owned</SelectItem>
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                      {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                    </Field>
-                  )}
-                />
               </div>
             </FieldGroup>
           </div>
@@ -315,9 +292,15 @@ export function VehicleForm({
                   name="mileage"
                   render={({ field, fieldState }) => (
                     <Field data-invalid={fieldState.invalid}>
-                      <FieldLabel>Mileage (km)</FieldLabel>
+                      <FieldLabel htmlFor="vehicle-mileage">Mileage (km)</FieldLabel>
                       <InputGroup>
-                        <InputGroupInput {...field} value={field.value ?? ""} type="number" placeholder="50000" />
+                        <InputGroupInput
+                          {...field}
+                          id="vehicle-mileage"
+                          value={field.value ?? ""}
+                          type="number"
+                          placeholder="50000"
+                        />
                         <InputGroupAddon align="inline-end">km</InputGroupAddon>
                       </InputGroup>
                       {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
@@ -458,6 +441,26 @@ export function VehicleForm({
                   )}
                 />
               </div>
+              {/* BC-11: the buyer sees these inside details on the showroom page. */}
+              <Controller
+                control={form.control}
+                name="interior_features"
+                render={({ field, fieldState }) => (
+                  <Field data-invalid={fieldState.invalid}>
+                    <FieldLabel htmlFor="vehicle-interior-features">
+                      Interior features, e.g. leather seats, 7 seats, rear AC
+                    </FieldLabel>
+                    <Textarea
+                      {...field}
+                      value={field.value ?? ""}
+                      id="vehicle-interior-features"
+                      rows={3}
+                      placeholder="Leather seats, 7 seats, rear AC"
+                    />
+                    {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                  </Field>
+                )}
+              />
             </FieldGroup>
           </div>
         </div>
@@ -471,10 +474,16 @@ export function VehicleForm({
                 name="current_price"
                 render={({ field, fieldState }) => (
                   <Field data-invalid={fieldState.invalid}>
-                    <FieldLabel>Price</FieldLabel>
-                    <InputGroup className="[&>[data-slot=input-group-addon]]:absolute [&>[data-slot=input-group-addon]]:inset-y-0 [&>[data-slot=input-group-addon]]:left-0 [&>[data-slot=input-group-addon]]:z-10 [&>[data-slot=input-group-control]]:pl-8">
+                    <FieldLabel htmlFor="vehicle-current-price">Price</FieldLabel>
+                    <InputGroup>
                       <InputGroupAddon align="inline-start">₱</InputGroupAddon>
-                      <InputGroupInput {...field} value={field.value ?? ""} type="number" placeholder="500000" />
+                      <InputGroupInput
+                        {...field}
+                        id="vehicle-current-price"
+                        value={field.value ?? ""}
+                        type="number"
+                        placeholder="500000"
+                      />
                     </InputGroup>
                     {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                   </Field>
@@ -504,17 +513,6 @@ export function VehicleForm({
                       Leave blank to use GCE's default markup ({globalMarkupPct}%). The buyer always sees the financed
                       total, never the percentage.
                     </p>
-                    {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                  </Field>
-                )}
-              />
-              <Controller
-                control={form.control}
-                name="warranty_details"
-                render={({ field, fieldState }) => (
-                  <Field data-invalid={fieldState.invalid}>
-                    <FieldLabel>Warranty Details</FieldLabel>
-                    <Input {...field} value={field.value ?? ""} placeholder="1 year engine warranty" />
                     {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                   </Field>
                 )}

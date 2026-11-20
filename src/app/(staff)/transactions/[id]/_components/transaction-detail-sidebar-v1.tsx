@@ -89,7 +89,6 @@ export function TransactionDetailSidebarV1({
   conditionItems,
   checklistNameMap,
   onRecordPayment,
-  onRecordPaperwork,
   onWaiveInstallment,
   onRecordInstallmentPaid,
   onRecordAdvancePayment,
@@ -127,7 +126,6 @@ export function TransactionDetailSidebarV1({
     paymentKind: string,
     proof?: File,
   ) => Promise<boolean>;
-  readonly onRecordPaperwork: (documentKind: string) => Promise<void>;
   readonly onWaiveInstallment: (installmentId: string) => Promise<void>;
   readonly onRecordInstallmentPaid?: (installmentId: string, amount: string) => Promise<void>;
   /** T11: records one cash payment covering the installments the Sales Manager ticked. */
@@ -161,9 +159,8 @@ export function TransactionDetailSidebarV1({
   );
   const tState = state as TransactionState;
   // Task 32 role scoping: CEO approves (triage Approve/Reject + sell review), doesn't process.
-  // Processing actions (upload / record payment / record paperwork) are hidden for CEO;
+  // Processing actions (upload / record payment) are hidden for CEO;
   // docs and payments stay visible read-only. Head Accountant verifies documents.
-  const isCeo = userRole === "ceo";
   // Only the Head Accountant may verify purchase documents, so the buttons match
   // the server-side guard in verifyTransactionDocument.
   const canRecordCash = userRole === "sales_manager" || userRole === "ceo";
@@ -667,25 +664,6 @@ export function TransactionDetailSidebarV1({
                   </Button>
                 </>
               ) : null}
-            </div>
-          )}
-
-          {tState === "completed" && !isCeo && (
-            <div className="space-y-2 rounded-md border bg-muted/20 px-3 py-2">
-              <p className="text-muted-foreground text-xs">Record paperwork</p>
-              <div className="flex gap-1.5">
-                {["invoice", "receipt"].map((dk) => (
-                  <Button
-                    key={dk}
-                    variant="outline"
-                    size="sm"
-                    className="h-6 flex-1 px-2 text-xs"
-                    onClick={() => onRecordPaperwork(dk)}
-                  >
-                    Record {dk}
-                  </Button>
-                ))}
-              </div>
             </div>
           )}
 

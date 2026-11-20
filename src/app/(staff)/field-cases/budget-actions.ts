@@ -16,7 +16,9 @@ export async function requestFieldBudget(formData: FormData): Promise<BudgetResu
   return done("/staff/field-budget/request", {
     field_case_id: formData.get("field_case_id"),
     amount: formData.get("amount"),
-    purpose: formData.get("purpose"),
+    // BH-5: the purpose is the ticked category list, not free text.
+    categories: formData.getAll("categories[]"),
+    other: formData.get("other") ?? "",
   });
 }
 

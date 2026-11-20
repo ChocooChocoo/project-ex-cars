@@ -73,16 +73,17 @@ test.describe
       await page.getByLabel("There is no known issue").check();
       await pick(page, /^Meet-up method/, "GCE Visit");
       await page.getByLabel("Vehicle photos").setInputFiles(png("front.png"));
-      // T10: two IDs, each front and back (the ID type unlocks its file inputs), then the OR, the CR and the deed.
+      // T10: two IDs, each front and back (the ID type unlocks its file inputs). SN-13: the OR, the CR and
+      // the deed of sale are declared on a checklist now, not uploaded — the originals are checked at the meet-up.
       await pick(page, "ID type #1", "Passport");
       await pick(page, "ID type #2", "Driver's License");
       for (const n of [1, 2]) {
         await page.getByLabel(`Front of ID #${n}`).setInputFiles(png(`id-${n}-front.png`));
         await page.getByLabel(`Back of ID #${n}`).setInputFiles(png(`id-${n}-back.png`));
       }
-      await page.getByLabel("Official Receipt (OR) *").setInputFiles(png("or.png"));
-      await page.getByLabel("Certificate of Registration (CR) *").setInputFiles(png("cr.png"));
-      await page.getByLabel("Deed of Sale *").setInputFiles(png("deed.png"));
+      await pick(page, "Official Receipt (OR) *", "I have it");
+      await pick(page, "Certificate of Registration (CR) *", "I have it");
+      await pick(page, "Deed of Sale *", "I have it");
       await page.getByRole("button", { name: "Submit Vehicle", exact: true }).click();
 
       await page.waitForURL(/\/my-transactions\/[0-9a-f-]{36}/, { timeout: 30_000 });
@@ -96,8 +97,8 @@ test.describe
       await page.goto(`/marketing_specialist/transactions/${transactionId}`);
       await expect(page.getByRole("button", { name: "Propose ceiling to CEO" })).toBeDisabled();
 
-      // Four ID images, the OR, the CR and the deed of sale (the photos are attachments, verified on upload).
-      await verifyAll(page, 7);
+      // SN-11: only the four ID images need verifying now (the photos are attachments, verified on upload).
+      await verifyAll(page, 4);
 
       await page.getByLabel("Purchase ceiling (₱)").fill("500000");
       await press(page, "Propose ceiling to CEO");

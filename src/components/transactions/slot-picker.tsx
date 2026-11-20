@@ -10,6 +10,11 @@ import { cn } from "@/lib/utils";
 
 const CLOSED_MESSAGE = "GCE is closed on Sundays.";
 const RULE_MESSAGE = "Pick a time on the hour, 9 AM to 9 PM, Monday to Saturday.";
+// The lead-time line names the arrangement the minimum protects.
+const LEAD_NOTES: Record<"delivery" | "meetup", (days: number) => string> = {
+  delivery: (days) => `Delivery needs at least ${days} days from today.`,
+  meetup: (days) => `A halfway meet-up needs at least ${days} days from today.`,
+};
 
 export type SlotDraft = { date: string; hour: number | null };
 
@@ -38,6 +43,7 @@ export function SlotPicker({
   value,
   onChange,
   minDays = 0,
+  leadKind = "delivery",
   takenSlots = [],
   disabled = false,
   className,
@@ -50,6 +56,8 @@ export function SlotPicker({
   readonly onChange: (value: string, draft: SlotDraft) => void;
   /** Earliest day that can be booked, counted from today in Manila. Delivery needs 7. */
   readonly minDays?: number;
+  /** What the lead time protects, so the rule line names the right arrangement. */
+  readonly leadKind?: "delivery" | "meetup";
   readonly takenSlots?: string[];
   readonly disabled?: boolean;
   readonly className?: string;
@@ -125,7 +133,7 @@ export function SlotPicker({
       </div>
       <p id={`${id}-rule`} className="text-muted-foreground text-xs" aria-live="polite">
         {closed ? CLOSED_MESSAGE : RULE_MESSAGE}
-        {minDays > 0 && !closed ? ` Delivery needs at least ${minDays} days from today.` : ""}
+        {minDays > 0 && !closed ? ` ${LEAD_NOTES[leadKind](minDays)}` : ""}
       </p>
       {soldOut ? (
         <p className="text-muted-foreground text-xs" aria-live="polite">

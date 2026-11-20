@@ -2,7 +2,9 @@
 
 import { notFound, redirect } from "next/navigation";
 
+import type { ChecklistEntry } from "@/app/(staff)/inspections/_components/checklist-form";
 import { PageSkeleton } from "@/components/page-skeleton";
+import type { InspectionResultData } from "@/components/transactions/inspection-result";
 import { PurchaseFundsCard } from "@/components/transactions/purchase-funds-card";
 import { browserApi } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/errors";
@@ -42,6 +44,9 @@ type CasePack = {
   sellDetails?: Row | null;
   documents?: SignedTransactionDocument[];
   expenses?: Row[];
+  /** SH-7: the reported part-by-part inspection and the checklist the Mechanic answers. */
+  inspection?: InspectionResultData | null;
+  checklist?: ChecklistEntry[];
   fund?: (Row & { requested_by?: string }) | null;
 };
 
@@ -77,12 +82,10 @@ export function FieldCasePage() {
 
   const handover = page.data.handover ?? null;
   const papersStatus = (handover?.papers_status as PapersStatus | null | undefined) ?? null;
+  // BH-2: the Confidential Informant handles the contract on a buyer meet-up. The Mechanic's view of the case is the
+  // vehicle check only, so no member is passed for a Mechanic and no contract control renders for them.
   const member =
-    role === "confidential_informant" && fieldCase.assigned_confidential_informant === userId
-      ? "informant"
-      : kind === "buyer_meetup" && role === "mechanic" && fieldCase.mechanic_id === userId
-        ? "mechanic"
-        : null;
+    role === "confidential_informant" && fieldCase.assigned_confidential_informant === userId ? "informant" : null;
   const isInformant = role === "confidential_informant" && fieldCase.assigned_confidential_informant === userId;
   const approved = transaction.current_state === "approved";
   const open = !["completed", "cancelled"].includes(fieldCase.state) && approved;
@@ -143,6 +146,8 @@ export function FieldCasePage() {
         sellDetails={sell}
         documents={page.data.documents ?? []}
         expenses={expenses}
+        inspection={page.data.inspection ?? null}
+        checklist={(page.data.checklist ?? []) as ChecklistEntry[]}
         userRole={role}
         userId={userId}
       />

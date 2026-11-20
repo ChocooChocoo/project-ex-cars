@@ -69,13 +69,11 @@ describe("ShareLocation", () => {
 });
 
 describe("DeliveryLastSeen", () => {
-  it("links the last position to Google Maps", () => {
+  it("shows the last position without leaving the app (SH-8)", () => {
     render(<DeliveryLastSeen lat={14.5995} lng={120.9842} at="2026-10-27T02:00:00.000Z" />);
     expect(screen.getByText(/Last seen/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Open in Google Maps" })).toHaveAttribute(
-      "href",
-      "https://www.google.com/maps?q=14.5995,120.9842",
-    );
+    expect(screen.getByText("14.59950, 120.98420")).toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
 
   it("shows nothing before a position is shared", () => {

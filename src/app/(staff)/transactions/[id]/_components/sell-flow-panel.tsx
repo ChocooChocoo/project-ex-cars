@@ -17,7 +17,9 @@ import {
 } from "@/app/(staff)/transactions/sell-actions";
 import { approvePrice } from "@/app/(staff)/vehicles/actions";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { MeetupMap } from "@/components/maps/lazy-maps";
 import { TransactionStatusBadge } from "@/components/transaction-status-badge";
+import { InspectionResult, type InspectionResultData } from "@/components/transactions/inspection-result";
 import { PurchaseFundsCard } from "@/components/transactions/purchase-funds-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,8 +29,19 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  isFutureManilaInput,
+  isMeetupDate,
+  MEETUP_LEAD_DAYS,
+  MEETUP_LEAD_MESSAGE,
+  manilaDay,
+  manilaInputInstant,
+  manilaInputValue,
+} from "@/lib/transactions/buy-flow";
+import {
   approvedCeiling,
+  approvedCeilingOfKind,
   PROPOSAL_KIND_LABELS,
+  pesoAmount,
   SELL_MEETUP_METHOD_LABELS,
   type SellMeetupMethod,
   sellPapersVerified,
@@ -44,17 +57,21 @@ export interface SellFlowData {
   readonly proposals: Row[];
   readonly fieldCase: Row | null;
   readonly issueReport: Row | null;
+  /** SH-7: the seller meet-up inspection the Mechanic reported, part by part. */
+  readonly inspection?: InspectionResultData | null;
   readonly expenses: Row[];
   readonly threadId: string | null;
   readonly mechanics: Person[];
   /** T10: the car's purchase funds and whether the viewer requested them. */
   readonly fund?: Row | null;
   readonly fundIsMine?: boolean;
+  /** SN-3: where the bought car's original papers are, once their photos were sent to the CI. */
+  readonly papersCustody?: string | null;
 }
 
 // Next step for each stage, so every viewer sees where the offer stands (GCE Process Flows §1).
 function stageGuidance(state: TransactionState, data: SellFlowData, sell: Row | undefined): string {
-  if (state === "pending") return "Step 2: the Marketing Specialist verifies the IDs, OR, CR and deed of sale.";
+  if (state === "pending") return "Step 2: the Marketing Specialist verifies the IDs and reads the papers checklist.";
   if (state === "under_review") return "Waiting for the CEO to decide the proposed ceiling (7-day window).";
   if (state === "approved") {
     if (sell?.cleared_for_payment_at) return "Cleared for payment. The fund requester pays the seller.";
@@ -66,7 +83,7 @@ function stageGuidance(state: TransactionState, data: SellFlowData, sell: Row | 
     }
     if (!data.fieldCase.inspection_outcome) return "Step 6: the field team meets the seller and inspects the car.";
     if (!data.issueReport) return "Step 7: the Marketing Specialist files the Inspection Issue Report.";
-    return "Step 9: the Mechanic presents the revised price; record the seller's answer.";
+    return "Step 9: renegotiate with the seller in the chat, then record the agreed price under the revised ceiling.";
   }
   return "This sell offer has ended.";
 }
@@ -124,13 +141,37 @@ export function SellFlowPanel({
 
   const papersOk = sellPapersVerified(documents as { document_kind: unknown; verification_state: unknown }[]);
   const pendingProposal = data.proposals.find((p) => p.decision === "pending");
-  const ceiling = approvedCeiling(
-    data.proposals as { proposal_kind: unknown; decision: unknown; proposed_amount: unknown; created_at: unknown }[],
-  );
+  const proposals = data.proposals as {
+    proposal_kind: unknown;
+    decision: unknown;
+    proposed_amount: unknown;
+    created_at: unknown;
+  }[];
+  const ceiling = approvedCeiling(proposals);
+  // SH-6: the approved revised ceiling is a maximum. The final price is what the seller actually accepted.
+  const revisedCeiling = approvedCeilingOfKind(proposals, "revised_ceiling");
+  const purchaseCeiling = approvedCeilingOfKind(proposals, "purchase_ceiling");
   const method = sellDetails?.meetup_method as SellMeetupMethod | undefined;
+  // SH-12 / SH-14: the seller set the halfway pin on the map during the offer; the Marketing Specialist reads it
+  // and never types the location by hand.
+  const meetupPoint =
+    sellDetails?.meetup_lat != null && sellDetails?.meetup_lng != null
+      ? { lat: Number(sellDetails.meetup_lat), lng: Number(sellDetails.meetup_lng) }
+      : null;
+  const meetupAddress = (sellDetails?.meetup_address as string | null | undefined) ?? null;
+  // The server writes field_cases.location itself from the pin; a GCE visit still reads "GCE".
+  const locationForFieldCase = method === "gce_visit" ? "GCE" : (meetupAddress ?? "");
   const fieldCase = data.fieldCase;
   const report = data.issueReport;
   const reportProposal = data.proposals.find((p) => p.id === report?.proposal_id);
+  // SH-12 / BH-1: a Meet Halfway trip keeps the buyer's 2-day lead time; a GCE visit may be the same day.
+  const scheduleFloor =
+    method === "meet_halfway" ? `${manilaDay(new Date(), MEETUP_LEAD_DAYS)}T00:00` : manilaInputValue();
+  const typedSchedule = form.schedule ?? "";
+  const scheduleInvalid =
+    typedSchedule !== "" &&
+    (!isFutureManilaInput(typedSchedule) ||
+      (method === "meet_halfway" && !isMeetupDate(new Date(manilaInputInstant(typedSchedule)))));
 
   return (
     <Card className="shadow-xs">
@@ -148,7 +189,7 @@ export function SellFlowPanel({
       </CardHeader>
       <CardContent className="flex flex-col gap-4 text-sm">
         <dl className="grid gap-2 sm:grid-cols-2">
-          <Fact label="Seller's asking price" value={formatCurrency(Number(sellDetails?.offered_amount ?? 0))} />
+          <Fact label="Asking price" value={formatCurrency(Number(sellDetails?.offered_amount ?? 0))} />
           <Fact label="Meet-up method" value={method ? SELL_MEETUP_METHOD_LABELS[method] : "Not given"} />
           <Fact label="Condition" value={String(vehicle?.condition ?? "Not given")} />
           <Fact
@@ -162,9 +203,11 @@ export function SellFlowPanel({
               "Not given"
             }
           />
-          <Fact label="Approved ceiling" value={ceiling === null ? "—" : formatCurrency(ceiling)} />
+          {/* SH-5 / SH-6: four separate money figures. The ceilings are limits; the agreed price is the real one. */}
+          <Fact label="Approved ceiling" value={purchaseCeiling === null ? "—" : formatCurrency(purchaseCeiling)} />
+          <Fact label="Revised ceiling" value={revisedCeiling === null ? "—" : formatCurrency(revisedCeiling)} />
           <Fact
-            label="Agreed price"
+            label="Final agreed price"
             value={sellDetails?.agreed_price ? formatCurrency(Number(sellDetails.agreed_price)) : "—"}
           />
           <div className="sm:col-span-2">
@@ -191,7 +234,7 @@ export function SellFlowPanel({
             <p className="text-muted-foreground text-xs">
               {papersOk
                 ? "Papers verified. Check the ORCR matches the car and owner, then propose the ceiling."
-                : "Verify two valid IDs, the ORCR and the deed of sale in Documents first."}
+                : "Verify both valid IDs (front and back) in Documents first."}
             </p>
             <div className="grid gap-2 sm:grid-cols-2">
               <Field label="Purchase ceiling (₱)" htmlFor="ceiling-amount">
@@ -331,20 +374,28 @@ export function SellFlowPanel({
                 />
               </Field>
               <Field label="Meet-up date and time" htmlFor="meetup-schedule">
+                {/* SH-12: a past schedule is refused. The field opens on now in Manila, or on the halfway
+                    lead time, and the server checks the same rule again. */}
                 <Input
                   id="meetup-schedule"
                   type="datetime-local"
+                  min={scheduleFloor}
                   value={form.schedule ?? ""}
                   onChange={(e) => set("schedule")(e.target.value)}
                 />
+                {typedSchedule && !isFutureManilaInput(typedSchedule) ? (
+                  <p className="text-destructive text-xs">Set a future meet-up date and time.</p>
+                ) : null}
+                {typedSchedule && isFutureManilaInput(typedSchedule) && method === "meet_halfway" && scheduleInvalid ? (
+                  <p className="text-destructive text-xs">{MEETUP_LEAD_MESSAGE}</p>
+                ) : null}
               </Field>
-              <Field label="Meet-up location" htmlFor="meetup-location">
-                <Input
-                  id="meetup-location"
-                  value={form.location ?? (method === "gce_visit" ? "GCE" : "")}
-                  onChange={(e) => set("location")(e.target.value)}
-                />
-              </Field>
+              {locationForFieldCase ? (
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-xs">Meet-up location</span>
+                  <p className="text-sm">{locationForFieldCase}</p>
+                </div>
+              ) : null}
               {method === "gce_visit" ? null : (
                 <PersonSelect
                   label="Confidential Informant"
@@ -360,17 +411,33 @@ export function SellFlowPanel({
                 onChange={set("mechanic_id")}
               />
             </div>
+            {/* SH-12: the halfway point the seller pinned, read-only, with the address the pin filled. */}
+            {method === "meet_halfway" ? (
+              <div className="flex flex-col gap-2 rounded-md border p-3">
+                {meetupPoint ? (
+                  <MeetupMap value={meetupPoint} editable={false} />
+                ) : (
+                  <p className="text-muted-foreground text-xs">
+                    The seller did not set a meet-up point. Ask them to set one on the map.
+                  </p>
+                )}
+                <p className="text-xs">
+                  <span className="text-muted-foreground">Seller&apos;s meet-up address: </span>
+                  {meetupAddress ?? "Not given"}
+                </p>
+              </div>
+            ) : null}
             <Button
               size="sm"
               className="self-start"
-              disabled={busy}
+              disabled={busy || scheduleInvalid}
               onClick={() =>
                 submit(
                   recordAgreedPrice,
                   {
                     agreed_price: form.agreed_price,
-                    schedule: form.schedule ? new Date(form.schedule).toISOString() : "",
-                    location: form.location ?? (method === "gce_visit" ? "GCE" : ""),
+                    // The field is a Manila wall clock; this writes the offset in, so no device time zone is involved.
+                    schedule: manilaInputInstant(form.schedule ?? ""),
                     informant_id: form.informant_id,
                     mechanic_id: form.mechanic_id,
                   },
@@ -427,6 +494,8 @@ export function SellFlowPanel({
                   ? `Issue: ${fieldCase.issue_description} (repair estimate ${formatCurrency(Number(fieldCase.repair_estimate ?? 0))})`
                   : "Inspection not reported yet."}
             </p>
+            {/* SH-7: the part-by-part checklist the Mechanic reported, with costs and photos. */}
+            {data.inspection ? <InspectionResult result={data.inspection} title="Inspection detail" /> : null}
             <Link href={`/dashboard/field-cases/${fieldCase.id}`} className="text-primary text-xs underline">
               Open field case
             </Link>
@@ -436,7 +505,9 @@ export function SellFlowPanel({
         {isMs && state === "approved" && fieldCase?.inspection_outcome === "issue_found" && !report ? (
           <section className="flex flex-col gap-3 rounded-md border p-3">
             <p className="font-medium">Inspection Issue Report</p>
-            <p className="text-muted-foreground text-xs">Photos of the issue are under Documents (Inspection photo).</p>
+            <p className="text-muted-foreground text-xs">
+              Review the declared and hidden issues with their costs above before deciding.
+            </p>
             <Field label="Is the vehicle still profitable?" htmlFor="profitable">
               <Select value={form.is_profitable ?? ""} onValueChange={set("is_profitable")}>
                 <SelectTrigger id="profitable">
@@ -458,16 +529,8 @@ export function SellFlowPanel({
             </Field>
             {form.is_profitable === "yes" ? (
               <div className="grid gap-2 sm:grid-cols-2">
-                <Field label="Recalculated price (₱)" htmlFor="recalculated">
-                  <Input
-                    id="recalculated"
-                    type="number"
-                    min="0"
-                    value={form.recalculated_price ?? ""}
-                    onChange={(e) => set("recalculated_price")(e.target.value)}
-                  />
-                </Field>
-                <Field label="New ceiling (₱)" htmlFor="new-ceiling">
+                {/* SH-6: the revised ceiling is the most GCE may pay, so it is the only amount collected here. */}
+                <Field label="Revised ceiling (₱)" htmlFor="new-ceiling">
                   <Input
                     id="new-ceiling"
                     type="number"
@@ -481,13 +544,14 @@ export function SellFlowPanel({
                     <Textarea
                       id="seller-remarks"
                       rows={2}
-                      placeholder="Why the price changed, e.g. the timing belt needs replacing"
+                      placeholder="Why the offer dropped, e.g. the timing belt needs replacing"
                       value={form.seller_remarks ?? ""}
                       onChange={(e) => set("seller_remarks")(e.target.value)}
                     />
                   </Field>
                   <p className="mt-1 text-muted-foreground text-xs">
-                    The seller sees the recalculated price and these remarks once the CEO approves.
+                    The seller sees these remarks. The final price is agreed with them in the chat after the CEO
+                    approves, and it never shows the ceiling.
                   </p>
                 </div>
               </div>
@@ -502,7 +566,6 @@ export function SellFlowPanel({
                   {
                     is_profitable: form.is_profitable,
                     profitability_reason: form.profitability_reason,
-                    recalculated_price: form.recalculated_price,
                     new_ceiling: form.new_ceiling,
                     seller_remarks: form.seller_remarks,
                   },
@@ -525,8 +588,7 @@ export function SellFlowPanel({
             </p>
             {report.is_profitable ? (
               <p className="text-xs">
-                Recalculated {formatCurrency(Number(report.recalculated_price))} · New ceiling{" "}
-                {formatCurrency(Number(report.new_ceiling))}
+                Revised ceiling {formatCurrency(Number(report.new_ceiling))}
                 {report.seller_response ? ` · Seller ${String(report.seller_response)}` : ""}
               </p>
             ) : null}
@@ -534,22 +596,50 @@ export function SellFlowPanel({
               <p className="text-xs">Remarks for the seller: {String(report.seller_remarks)}</p>
             ) : null}
             {isMs && state === "approved" && reportProposal?.decision === "approved" && !report.seller_response ? (
-              <div className="flex gap-2 pt-1">
-                <Button
-                  size="sm"
-                  disabled={busy}
-                  onClick={() => submit(recordSellerResponse, { response: "agreed" }, "Seller's agreement recorded.")}
-                >
-                  Seller agrees
-                </Button>
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  disabled={busy}
-                  onClick={() => submit(recordSellerResponse, { response: "refused" }, "Seller's refusal recorded.")}
-                >
-                  Seller refuses
-                </Button>
+              // SH-6: the approved revised ceiling is a maximum, so the Marketing Specialist renegotiates and
+              // records the price the seller actually accepted, within it.
+              <div className="flex flex-col gap-2 pt-1">
+                <p className="font-medium text-xs">Record second negotiation</p>
+                <div className="flex flex-wrap items-end gap-2">
+                  <Field
+                    label={`Agreed price (₱, max ${ceiling === null ? "—" : formatCurrency(ceiling)})`}
+                    htmlFor="negotiated-price"
+                  >
+                    <Input
+                      id="negotiated-price"
+                      type="number"
+                      min="0"
+                      value={form.negotiated_price ?? ""}
+                      onChange={(e) => set("negotiated_price")(e.target.value)}
+                    />
+                  </Field>
+                  <Button
+                    size="sm"
+                    disabled={busy || !(Number(form.negotiated_price) > 0)}
+                    onClick={() =>
+                      submit(
+                        recordSellerResponse,
+                        { response: "agreed", agreed_price: form.negotiated_price },
+                        "Agreed price recorded.",
+                      )
+                    }
+                  >
+                    Seller agrees
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    disabled={busy}
+                    onClick={() => submit(recordSellerResponse, { response: "refused" }, "Seller's refusal recorded.")}
+                  >
+                    Seller refuses
+                  </Button>
+                </div>
+                {Number(form.negotiated_price) > 0 && ceiling !== null && Number(form.negotiated_price) > ceiling ? (
+                  <p className="text-destructive text-xs">
+                    The agreed price cannot exceed the approved ceiling of {pesoAmount(ceiling)}.
+                  </p>
+                ) : null}
               </div>
             ) : null}
           </section>

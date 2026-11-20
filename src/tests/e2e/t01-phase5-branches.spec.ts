@@ -237,10 +237,9 @@ test.describe
       await page.getByRole("button", { name: "Complete reconditioning" }).click();
       await expect(page.getByText("Reconditioning completed.")).toBeVisible();
 
-      await signInAs(page, "sales_manager@gce.local");
-      await open(page, `/sales_manager/vehicles/${vehicleId}`);
-      await page.getByRole("button", { name: "Mark papers re-processed" }).click();
-      await expect(page.getByText("Papers marked re-processed.")).toBeVisible();
+      // SH-2: there is no Sales Manager "papers re-processed" step any more — completing the
+      // reconditioning is what puts the car back in front of the Marketing Specialist for a reprice.
+      await page.waitForLoadState("networkidle");
 
       // Marketing Specialist reprices; the CEO approves; the car is listed again.
       const { data: car } = await db().from("vehicles").select("stock_code").eq("id", vehicleId).single();

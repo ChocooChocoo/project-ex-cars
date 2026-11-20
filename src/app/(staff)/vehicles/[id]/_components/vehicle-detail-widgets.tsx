@@ -30,7 +30,6 @@ export interface VehicleDetail {
   description: string | null;
   current_price: number | null;
   financing_markup_pct: number | string | null;
-  warranty_details: string | null;
   offer_details: string | null;
   listing_state: string | null;
   created_at: string | null;
@@ -114,7 +113,6 @@ export function VehicleMetricCards({ vehicle }: { readonly vehicle: VehicleDetai
 
 export function VehiclePurchaseCard({ vehicle }: { readonly vehicle: VehicleDetail }) {
   const specs: Array<{ label: string; value: string }> = [
-    { label: "Condition", value: vehicle.condition ?? "—" },
     { label: "Mileage", value: vehicle.mileage ? `${vehicle.mileage.toLocaleString()} km` : "—" },
     { label: "Transmission", value: vehicle.transmission ?? "—" },
     { label: "Fuel Type", value: vehicle.fuel_type ?? "—" },
@@ -165,15 +163,6 @@ export function VehiclePurchaseCard({ vehicle }: { readonly vehicle: VehicleDeta
             </div>
           ))}
         </div>
-        {vehicle.warranty_details ? (
-          <>
-            <Separator />
-            <div>
-              <span className="text-muted-foreground text-sm">Warranty</span>
-              <p className="text-sm">{vehicle.warranty_details}</p>
-            </div>
-          </>
-        ) : null}
       </CardContent>
     </Card>
   );

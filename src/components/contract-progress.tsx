@@ -1,11 +1,12 @@
 import { format } from "date-fns";
 
-import { isFieldArrangement, isHalfwayCashRequest, missingContractCopies } from "@/lib/transactions/buy-flow";
+import { isFieldArrangement, missingContractCopies } from "@/lib/transactions/buy-flow";
 
 type Row = Record<string, unknown>;
 
 // What has been recorded about a sale's contract so far: signing, the copies kept and, in the field,
 // the meeting and the money. Shown to staff on the request and to the team on the field case.
+// BH-2: only the Confidential Informant keeps a signed copy; the Mechanic's step is gone.
 export function ContractProgress({ details, handover }: { readonly details: Row | null; readonly handover: Row }) {
   const field = isFieldArrangement(details);
   const steps: [string, unknown][] = [
@@ -16,9 +17,6 @@ export function ContractProgress({ details, handover }: { readonly details: Row 
           ["Signing reported by the Confidential Informant", handover.signing_reported_at],
           ["Signed copy kept by the Confidential Informant", handover.ci_copy_at],
         ] as [string, unknown][])
-      : []),
-    ...(isHalfwayCashRequest(details)
-      ? ([["Signed copy kept by the Mechanic", handover.mechanic_copy_at]] as [string, unknown][])
       : []),
   ];
   const missing = handover.contract_state === "signed" ? missingContractCopies(details, handover) : [];

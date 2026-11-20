@@ -37,6 +37,35 @@ export interface ChecklistResult {
   }>;
 }
 
+/** One system with the components and parts hanging under it. */
+export interface ChecklistBranch {
+  readonly system: ChecklistEntry;
+  readonly components: { readonly component: ChecklistEntry; readonly parts: ChecklistEntry[] }[];
+}
+
+/**
+ * SH-7: the checklist tree every inspection screen renders. `inspection_checklist_nodes` comes back flat, in
+ * `display_order`, and a part always hangs off a component, which hangs off a system.
+ */
+export function buildChecklistTree(nodes: readonly ChecklistEntry[]): ChecklistBranch[] {
+  const systems = nodes.filter((node) => node.level === "system");
+  const childrenOf = (parentId: string) => nodes.filter((node) => node.parent_id === parentId);
+
+  return systems.map((system) => ({
+    system,
+    components: childrenOf(system.id).map((component) => ({ component, parts: childrenOf(component.id) })),
+  }));
+}
+
+/**
+ * SH-7: the nodes a report must answer, i.e. every leaf. A part is one; a system or component is one only when
+ * nothing hangs under it (the seeded tree has three levels, but a checklist can be published with two).
+ */
+export function checklistLeafNodes(nodes: readonly ChecklistEntry[]): ChecklistEntry[] {
+  const parentIds = new Set(nodes.map((node) => node.parent_id).filter((id): id is string => id !== null));
+  return nodes.filter((node) => !parentIds.has(node.id));
+}
+
 interface ChecklistFormProps {
   inspectionId: string;
   checklist: ChecklistEntry[];
@@ -49,13 +78,13 @@ const statusLabels: Record<string, string> = {
   for_replacement: "For Replacement",
 };
 
-const levelIndent: Record<string, string> = {
+export const CHECKLIST_LEVEL_INDENT: Record<string, string> = {
   system: "ml-0",
   component: "ml-6",
   part: "ml-12",
 };
 
-const levelBadge: Record<string, string> = {
+export const CHECKLIST_LEVEL_BADGE: Record<string, "default" | "secondary" | "outline"> = {
   system: "default",
   component: "secondary",
   part: "outline",
@@ -227,13 +256,10 @@ function ChecklistRow({
   const isLoading = submitting === entry.id;
 
   return (
-    <div className={`${levelIndent[entry.level]} space-y-3 rounded-md border px-3.5 py-3`}>
+    <div className={`${CHECKLIST_LEVEL_INDENT[entry.level]} space-y-3 rounded-md border px-3.5 py-3`}>
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <Badge
-            variant={levelBadge[entry.level] as "default" | "secondary" | "outline"}
-            className="text-xs capitalize"
-          >
+          <Badge variant={CHECKLIST_LEVEL_BADGE[entry.level] ?? "outline"} className="text-xs capitalize">
             {entry.level}
           </Badge>
           <span className="text-sm">{entry.name}</span>

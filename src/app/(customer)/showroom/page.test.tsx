@@ -70,4 +70,27 @@ describe("customer showroom (static pages)", () => {
     expect(notFound).toHaveBeenCalled();
     spy.mockRestore();
   });
+
+  it("BC-11: shows Interior, Interior features and Best for", async () => {
+    browserApi.mockResolvedValue({
+      vehicle: {
+        id: "car-1",
+        listing_state: "available",
+        make: "Toyota",
+        model: "Innova",
+        interior_color: "Black",
+        interior_features: "Leather seats, 7 seats, rear AC",
+        purpose: "Family Car",
+      },
+      media: [],
+    });
+    render(<VehicleDetailPage />);
+
+    const interior = await screen.findByText("Interior");
+    expect(interior.nextElementSibling).toHaveTextContent("Black");
+    expect(screen.getByText("Interior features").nextElementSibling).toHaveTextContent(
+      "Leather seats, 7 seats, rear AC",
+    );
+    expect(screen.getByText("Best for").nextElementSibling).toHaveTextContent("Family Car");
+  });
 });

@@ -64,3 +64,8 @@ export async function uploadFieldDocument(formData: FormData): Promise<HandoverR
 export async function recordFieldSignatures(formData: FormData): Promise<HandoverResult> {
   return send("record-field-signatures", formData, true);
 }
+
+// BC-3: the Sales Manager signs a GCE-visit sale for GCE.
+export async function recordSmSignature(formData: FormData): Promise<HandoverResult> {
+  return send("record-sm-signature", formData, true);
+}

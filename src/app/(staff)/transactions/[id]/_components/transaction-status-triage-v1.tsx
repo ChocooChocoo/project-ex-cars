@@ -4,6 +4,7 @@
 import { format } from "date-fns";
 
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { RejectReasonDialog } from "@/components/reject-reason-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { canRecordNoShow, isDirectPayment } from "@/lib/transactions/buy-flow";
@@ -44,6 +45,8 @@ const STATE_GUIDANCE: Record<TransactionState, (kind: string) => string> = {
 
 export type VisitOutcome = "declined" | "legit" | "not_legit" | "no_show";
 
+const PREREQUISITES_HINT = "Verify the IDs and proof of billing first.";
+
 export function TransactionStatusTriageV1({
   state,
   kind,
@@ -53,6 +56,7 @@ export function TransactionStatusTriageV1({
   userRole,
   transitioning,
   onTransition,
+  verifiedPrerequisites = null,
   paymentMethod = null,
   papersRequested = false,
   visit = null,
@@ -65,7 +69,9 @@ export function TransactionStatusTriageV1({
   readonly updatedAt: string;
   readonly userRole: string;
   readonly transitioning: boolean;
-  readonly onTransition: (to: TransactionState) => Promise<void>;
+  readonly onTransition: (to: TransactionState, reason?: string) => Promise<void>;
+  /** BC-8: two verified IDs (front and back) and a verified proof of billing, as the API decided it. */
+  readonly verifiedPrerequisites?: boolean | null;
   readonly paymentMethod?: string | null;
   readonly papersRequested?: boolean;
   readonly visit?: { kind: string; schedule: string; deliveryStatus?: string | null } | null;
@@ -145,25 +151,40 @@ export function TransactionStatusTriageV1({
         {allowed.length > 0 ? (
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             {allowed.map((to) => {
-              // T06: approving or rejecting a request asks for confirmation first.
+              // T06: approving or rejecting a request asks for confirmation first. BC-8: Approve stays disabled
+              // until the documents card reports two verified IDs (front and back) and a verified proof of billing;
+              // the API refuses the same approval, because both read `verified_prerequisites`.
               const decision = to === "approved" ? "approve" : to === "rejected" ? "reject" : null;
+              const blocked = to === "approved" && verifiedPrerequisites === false;
               const button = (
                 <button
                   key={to}
                   type="button"
-                  disabled={transitioning}
+                  disabled={transitioning || blocked}
                   onClick={decision ? undefined : () => onTransition(to)}
                   className="space-y-1 rounded-md border bg-muted/20 px-2.5 py-2 text-left transition-colors hover:bg-muted/35 disabled:opacity-50"
                 >
                   <div className="text-muted-foreground text-xs">Transition</div>
                   <div className="font-semibold text-sm capitalize">{TRANSACTION_ACTION_LABELS[to]}</div>
                   <div className="text-muted-foreground text-xs">
-                    Mark as {TRANSACTION_STATE_LABELS[to].toLowerCase()}
+                    {blocked ? PREREQUISITES_HINT : `Mark as ${TRANSACTION_STATE_LABELS[to].toLowerCase()}`}
                   </div>
                 </button>
               );
-              return decision ? (
-                <ConfirmDialog key={to} action={decision} onConfirm={() => onTransition(to)} trigger={button} />
+              return decision === "approve" ? (
+                <ConfirmDialog key={to} action="approve" onConfirm={() => onTransition(to)} trigger={button} />
+              ) : decision === "reject" ? (
+                // BC-9: a rejection always carries a reason, and the button stays disabled until one is typed.
+                <RejectReasonDialog
+                  key={to}
+                  trigger={button}
+                  title="Why is this request being rejected?"
+                  description="The buyer reads this reason on their request. Their visit slot is released."
+                  label="Reason for rejecting"
+                  placeholder="e.g. The proof of billing is not in the buyer's name"
+                  confirmLabel="Reject request"
+                  onConfirm={(reason) => onTransition(to, reason)}
+                />
               ) : (
                 button
               );

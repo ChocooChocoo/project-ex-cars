@@ -37,6 +37,9 @@ export function purchaseExcessCents(fund: Row | null, agreedPrice: number, expen
 
 // T10 Selling funds: the Marketing Specialist (GCE Visit) or the Confidential Informant (Meet Halfway) requests
 // the car payment (plus travel on a Meet Halfway), pays the seller once the car is cleared, and returns the excess.
+// SH-5: every figure here is `sell_details.agreed_price` — the price agreed in the second negotiation, never the
+// approved ceiling. A fund requested before that renegotiation still pays the final price, and the difference
+// (plus unspent travel) is the excess to return.
 export function PurchaseFundsCard({
   transactionId,
   fieldCaseId,
@@ -111,15 +114,29 @@ export function PurchaseFundsCard({
             {released ? (
               <div>
                 <dt className="text-muted-foreground text-xs">Excess to return</dt>
-                <dd>{formatCurrency(excess)}</dd>
+                <dd>{excess > 0 ? formatCurrency(excess) : "No excess"}</dd>
+              </div>
+            ) : null}
+            {fund.rejection_reason ? (
+              <div className="sm:col-span-2">
+                <dt className="text-muted-foreground text-xs">Rejected</dt>
+                <dd className="whitespace-pre-wrap break-words rounded-md border border-destructive/40 bg-destructive/5 p-2">
+                  Rejected: {String(fund.rejection_reason)}
+                </dd>
               </div>
             ) : null}
             {fund.returned_at ? (
               <div>
                 <dt className="text-muted-foreground text-xs">Returned</dt>
                 <dd>
-                  {formatCurrency(Number(fund.returned_cents ?? 0) / 100)} ·{" "}
-                  {fund.return_confirmed_at ? "confirmed" : "waiting for the Head Accountant"}
+                  {Number(fund.returned_cents ?? 0) === 0 ? (
+                    "No excess"
+                  ) : (
+                    <>
+                      {formatCurrency(Number(fund.returned_cents ?? 0) / 100)} ·{" "}
+                      {fund.return_confirmed_at ? "confirmed" : "waiting for the Head Accountant"}
+                    </>
+                  )}
                 </dd>
               </div>
             ) : null}
@@ -172,8 +189,21 @@ export function PurchaseFundsCard({
             <p className="text-muted-foreground text-xs">Pay the seller once the inspection clears the car.</p>
           )
         ) : null}
-
-        {isRequester && fund && released && !fund.returned_at ? (
+        {/* BH-3 / SN-2 / SH-11: zero excess is one click and never asks for a cash amount. */}
+        {isRequester && fund && released && !fund.returned_at && excess === 0 ? (
+          <Button
+            size="sm"
+            variant="outline"
+            className="self-start"
+            disabled={busy}
+            onClick={() =>
+              send(recordBudgetReturn, { field_case_id: fieldCaseId, returned: "0" }, "No excess recorded.")
+            }
+          >
+            No excess — mark completed
+          </Button>
+        ) : null}
+        {isRequester && fund && released && !fund.returned_at && excess > 0 ? (
           <div className="flex flex-wrap items-end gap-2">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="funds-returned">Cash returned (₱)</Label>

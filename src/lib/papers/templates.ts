@@ -7,11 +7,27 @@ import { GCE_SELLER } from "@/lib/transactions/buy-flow";
 export const PAPER_BLANK = "________";
 
 // T11: the buyer and the Confidential Informant sign the contract on the device in the field, so both
-// signature images are kept in the private bucket. The paper stays text-only and prints the paths as a
-// record; the images are shown under the sheet.
+// signature images are kept in the private bucket. The missed payment policy prints the paths as a record.
 export interface PaperSignatures {
   buyer: string | null;
   ci: string | null;
+}
+
+// BC-2 / BC-3: who signs a paper, as the API reports it. The buyer's e-signature, and GCE's representative: the
+// Sales Manager at a GCE visit, the Confidential Informant in the field. A missing image leaves the line for pen.
+export interface PaperSigners {
+  buyerUrl: string | null;
+  gceName: string | null;
+  gceRole: string;
+  gceUrl: string | null;
+}
+
+// One "signature over printed name" block, drawn on the sheet itself.
+export interface PaperSignatureBlock {
+  party: string;
+  name: string;
+  caption: string;
+  imageUrl: string | null;
 }
 
 type Embedded<T> = T | T[] | null;
@@ -25,7 +41,6 @@ interface VehicleSource {
   engine_number?: string | null;
   chassis_number?: string | null;
   vin?: string | null;
-  warranty_details?: string | null;
 }
 
 // The joined transaction row the print pages read: the buyer is `transactions.customer_id`, so
@@ -57,7 +72,6 @@ export interface PaperSale {
     plate: string;
     engine: string;
     chassis: string;
-    warranty: string;
   };
   price: string;
   date: string;
@@ -75,11 +89,23 @@ export interface PaperFinancing {
 export interface PaperDocument {
   title: string;
   paragraphs: string[];
+  signatures?: PaperSignatureBlock[];
 }
 
 function one<T>(value: Embedded<T>): T | null {
   return Array.isArray(value) ? (value[0] ?? null) : value;
 }
+
+// BC-6: the six missed-payment clauses. The Missed Payment Policy and the Policy & Warranty print the same list,
+// so the rule is written once.
+export const MISSED_PAYMENT_CLAUSES = [
+  "1. The client pays one monthly installment on or before each due date in the schedule.",
+  "2. Four (4) consecutive missed monthly payments is a default under this agreement.",
+  "3. On default, GCE may tow and take back the motor vehicle described above, with prior written notice to the client at the address stated here.",
+  "4. Towing, storage and recovery costs are for the client's account and are added to the outstanding balance.",
+  "5. The client may stop the towing by paying every missed installment and these costs in full before the recovery team takes the vehicle.",
+  "6. Returning the vehicle voluntarily does not cancel the remaining balance unless GCE accepts the surrender in writing.",
+] as const;
 
 // The fixed financing policy, filled in with the client, the car and the money. The same wording is
 // printed for every sale; only the recorded values change. T11: a policy printed after the field signing
@@ -96,14 +122,7 @@ export function missedPaymentPolicy(
       `CLIENT\nName: ${sale.buyer.name}\nAddress: ${sale.buyer.address}`,
       `MOTOR VEHICLE FINANCED\n${vehicleLines(sale)}`,
       `FINANCING\n${financingLines(financing)}`,
-      [
-        "1. The client pays one monthly installment on or before each due date in the schedule.",
-        "2. Four (4) consecutive missed monthly payments is a default under this agreement.",
-        "3. On default, GCE may tow and take back the motor vehicle described above, with prior written notice to the client at the address stated here.",
-        "4. Towing, storage and recovery costs are for the client's account and are added to the outstanding balance.",
-        "5. The client may stop the towing by paying every missed installment and these costs in full before the recovery team takes the vehicle.",
-        "6. Returning the vehicle voluntarily does not cancel the remaining balance unless GCE accepts the surrender in writing.",
-      ].join("\n"),
+      MISSED_PAYMENT_CLAUSES.join("\n"),
       ...(signatures ? [signatureLines(sale, signatures)] : []),
       `CLIENT\nSignature over printed name: ______________________________\nPrinted name: ${sale.buyer.name}\nDate: ____________________`,
       "GCE REPRESENTATIVE\nSignature over printed name: ______________________________\nPrinted name: ______________________________\nDate: ____________________",
@@ -193,7 +212,6 @@ export function paperSale(row: TransactionPaperSource): PaperSale {
       plate: printed(car?.plate_number),
       engine: printed(car?.engine_number),
       chassis: chassis === PAPER_BLANK ? printed(car?.vin) : chassis,
-      warranty: printed(car?.warranty_details),
     },
     price: printedPrice(details?.final_price),
     date: printedDate(row.completed_at ?? row.opened_at),
@@ -220,10 +238,29 @@ function signatureLines(sale: PaperSale, signatures: PaperSignatures): string {
   ].join("\n");
 }
 
+// BC-2 / BC-3: BUYER and SELLER blocks, each a signature over a printed name. GCE signs through its
+// representative, named on the block when the API knows who signed.
+function signatureBlocks(sale: PaperSale, signers: PaperSigners | null): PaperSignatureBlock[] {
+  return [
+    {
+      party: "BUYER",
+      name: sale.buyer.name,
+      caption: "Signature over printed name",
+      imageUrl: signers?.buyerUrl ?? null,
+    },
+    {
+      party: `SELLER: ${GCE_SELLER}`,
+      name: `By: ${signers?.gceName ?? PAPER_BLANK}`,
+      caption: `Signature over printed name${signers?.gceRole ? ` (${signers.gceRole})` : ""}`,
+      imageUrl: signers?.gceUrl ?? null,
+    },
+  ];
+}
+
 // T11: the sale contract. The Sales Manager writes the body and the Head Accountant approves it; the buyer
-// and the Confidential Informant sign it in the field. A contract without a body prints the blank line
-// note instead, so the sheet is never an empty page.
-export function contract(sale: PaperSale, contractBody: string | null, signatures: PaperSignatures): PaperDocument {
+// signs it in the app (or on paper in the field) and GCE's representative signs for GCE. A contract without a
+// body prints the blank line note instead, so the sheet is never an empty page.
+export function contract(sale: PaperSale, contractBody: string | null, signers: PaperSigners | null): PaperDocument {
   const body = String(contractBody ?? "").trim();
   return {
     title: "CONTRACT",
@@ -232,12 +269,12 @@ export function contract(sale: PaperSale, contractBody: string | null, signature
       `MOTOR VEHICLE\n${vehicleLines(sale)}\nTotal contract price: ${sale.price}`,
       body === "" ? `TERMS\n${PAPER_BLANK}\nGCE has not recorded the contract terms yet.` : `TERMS\n${body}`,
       `The BUYER and the SELLER have read this contract and sign it on ${sale.date}.`,
-      signatureLines(sale, signatures),
     ],
+    signatures: signatureBlocks(sale, signers),
   };
 }
 
-export function deedOfSale(sale: PaperSale): PaperDocument {
+export function deedOfSale(sale: PaperSale, signers: PaperSigners | null = null): PaperDocument {
   return {
     title: "DEED OF SALE",
     paragraphs: [
@@ -246,24 +283,34 @@ export function deedOfSale(sale: PaperSale): PaperDocument {
       vehicleLines(sale),
       "That the SELLER is the absolute owner of the motor vehicle described above and warrants that the same is free from all liens and encumbrances.",
       `IN WITNESS WHEREOF, the SELLER and the BUYER have signed this Deed on ${sale.date}.`,
-      `SELLER: ${GCE_SELLER}\nBy: ______________________________`,
-      `BUYER: ${sale.buyer.name}\nSignature: ______________________________`,
     ],
+    signatures: signatureBlocks(sale, signers),
   };
 }
 
-export function policyWarranty(sale: PaperSale): PaperDocument {
+// BC-6: the Policy & Warranty of a financing sale: GCE's standard warranty (it used to be typed per car) and the
+// missed-payment clauses, signed by the buyer and GCE. A Full Payment sale has no Policy & Warranty.
+export function policyWarranty(
+  sale: PaperSale,
+  financing: PaperFinancing,
+  signers: PaperSigners | null = null,
+): PaperDocument {
   return {
     title: "POLICY & WARRANTY",
     paragraphs: [
-      "DRAFT — for client review. GCE has not issued the final Policy & Warranty terms yet.",
-      `This Policy & Warranty covers the motor vehicle sold by ${GCE_SELLER} to ${sale.buyer.name} on ${sale.date}, described as follows:`,
-      `${vehicleLines(sale)}\nWarranty: ${sale.vehicle.warranty}`,
-      "GCE repairs or replaces, at its option, any part covered by this warranty that fails because of a defect in materials or workmanship within the warranty period.",
-      "This warranty does not cover damage from an accident, misuse, neglect, unauthorized repairs, or normal wear on consumable parts.",
-      "The warranty is void if the vehicle is repaired outside GCE or its authorized service partners.",
-      "The buyer keeps this Policy & Warranty together with the Deed of Sale and presents it when claiming a repair.",
+      `This Policy & Warranty covers the motor vehicle sold on financing by ${GCE_SELLER} to ${sale.buyer.name} on ${sale.date}, described as follows:`,
+      vehicleLines(sale),
+      `FINANCING\n${financingLines(financing)}`,
+      [
+        "WARRANTY",
+        "GCE inspects and reconditions every vehicle before release. GCE repairs or replaces, at its option, any part that fails because of a defect in materials or workmanship within thirty (30) days or 1,000 km from release, whichever comes first.",
+        "This warranty does not cover damage from an accident, misuse, neglect, unauthorized repairs, or normal wear on consumable parts such as tires, brake pads, wiper blades, bulbs and the battery.",
+        "The warranty is void if the vehicle is repaired outside GCE or its authorized service partners.",
+        "The buyer keeps this Policy & Warranty together with the Deed of Sale and presents it when claiming a repair.",
+      ].join("\n"),
+      `MISSED PAYMENT POLICY\n${MISSED_PAYMENT_CLAUSES.join("\n")}`,
       `Issued by ${GCE_SELLER} on ${sale.date}.`,
     ],
+    signatures: signatureBlocks(sale, signers),
   };
 }

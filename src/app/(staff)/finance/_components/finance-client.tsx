@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { Banknote, Check, ChevronRight, Plus, Send, Undo2 } from "lucide-react";
@@ -17,6 +18,7 @@ import {
   verifyFinancialEntry,
 } from "@/app/(staff)/finance/actions";
 import { TablePager, usePagedRows } from "@/components/table-pager";
+import { InspectionResult, type InspectionResultData } from "@/components/transactions/inspection-result";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -53,6 +55,34 @@ export interface FinancialEntryRow {
   description: string;
   verified_by: string | null;
   recorded_at: string;
+  /** SN-10: the source of an automatic movement, so the row links back to the car or the field case. */
+  transaction_id?: string | null;
+  field_case_id?: string | null;
+}
+
+/** SN-9: what a fund request is actually about, as the Finance page reads it beside the request. */
+export interface DisbursementContext {
+  transaction: { id: string; kind: string; state: string; arrangement: string | null };
+  vehicle: {
+    stock_code: string;
+    year: number;
+    make: string;
+    model: string;
+    condition: string | null;
+    listing_state: string | null;
+  } | null;
+  party: { role: "seller" | "buyer"; name: string | null };
+  prices: { agreed_cents: number | null; final_cents: number | null; requested_cents: number };
+  payment: {
+    option: string | null;
+    method: string | null;
+    received_cents: number;
+    downpayment: { amount_cents: number | null; status: string };
+    delivery_fee: { amount_cents: number | null; status: string };
+  };
+  issues: { condition: string | null; has_known_issues: boolean | null; declared_issues: string | null } | null;
+  /** SH-3: the seller meet-up inspection, serialised once by VehicleInspection::pack(). */
+  inspection: InspectionResultData | null;
 }
 
 export interface DisbursementRow {
@@ -70,6 +100,16 @@ export interface DisbursementRow {
   returned_cents?: number | null;
   returned_at?: string | null;
   return_confirmed_at?: string | null;
+  /** BH-4: why the Head Accountant rejected it, shown to the person who asked. */
+  rejection_reason?: string | null;
+  context?: DisbursementContext | null;
+}
+
+/** SN-10: opening balance plus every posted movement, as Laravel sums it. */
+export interface CashOnHand {
+  opening_cents: number;
+  movements_cents: number;
+  total_cents: number;
 }
 
 export interface PurchaseTransactionRow {
@@ -90,6 +130,8 @@ interface FinanceClientProps {
   isInformant: boolean;
   /** T10: the Head Accountant confirms a field budget's returned excess. */
   canConfirmReturn?: boolean;
+  /** SN-10: opening balance plus movements, summed by Laravel. Omitted keeps the client's own sum. */
+  cashOnHand?: CashOnHand | null;
 }
 
 const ENTRY_LABELS: Record<FinancialEntryKind, string> = {
@@ -125,7 +167,30 @@ export function getFinanceSummary(entries: FinancialEntryRow[]) {
   return { revenueTotal, expenseTotal, netTotal: revenueTotal - expenseTotal, count: entries.length };
 }
 
-const isOutflow = (kind: FinancialEntryKind) => kind === "expense" || kind === "disbursement";
+/**
+ * SN-10 sign convention, the one Laravel's Ledger applies: `amount_cents` is always a positive magnitude, and the
+ * entry kind decides the direction. Revenue and adjustment put money in the drawer, expense and disbursement take
+ * it out. Cash on hand = the opening balance plus the sum of these effects.
+ */
+const ENTRY_SIGN: Record<FinancialEntryKind, 1 | -1> = {
+  revenue: 1,
+  adjustment: 1,
+  expense: -1,
+  disbursement: -1,
+};
+
+/** The signed cash effect of one entry, in centavos. */
+export function entryEffectCents(entry: FinancialEntryRow): number {
+  return ENTRY_SIGN[entry.entry_kind] * entry.amount_cents;
+}
+
+/** Opening balance plus every movement, or Laravel's own figures when the page sent them. */
+export function cashOnHandCents(entries: FinancialEntryRow[], cashOnHand?: CashOnHand | null): number {
+  if (cashOnHand) return cashOnHand.total_cents;
+  return entries.reduce((total, entry) => total + entryEffectCents(entry), 0);
+}
+
+const isOutflow = (kind: FinancialEntryKind) => ENTRY_SIGN[kind] === -1;
 
 function LedgerTable({
   entries,
@@ -175,7 +240,7 @@ function LedgerTable({
                         : "text-green-600 dark:text-green-400",
                     )}
                   >
-                    {isOutflow(entry.entry_kind) ? "−" : "+"}₱{(entry.amount_cents / 100).toLocaleString()}
+                    {formatCurrency(entryEffectCents(entry) / 100)}
                   </td>
                   <td className="px-2 py-2 text-muted-foreground">
                     {new Date(entry.recorded_at).toLocaleDateString()}
@@ -205,6 +270,193 @@ function LedgerTable({
       </div>
       <TablePager {...paged} label="Financial entries" />
     </div>
+  );
+}
+
+/**
+ * SN-10: the movements list — date, type, amount, reason and a link to the car or field case that caused it.
+ * Automatic entries point at their source; a manual entry has none, so it stays plain text.
+ */
+function MovementsTable({ entries }: { readonly entries: FinancialEntryRow[] }) {
+  const paged = usePagedRows(entries);
+  const href = (entry: FinancialEntryRow) =>
+    entry.transaction_id
+      ? `/dashboard/transactions/${entry.transaction_id}`
+      : entry.field_case_id
+        ? `/dashboard/field-cases/${entry.field_case_id}`
+        : null;
+
+  return (
+    <div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b text-left text-muted-foreground">
+              <th className="px-2 py-2 font-medium">Date</th>
+              <th className="px-2 py-2 font-medium">Type</th>
+              <th className="px-2 py-2 font-medium">Reason</th>
+              <th className="px-2 py-2 text-right font-medium">Amount</th>
+              <th className="px-2 py-2 font-medium">Source</th>
+            </tr>
+          </thead>
+          <tbody>
+            {entries.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-2 py-6 text-center text-muted-foreground">
+                  No money movements recorded yet.
+                </td>
+              </tr>
+            ) : (
+              paged.rows.map((entry) => {
+                const link = href(entry);
+                return (
+                  <tr key={entry.id} className="border-b last:border-0">
+                    <td className="px-2 py-2 text-muted-foreground">
+                      {new Date(entry.recorded_at).toLocaleDateString()}
+                    </td>
+                    <td className="px-2 py-2">
+                      <Badge variant="secondary" className="capitalize">
+                        {ENTRY_LABELS[entry.entry_kind]}
+                      </Badge>
+                    </td>
+                    <td className="px-2 py-2 text-muted-foreground">{entry.description}</td>
+                    <td
+                      className={cn(
+                        "px-2 py-2 text-right font-medium tabular-nums",
+                        isOutflow(entry.entry_kind)
+                          ? "text-red-600 dark:text-red-400"
+                          : "text-green-600 dark:text-green-400",
+                      )}
+                    >
+                      {formatCurrency(entryEffectCents(entry) / 100)}
+                    </td>
+                    <td className="px-2 py-2">
+                      {link ? (
+                        <Link href={link} className="text-primary underline underline-offset-4">
+                          Open
+                        </Link>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+      <TablePager {...paged} label="Money movements" />
+    </div>
+  );
+}
+
+/** A charge the deal does or does not owe, and whether its money is confirmed. */
+function ChargeLine({
+  label,
+  charge,
+}: {
+  readonly label: string;
+  readonly charge: { amount_cents: number | null; status: string };
+}) {
+  return (
+    <div>
+      <dt className="text-muted-foreground text-xs">{label}</dt>
+      <dd>
+        {charge.status === "not_required" ? (
+          <span className="text-muted-foreground">Not required</span>
+        ) : (
+          <>
+            {formatCurrency(Number(charge.amount_cents ?? 0) / 100)}{" "}
+            <Badge variant={charge.status === "paid" ? "default" : "outline"} className="capitalize">
+              {charge.status}
+            </Badge>
+          </>
+        )}
+      </dd>
+    </div>
+  );
+}
+
+/**
+ * SN-9 / BH-4 / SH-3: the car, the deal, the parties, the prices and the payment status of a fund request, with
+ * the seller meet-up inspection result for a purchase, so the Head Accountant decides without leaving the page.
+ */
+function FundContext({ context }: { readonly context: DisbursementContext }) {
+  const { transaction, vehicle, party, prices, payment, issues, inspection } = context;
+  const arrangement =
+    transaction.kind === "sell"
+      ? transaction.arrangement === "gce_visit"
+        ? "GCE Visit"
+        : "Meet Halfway"
+      : (transaction.arrangement ?? "GCE Visit").replace(/_/g, " ");
+  return (
+    <section className="flex flex-col gap-3 rounded-md border bg-muted/20 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="font-medium">
+          {vehicle ? `${vehicle.year} ${vehicle.make} ${vehicle.model}` : "Vehicle"}
+          {vehicle?.stock_code ? <span className="text-muted-foreground"> · {vehicle.stock_code}</span> : null}
+        </p>
+        <Link
+          href={`/dashboard/transactions/${transaction.id}`}
+          className="text-primary text-xs underline underline-offset-4"
+        >
+          Open transaction
+        </Link>
+      </div>
+      <dl className="grid gap-2 text-sm sm:grid-cols-2">
+        <div>
+          <dt className="text-muted-foreground text-xs">Transaction</dt>
+          <dd>{`${transaction.kind === "sell" ? "Sell" : "Buy"} · ${arrangement}`}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground text-xs">{party.role === "seller" ? "Seller" : "Buyer"}</dt>
+          <dd>{party.name ?? "—"}</dd>
+        </div>
+        {prices.agreed_cents !== null ? (
+          <div>
+            <dt className="text-muted-foreground text-xs">Agreed price</dt>
+            <dd className="tabular-nums">{formatCurrency(prices.agreed_cents / 100)}</dd>
+          </div>
+        ) : null}
+        {prices.final_cents !== null ? (
+          <div>
+            <dt className="text-muted-foreground text-xs">Final price</dt>
+            <dd className="tabular-nums">{formatCurrency(prices.final_cents / 100)}</dd>
+          </div>
+        ) : null}
+        {payment.option || payment.method ? (
+          <div>
+            <dt className="text-muted-foreground text-xs">Payment</dt>
+            <dd className="capitalize">
+              {[payment.option === "full" ? "Full payment" : payment.option, payment.method?.replace(/_/g, " ")]
+                .filter(Boolean)
+                .join(" · ")}
+            </dd>
+          </div>
+        ) : null}
+        {payment.received_cents > 0 ? (
+          <div>
+            <dt className="text-muted-foreground text-xs">Received so far</dt>
+            <dd className="tabular-nums">{formatCurrency(payment.received_cents / 100)}</dd>
+          </div>
+        ) : null}
+        <ChargeLine label="Downpayment" charge={payment.downpayment} />
+        <ChargeLine label="Delivery fee" charge={payment.delivery_fee} />
+      </dl>
+      {issues ? (
+        <div className="flex flex-col gap-1">
+          <p className="text-muted-foreground text-xs">Condition and declared issues</p>
+          <p className="text-sm">
+            {[issues.condition, issues.has_known_issues ? "Declared issues" : "No declared issues"]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+          {issues.declared_issues ? <p className="text-sm">{issues.declared_issues}</p> : null}
+        </div>
+      ) : null}
+      {inspection ? <InspectionResult result={inspection} title="Inspection on site" /> : null}
+    </section>
   );
 }
 
@@ -261,7 +513,9 @@ function DisbursementsTable({
                       {row.title}
                     </button>
                   </td>
-                  <td className="px-2 py-2 tabular-nums">₱{(row.amount_cents / 100).toLocaleString()}</td>
+                  <td className="px-2 py-2 tabular-nums">
+                    {formatCurrency(row.amount_cents / 100, { noDecimals: true })}
+                  </td>
                   <td className="max-w-64 truncate px-2 py-2 text-muted-foreground">{row.purpose}</td>
                   <td className="px-2 py-2">
                     <Badge variant={statusVariant(row.status)}>{row.status}</Badge>
@@ -303,6 +557,8 @@ function DisbursementDetail({
   const fieldBudgetOut = Boolean(row.field_case_id) && ["released", "received", "paid"].includes(row.status);
   const flow = fieldBudgetOut ? undefined : DISBURSEMENT_FLOW[row.status];
   const canReject = canAdvance && (row.status === "draft" || row.status === "submitted");
+  // BH-3: a zero excess is system-confirmed on the spot, so there is nothing for the Head Accountant to confirm.
+  const excessToConfirm = Boolean(row.returned_at && !row.return_confirmed_at && Number(row.returned_cents ?? 0) > 0);
 
   return (
     <>
@@ -327,12 +583,26 @@ function DisbursementDetail({
             {row.purpose}
           </dd>
         </div>
+        {row.rejection_reason ? (
+          <div className="flex flex-col gap-1">
+            <dt className="text-muted-foreground">Reason for rejecting</dt>
+            <dd className="whitespace-pre-wrap break-words rounded-md border border-destructive/40 bg-destructive/5 p-3">
+              {row.rejection_reason}
+            </dd>
+          </div>
+        ) : null}
         {row.returned_at ? (
           <div className="flex flex-col gap-1">
             <dt className="text-muted-foreground">Excess returned</dt>
             <dd>
-              {formatCurrency(Number(row.returned_cents ?? 0) / 100)} ·{" "}
-              {row.return_confirmed_at ? "confirmed" : "waiting for your confirmation"}
+              {Number(row.returned_cents ?? 0) === 0 ? (
+                "No excess"
+              ) : (
+                <>
+                  {formatCurrency(Number(row.returned_cents ?? 0) / 100)} ·{" "}
+                  {row.return_confirmed_at ? "confirmed" : "waiting for your confirmation"}
+                </>
+              )}
             </dd>
           </div>
         ) : null}
@@ -343,6 +613,8 @@ function DisbursementDetail({
           </div>
         ) : null}
       </dl>
+
+      {row.context ? <FundContext context={row.context} /> : null}
 
       {canReject ? (
         <Field>
@@ -362,7 +634,7 @@ function DisbursementDetail({
         <p className="text-muted-foreground text-sm">Awaiting approval by finance roles.</p>
       ) : null}
 
-      {canConfirmReturn && row.returned_at && !row.return_confirmed_at ? (
+      {canConfirmReturn && excessToConfirm ? (
         <DialogFooter>
           <Button disabled={busy} onClick={onConfirmReturn}>
             Confirm excess received
@@ -402,6 +674,7 @@ export function FinanceClient({
   canRequestPurchaseFunds,
   isInformant,
   canConfirmReturn = false,
+  cashOnHand = null,
 }: FinanceClientProps) {
   const router = useRouter();
   const [entryOpen, setEntryOpen] = useState(false);
@@ -428,6 +701,12 @@ export function FinanceClient({
   const [advancing, setAdvancing] = useState(false);
 
   const { revenueTotal, expenseTotal } = getFinanceSummary(entries);
+  // SN-10: Laravel sums the opening balance with every movement; the client can do the same if it says nothing.
+  const cash = cashOnHandCents(entries, cashOnHand) / 100;
+  const openingCents = cashOnHand ? cashOnHand.opening_cents : 0;
+  const movementsCents = cashOnHand
+    ? cashOnHand.movements_cents
+    : entries.reduce((total, entry) => total + entryEffectCents(entry), 0);
   const pendingApprovals = disbursements.filter(
     (d) => d.status === "submitted" || d.status === "approved" || d.status === "released" || d.status === "received",
   ).length;
@@ -588,7 +867,18 @@ export function FinanceClient({
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {/* SN-10: the drawer total is part of the ledger's audience, so an informant does not see it. */}
+        {cashOnHand ? (
+          <Card>
+            <CardContent className="flex flex-col gap-1 pt-4">
+              <span className="text-muted-foreground text-xs">Cash on hand</span>
+              <span className={cn("font-semibold text-2xl tabular-nums", cash < 0 && "text-red-600 dark:text-red-400")}>
+                {formatCurrency(cash, { noDecimals: true })}
+              </span>
+            </CardContent>
+          </Card>
+        ) : null}
         <Card>
           <CardContent className="flex flex-col gap-1 pt-4">
             <span className="text-muted-foreground text-xs">Revenue</span>
@@ -625,6 +915,10 @@ export function FinanceClient({
             <Banknote />
             Ledger
           </TabsTrigger>
+          <TabsTrigger value="movements" className="gap-2">
+            <Undo2 />
+            Movements
+          </TabsTrigger>
           <TabsTrigger value="disbursements" className="gap-2">
             <Send />
             Disbursements
@@ -633,20 +927,30 @@ export function FinanceClient({
 
         {!isInformant ? (
           <TabsContent value="summary">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <Card size="sm">
                 <CardContent className="flex flex-col gap-1 pt-3">
-                  <span className="text-muted-foreground text-xs">Revenue</span>
-                  <span className="font-semibold text-2xl text-green-600 dark:text-green-400">
-                    ₱{(revenueTotal / 100).toLocaleString()}
+                  <span className="text-muted-foreground text-xs">Opening balance</span>
+                  <span className="font-semibold text-2xl tabular-nums">
+                    {formatCurrency(openingCents / 100, { noDecimals: true })}
                   </span>
                 </CardContent>
               </Card>
               <Card size="sm">
                 <CardContent className="flex flex-col gap-1 pt-3">
-                  <span className="text-muted-foreground text-xs">Expenses</span>
-                  <span className="font-semibold text-2xl text-red-600 dark:text-red-400">
-                    ₱{(expenseTotal / 100).toLocaleString()}
+                  <span className="text-muted-foreground text-xs">Movements</span>
+                  <span className={cn("font-semibold text-2xl tabular-nums", movementsCents < 0 && "text-red-600")}>
+                    {formatCurrency(movementsCents / 100, { noDecimals: true })}
+                  </span>
+                </CardContent>
+              </Card>
+              <Card size="sm">
+                <CardContent className="flex flex-col gap-1 pt-3">
+                  <span className="text-muted-foreground text-xs">Cash on hand</span>
+                  <span
+                    className={cn("font-semibold text-2xl tabular-nums", cash < 0 && "text-red-600 dark:text-red-400")}
+                  >
+                    {formatCurrency(cash, { noDecimals: true })}
                   </span>
                 </CardContent>
               </Card>
@@ -658,10 +962,22 @@ export function FinanceClient({
               </Card>
             </div>
             <p className="mt-3 text-muted-foreground text-xs">
-              Summary from same {entries.length} ledger entries · full table in Ledger tab
+              Opening balance from app_settings.finance_opening_cents plus every posted movement · {entries.length}{" "}
+              ledger entries · full list in the Movements tab
             </p>
           </TabsContent>
         ) : null}
+
+        <TabsContent value="movements">
+          <Card>
+            <CardHeader>
+              <CardTitle>Money movements</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <MovementsTable entries={entries} />
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="ledger">
           <Card>
@@ -709,7 +1025,7 @@ export function FinanceClient({
           if (!open && !advancing) setDetail(null);
         }}
       >
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
           {detail ? (
             <DisbursementDetail
               row={detail}

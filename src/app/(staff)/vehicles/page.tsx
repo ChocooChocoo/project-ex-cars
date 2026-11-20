@@ -19,7 +19,7 @@ export default function VehiclesPage() {
       ? browserApi<{
           vehicles: Record<string, unknown>[];
           proposals: PriceProposalRow[];
-          reconditioning_by_vehicle: Record<string, { state: string; papers_processed_at: string | null }>;
+          reconditioning_by_vehicle: Record<string, { state: string }>;
           default_markup_pct: number;
         }>("GET", "/api/v1/staff/vehicles")
       : Promise.resolve(null),

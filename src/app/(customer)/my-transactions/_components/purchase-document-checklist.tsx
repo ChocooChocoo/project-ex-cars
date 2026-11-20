@@ -85,7 +85,7 @@ function UploadRow({
       </div>
       {doc?.verification_state === "rejected" ? (
         <p className="text-destructive text-xs">
-          Upload a new one.{doc.rejection_reason ? ` What to fix: ${String(doc.rejection_reason)}` : ""}
+          GCE asked you to resubmit: {doc.rejection_reason ? String(doc.rejection_reason) : "this file cannot be read."}
         </p>
       ) : null}
       {needsFile ? (
@@ -107,30 +107,45 @@ function UploadRow({
 
 // T06: first-time buyers found the old single upload box confusing. The section now lists exactly what GCE
 // needs, two valid IDs (front and back) and one proof of billing, with the status of each.
+// SN-11: a seller sends only the two IDs (the OR/CR/Deed are declared on the checklist), so the billing slot is
+// left out for that audience.
 export function PurchaseDocumentChecklist({
   documents,
   canUpload,
   uploading,
   onUpload,
+  audience = "buyer",
 }: {
   readonly documents: SlotDocument[];
   readonly canUpload: boolean;
   readonly uploading: boolean;
   readonly onUpload: (upload: DocumentUpload) => void;
+  readonly audience?: "buyer" | "seller";
 }) {
   const slots = documentSlots(documents);
   const [chosenTypes, setChosenTypes] = useState<[string, string]>(["", ""]);
   const disabled = !canUpload || uploading;
+  const seller = audience === "seller";
 
   return (
     <div className="flex flex-col gap-3">
       <p className="text-muted-foreground text-sm">
-        To buy a car, send GCE <span className="font-medium text-foreground">2 different valid IDs</span> (a photo of
-        the front and the back of each) and <span className="font-medium text-foreground">1 proof of billing</span> (a
-        recent utility, internet or phone bill in your name). JPEG, PNG, WebP or PDF, up to 2 MB each. GCE staff check
-        every file.
+        {seller ? (
+          <>
+            Send GCE <span className="font-medium text-foreground">2 different valid IDs</span> (a photo of the front
+            and the back of each). JPEG, PNG, WebP or PDF, up to 2 MB each. GCE staff check every file, and the car's
+            papers are checked against the originals at the meet-up.
+          </>
+        ) : (
+          <>
+            To buy a car, send GCE <span className="font-medium text-foreground">2 different valid IDs</span> (a photo
+            of the front and the back of each) and{" "}
+            <span className="font-medium text-foreground">1 proof of billing</span> (a recent utility, internet or phone
+            bill in your name). JPEG, PNG, WebP or PDF, up to 2 MB each. GCE staff check every file.
+          </>
+        )}
       </p>
-      <ol className="grid gap-3 md:grid-cols-3">
+      <ol className={`grid gap-3 ${seller ? "md:grid-cols-2" : "md:grid-cols-3"}`}>
         {slots.ids.map((slot, index) => {
           const idType = slot.idType ?? chosenTypes[index];
           const otherType = slots.ids[1 - index].idType ?? chosenTypes[1 - index];
@@ -175,15 +190,17 @@ export function PurchaseDocumentChecklist({
             </li>
           );
         })}
-        <li className="flex flex-col gap-3 rounded-lg border p-3">
-          <p className="font-medium text-sm">Proof of billing</p>
-          <UploadRow
-            label="Bill"
-            doc={slots.billing}
-            disabled={disabled}
-            onFile={(file) => onUpload({ kind: "proof_of_billing", file })}
-          />
-        </li>
+        {seller ? null : (
+          <li className="flex flex-col gap-3 rounded-lg border p-3">
+            <p className="font-medium text-sm">Proof of billing</p>
+            <UploadRow
+              label="Bill"
+              doc={slots.billing}
+              disabled={disabled}
+              onFile={(file) => onUpload({ kind: "proof_of_billing", file })}
+            />
+          </li>
+        )}
       </ol>
       {uploading ? <p className="text-muted-foreground text-xs">Uploading...</p> : null}
     </div>

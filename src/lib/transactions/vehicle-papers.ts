@@ -11,7 +11,7 @@ export interface VehiclePaperSource {
   papers_status: string | null;
   papers_updated_at: string | null;
   transactions: Embedded<{
-    purchase_details: Embedded<{ arrangement_kind: string | null }>;
+    purchase_details: Embedded<{ arrangement_kind: string | null; payment_method?: string | null }>;
     profiles: Embedded<{ full_name: string | null }>;
     vehicles: Embedded<{
       id: string;
@@ -29,6 +29,7 @@ export interface VehiclePaperRecord {
   buyer: string;
   status: PapersStatus;
   arrangementKind: string | null;
+  paymentMethod: string | null;
   updatedAt: string | null;
   vehicleId: string | null;
 }
@@ -50,6 +51,7 @@ export function vehiclePaperRecord(row: VehiclePaperSource): VehiclePaperRecord 
     buyer: String(buyer?.full_name ?? "the buyer"),
     status: row.papers_status as PapersStatus,
     arrangementKind: typeof details?.arrangement_kind === "string" ? details.arrangement_kind : null,
+    paymentMethod: typeof details?.payment_method === "string" ? details.payment_method : null,
     updatedAt: row.papers_updated_at,
     vehicleId: car?.id ?? null,
   };
@@ -66,4 +68,23 @@ export function vehiclePapersAction(
   if (status === "released_to_ci") return "hand_to_buyer";
   if (isFieldArrangement(arrangement) && (!status || status === "returned")) return "release_to_ci";
   return null;
+}
+
+// SN-4: the originals one seller gave GCE, as the "From sellers" tab lists them.
+export type PapersCustodyState = "with_ci" | "released" | "on_hold";
+
+export const PAPERS_CUSTODY_LABELS: Record<PapersCustodyState, string> = {
+  with_ci: "With the Confidential Informant",
+  released: "Released",
+  on_hold: "On Hold",
+};
+
+export interface SellerPapersRow {
+  vehicle_id: string;
+  vehicle: string;
+  seller: string | null;
+  source_transaction_id: string | null;
+  received_at: string | null;
+  custody_state: PapersCustodyState;
+  papers: { document_kind: string; label: string; url: string | null }[];
 }

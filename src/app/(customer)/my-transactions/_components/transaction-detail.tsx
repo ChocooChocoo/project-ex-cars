@@ -12,7 +12,6 @@ import { toast } from "sonner";
 
 import {
   cancelTransaction,
-  removePurchaseDocument,
   respondToFinancingOffer,
   saveBuyDetails,
   submitBuyRequest,
@@ -21,6 +20,8 @@ import {
 import { submitReview } from "@/app/(customer)/my-transactions/review-actions";
 import { LiveLocationMap } from "@/components/live-location-map";
 import { LoanCalculator } from "@/components/loan-calculator";
+import { GceLocationMap, MeetupMap } from "@/components/maps/lazy-maps";
+import { MeetupAddressFields } from "@/components/maps/meetup-address-fields";
 import { AddressFields } from "@/components/profile/address-fields";
 import { RejectReasonDialog } from "@/components/reject-reason-dialog";
 import { TransactionImagePreview } from "@/components/transaction-image-preview";
@@ -63,7 +64,9 @@ import {
   isFinancingRequest,
   isOnsiteCashRequest,
   isQueuedRequest,
+  MEETUP_LEAD_DAYS,
   needsContract,
+  needsSmSignature,
   onlinePaymentsDue,
   originalDeliverySchedule,
   PAPERS_STATUS_LABELS,
@@ -86,10 +89,12 @@ import {
   transactionKindLabel,
 } from "@/lib/transactions/labels";
 import { monthlyInstallment } from "@/lib/transactions/loan-calculator";
-import { CUSTOMER_SELL_STATUS_LABELS, sellerSafeNote } from "@/lib/transactions/sell-flow";
+import { composeMeetupAddress, emptyMeetupAddress, type MeetupAddressParts } from "@/lib/transactions/meetup-area";
+import { CUSTOMER_SELL_STATUS_LABELS, type LatLng, sellerSafeNote } from "@/lib/transactions/sell-flow";
 import type { FlowStatus, QueueState, TransactionFlag, TransactionState } from "@/lib/transactions/state-machine";
 import { compressImage } from "@/lib/uploads/compress-image";
 import { cn, formatCurrency } from "@/lib/utils";
+import { SELL_PAPER_FIELDS, SELL_PAPER_STATUS_LABELS } from "@/lib/vehicles/catalog";
 
 import { ContractSign, OnSiteContract } from "./contract-sign";
 import { DeliveryReschedule } from "./delivery-reschedule";
@@ -108,6 +113,14 @@ const manilaSlot = new Intl.DateTimeFormat("en-PH", {
   minute: "2-digit",
 });
 
+// BH-1: how far ahead each arrangement may be booked. A GCE visit is same-day, a halfway meet-up needs
+// 2 calendar days in Manila, and a delivery keeps its 7-day lead time.
+function arrangementLeadDays(kind: string): number {
+  if (kind === "meetup") return MEETUP_LEAD_DAYS;
+  if (kind === "delivery") return DELIVERY_LEAD_DAYS;
+  return 0;
+}
+
 function ProgressStepper({ state }: { readonly state: TransactionState }) {
   const isCancelled = state === "cancelled" || state === "rejected";
   const labels = isCancelled
@@ -120,7 +133,7 @@ function ProgressStepper({ state }: { readonly state: TransactionState }) {
     approved: "Approved by GCE — we are finalising your transaction.",
     completed: "Complete — your transaction is finished.",
     cancelled: "Cancelled — this transaction was stopped. Start a new request if needed.",
-    rejected: "Not approved — use See reason above for why, or contact support.",
+    rejected: "Not approved — the reason is shown below, or contact support.",
   };
   return (
     <Card>
@@ -212,11 +225,12 @@ export function TransactionDetail({
     last_lng?: number | null;
     last_located_at?: string | null;
   } | null;
-  /** T03 C13: GCE's CEO-approved counter-offer on a sell offer, with the remarks written for the seller. */
+  /**
+   * SH-6: GCE's revised offer on a sell offer. An approved revised ceiling is a maximum, not the price, so the
+   * seller reads the remarks written for them and their own answer — never the ceiling it must stay under.
+   */
   readonly counterOffer?: {
-    price: number;
     remarks: string | null;
-    issue: string | null;
     response: string | null;
   } | null;
 }) {
@@ -307,31 +321,33 @@ export function TransactionDetail({
 
   // Purchase document upload state
   const [uploading, setUploading] = useState(false);
-  const [removingDocumentId, setRemovingDocumentId] = useState<string | null>(null);
 
   const buyerDocuments = documents as {
     document_kind: unknown;
     verification_state: unknown;
     id_type?: unknown;
     id_side?: unknown;
+    rejection_reason?: unknown;
   }[];
   const activeIdImages = activeBuyerIds(buyerDocuments).length;
+  // SH-13: the seller still sees the photos they uploaded; only the staff-facing papers list is gone.
+  const sellerPhotos = (
+    documents as { id?: unknown; document_kind?: unknown; signed_url?: unknown; is_image?: unknown }[]
+  ).filter(
+    (doc) =>
+      typeof doc.signed_url === "string" &&
+      doc.is_image !== false &&
+      (doc.document_kind === "sell_photo" || doc.document_kind === "issue_photo"),
+  );
   const idsComplete = buyerIdsComplete(buyerDocuments);
   const hasBilling = documents.some(
     (d) => d.document_kind === "proof_of_billing" && d.verification_state !== "rejected",
   );
-
-  async function handleRemoveDocument(documentId: string) {
-    setRemovingDocumentId(documentId);
-    const result = await removePurchaseDocument(documentId);
-    setRemovingDocumentId(null);
-    if (result.error) {
-      toast.error(result.error);
-    } else {
-      toast.success("Document removed.");
-      router.refresh();
-    }
-  }
+  // SN-14: a customer cannot delete a submitted document, so the upload slots appear for a first upload and again
+  // only when GCE asked for a replacement (document_resubmission_requested).
+  const sellerNeedsIdResubmission = buyerDocuments.some(
+    (d) => d.document_kind === "valid_id" && d.verification_state === "rejected",
+  );
 
   async function handleUploadDocument({
     kind: docKind,
@@ -388,7 +404,6 @@ export function TransactionDetail({
     );
     router.refresh();
   }
-
   // Buy detail form state
   // T04 P5: Payment Option, then the method for a Full Payment. Financing keeps the method 'financing'.
   const savedMethod = (purchaseDetails?.payment_method as string) ?? "";
@@ -416,13 +431,28 @@ export function TransactionDetail({
     barangay_code: autofill?.barangay_code ?? "",
   }));
   const location = composeAddress({ ...address, province_name: provinceNameFor(address) });
+  // BH-8: a Meet Halfway meet-up is the CALABARZON map pin and the address the pin fills, not a PSGC address.
+  // Delivery keeps the PSGC fields, which the purchase_details CHECK still requires.
+  const savedMeetupAddress = purchaseDetails?.meetup_address as string | null | undefined;
+  const [meetupAddress, setMeetupAddress] = useState<MeetupAddressParts>(() => ({
+    ...emptyMeetupAddress(),
+    // A saved one-line address is shown as typed-block text, so it stays editable after a reload.
+    block_lot: savedMeetupAddress ?? "",
+  }));
+  const [meetupPoint, setMeetupPoint] = useState<LatLng | null>(
+    purchaseDetails?.meetup_lat != null && purchaseDetails?.meetup_lng != null
+      ? { lat: Number(purchaseDetails.meetup_lat), lng: Number(purchaseDetails.meetup_lng) }
+      : null,
+  );
+  const meetupLocation = composeMeetupAddress(meetupAddress);
   const locationRequired = arrangementKind === "meetup" || arrangementKind === "delivery";
   // T10: the re-scheduling window is measured from the first delivery time the buyer booked.
   const originalDelivery = originalDeliverySchedule(viewingArrangements);
-  const locationMissing = locationRequired && !address.barangay_code;
+  // A delivery needs the PSGC barangay; a meet-up needs the pin inside CALABARZON.
+  const locationMissing =
+    arrangementKind === "delivery" ? !address.barangay_code : arrangementKind === "meetup" && meetupPoint === null;
   const savedLocationMissing =
-    ["meetup", "delivery"].includes(String(purchaseDetails?.arrangement_kind)) &&
-    !String(purchaseDetails?.location ?? "").trim();
+    purchaseDetails?.arrangement_kind === "delivery" && !String(purchaseDetails?.location ?? "").trim();
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -463,8 +493,17 @@ export function TransactionDetail({
     fd.set("transaction_id", id);
     fd.set("decision", decision);
     if (visitAt) fd.set("schedule", visitAt);
-    fd.set("location", location);
-    for (const [key, value] of Object.entries(address)) fd.set(key, value);
+    if (offerKind === "meetup") {
+      // BH-8: the pin and the address the pin filled, not the PSGC address.
+      fd.set("meetup_address", meetupLocation);
+      if (meetupPoint) {
+        fd.set("meetup_lat", String(meetupPoint.lat));
+        fd.set("meetup_lng", String(meetupPoint.lng));
+      }
+    } else {
+      fd.set("location", location);
+      for (const [key, value] of Object.entries(address)) fd.set(key, value);
+    }
     const result = await respondToFinancingOffer(fd);
     setResponding(false);
     if (result.error) toast.error(result.error);
@@ -526,8 +565,17 @@ export function TransactionDetail({
     fd.set("arrangement_kind", arrangementKind);
     // Already a Manila ISO slot, or "" until an hour is picked.
     fd.set("schedule", schedule);
-    fd.set("location", location);
-    for (const [key, value] of Object.entries(address)) fd.set(key, value);
+    if (arrangementKind === "meetup") {
+      // BH-8: the map pin and the address it filled. Delivery keeps the PSGC address fields.
+      fd.set("meetup_address", meetupLocation);
+      if (meetupPoint) {
+        fd.set("meetup_lat", String(meetupPoint.lat));
+        fd.set("meetup_lng", String(meetupPoint.lng));
+      }
+    } else {
+      fd.set("location", location);
+      for (const [key, value] of Object.entries(address)) fd.set(key, value);
+    }
     fd.set("notes", notes);
     if (acknowledge) fd.set("acknowledge_condition", "yes");
     if (agreeDeliveryTerms) fd.set("agree_delivery_terms", "yes");
@@ -616,6 +664,23 @@ export function TransactionDetail({
   return (
     <>
       <ProgressStepper state={state} />
+      {/* BC-9: the reason GCE recorded is part of the banner, not hidden behind "See reason". */}
+      {stoppedReason ? (
+        <div
+          role="alert"
+          className={cn(
+            "flex flex-col gap-1 rounded-xl border p-3 text-sm",
+            state === "rejected"
+              ? "border-destructive/35 bg-destructive/10 text-destructive"
+              : "border-border bg-muted/30",
+          )}
+        >
+          <span className="font-medium">
+            {state === "rejected" ? "This request was not approved." : "This transaction was cancelled."}
+          </span>
+          <span className="whitespace-pre-wrap break-words">Reason: {stoppedReason}</span>
+        </div>
+      ) : null}
       {/* Header */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex flex-col gap-1">
@@ -845,7 +910,8 @@ export function TransactionDetail({
                     setSchedule(value);
                     setScheduleDate(draft.date);
                   }}
-                  minDays={arrangementKind === "delivery" ? DELIVERY_LEAD_DAYS : 0}
+                  minDays={arrangementLeadDays(arrangementKind)}
+                  leadKind={arrangementKind === "meetup" ? "meetup" : "delivery"}
                   takenSlots={takenSlots}
                 />
                 {gceVisitOnly ? (
@@ -938,10 +1004,38 @@ export function TransactionDetail({
                       : " No slots are taken for this car yet."}
                   </p>
                 ) : null}
-                {/* T04 P2: a GCE Visit happens at GCE, so it asks for no location. */}
-                {arrangementKind === "gce_visit" ? null : (
+                {arrangementKind === "gce_visit" ? (
                   <div className="flex flex-col gap-1.5">
-                    <p className="font-medium text-sm">Location{locationRequired ? " *" : ""}</p>
+                    <p className="font-medium text-sm">Where to meet</p>
+                    <p className="text-muted-foreground text-xs">
+                      GCE visits happen at the office. The pin shows where to bring the car.
+                    </p>
+                    <GceLocationMap />
+                  </div>
+                ) : arrangementKind === "meetup" ? (
+                  <div className="flex flex-col gap-1.5">
+                    <p className="font-medium text-sm">Meet-up point *</p>
+                    <p className="text-muted-foreground text-xs">
+                      We suggest the halfway point between GCE and your location. Drag the pin to adjust it, inside
+                      CALABARZON. The address fills in once you drop the pin, and you type the block and lot.
+                    </p>
+                    <MeetupMap
+                      value={meetupPoint}
+                      onChange={(point) => setMeetupPoint(point)}
+                      onAddress={(next) =>
+                        next && setMeetupAddress((current) => ({ ...next, block_lot: current.block_lot }))
+                      }
+                    />
+                    <MeetupAddressFields value={meetupAddress} onChange={setMeetupAddress} />
+                    {locationMissing ? (
+                      <p id="location-error" className="text-destructive text-sm">
+                        Set the meet-up point on the map.
+                      </p>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-1.5">
+                    <p className="font-medium text-sm">Delivery address{locationRequired ? " *" : ""}</p>
                     <AddressFields
                       value={address}
                       onChange={setAddress}
@@ -949,7 +1043,7 @@ export function TransactionDetail({
                     />
                     {locationMissing ? (
                       <p id="location-error" className="text-destructive text-sm">
-                        Choose the region, city and barangay for the meet-up or delivery.
+                        Choose the region, city and barangay for the delivery.
                       </p>
                     ) : null}
                   </div>
@@ -1027,6 +1121,7 @@ export function TransactionDetail({
                 contractBody={(handover.contract_body as string | null | undefined) ?? null}
                 signedAt={(handover.contract_signed_at as string | null | undefined) ?? null}
                 signingMethod={(handover.signing_method as string | null | undefined) ?? null}
+                waitsForGce={needsSmSignature(purchaseDetails ?? null) && handover.sm_signed !== true}
               />
               <Separator />
             </>
@@ -1070,21 +1165,37 @@ export function TransactionDetail({
                     }
                     value={visitAt}
                     onChange={(value) => setVisitAt(value)}
-                    minDays={financedDelivery ? DELIVERY_LEAD_DAYS : 0}
+                    minDays={arrangementLeadDays(offerKind)}
+                    leadKind={offerKind === "meetup" ? "meetup" : "delivery"}
                     takenSlots={takenSlots}
                   />
-                  {offerKind !== "gce_visit" ? (
+                  {offerKind === "gce_visit" ? (
+                    <div className="flex flex-col gap-1.5">
+                      <p className="font-medium text-sm">Where to meet</p>
+                      <GceLocationMap />
+                    </div>
+                  ) : offerKind === "meetup" ? (
+                    <div className="flex flex-col gap-1.5">
+                      <p className="font-medium text-sm">Meet-up point (Calabarzon) *</p>
+                      <MeetupMap
+                        value={meetupPoint}
+                        onChange={(point) => setMeetupPoint(point)}
+                        onAddress={(next) =>
+                          next && setMeetupAddress((current) => ({ ...next, block_lot: current.block_lot }))
+                        }
+                      />
+                      <MeetupAddressFields value={meetupAddress} onChange={setMeetupAddress} />
+                    </div>
+                  ) : (
                     <>
-                      <p className="font-medium text-sm">
-                        {financedDelivery ? "Delivery address" : "Meet-up location (Calabarzon)"}
-                      </p>
+                      <p className="font-medium text-sm">Delivery address</p>
                       <AddressFields
                         value={address}
                         onChange={setAddress}
                         storedAddress={autofill?.address ?? undefined}
                       />
                     </>
-                  ) : null}
+                  )}
                   {offerKind === "gce_visit" && takenSlots.length > 0 ? (
                     <p className="text-muted-foreground text-xs">
                       Already taken: {takenSlots.map((slot) => manilaSlot.format(new Date(slot))).join(", ")}.
@@ -1092,7 +1203,10 @@ export function TransactionDetail({
                   ) : null}
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button onClick={() => handleFinancingResponse("proceed")} disabled={responding || !visitAt}>
+                  <Button
+                    onClick={() => handleFinancingResponse("proceed")}
+                    disabled={responding || !visitAt || (offerKind === "meetup" && meetupPoint === null)}
+                  >
                     {offerKind === "gce_visit"
                       ? "Accept and book visit"
                       : financedDelivery
@@ -1216,6 +1330,66 @@ export function TransactionDetail({
             </>
           ) : null}
 
+          {/* BC-10 / BH-8: the in-app map of where this transaction meets, for both kinds. While the buyer is still
+              filling in the purchase details, the form above already shows the map of the arrangement they pick. */}
+          {kind === "buy" && state === "pending" && !queueState ? null : (
+            <section className="flex flex-col gap-3">
+              <h2 className="font-medium tracking-tight">Where to meet</h2>
+              {kind === "buy" && offerKind === "gce_visit" ? (
+                <>
+                  <p className="text-muted-foreground text-sm">
+                    GCE visits happen at the office on the pin. Bring the car and the original papers.
+                  </p>
+                  <GceLocationMap />
+                </>
+              ) : kind === "sell" && sellDetails?.meetup_method === "gce_visit" ? (
+                <>
+                  <p className="text-muted-foreground text-sm">
+                    GCE visits happen at the office on the pin. Bring the car and the original papers.
+                  </p>
+                  <GceLocationMap />
+                </>
+              ) : kind === "sell" && sellDetails?.meetup_method === "meet_halfway" ? (
+                <>
+                  <p className="text-muted-foreground text-sm">
+                    The meet-up point you set on the map. Keep the pin inside CALABARZON.
+                  </p>
+                  <MeetupMap
+                    value={
+                      sellDetails?.meetup_lat != null && sellDetails?.meetup_lng != null
+                        ? { lat: Number(sellDetails.meetup_lat), lng: Number(sellDetails.meetup_lng) }
+                        : null
+                    }
+                    editable={false}
+                  />
+                  {sellDetails?.meetup_address ? <p className="text-sm">{String(sellDetails.meetup_address)}</p> : null}
+                </>
+              ) : kind === "buy" && offerKind === "meetup" ? (
+                <>
+                  <p className="text-muted-foreground text-sm">The meet-up point you set on the map.</p>
+                  <MeetupMap
+                    value={
+                      purchaseDetails?.meetup_lat != null && purchaseDetails?.meetup_lng != null
+                        ? { lat: Number(purchaseDetails.meetup_lat), lng: Number(purchaseDetails.meetup_lng) }
+                        : null
+                    }
+                    editable={false}
+                  />
+                  {purchaseDetails?.meetup_address ? (
+                    <p className="text-sm">{String(purchaseDetails.meetup_address)}</p>
+                  ) : null}
+                </>
+              ) : (
+                <p className="text-muted-foreground text-sm">
+                  {kind === "buy" && offerKind === "delivery"
+                    ? "GCE delivers the car to your address."
+                    : "The meet-up place appears here once GCE sets it."}
+                </p>
+              )}
+            </section>
+          )}
+          <Separator />
+
           <section className="flex flex-col gap-3">
             <h2 className="font-medium tracking-tight">Status History</h2>
             {history.length === 0 ? (
@@ -1276,30 +1450,24 @@ export function TransactionDetail({
                       : TRANSACTION_STATE_LABELS[state]
                   }
                 />
-                <DetailRow label="Review Notes" value={(sellDetails.review_notes as string) ?? "—"} />
+                <DetailRow label="Review Notes" value={(sellDetails.review_notes as string) ?? "—"} />{" "}
                 {counterOffer ? (
                   <section
                     className="flex flex-col gap-1.5 rounded-md border bg-muted/30 p-3"
                     aria-label="GCE counter-offer"
                   >
-                    <div className="flex flex-wrap items-baseline justify-between gap-2">
-                      <span className="font-medium text-sm">GCE counter-offer</span>
-                      <span className="font-semibold text-base tabular-nums">
-                        ₱{counterOffer.price.toLocaleString()}
-                      </span>
-                    </div>
-                    {counterOffer.issue ? (
-                      <p className="text-muted-foreground text-xs">Inspection found: {counterOffer.issue}</p>
-                    ) : null}
+                    {/* SH-6: the remarks only. The approved revised ceiling is internal, and the agreed price is
+                        the figure quoted in the chat, not a ceiling. */}
+                    <span className="font-medium text-sm">GCE revised offer</span>
                     <p className="text-sm">
                       <span className="text-muted-foreground">Remarks: </span>
                       {counterOffer.remarks ?? "No remarks given."}
                     </p>
                     <p className="text-muted-foreground text-xs">
                       {counterOffer.response === "agreed"
-                        ? "You accepted this price."
+                        ? "You accepted the revised offer."
                         : counterOffer.response === "refused"
-                          ? "You declined this price."
+                          ? "You declined the revised offer."
                           : "Reply in the chat with GCE to accept or decline."}
                     </p>
                   </section>
@@ -1309,82 +1477,114 @@ export function TransactionDetail({
             </>
           )}
 
-          <section className="flex flex-col gap-3">
-            <h2 className="font-medium tracking-tight">Documents</h2>
-            {kind === "buy" && !isTerminal ? (
-              <>
-                <PurchaseDocumentChecklist
-                  documents={buyerDocuments}
-                  canUpload
-                  uploading={uploading}
-                  onUpload={handleUploadDocument}
-                />
-                {documents.length > 0 ? <h3 className="font-medium text-sm">Uploaded files</h3> : null}
-              </>
-            ) : null}
-            {documents.length === 0 ? (
-              <p className="text-muted-foreground text-xs">No documents uploaded.</p>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {documents.map((doc) => {
-                  const label = transactionDocumentLabel(doc.document_kind);
-                  const signedUrl = typeof doc.signed_url === "string" ? doc.signed_url : null;
-                  return (
-                    <div key={doc.id as string} className="flex flex-col gap-2 rounded-lg border p-3 text-sm">
-                      <div className="flex items-center gap-2">
-                        <FileText className="size-4 text-muted-foreground" />
-                        <span>{label}</span>
-                        {doc.id_type ? (
-                          <span className="text-muted-foreground text-xs capitalize">
-                            {(doc.id_type as string).replace(/_/g, " ")}
-                          </span>
-                        ) : null}
-                        {doc.id_side ? (
-                          <span className="text-muted-foreground text-xs capitalize">{doc.id_side as string}</span>
-                        ) : null}
-                        <Badge variant="secondary" className="ml-auto text-xs">
-                          {doc.verification_state as string}
-                        </Badge>
-                        {state === "pending" && doc.verification_state === "pending" ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 px-2 text-xs"
-                            aria-label={`Remove ${label}${doc.id_side ? ` (${doc.id_side as string})` : ""}`}
-                            disabled={removingDocumentId === (doc.id as string)}
-                            onClick={() => handleRemoveDocument(doc.id as string)}
-                          >
-                            {removingDocumentId === (doc.id as string) ? "Removing..." : "Remove"}
-                          </Button>
-                        ) : null}
-                      </div>
-                      {doc.verification_state === "rejected" ? (
-                        <p className="text-destructive text-xs">
-                          Please upload a new one.{doc.rejection_reason ? ` What to fix: ${doc.rejection_reason}` : ""}
-                        </p>
-                      ) : null}
-                      {signedUrl ? (
-                        doc.is_image === true ? (
-                          <TransactionImagePreview src={signedUrl} alt={`${label} preview`} />
-                        ) : (
-                          <a
-                            href={signedUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-primary text-xs underline"
-                          >
-                            Open {label.toLowerCase()}
-                          </a>
-                        )
-                      ) : (
-                        <p className="text-muted-foreground text-xs">Preview unavailable</p>
-                      )}
-                    </div>
-                  );
-                })}
+          {/* SH-13: the flat uploaded-file list is gone for sellers, but their own car photos stay visible —
+              these are the pictures the seller took, not GCE's internal papers. */}
+          {kind === "sell" && sellerPhotos.length > 0 ? (
+            <section className="flex flex-col gap-3">
+              <h2 className="font-medium tracking-tight">Car photos</h2>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {sellerPhotos.map((doc) => (
+                  <TransactionImagePreview
+                    key={doc.id as string}
+                    src={doc.signed_url as string}
+                    alt={doc.document_kind === "issue_photo" ? "Declared issue photo" : "Vehicle photo"}
+                  />
+                ))}
               </div>
-            )}
-          </section>
+            </section>
+          ) : null}
+          {kind === "sell" && sellerPhotos.length > 0 ? <Separator /> : null}
+
+          {/* SH-13: the seller's documents section is the papers checklist they answered, not a flat file list. The
+              upload slots appear again only when GCE asked for a new ID. SN-14: nothing here is deletable. */}
+          {kind === "sell" ? (
+            <section className="flex flex-col gap-3">
+              <h2 className="font-medium tracking-tight">Your papers checklist</h2>
+              {sellDetails ? (
+                <SellerPapersAnswers checklist={sellDetails.papers_checklist} />
+              ) : (
+                <p className="text-muted-foreground text-xs">No papers checklist yet.</p>
+              )}
+              {sellerNeedsIdResubmission && !isTerminal ? (
+                <>
+                  <h3 className="font-medium text-sm">GCE asked you to resubmit</h3>
+                  <PurchaseDocumentChecklist
+                    documents={buyerDocuments}
+                    canUpload
+                    uploading={uploading}
+                    onUpload={handleUploadDocument}
+                    audience="seller"
+                  />
+                </>
+              ) : null}
+            </section>
+          ) : (
+            <section className="flex flex-col gap-3">
+              <h2 className="font-medium tracking-tight">Documents</h2>
+              {!isTerminal ? (
+                <>
+                  <PurchaseDocumentChecklist
+                    documents={buyerDocuments}
+                    canUpload
+                    uploading={uploading}
+                    onUpload={handleUploadDocument}
+                  />
+                  {documents.length > 0 ? <h3 className="font-medium text-sm">Uploaded files</h3> : null}
+                </>
+              ) : null}
+              {documents.length === 0 ? (
+                <p className="text-muted-foreground text-xs">No documents uploaded.</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {documents.map((doc) => {
+                    const label = transactionDocumentLabel(doc.document_kind);
+                    const signedUrl = typeof doc.signed_url === "string" ? doc.signed_url : null;
+                    return (
+                      <div key={doc.id as string} className="flex flex-col gap-2 rounded-lg border p-3 text-sm">
+                        <div className="flex items-center gap-2">
+                          <FileText className="size-4 text-muted-foreground" />
+                          <span>{label}</span>
+                          {doc.id_type ? (
+                            <span className="text-muted-foreground text-xs capitalize">
+                              {(doc.id_type as string).replace(/_/g, " ")}
+                            </span>
+                          ) : null}
+                          {doc.id_side ? (
+                            <span className="text-muted-foreground text-xs capitalize">{doc.id_side as string}</span>
+                          ) : null}
+                          <Badge variant="secondary" className="ml-auto text-xs">
+                            {doc.verification_state as string}
+                          </Badge>
+                        </div>
+                        {doc.verification_state === "rejected" ? (
+                          <p className="text-destructive text-xs">
+                            GCE asked you to resubmit:{" "}
+                            {doc.rejection_reason ? String(doc.rejection_reason) : "this file cannot be read."}
+                          </p>
+                        ) : null}
+                        {signedUrl ? (
+                          doc.is_image === true ? (
+                            <TransactionImagePreview src={signedUrl} alt={`${label} preview`} />
+                          ) : (
+                            <a
+                              href={signedUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-primary text-xs underline"
+                            >
+                              Open {label.toLowerCase()}
+                            </a>
+                          )
+                        ) : (
+                          <p className="text-muted-foreground text-xs">Preview unavailable</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          )}
           <Separator />
 
           <section className="flex flex-col gap-3" aria-label="Financial summary">
@@ -1517,6 +1717,30 @@ function DetailRow({ label, value }: { readonly label: string; readonly value: s
     <div className="flex justify-between gap-2">
       <span className="text-muted-foreground">{label}</span>
       <span className="text-right font-medium">{value}</span>
+    </div>
+  );
+}
+
+// SH-13: the seller reads back the answers they gave about the OR, the CR and the deed of sale. Read-only: the
+// papers stay with the seller and the originals are checked at the meet-up.
+function SellerPapersAnswers({ checklist }: { readonly checklist: unknown }) {
+  const answers = (checklist ?? {}) as Record<string, unknown>;
+  return (
+    <div className="flex flex-col gap-2">
+      {SELL_PAPER_FIELDS.map((paper) => {
+        const status = answers[paper.key];
+        return (
+          <DetailRow
+            key={paper.key}
+            label={paper.label}
+            value={
+              typeof status === "string" && status in SELL_PAPER_STATUS_LABELS
+                ? SELL_PAPER_STATUS_LABELS[status as keyof typeof SELL_PAPER_STATUS_LABELS]
+                : "Not answered yet"
+            }
+          />
+        );
+      })}
     </div>
   );
 }

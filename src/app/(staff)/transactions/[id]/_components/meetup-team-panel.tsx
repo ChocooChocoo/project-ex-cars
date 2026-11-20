@@ -11,8 +11,8 @@ import { toast } from "sonner";
 import { createMeetupFieldCase } from "@/app/(staff)/transactions/delivery-actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { downPaymentFor } from "@/lib/transactions/delivery-fee";
+import { formatCurrency } from "@/lib/utils";
 
 import { PersonSelect } from "./delivery-panel";
 
@@ -22,8 +22,6 @@ type Person = { id: string; full_name: string | null };
 export interface MeetupPick {
   readonly informant_id?: string;
   readonly mechanic_id?: string;
-  /** Bank Transfer meet-ups only: the amount the buyer pays online before the meet-up. */
-  readonly downpayment_amount?: string;
 }
 
 // Meet Halfway: the Confidential Informant and the Mechanic who meet the buyer.
@@ -33,6 +31,7 @@ export function MeetupTeamPanel({
   transactionId,
   mode,
   paymentMethod,
+  finalPrice,
   informants,
   mechanics,
   pick,
@@ -43,6 +42,8 @@ export function MeetupTeamPanel({
   readonly transactionId: string;
   readonly mode: "approval" | "assign" | "assigned";
   readonly paymentMethod?: string | null;
+  /** BH-6: the price the commitment downpayment (10%) is computed from. */
+  readonly finalPrice?: number;
   readonly informants: Person[];
   readonly mechanics: Person[];
   readonly pick: MeetupPick;
@@ -53,8 +54,10 @@ export function MeetupTeamPanel({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const downpaymentRequired = paymentMethod === "bank_transfer";
-  const downpayment = Number(pick.downpayment_amount ?? 0);
-  const downpaymentReady = !downpaymentRequired || (Number.isFinite(downpayment) && downpayment > 0);
+  // BH-6: the commitment downpayment is 10% of the price and is shown, never typed. The server sets the same
+  // amount from PaymentRules::downPayment, so the two cannot disagree.
+  const downpayment = downPaymentFor(finalPrice ?? 0);
+  const downpaymentReady = !downpaymentRequired || downpayment > 0;
   // T10: a Bank Transfer meet-up is approved with its downpayment only; the team follows once it is paid.
   const downpaymentOnly = mode === "approval" && downpaymentRequired;
   const complete = downpaymentOnly ? downpaymentReady : Boolean(pick.informant_id && pick.mechanic_id);
@@ -122,18 +125,11 @@ export function MeetupTeamPanel({
             </div>
             {mode === "approval" && downpaymentRequired ? (
               <div className="grid gap-2">
-                <Label htmlFor="meetup-downpayment">Downpayment required (₱)</Label>
-                <Input
-                  id="meetup-downpayment"
-                  type="number"
-                  min={1}
-                  step={100}
-                  inputMode="decimal"
-                  value={pick.downpayment_amount ?? ""}
-                  onChange={(event) => onPick({ ...pick, downpayment_amount: event.target.value })}
-                  aria-describedby="meetup-downpayment-help"
-                />
-                <p id="meetup-downpayment-help" className="text-muted-foreground text-xs">
+                <p className="text-muted-foreground text-xs">Commitment downpayment (10% of the price)</p>
+                <p className="font-medium tabular-nums">
+                  {downpayment > 0 ? formatCurrency(downpayment) : "Set the vehicle price first"}
+                </p>
+                <p className="text-muted-foreground text-xs">
                   The buyer pays this through PayMongo before the meet-up. The balance follows at the meet-up.
                 </p>
               </div>
@@ -143,7 +139,7 @@ export function MeetupTeamPanel({
                 {downpaymentOnly
                   ? complete
                     ? "Approve the request. The buyer then pays the downpayment through PayMongo."
-                    : "Enter the downpayment the buyer pays before the meet-up."
+                    : "Set the vehicle price before approving: the downpayment is 10% of it."
                   : complete
                     ? "Team chosen. Approve the request to send the command."
                     : "The request cannot be approved until both are chosen."}

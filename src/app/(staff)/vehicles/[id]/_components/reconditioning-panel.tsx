@@ -10,12 +10,12 @@ import { toast } from "sonner";
 
 import {
   completeReconditioning,
-  markPapersProcessed,
   markReconditioningRefundReturned,
   requestReconditioningFunds,
   startReconditioning,
   submitReconditioningReport,
 } from "@/app/(staff)/vehicles/reconditioning-actions";
+import { type InspectionResultData, inspectionRepairParts } from "@/components/transactions/inspection-result";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,7 +36,7 @@ type FundRequest = {
   reason: string | null;
   shortfall_reason: string | null;
   state: string;
-  disbursement_requests?: { status?: string | null } | null;
+  disbursement_requests?: { status?: string | null; rejection_reason?: string | null } | null;
   reconditioning_fund_receipts?: Receipt[];
 };
 type Job = Row & {
@@ -55,14 +55,33 @@ type Job = Row & {
 
 type PartInput = {
   id: string;
+  /** SH-4: the `for_repair` answer of the inspection this row was pre-filled from. */
+  result_id: string | null;
   part_name: string;
   replacement_brand: string;
   estimated_cost: string;
   photo?: File | null;
+  /** The inspection photo the server reuses when the Mechanic attaches nothing new. */
+  inspection_photo_url?: string | null;
+  is_hidden_issue?: boolean;
 };
 
 const EMPTY_PART = { part_name: "", replacement_brand: "", estimated_cost: "" };
-const newPart = (): PartInput => ({ id: crypto.randomUUID(), ...EMPTY_PART });
+const newPart = (): PartInput => ({ id: crypto.randomUUID(), result_id: null, ...EMPTY_PART });
+
+/** SH-4: one row per part the inspection found for repair; the Mechanic only adds the brand and the budget. */
+function prefilledParts(inspection: InspectionResultData | null | undefined): PartInput[] {
+  return inspectionRepairParts(inspection).map((part) => ({
+    id: crypto.randomUUID(),
+    result_id: part.result_id,
+    part_name: part.name,
+    replacement_brand: "",
+    estimated_cost: part.cost === null ? "" : String(part.cost),
+    photo: null,
+    inspection_photo_url: part.photos[0]?.url ?? null,
+    is_hidden_issue: part.is_hidden_issue,
+  }));
+}
 
 const STATE_LABELS: Record<string, string> = {
   awaiting_report: "Waiting for the status report",
@@ -71,19 +90,26 @@ const STATE_LABELS: Record<string, string> = {
   completed: "Ready for repricing",
 };
 
-// §6 steps 27–38: a repossessed car's inspection, per-part fund request, repairs, papers and repricing.
+// §6 steps 27–38: a repossessed car's inspection, per-part fund request, repairs, and repricing (SH-2: no
+// Sales Manager papers step sits between the repairs and the repricing any more).
 export function ReconditioningPanel({
   job: rawJob,
   userRole,
+  inspection,
 }: {
   readonly job: Record<string, unknown>;
   readonly userRole: string;
+  /** SH-4: the car's acquisition inspection; its `for_repair` parts pre-fill the report. */
+  readonly inspection?: InspectionResultData | null;
 }) {
   const job = rawJob as Job;
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({});
-  const [parts, setParts] = useState<PartInput[]>([newPart()]);
+  const [parts, setParts] = useState<PartInput[]>(() => {
+    const prefill = prefilledParts(inspection);
+    return prefill.length > 0 ? prefill : [newPart()];
+  });
   const [receipts, setReceipts] = useState<File[]>([]);
   const set = (key: string) => (value: string) => setForm((prev) => ({ ...prev, [key]: value }));
 
@@ -125,8 +151,17 @@ export function ReconditioningPanel({
     const fd = new FormData();
     fd.set("job_id", String(job.id));
     fd.set("status_report", form.status_report ?? "");
-    fd.set("parts", JSON.stringify(parts.map(({ photo: _photo, ...part }) => part)));
-    // T10: one photo per part row, in the same order as the parts.
+    fd.set(
+      "parts",
+      JSON.stringify(
+        parts.map(({ photo: _photo, inspection_photo_url: _url, ...part }) => ({
+          ...part,
+          part_name: part.part_name || "Part",
+          estimated_cost: part.estimated_cost === "" ? 0 : part.estimated_cost,
+        })),
+      ),
+    );
+    // T10: one photo per part row, in the same order as the parts; a pre-filled row may reuse the inspection one.
     for (const [index, part] of parts.entries()) if (part.photo) fd.set(`part_photo_${index}`, part.photo);
     return run(submitReconditioningReport, fd, "Report sent; fund request raised.");
   }
@@ -148,8 +183,8 @@ export function ReconditioningPanel({
           <Badge variant={state === "completed" ? "default" : "secondary"}>{STATE_LABELS[state] ?? state}</Badge>
         </CardTitle>
         <CardDescription>
-          Repossessed car. The Mechanic reports and restores it, the Sales Manager re-processes the papers, then the
-          Marketing Specialist proposes the revised price for the CEO.
+          Repossessed car. The Mechanic reports the parts and restores it, then the Marketing Specialist proposes the
+          revised price for the CEO.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4 text-sm">
@@ -233,6 +268,11 @@ export function ReconditioningPanel({
                     {request.shortfall_reason ? (
                       <p className="mt-1 text-muted-foreground text-xs">{request.shortfall_reason}</p>
                     ) : null}
+                    {request.disbursement_requests?.rejection_reason ? (
+                      <p className="mt-1 whitespace-pre-wrap break-words rounded-md border border-destructive/40 bg-destructive/5 p-2 text-xs">
+                        Rejected: {request.disbursement_requests.rejection_reason}
+                      </p>
+                    ) : null}
                     {request.reconditioning_fund_receipts?.length ? (
                       <div className="mt-2 flex flex-wrap gap-2">
                         {request.reconditioning_fund_receipts.map((receipt) => (
@@ -255,13 +295,6 @@ export function ReconditioningPanel({
           </section>
         ) : null}
 
-        <p className="text-muted-foreground text-xs">
-          Papers:{" "}
-          {job.papers_processed_at
-            ? `re-processed ${format(new Date(job.papers_processed_at as string), "MMM d, yyyy")}`
-            : "not re-processed yet"}
-        </p>
-
         {isMechanic && state === "awaiting_report" ? (
           <section className="flex flex-col gap-3 rounded-md border p-3">
             <Label htmlFor="recon-report">Overall Vehicle Status Report</Label>
@@ -273,44 +306,70 @@ export function ReconditioningPanel({
             />
             <div className="flex flex-col gap-2">
               <p className="font-medium">Parts to repair or replace</p>
+              <p className="text-muted-foreground text-xs">
+                Pre-filled from the inspection, one row per part that needs repair. Add the replacement brand and the
+                budget; the inspection photo is reused unless you attach a new one.
+              </p>
               {parts.map((part, index) => (
-                <div key={part.id} className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr_130px_auto]">
-                  <Input
-                    aria-label={`Part ${index + 1} photo`}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    onChange={(e) => setPart(index, "photo", e.target.files?.[0] ?? null)}
-                  />
-                  <Input
-                    aria-label={`Part ${index + 1} name`}
-                    placeholder="Part name"
-                    value={part.part_name}
-                    onChange={(e) => setPart(index, "part_name", e.target.value)}
-                  />
-                  <Input
-                    aria-label={`Part ${index + 1} replacement brand`}
-                    placeholder="Replacement brand"
-                    value={part.replacement_brand}
-                    onChange={(e) => setPart(index, "replacement_brand", e.target.value)}
-                  />
-                  <Input
-                    aria-label={`Part ${index + 1} estimated budget`}
-                    type="number"
-                    min="0"
-                    placeholder="Budget (₱)"
-                    value={part.estimated_cost}
-                    onChange={(e) => setPart(index, "estimated_cost", e.target.value)}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Remove part ${index + 1}`}
-                    disabled={parts.length === 1}
-                    onClick={() => setParts((prev) => prev.filter((_, i) => i !== index))}
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
+                <div key={part.id} className="flex flex-col gap-2 rounded-md border p-2">
+                  <div className="grid gap-2 sm:grid-cols-[1fr_1fr_130px_auto]">
+                    <Input
+                      aria-label={`Part ${index + 1} name`}
+                      placeholder="Part name"
+                      value={part.part_name}
+                      readOnly={part.result_id !== null}
+                      onChange={(e) => setPart(index, "part_name", e.target.value)}
+                    />
+                    <Input
+                      aria-label={`Part ${index + 1} replacement brand`}
+                      placeholder="Replacement brand"
+                      value={part.replacement_brand}
+                      onChange={(e) => setPart(index, "replacement_brand", e.target.value)}
+                    />
+                    <Input
+                      aria-label={`Part ${index + 1} estimated budget`}
+                      type="number"
+                      min="0"
+                      placeholder="Budget (₱)"
+                      value={part.estimated_cost}
+                      onChange={(e) => setPart(index, "estimated_cost", e.target.value)}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Remove part ${index + 1}`}
+                      disabled={parts.length === 1}
+                      onClick={() => setParts((prev) => prev.filter((_, i) => i !== index))}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Input
+                      aria-label={`Part ${index + 1} photo`}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      onChange={(e) => setPart(index, "photo", e.target.files?.[0] ?? null)}
+                    />
+                    {part.result_id ? (
+                      <Badge variant={part.is_hidden_issue ? "destructive" : "outline"} className="text-[11px]">
+                        {part.is_hidden_issue
+                          ? "Hidden issue · from the inspection"
+                          : "Declared by seller · from the inspection"}
+                      </Badge>
+                    ) : null}
+                    {part.inspection_photo_url ? (
+                      <a
+                        href={part.inspection_photo_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-primary text-xs underline underline-offset-4"
+                      >
+                        Inspection photo
+                      </a>
+                    ) : null}
+                  </div>
                 </div>
               ))}
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -401,7 +460,7 @@ export function ReconditioningPanel({
                   submit(
                     completeReconditioning,
                     { final_report: form.final_report, actual_cost: form.actual_cost },
-                    "Reconditioning completed.",
+                    "Reconditioning completed. The car is ready for repricing.",
                   )
                 }
               >
@@ -434,23 +493,11 @@ export function ReconditioningPanel({
           </section>
         ) : null}
 
-        {userRole === "sales_manager" && !job.papers_processed_at ? (
-          <Button
-            size="sm"
-            variant="outline"
-            className="self-start"
-            disabled={busy}
-            onClick={() => submit(markPapersProcessed, {}, "Papers marked re-processed.")}
-          >
-            Mark papers re-processed
-          </Button>
-        ) : null}
-
+        {/* SH-1 / SH-2: no Sales Manager "papers re-processed" button or waiting text; completing the
+            repairs moved the car to "awaiting_price_approval", so the repricing step is already open. */}
         {userRole === "marketing_specialist" && state === "completed" ? (
           <p className="text-xs">
-            {job.papers_processed_at
-              ? "Ready: propose the revised price from the vehicle list. It goes to the CEO as a reprice."
-              : "Waiting for the Sales Manager to re-process the papers before repricing."}
+            Ready: propose the revised price from the vehicle list. It goes to the CEO as a reprice.
           </p>
         ) : null}
       </CardContent>

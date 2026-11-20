@@ -3,7 +3,6 @@
 import { notFound, redirect } from "next/navigation";
 
 import { PageSkeleton } from "@/components/page-skeleton";
-import { TransactionImagePreview } from "@/components/transaction-image-preview";
 import { browserApi } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/errors";
 import { usePageData } from "@/lib/api/use-page-data";
@@ -11,6 +10,7 @@ import {
   contract,
   deedOfSale,
   missedPaymentPolicy,
+  type PaperSigners,
   paperFinancing,
   paperSale,
   policyWarranty,
@@ -26,8 +26,7 @@ type PaperData = {
   contractBody?: string | null;
   signaturePath?: string | null;
   ciSignaturePath?: string | null;
-  buyerSignatureUrl?: string | null;
-  ciSignatureUrl?: string | null;
+  signatures?: PaperSigners;
 };
 
 /**
@@ -47,56 +46,19 @@ function usePaper(paper: "contract" | "deed-of-sale" | "missed-payment-policy" |
 
 /**
  * The sale contract, filled in from the transaction on record with the body the Sales Manager wrote and the
- * Head Accountant approved. Both signature images GCE recorded are shown under the sheet: the paper itself
- * stays text-only, so it prints without a photo of a signature.
+ * Head Accountant approved. BC-2: the buyer's and GCE's signatures are drawn on the sheet over the printed names.
  */
 export function ContractPaper() {
   const { transactionId, data } = usePaper("contract");
   if (!data) return <PageSkeleton />;
-  const paper = contract(paperSale(data.source), data.contractBody ?? null, {
-    buyer: data.signaturePath ?? null,
-    ci: data.ciSignaturePath ?? null,
-  });
-  const signatures = [
-    { label: "Buyer signature", url: data.buyerSignatureUrl ?? null, alt: "Buyer signature" },
-    {
-      label: "Confidential Informant signature",
-      url: data.ciSignatureUrl ?? null,
-      alt: "Confidential Informant signature",
-    },
-  ];
-
   return (
-    <div className="flex flex-col gap-6">
-      <PaperDocumentView
-        paper={paper}
-        heading="Contract"
-        note="Filled in from the sale on record, with the contract text the Sales Manager wrote. The signatures are shown below the sheet and are kept as images, not printed on it."
-        backHref={`/dashboard/transactions/${transactionId}`}
-        backLabel="Transaction"
-      />
-
-      <section aria-label="Recorded signatures" className="flex flex-col gap-3">
-        <h2 className="font-medium tracking-tight">Recorded signatures</h2>
-        <div className="grid gap-4 sm:grid-cols-2">
-          {signatures.map((signature) => (
-            <div key={signature.label} className="flex flex-col gap-2 rounded-lg border bg-card p-4">
-              <span className="text-sm">{signature.label}</span>
-              {signature.url ? (
-                <TransactionImagePreview
-                  src={signature.url}
-                  alt={signature.alt}
-                  triggerClassName="h-32 w-full"
-                  className="object-contain"
-                />
-              ) : (
-                <span className="text-muted-foreground text-sm">Not signed yet.</span>
-              )}
-            </div>
-          ))}
-        </div>
-      </section>
-    </div>
+    <PaperDocumentView
+      paper={contract(paperSale(data.source), data.contractBody ?? null, data.signatures ?? null)}
+      heading="Contract"
+      note="Filled in from the sale on record, with the contract text the Sales Manager wrote. A signature line stays empty until it is signed in the app or by pen."
+      backHref={`/dashboard/transactions/${transactionId}`}
+      backLabel="Transaction"
+    />
   );
 }
 
@@ -106,9 +68,9 @@ export function DeedOfSalePaper() {
   if (!data) return <PageSkeleton />;
   return (
     <PaperDocumentView
-      paper={deedOfSale(paperSale(data.source))}
+      paper={deedOfSale(paperSale(data.source), data.signatures ?? null)}
       heading="Deed of Sale"
-      note="Filled in from the sale on record. A blank line is a detail GCE has not recorded yet; write it in by hand before signing."
+      note="Filled in from the sale on record, with the signatures recorded in the app. A blank line is a detail GCE has not recorded yet; write it in by hand before signing."
     />
   );
 }
@@ -127,15 +89,15 @@ export function MissedPaymentPolicyPaper() {
   );
 }
 
-/** The Policy & Warranty for one sold car; the wording is still a draft for client review. */
+/** BC-6: the Policy & Warranty of a financing sale, with the missed-payment clauses and both signatures. */
 export function PolicyWarrantyPaper() {
   const { data } = usePaper("policy-warranty");
   if (!data) return <PageSkeleton />;
   return (
     <PaperDocumentView
-      paper={policyWarranty(paperSale(data.source))}
+      paper={policyWarranty(paperSale(data.source), paperFinancing(data.source), data.signatures ?? null)}
       heading="Policy & Warranty"
-      note="Draft terms for client review, filled in with the car's recorded warranty. GCE has not issued the final Policy & Warranty yet."
+      note="GCE's standard warranty and missed payment policy for a financing sale, filled in from the sale on record."
     />
   );
 }

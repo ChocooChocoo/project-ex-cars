@@ -1,8 +1,9 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { cancelTransaction, removePurchaseDocument, saveBuyDetails } from "@/app/(customer)/my-transactions/actions";
+import { cancelTransaction, saveBuyDetails } from "@/app/(customer)/my-transactions/actions";
 import type { ProfileAutoFill } from "@/lib/autofill";
+import { DELIVERY_LEAD_DAYS, MEETUP_LEAD_DAYS, manilaDay } from "@/lib/transactions/buy-flow";
 
 import { TransactionDetail } from "./transaction-detail";
 
@@ -23,7 +24,6 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 vi.mock("@/app/(customer)/my-transactions/actions", () => ({
   cancelTransaction: vi.fn(),
-  removePurchaseDocument: vi.fn(),
   saveBuyDetails: vi.fn(),
   signContract: vi.fn(),
   uploadPurchaseDocument: vi.fn(),
@@ -89,6 +89,48 @@ describe("TransactionDetail completed sell offer", () => {
     expect(screen.getByText("Agreed Price").nextElementSibling).toHaveTextContent("₱450,000");
     expect(screen.getByText("Decision").nextElementSibling).toHaveTextContent("Completed");
     expect(screen.getByTestId("paper")).toHaveTextContent("450000/450000");
+  });
+});
+
+describe("TransactionDetail counter-offer (SH-6)", () => {
+  function renderCounterOffer(counterOffer: { remarks: string | null; response: string | null }) {
+    render(
+      <TransactionDetail
+        transaction={{
+          ...transaction,
+          transaction_kind: "sell",
+          current_state: "approved",
+          sell_details: { offered_amount: 520000, agreed_price: 400000 },
+        }}
+        history={[]}
+        documents={[]}
+        payments={[]}
+        installmentAccount={null}
+        paymentTerms={null}
+        viewingArrangements={[]}
+        autofill={null}
+        counterOffer={counterOffer}
+      />,
+    );
+  }
+
+  it("shows the remarks for the seller and no ceiling amount", () => {
+    renderCounterOffer({ remarks: "The timing belt needs replacing.", response: null });
+
+    const card = screen.getByLabelText("GCE counter-offer");
+    expect(card).toHaveTextContent("GCE revised offer");
+    expect(card).toHaveTextContent("The timing belt needs replacing.");
+    // SH-6: the approved revised ceiling (₱415,000) is internal and never printed here.
+    expect(card).not.toHaveTextContent("415,000");
+    expect(card).not.toHaveTextContent("₱");
+  });
+
+  it("reports the seller's own answer without quoting a price", () => {
+    renderCounterOffer({ remarks: null, response: "agreed" });
+
+    const card = screen.getByLabelText("GCE counter-offer");
+    expect(card).toHaveTextContent("You accepted the revised offer.");
+    expect(card).toHaveTextContent("No remarks given.");
   });
 });
 
@@ -196,13 +238,19 @@ describe("T07 customer transaction controls", () => {
     expect(fd.get("financing_pay_method")).toBe("cash");
     expect(fd.get("payment_method")).toBe("financing");
   });
-  it("requires a PSGC location and blocks saving until one is chosen", () => {
+  it("asks for the meet-up pin instead of a PSGC address, and blocks saving until it is set (BH-8)", () => {
     detail({ current_state: "pending", purchase_details: { arrangement_kind: "meetup" } });
-    expect(screen.getByText("Choose the region, city and barangay for the meet-up or delivery.")).toBeInTheDocument();
+    expect(screen.getByText("Set the meet-up point on the map.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save Details" })).toBeDisabled();
+    expect(screen.queryByText(/Choose the region, city and barangay/)).not.toBeInTheDocument();
+  });
+  it("requires a PSGC location for a delivery and blocks saving until one is chosen", () => {
+    detail({ current_state: "pending", purchase_details: { arrangement_kind: "delivery" } });
+    expect(screen.getByText("Choose the region, city and barangay for the delivery.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save Details" })).toBeDisabled();
   });
-  it("starts the location from the profile address (T10)", () => {
-    detail({ current_state: "pending", purchase_details: { arrangement_kind: "meetup" } }, null, {
+  it("starts a delivery location from the profile address (T10)", () => {
+    detail({ current_state: "pending", purchase_details: { arrangement_kind: "delivery" } }, null, {
       full_name: "Ana",
       email: "ana@gce.test",
       phone: null,
@@ -213,7 +261,7 @@ describe("T07 customer transaction controls", () => {
       city_code: "043405000",
       barangay_code: "043405001",
     });
-    expect(screen.queryByText("Choose the region, city and barangay for the meet-up or delivery.")).toBeNull();
+    expect(screen.queryByText("Choose the region, city and barangay for the delivery.")).toBeNull();
   });
   it("requires agreement before cancelling active financing and sends consent", async () => {
     vi.mocked(cancelTransaction).mockResolvedValue({ success: true });
@@ -290,6 +338,84 @@ describe("TransactionDetail visit time", () => {
   });
 });
 
+describe("TransactionDetail scheduling lead times (BH-1)", () => {
+  function renderPending(arrangement: string) {
+    render(
+      <TransactionDetail
+        transaction={{ ...transaction, current_state: "pending", purchase_details: { arrangement_kind: arrangement } }}
+        history={[]}
+        documents={[]}
+        payments={[]}
+        installmentAccount={null}
+        paymentTerms={null}
+        viewingArrangements={[]}
+        autofill={null}
+      />,
+    );
+  }
+
+  it("needs 2 Manila days for a halfway meet-up, and says so", () => {
+    renderPending("meetup");
+
+    expect(screen.getByLabelText("Schedule")).toHaveAttribute("min", manilaDay(new Date(), MEETUP_LEAD_DAYS));
+    expect(screen.getByText(/A halfway meet-up needs at least 2 days from today/)).toBeInTheDocument();
+  });
+
+  it("still lets a GCE visit be booked the same day", () => {
+    renderPending("gce_visit");
+
+    expect(screen.getByLabelText("Schedule")).toHaveAttribute("min", manilaDay(new Date()));
+    expect(screen.queryByText(/needs at least/)).not.toBeInTheDocument();
+  });
+
+  it("keeps the 7-day lead time for a delivery", () => {
+    renderPending("delivery");
+
+    expect(screen.getByLabelText("Delivery date and time")).toHaveAttribute(
+      "min",
+      manilaDay(new Date(), DELIVERY_LEAD_DAYS),
+    );
+    expect(screen.getByText(/Delivery needs at least 7 days from today/)).toBeInTheDocument();
+  });
+
+  // The approved-financing offer reuses one picker id per screen, so each arrangement renders on its own.
+  function renderFinancingOffer(arrangement: string) {
+    render(
+      <TransactionDetail
+        transaction={{
+          ...transaction,
+          current_state: "approved",
+          flow_status: "approved_awaiting_buyer_decision",
+          purchase_details: { payment_option: "financing", payment_method: "financing", arrangement_kind: arrangement },
+        }}
+        history={[]}
+        documents={[]}
+        payments={[]}
+        installmentAccount={null}
+        paymentTerms={{ state: "approved", down_payment: 0, number_of_payments: 12, total_amount: 800000 }}
+        viewingArrangements={[]}
+        autofill={null}
+      />,
+    );
+  }
+
+  it("needs 2 Manila days for a financed meet-up booked after approval", () => {
+    renderFinancingOffer("meetup");
+
+    expect(screen.getByLabelText("Meet-up date and time")).toHaveAttribute(
+      "min",
+      manilaDay(new Date(), MEETUP_LEAD_DAYS),
+    );
+    expect(screen.getByText(/A halfway meet-up needs at least 2 days from today/)).toBeInTheDocument();
+  });
+
+  it("keeps a financed GCE visit bookable the same day", () => {
+    renderFinancingOffer("gce_visit");
+
+    expect(screen.getByLabelText("GCE visit date and time")).toHaveAttribute("min", manilaDay(new Date()));
+  });
+});
+
 describe("TransactionDetail document previews", () => {
   it("renders a signed image preview without exposing its private path", () => {
     renderDetail([
@@ -336,7 +462,7 @@ describe("TransactionDetail document previews", () => {
   });
 });
 
-describe("TransactionDetail ID sides and removal", () => {
+describe("TransactionDetail ID sides", () => {
   function renderPendingBuy(documents: Record<string, unknown>[]) {
     render(
       <TransactionDetail
@@ -373,22 +499,29 @@ describe("TransactionDetail ID sides and removal", () => {
     expect(screen.getAllByText("Missing")).toHaveLength(4);
   });
 
-  it("shows the side of an ID and removes a pending image", async () => {
-    vi.mocked(removePurchaseDocument).mockResolvedValue({ success: true });
+  it("shows the side of an ID and never offers to remove it (SN-14)", () => {
     renderPendingBuy([pendingFront]);
 
     expect(screen.getByText("front")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Remove Valid ID (front)" }));
-
-    await waitFor(() => expect(removePurchaseDocument).toHaveBeenCalledWith("doc-front"));
+    expect(screen.queryByRole("button", { name: /^Remove/ })).not.toBeInTheDocument();
   });
 
-  it("hides Remove once the request has been sent", () => {
+  it("offers the upload slots again only once GCE asked for a new ID (SN-14)", () => {
+    renderPendingBuy([{ ...pendingFront, verification_state: "rejected", rejection_reason: "Blurred photo" }]);
+
+    // The checklist slot and the uploaded-files row both carry the reason staff gave.
+    expect(screen.getAllByText(/GCE asked you to resubmit: Blurred photo/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByLabelText("Front").length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("TransactionDetail seller papers (SH-13, SN-14)", () => {
+  function renderSell(sell_details: Record<string, unknown>, documents: Record<string, unknown>[] = []) {
     render(
       <TransactionDetail
-        transaction={{ ...transaction, current_state: "under_review" }}
+        transaction={{ ...transaction, transaction_kind: "sell", current_state: "pending", sell_details }}
         history={[]}
-        documents={[pendingFront]}
+        documents={documents}
         payments={[]}
         installmentAccount={null}
         paymentTerms={null}
@@ -396,8 +529,47 @@ describe("TransactionDetail ID sides and removal", () => {
         autofill={null}
       />,
     );
+  }
 
-    expect(screen.queryByRole("button", { name: /^Remove/ })).not.toBeInTheDocument();
+  it("shows the answers the seller gave instead of a flat file list", () => {
+    renderSell({
+      offered_amount: 500000,
+      papers_checklist: { official_receipt: "has", certificate_of_registration: "expired", deed_of_sale: "has" },
+    });
+
+    expect(screen.getByRole("heading", { name: "Your papers checklist" })).toBeInTheDocument();
+    expect(screen.getByText("Official Receipt (OR)").nextElementSibling).toHaveTextContent("I have it");
+    expect(screen.getByText("Certificate of Registration (CR)").nextElementSibling).toHaveTextContent("It is expired");
+    expect(screen.queryByRole("heading", { name: "Documents" })).not.toBeInTheDocument();
+  });
+
+  it("hides the upload slots for a seller nothing was asked to resubmit", () => {
+    renderSell({ offered_amount: 500000, papers_checklist: { official_receipt: "has" } }, [
+      { id: "id-1", document_kind: "valid_id", verification_state: "verified", is_image: true, signed_url: null },
+    ]);
+
+    expect(screen.queryByText("GCE asked you to resubmit")).not.toBeInTheDocument();
+    expect(screen.queryByText("Valid ID #1")).not.toBeInTheDocument();
+  });
+
+  it("offers the ID slots again when GCE rejected the seller's ID", () => {
+    renderSell({ offered_amount: 500000, papers_checklist: { official_receipt: "has" } }, [
+      {
+        id: "id-1",
+        document_kind: "valid_id",
+        id_type: "passport",
+        id_side: "front",
+        verification_state: "rejected",
+        rejection_reason: "Blurred photo",
+        is_image: true,
+        signed_url: null,
+      },
+    ]);
+
+    expect(screen.getByText("GCE asked you to resubmit")).toBeInTheDocument();
+    expect(screen.getByText(/GCE asked you to resubmit: Blurred photo/)).toBeInTheDocument();
+    expect(screen.getByText("Valid ID #1")).toBeInTheDocument();
+    expect(screen.queryByText("Proof of billing")).not.toBeInTheDocument();
   });
 });
 
@@ -433,10 +605,12 @@ describe("TransactionDetail contract", () => {
     expect(screen.queryByText(/sign the printed contract/)).not.toBeInTheDocument();
   });
 
-  it("shows no contract on a cash buy at a GCE visit, which has none", () => {
-    renderApprovedBuy({ payment_method: "cash", arrangement_kind: "gce_visit" }, null);
+  it("BC-2 / BC-3: a cash GCE visit is signed in the app once the Sales Manager has signed for GCE", () => {
+    renderApprovedBuy({ payment_method: "cash", arrangement_kind: "gce_visit" }, "approved");
 
-    expect(screen.queryByRole("heading", { name: "Your contract" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Your contract" })).toBeInTheDocument();
+    expect(screen.getByText(/The Sales Manager signs for GCE first/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Sign contract/ })).not.toBeInTheDocument();
   });
 
   it("T11: offers the signed contract and policy as a copy once it is signed", () => {
@@ -449,6 +623,65 @@ describe("TransactionDetail contract", () => {
     renderApprovedBuy({ payment_method: "financing", arrangement_kind: "gce_visit" }, "approved");
 
     expect(screen.queryByTestId("signed-copy-link")).not.toBeInTheDocument();
+  });
+});
+
+describe("TransactionDetail rejection reason (BC-9)", () => {
+  function renderRejected(history: Record<string, unknown>[]) {
+    render(
+      <TransactionDetail
+        transaction={{ ...transaction, current_state: "rejected" }}
+        history={history}
+        documents={[]}
+        payments={[]}
+        installmentAccount={null}
+        paymentTerms={null}
+        viewingArrangements={[]}
+        autofill={null}
+      />,
+    );
+  }
+
+  it("prints the reason on the rejected banner, not only behind See reason", () => {
+    renderRejected([
+      {
+        from_state: "under_review",
+        to_state: "rejected",
+        reason: "The proof of billing is not in the buyer's name.",
+        changed_at: "2026-11-05T02:00:00.000Z",
+      },
+    ]);
+
+    const banner = screen.getByRole("alert");
+    expect(banner).toHaveTextContent("This request was not approved.");
+    expect(banner).toHaveTextContent("Reason: The proof of billing is not in the buyer's name.");
+    // The older modal is still there for the full record.
+    expect(screen.getByRole("button", { name: "See reason" })).toBeInTheDocument();
+  });
+
+  it("keeps the banner when GCE recorded no reason", () => {
+    renderRejected([]);
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Reason: GCE did not record a reason. Contact support for details.",
+    );
+  });
+
+  it("shows no rejection banner on an approved transaction", () => {
+    render(
+      <TransactionDetail
+        transaction={{ ...transaction, current_state: "approved" }}
+        history={[]}
+        documents={[]}
+        payments={[]}
+        installmentAccount={null}
+        paymentTerms={null}
+        viewingArrangements={[]}
+        autofill={null}
+      />,
+    );
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });
 

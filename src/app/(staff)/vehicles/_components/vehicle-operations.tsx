@@ -11,7 +11,7 @@ import { VehicleTable } from "./vehicles-table";
 
 type VehicleQuickFilter = "all" | "available" | "ready" | "on_lot" | "needs_inspection" | "ready_for_pricing";
 
-type ReconditioningSummary = { state: string; papers_processed_at: string | null };
+type ReconditioningSummary = { state: string };
 
 function getVehicleFilterOptions(userRole: string | null) {
   if (userRole === "sales_manager") {
@@ -87,10 +87,12 @@ export function VehicleOperations({
       return vehicles.filter((v) => v.listing_state === "inspecting" || v.listing_state === "repairing");
     }
     if (userRole === "marketing_specialist" && vehicleFilter === "ready_for_pricing") {
-      return vehicles.filter((v) => {
-        const job = reconditioningByVehicle[String(v.id)];
-        return v.listing_state === "repairing" && job?.state === "completed" && Boolean(job.papers_processed_at);
-      });
+      // SH-1 / SH-2: completing the reconditioning leaves the car in "awaiting_price_approval" for every role,
+      // so the list reads the listing state only. No Sales Manager papers step gates it any more.
+      return vehicles.filter(
+        (v) =>
+          v.listing_state === "awaiting_price_approval" && reconditioningByVehicle[String(v.id)]?.state === "completed",
+      );
     }
     return vehicles;
   }, [vehicles, vehicleFilter, userRole, filterOptions, reconditioningByVehicle]);

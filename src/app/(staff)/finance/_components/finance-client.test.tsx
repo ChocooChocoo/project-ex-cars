@@ -4,7 +4,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { advanceDisbursement } from "@/app/(staff)/finance/actions";
 
-import { type DisbursementRow, FinanceClient, type FinancialEntryRow, getFinanceSummary } from "./finance-client";
+import {
+  type CashOnHand,
+  cashOnHandCents,
+  type DisbursementContext,
+  type DisbursementRow,
+  entryEffectCents,
+  FinanceClient,
+  type FinancialEntryRow,
+  getFinanceSummary,
+} from "./finance-client";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
@@ -296,5 +305,194 @@ describe("Finance tables (T03 HA4, HA5)", () => {
 
     expect(screen.getByText("Request 10")).toBeInTheDocument();
     expect(screen.queryByText("Request 11")).not.toBeInTheDocument();
+  });
+});
+
+describe("Cash on hand (SN-10)", () => {
+  const entry = (entry_kind: FinancialEntryRow["entry_kind"], amount_cents: number): FinancialEntryRow => ({
+    id: `${entry_kind}-${amount_cents}`,
+    entry_kind,
+    amount_cents,
+    description: entry_kind,
+    verified_by: null,
+    recorded_at: new Date().toISOString(),
+  });
+
+  it("takes released funds out and puts revenue and adjustments in", () => {
+    expect(entryEffectCents(entry("disbursement", 10_000_000))).toBe(-10_000_000);
+    expect(entryEffectCents(entry("expense", 150_000))).toBe(-150_000);
+    expect(entryEffectCents(entry("revenue", 30_000_000))).toBe(30_000_000);
+    expect(entryEffectCents(entry("adjustment", 2_000_000))).toBe(2_000_000);
+  });
+
+  it("sums the effects to the cash on hand when the page sends no figures", () => {
+    const entries = [entry("revenue", 30_000_000), entry("disbursement", 10_000_000), entry("expense", 150_000)];
+    expect(cashOnHandCents(entries)).toBe(19_850_000);
+  });
+
+  it("uses Laravel's figures, opening balance included, when the page sends them", () => {
+    const cashOnHand: CashOnHand = { opening_cents: 1_000_000, movements_cents: -10_000_000, total_cents: -9_000_000 };
+    render(
+      <FinanceClient
+        entries={[entry("disbursement", 10_000_000)]}
+        disbursements={[]}
+        cashOnHand={cashOnHand}
+        {...financeProps}
+      />,
+    );
+    expect(cashOnHandCents([entry("disbursement", 10_000_000)], cashOnHand)).toBe(-9_000_000);
+    expect(screen.getAllByText("Cash on hand").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("shows no Cash on hand card when the page sends none (the informant)", () => {
+    const informant = { ...financeProps, isInformant: true, canRecord: false, canVerify: false, canAdvance: false };
+    render(<FinanceClient entries={[entry("revenue", 100)]} disbursements={[]} {...informant} />);
+    expect(screen.queryByText("Cash on hand")).not.toBeInTheDocument();
+  });
+
+  it("lists a movement with its reason and links its transaction", () => {
+    render(
+      <FinanceClient
+        entries={[
+          {
+            ...entry("disbursement", 10_000_000),
+            description: "Funds released: Reconditioning fund. Repair the bought car",
+            transaction_id: "tx-1",
+          },
+        ]}
+        disbursements={[]}
+        {...financeProps}
+      />,
+    );
+    fireEvent.mouseDown(screen.getByRole("tab", { name: /Movements/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /Movements/ }));
+    expect(screen.getByText("Funds released: Reconditioning fund. Repair the bought car")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open" })).toHaveAttribute("href", "/dashboard/transactions/tx-1");
+  });
+});
+
+describe("Fund request context (SN-9, SH-3, BH-4)", () => {
+  const context: DisbursementContext = {
+    transaction: { id: "tx-1", kind: "sell", state: "approved", arrangement: "meet_halfway" },
+    vehicle: {
+      stock_code: "GCE-0042",
+      year: 2021,
+      make: "Toyota",
+      model: "Vios",
+      condition: "Good",
+      listing_state: "draft",
+    },
+    party: { role: "seller", name: "Ana Dela Cruz" },
+    prices: { agreed_cents: 45_000_000, final_cents: null, requested_cents: 45_150_000 },
+    payment: {
+      option: null,
+      method: null,
+      received_cents: 0,
+      downpayment: { amount_cents: null, status: "not_required" },
+      delivery_fee: { amount_cents: null, status: "not_required" },
+    },
+    issues: { condition: "Good", has_known_issues: true, declared_issues: "Worn front tyres" },
+    inspection: null,
+  };
+
+  it("shows the car, deal, parties, prices and payment status with a transaction link", () => {
+    render(
+      <FinanceClient
+        entries={[]}
+        disbursements={[disbursement({ context, purchase_transaction_id: "tx-1" })]}
+        {...financeProps}
+      />,
+    );
+    openDisbursements();
+    fireEvent.click(screen.getByRole("button", { name: /Open Reconditioning fund/ }));
+
+    expect(screen.getByText("2021 Toyota Vios")).toBeInTheDocument();
+    expect(screen.getByText("Ana Dela Cruz")).toBeInTheDocument();
+    expect(screen.getByText("₱450,000.00")).toBeInTheDocument();
+    expect(screen.getByText("Sell · Meet Halfway")).toBeInTheDocument();
+    expect(screen.getByText("Worn front tyres")).toBeInTheDocument();
+    expect(screen.getAllByText("Not required").length).toBe(2);
+    expect(screen.getByRole("link", { name: "Open transaction" })).toHaveAttribute(
+      "href",
+      "/dashboard/transactions/tx-1",
+    );
+  });
+
+  it("embeds the inspection result for a purchase fund", () => {
+    render(
+      <FinanceClient
+        entries={[]}
+        disbursements={[
+          disbursement({
+            context: {
+              ...context,
+              inspection: {
+                inspection_id: "i-1",
+                inspected_at: null,
+                findings: "Brakes worn",
+                total: 12000,
+                parts: [
+                  {
+                    result_id: "r-1",
+                    node_id: "n-1",
+                    name: "Brake pads",
+                    status: "for_repair",
+                    cost: 12000,
+                    notes: null,
+                    is_hidden_issue: true,
+                    photos: [],
+                  },
+                ],
+              },
+            },
+          }),
+        ]}
+        {...financeProps}
+      />,
+    );
+    openDisbursements();
+    fireEvent.click(screen.getByRole("button", { name: /Open Reconditioning fund/ }));
+
+    expect(screen.getByText("Inspection on site")).toBeInTheDocument();
+    expect(screen.getByText("Brake pads")).toBeInTheDocument();
+    expect(screen.getByText("1 part need repair")).toBeInTheDocument();
+  });
+
+  it("shows why a request was rejected", () => {
+    render(
+      <FinanceClient
+        entries={[]}
+        disbursements={[disbursement({ status: "rejected", rejection_reason: "No quotation attached" })]}
+        {...financeProps}
+      />,
+    );
+    openDisbursements();
+    fireEvent.click(screen.getByRole("button", { name: /Open Reconditioning fund/ }));
+
+    expect(screen.getAllByText("No quotation attached").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("hides Confirm excess received for a zero return and says No excess instead", () => {
+    render(
+      <FinanceClient
+        entries={[]}
+        disbursements={[
+          disbursement({
+            status: "released",
+            field_case_id: "case-1",
+            returned_cents: 0,
+            returned_at: new Date().toISOString(),
+            return_confirmed_at: new Date().toISOString(),
+          }),
+        ]}
+        canConfirmReturn
+        {...financeProps}
+      />,
+    );
+    openDisbursements();
+    fireEvent.click(screen.getByRole("button", { name: /Open Reconditioning fund/ }));
+
+    expect(screen.queryByRole("button", { name: "Confirm excess received" })).not.toBeInTheDocument();
+    expect(screen.getByText("No excess")).toBeInTheDocument();
   });
 });

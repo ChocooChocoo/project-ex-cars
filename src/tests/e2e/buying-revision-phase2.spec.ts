@@ -11,6 +11,7 @@ import {
   pickByLabel,
   resetCustomerStanding,
   seedPassword,
+  signContract,
   signInAs,
 } from "./support/t01";
 import { archiveListedTestVehicles, canCreateTestVehicle, createTestVehicle } from "./support/test-vehicle";
@@ -59,28 +60,8 @@ test.describe
       await approveAsSalesManager(page, id);
       await expect(page.getByText("With the Confidential Informant")).toBeVisible();
 
-      // Cash is recorded, but the papers cannot be requested until the Head Accountant checks it.
-      await page.locator("#pay_amount").fill("500000");
-      await pick(page, "pay_method", "Cash");
-      await page.getByRole("button", { name: "Record Payment" }).click();
-      await expect(page.getByText("Payment recorded.")).toBeVisible();
-      await page.waitForLoadState("networkidle");
-      await page.getByRole("button", { name: "Request papers release" }).click();
-      await expect(
-        page.getByText("The Head Accountant must check the payment before the papers are requested."),
-      ).toBeVisible();
-      await markSold(page).click();
-      await expect(page.getByText(PAPERS_FIRST)).toBeVisible();
-
-      await signInAs(page, "head_accountant@gce.local");
-      await open(page, `/head_accountant/transactions/${id}`);
-      const verify = page.getByRole("button", { name: "Verify", exact: true });
-      await verify.first().click();
-      await expect(page.getByText("Payment verified.")).toBeVisible();
-
-      // Papers Requested.
-      await signInAs(page, "sales_manager@gce.local");
-      await open(page, `/sales_manager/transactions/${id}`);
+      // BC-4: a full payment at a GCE visit has nothing to verify up front, so its papers may be requested right
+      // after the approval. Papers Requested.
       await page.getByRole("button", { name: "Request papers release" }).click();
       await expect(page.getByText("Papers requested from the Confidential Informant.")).toBeVisible();
       await expect(page.getByText("Papers Requested").first()).toBeVisible();
@@ -107,13 +88,25 @@ test.describe
       await markSold(page).click();
       await expect(page.getByText(PAPERS_FIRST)).toBeVisible();
 
-      // Papers Received, then sold.
+      // Papers Received, then the cash is recorded and the car is sold.
       await page.getByRole("button", { name: "Receive papers" }).click();
       await expect(page.getByText("Papers received.")).toBeVisible();
       await expect(page.getByText("Papers Received").first()).toBeVisible();
       await page.setViewportSize({ width: 390, height: 844 });
       await page.screenshot({ path: "test-results/phase2-papers-received-mobile.png", fullPage: true });
       await page.setViewportSize({ width: 1280, height: 720 });
+      await markSold(page).click();
+      await expect(page.getByText(/Record the buyer's payment before marking the car sold/)).toBeVisible();
+      await page.locator("#pay_amount").fill("500000");
+      await pick(page, "pay_method", "Cash");
+      await page.getByRole("button", { name: "Record Payment" }).click();
+      await expect(page.getByText("Payment recorded.")).toBeVisible();
+      // BC-2: the cash GCE visit is signed before it is sold.
+      await markSold(page).click();
+      await expect(page.getByText("The buyer must sign the contract before the car is marked sold.")).toBeVisible();
+      await signContract(id);
+      await page.reload();
+      await page.waitForLoadState("networkidle");
       await markSold(page).click();
       await expect(page.getByText("Transaction moved to completed.")).toBeVisible();
 
@@ -205,6 +198,6 @@ test.describe
       await expect(page.getByText("Recorded: buyer didn't show up.")).toBeVisible();
       expect(await papersStatus(id)).toBe("returned");
       await page.reload();
-      await expect(page.getByText("Papers Returned to CI")).toBeVisible();
+      await expect(page.getByText("On Hold")).toBeVisible();
     });
   });

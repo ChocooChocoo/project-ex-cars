@@ -9,12 +9,14 @@ import { toast } from "sonner";
 import {
   receivePapers,
   recordFaceToFaceSigning,
+  recordSmSignature,
   requestPapersRelease,
   reviewContract,
   saveContract,
 } from "@/app/(staff)/transactions/handover-actions";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ContractProgress } from "@/components/contract-progress";
+import { SignaturePad } from "@/components/signature-pad";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,6 +26,7 @@ import {
   CONTRACT_STATE_LABELS,
   type ContractState,
   isFieldArrangement,
+  needsSmSignature,
   PAPERS_STATUS_LABELS,
   type PapersStatus,
   signsInApp,
@@ -117,9 +120,10 @@ export function HandoverPanel({
   );
 }
 
-// Contract: nothing is paid, handed over or marked sold before it is signed. For financing at a GCE
-// visit or a meet-up the Sales Manager writes it here and the Head Accountant approves it; everywhere
-// else it is signed on paper in the field, so this card only reports.
+// Contract: nothing is handed over or marked sold before it is signed. At a GCE visit (any payment) and for
+// financing at a meet-up the Sales Manager writes it here and the Head Accountant approves it; a delivery or a
+// cash meet-up is signed on paper in the field, so this card only reports. BC-3: at a GCE visit the Sales Manager
+// also signs for GCE here, before the buyer signs.
 export function ContractCard({
   transactionId,
   details,
@@ -139,9 +143,13 @@ export function ContractCard({
   const [busy, setBusy] = useState(false);
   const [body, setBody] = useState(String(handover.contract_body ?? ""));
   const [reason, setReason] = useState("");
+  const [smSignature, setSmSignature] = useState<HTMLCanvasElement | null>(null);
 
   const inApp = signsInApp(details);
+  const smSigns = needsSmSignature(details);
+  const smSigned = Boolean(handover.sm_signature_path);
   const state = (handover.contract_state as ContractState | null | undefined) ?? null;
+  const canSmSign = open && smSigns && !smSigned && state !== "signed" && ["sales_manager", "ceo"].includes(userRole);
   const canWrite =
     open &&
     inApp &&
@@ -164,14 +172,41 @@ export function ContractCard({
     }
   }
 
+  async function signForGce() {
+    if (!smSignature) return;
+    setBusy(true);
+    try {
+      const blob = await new Promise<Blob | null>((resolve) => smSignature.toBlob(resolve, "image/png"));
+      if (!blob) {
+        toast.error("Could not read the signature. Draw it again.");
+        return;
+      }
+      const fd = new FormData();
+      fd.set("transaction_id", transactionId);
+      fd.set("signature", new File([blob], "signature-sm.png", { type: "image/png" }));
+      const result = await recordSmSignature(fd);
+      if ("error" in result) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Signed for GCE. The buyer can now sign.");
+      setSmSignature(null);
+      router.refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Contract</CardTitle>
         <CardDescription>
-          {inApp
-            ? "The Sales Manager writes it, the Head Accountant approves it, then the buyer signs it. No payment is recorded before the signature."
-            : "The buyer signs the printed contract at the meet-up or on delivery, and the Confidential Informant reports it. No payment is recorded before the signature."}
+          {smSigns
+            ? "The Sales Manager writes it, the Head Accountant approves it, the Sales Manager signs for GCE, then the buyer signs. The buyer's and your signatures go on the Deed of Sale."
+            : inApp
+              ? "The Sales Manager writes it, the Head Accountant approves it, then the buyer signs it. No payment is recorded before the signature."
+              : "The buyer signs the printed contract at the meet-up or on delivery, and the Confidential Informant reports it. No payment is recorded before the signature."}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3 text-sm">
@@ -207,7 +242,9 @@ export function ContractCard({
               aria-describedby="contract-body-hint"
             />
             <p id="contract-body-hint" className="text-muted-foreground text-xs">
-              State the contract length and that GCE takes back the vehicle if it is not paid for.
+              {details?.payment_method === "financing"
+                ? "State the contract length and that GCE takes back the vehicle if it is not paid for."
+                : "State the full price paid and that the Deed of Sale transfers the vehicle to the buyer."}
             </p>
             <div className="flex flex-wrap gap-2">
               <ConfirmDialog
@@ -274,6 +311,26 @@ export function ContractCard({
         {state === "pending_approval" && !canReview ? (
           <p className="text-muted-foreground">Waiting for the Head Accountant to approve or return it.</p>
         ) : null}
+        {smSigns && state !== null ? (
+          <div className="flex flex-col gap-2 border-t pt-3">
+            <p className="flex flex-wrap items-center gap-2">
+              <span className="text-muted-foreground">GCE signature</span>
+              <Badge variant={smSigned ? "secondary" : "outline"}>
+                {smSigned ? "Signed by the Sales Manager" : "Not signed yet"}
+              </Badge>
+            </p>
+            {canSmSign ? (
+              <>
+                <Label>Sign for GCE (Sales Manager)</Label>
+                <SignaturePad onChange={setSmSignature} />
+                <Button size="sm" className="self-start" disabled={busy || !smSignature} onClick={signForGce}>
+                  Sign for GCE
+                </Button>
+              </>
+            ) : null}
+          </div>
+        ) : null}
+
         {state === "approved" && handover.signing_method === "face_to_face" ? (
           <div className="flex flex-col gap-2 border-t pt-3">
             <p>The buyer chose to sign face-to-face.</p>

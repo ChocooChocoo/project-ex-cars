@@ -2,7 +2,6 @@
 
 import { useMemo, useRef, useState } from "react";
 
-import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -12,6 +11,8 @@ import { toast } from "sonner";
 
 import { prepareSellUploads, submitSellVehicle } from "@/app/(customer)/my-transactions/actions";
 import { BrandModelCombobox } from "@/components/brand-model-combobox";
+import { GceLocationMap, MeetupMap } from "@/components/maps/lazy-maps";
+import { MeetupAddressFields } from "@/components/maps/meetup-address-fields";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -22,10 +23,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { createClient } from "@/lib/api/storage-client";
 import { ACCEPTED_ID_TYPES, ID_LABELS } from "@/lib/auth/roles";
+import { composeMeetupAddress, emptyMeetupAddress, type MeetupAddressParts } from "@/lib/transactions/meetup-area";
 import { SELL_MEETUP_METHOD_LABELS, SELL_MEETUP_METHODS } from "@/lib/transactions/sell-flow";
 import { compressImage, MAX_UPLOAD_BYTES } from "@/lib/uploads/compress-image";
 import { type SellVehicleFormData, sellVehicleSchema } from "@/lib/validation/transactions";
-import { OLDEST_LISTED_YEAR, OWNER_NUMBERS, SELL_CONDITIONS } from "@/lib/vehicles/catalog";
+import {
+  OLDEST_LISTED_YEAR,
+  OWNER_NUMBERS,
+  SELL_CONDITIONS,
+  SELL_PAPER_FIELDS,
+  SELL_PAPER_STATUS_LABELS,
+} from "@/lib/vehicles/catalog";
 
 export interface ConditionChecklistNode {
   id: string;
@@ -66,15 +74,16 @@ const LATEST_YEAR = new Date().getFullYear() + 1;
 // T12: the year is typed, so keys that make a negative, decimal or exponent number are blocked.
 const BLOCKED_YEAR_KEYS = new Set(["-", "+", ".", ",", "e", "E"]);
 
-// Leaflet needs the browser window, so the map is never rendered on the server.
-const MeetupMap = dynamic(() => import("./meetup-map").then((mod) => mod.MeetupMap), {
-  ssr: false,
-  loading: () => <div className="h-72 w-full animate-pulse rounded-md border bg-muted" />,
-});
-
 export const SELL_PAPER_ACCEPT = "image/jpeg,image/png,image/webp,application/pdf";
 
-// T10: each valid ID is sent front and back, like the buyer's; the OR and the CR are separate papers.
+// SN-13: the three papers are declared, not photographed. The seller keeps the originals and brings them to the
+// meet-up, so the form asks one question per paper.
+export const SELL_PAPERS_NOTICE =
+  "GCE respects the privacy of your vehicle papers. Answer this checklist now and bring the originals to the meet-up.";
+
+export const SELL_PAPERS_MESSAGE = "Answer the papers checklist for the OR, the CR and the deed of sale.";
+
+// T10: each valid ID is sent front and back, like the buyer's.
 const ID_FIELDS = [1, 2].flatMap((n) =>
   (["front", "back"] as const).map((side) => ({
     key: `id_${side}_${n}`,
@@ -85,24 +94,8 @@ const ID_FIELDS = [1, 2].flatMap((n) =>
     pathKey: `id_${side}_path_${n}`,
   })),
 );
-const OTHER_PAPER_FIELDS = [
-  {
-    key: "official_receipt_file",
-    label: "Official Receipt (OR) *",
-    kind: "official_receipt",
-    pathKey: "official_receipt_path",
-  },
-  {
-    key: "certificate_of_registration_file",
-    label: "Certificate of Registration (CR) *",
-    kind: "certificate_of_registration",
-    pathKey: "certificate_of_registration_path",
-  },
-  { key: "deed_of_sale_file", label: "Deed of Sale *", kind: "deed_of_sale", pathKey: "deed_of_sale_path" },
-] as const;
-const PAPER_FIELDS = [...ID_FIELDS, ...OTHER_PAPER_FIELDS];
-const PAPERS_MESSAGE =
-  "Attach both valid IDs (front and back) with their ID types, the OR, the CR and the deed of sale.";
+const PAPER_FIELDS = ID_FIELDS;
+const PAPERS_MESSAGE = "Attach both valid IDs (front and back) with their ID types.";
 
 export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNodes?: ConditionChecklistNode[] }) {
   const router = useRouter();
@@ -120,6 +113,8 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
 
   const hasKnownIssues = watch("has_known_issues");
   const meetupMethod = watch("meetup_method");
+  const meetupLat = watch("meetup_lat");
+  const meetupLng = watch("meetup_lng");
   const condition = watch("condition");
   const { field: makeField } = useController({ control, name: "make" });
   const { field: modelField } = useController({ control, name: "model" });
@@ -127,6 +122,9 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
   const [papers, setPapers] = useState<Record<string, File | null>>({});
   const [idTypes, setIdTypes] = useState<Record<string, string>>({});
   const [paperError, setPaperError] = useState<string | null>(null);
+  const [idFilesError, setIdFilesError] = useState<string | null>(null);
+  // SN-13: the seller's answers about the OR, the CR and the deed of sale, keyed by document kind.
+  const [papersChecklist, setPapersChecklist] = useState<Record<string, string>>({});
 
   const [photos, setPhotos] = useState<File[]>([]);
   const [photoError, setPhotoError] = useState<string | null>(null);
@@ -139,6 +137,8 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
   const [othersError, setOthersError] = useState<string | null>(null);
   const [issuePhotos, setIssuePhotos] = useState<File[]>([]);
   const [issuePhotoError, setIssuePhotoError] = useState<string | null>(null);
+  // BH-8: Region / Province / City / Barangay come from the pin; the block and lot are typed.
+  const [meetupAddress, setMeetupAddress] = useState<MeetupAddressParts>(emptyMeetupAddress());
   const nameById = useMemo(() => new Map(checklistNodes.map((node) => [node.id, node.name])), [checklistNodes]);
 
   const checklistTree = useMemo(() => {
@@ -214,12 +214,18 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
     }
     const missingPaper = PAPER_FIELDS.find((field) => !papers[field.key]);
     if (missingPaper || !idTypes.id_type_1 || !idTypes.id_type_2) {
-      setPaperError(PAPERS_MESSAGE);
+      setIdFilesError(PAPERS_MESSAGE);
       toast.error(PAPERS_MESSAGE);
       return;
     }
+    // SN-13: every paper must be declared; the papers themselves are checked against the originals.
+    if (SELL_PAPER_FIELDS.some((paper) => !papersChecklist[paper.key])) {
+      setPaperError(SELL_PAPERS_MESSAGE);
+      toast.error(SELL_PAPERS_MESSAGE);
+      return;
+    }
     if (idTypes.id_type_1 === idTypes.id_type_2) {
-      setPaperError("Use two different valid IDs.");
+      setIdFilesError("Use two different valid IDs.");
       toast.error("Use two different valid IDs.");
       return;
     }
@@ -249,9 +255,13 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
     if (data.meetup_method === "meet_halfway" && data.meetup_lat != null && data.meetup_lng != null) {
       fd.set("meetup_lat", String(data.meetup_lat));
       fd.set("meetup_lng", String(data.meetup_lng));
+      const composed = composeMeetupAddress(meetupAddress);
+      if (composed) fd.set("meetup_address", composed);
     }
     fd.set("id_type_1", idTypes.id_type_1);
     fd.set("id_type_2", idTypes.id_type_2);
+    // SN-13: one JSON field, like condition_items, so the three answers travel together.
+    fd.set("papers_checklist", JSON.stringify(papersChecklist));
     if (hasIssues && selectedConditionItems.length > 0) {
       fd.set("condition_items", JSON.stringify(selectedConditionItems));
     }
@@ -578,19 +588,76 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
             <Field data-invalid={!!errors.meetup_lat}>
               <FieldLabel>Meet-up point *</FieldLabel>
               <FieldDescription>
-                We suggest the halfway point between GCE and your location. Drag the pin to adjust it.
+                We suggest the halfway point between GCE and your location. Drag the pin to adjust it, inside
+                CALABARZON. The address fills in once you drop the pin, and you type the block and lot.
               </FieldDescription>
               <MeetupMap
+                value={
+                  meetupLat != null && meetupLng != null ? { lat: Number(meetupLat), lng: Number(meetupLng) } : null
+                }
                 onChange={(point) => {
                   setValue("meetup_lat", point.lat, { shouldValidate: isSubmitted });
                   setValue("meetup_lng", point.lng, { shouldValidate: isSubmitted });
                 }}
+                onAddress={(next) => next && setMeetupAddress((current) => ({ ...next, block_lot: current.block_lot }))}
               />
+              <MeetupAddressFields value={meetupAddress} onChange={setMeetupAddress} />
               {errors.meetup_lat && <FieldError errors={[{ message: errors.meetup_lat.message }]} />}
             </Field>
+          ) : meetupMethod === "gce_visit" ? (
+            <Field>
+              <FieldLabel>Where to meet</FieldLabel>
+              <FieldDescription>
+                Bring the car and the original papers to GCE. The pin shows the office so you know where to go.
+              </FieldDescription>
+              <GceLocationMap />
+            </Field>
           ) : null}
-          <Field data-invalid={!!paperError}>
-            <FieldLabel>Required papers (JPEG/PNG/WebP/PDF, max 2 MB each)</FieldLabel>
+          {/* SN-13: the OR, the CR and the deed of sale are declared, not uploaded. The originals are checked at
+              the meet-up, and GCE never stores a copy. */}
+          <Field data-invalid={!!paperError || !!errors.papers_checklist}>
+            <FieldLabel>Vehicle papers *</FieldLabel>
+            <FieldDescription>{SELL_PAPERS_NOTICE}</FieldDescription>
+            <ul className="grid gap-3 sm:grid-cols-3">
+              {SELL_PAPER_FIELDS.map((paper) => (
+                <li key={paper.key} className="flex flex-col gap-3 rounded-lg border p-3">
+                  <Field data-invalid={!papersChecklist[paper.key] && isSubmitted}>
+                    <FieldLabel htmlFor={`sell-${paper.key}`}>{paper.label} *</FieldLabel>
+                    <Select
+                      value={papersChecklist[paper.key] ?? ""}
+                      onValueChange={(value) => {
+                        const next = { ...papersChecklist, [paper.key]: value };
+                        setPapersChecklist(next);
+                        // The schema checks the answers too, so the form state must carry them or submit stalls.
+                        setValue("papers_checklist", next as SellVehicleFormData["papers_checklist"], {
+                          shouldValidate: isSubmitted,
+                        });
+                        setPaperError(null);
+                      }}
+                    >
+                      <SelectTrigger id={`sell-${paper.key}`} className="w-full">
+                        <SelectValue placeholder="Select an answer" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {paper.statuses.map((status) => (
+                          <SelectItem key={status} value={status}>
+                            {SELL_PAPER_STATUS_LABELS[status]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                </li>
+              ))}
+            </ul>
+            {paperError ? (
+              <FieldError errors={[{ message: paperError }]} />
+            ) : errors.papers_checklist ? (
+              <FieldError errors={[{ message: SELL_PAPERS_MESSAGE }]} />
+            ) : null}
+          </Field>
+          <Field data-invalid={!!idFilesError}>
+            <FieldLabel>Your valid IDs (JPEG/PNG/WebP/PDF, max 2 MB each)</FieldLabel>
             <ul className="grid gap-3 sm:grid-cols-2">
               {[1, 2].map((n) => {
                 const idType = idTypes[`id_type_${n}`] ?? "";
@@ -621,7 +688,7 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
                         disabled={!idType}
                         onFile={(file) => {
                           setPapers((prev) => ({ ...prev, [field.key]: file }));
-                          setPaperError(null);
+                          setIdFilesError(null);
                         }}
                       />
                     ))}
@@ -629,20 +696,8 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
                   </li>
                 );
               })}
-              {OTHER_PAPER_FIELDS.map((paper) => (
-                <li key={paper.key} className="flex flex-col gap-3 rounded-lg border p-3">
-                  <PaperInput
-                    id={`sell-${paper.key}`}
-                    label={paper.label}
-                    onFile={(file) => {
-                      setPapers((prev) => ({ ...prev, [paper.key]: file }));
-                      setPaperError(null);
-                    }}
-                  />
-                </li>
-              ))}
             </ul>
-            {paperError && <FieldError errors={[{ message: paperError }]} />}
+            {idFilesError && <FieldError errors={[{ message: idFilesError }]} />}
           </Field>
           <Field data-invalid={!!photoError}>
             <FieldLabel htmlFor="sell-photos">Vehicle Photos * (1–6 photos, JPEG/PNG/WebP, max 2 MB each)</FieldLabel>

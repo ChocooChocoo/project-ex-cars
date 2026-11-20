@@ -13,7 +13,6 @@ import {
   recordAdvancePayment,
   recordBuyerDecline,
   recordNoShow,
-  recordPaperwork,
   recordPayment,
   transitionTransaction,
   verifyPayment,
@@ -32,6 +31,8 @@ import {
 import type { TransactionState } from "@/lib/transactions/state-machine";
 
 import { BuyersForCarPanel, type CarBuyerRow } from "./buyers-for-car-panel";
+import { CapturePapersCard } from "./capture-papers-card";
+import { CarPapersCard } from "./car-papers-card";
 import { DeliveryPanel, type DeliveryTeam } from "./delivery-panel";
 import { FinancingPanel } from "./financing-panel";
 import { ContractCard, HandoverPanel } from "./handover-panel";
@@ -61,6 +62,7 @@ export function StaffTransactionDetail({
   financing = null,
   meetup = null,
   headSecurity = [],
+  verifiedPrerequisites = null,
 }: {
   readonly transaction: Record<string, unknown>;
   readonly history: Record<string, unknown>[];
@@ -87,6 +89,8 @@ export function StaffTransactionDetail({
     mechanics: { id: string; full_name: string | null }[];
   } | null;
   readonly headSecurity?: { id: string; full_name: string | null }[];
+  /** BC-8: the API's own answer for "two verified IDs and a verified proof of billing". */
+  readonly verifiedPrerequisites?: boolean | null;
 }) {
   const router = useRouter();
   // T03 HA3: rejected payments stay in Payment Records but never count toward progress or gates.
@@ -129,15 +133,16 @@ export function StaffTransactionDetail({
           ? "assign"
           : null;
 
-  async function doTransition(to: TransactionState) {
+  async function doTransition(to: TransactionState, reason = "") {
     setTransitioning(true);
     const fd = new FormData();
     fd.set("id", id);
     fd.set("to_state", to);
+    // BC-9: the reason typed in RejectReasonDialog travels with a rejection; the API requires it.
+    if (reason) fd.set("reason", reason);
     if (to === "approved" && cashMeetup) {
       fd.set("informant_id", meetupPick.informant_id ?? "");
       fd.set("mechanic_id", meetupPick.mechanic_id ?? "");
-      fd.set("downpayment_amount", meetupPick.downpayment_amount ?? "");
     }
     const result = await transitionTransaction(fd);
     setTransitioning(false);
@@ -281,18 +286,6 @@ export function StaffTransactionDetail({
     }
   }
 
-  async function onRecordPaperwork(documentKind: string) {
-    const fd = new FormData();
-    fd.set("transaction_id", id);
-    fd.set("document_kind", documentKind);
-    const result = await recordPaperwork(fd);
-    if (result.error) toast.error(result.error);
-    else {
-      toast.success(`${documentKind} recorded.`);
-      router.refresh();
-    }
-  }
-
   async function onInstructRepossession(informantId: string, reason: string, headSecurityId: string) {
     if (!informantId) {
       toast.error("Select a Confidential Informant.");
@@ -355,6 +348,7 @@ export function StaffTransactionDetail({
               userRole={userRole}
               transitioning={transitioning}
               onTransition={doTransition}
+              verifiedPrerequisites={verifiedPrerequisites}
               paymentMethod={(purchaseDetails?.payment_method as string | undefined) ?? null}
               papersRequested={papersStatus !== null && papersStatus !== "returned"}
               visit={
@@ -387,7 +381,6 @@ export function StaffTransactionDetail({
           sellDetails={sellDetails}
           checklistNameMap={checklistNameMap}
           onRecordPayment={onRecordPayment}
-          onRecordPaperwork={onRecordPaperwork}
           onWaiveInstallment={onWaiveInstallment}
           onRecordInstallmentPaid={onRecordInstallmentPaid}
           onRecordAdvancePayment={onRecordAdvancePayment}
@@ -400,6 +393,7 @@ export function StaffTransactionDetail({
         kind={kind}
         userRole={userRole}
         documents={documents}
+        papersChecklist={(sellDetails?.papers_checklist as Record<string, unknown> | undefined) ?? null}
         onVerifyDocument={onVerifyDocument}
         onRejectDocument={onRejectDocument}
       />
@@ -429,6 +423,7 @@ export function StaffTransactionDetail({
           transactionId={id}
           mode={meetupMode}
           paymentMethod={(purchaseDetails?.payment_method as string | undefined) ?? null}
+          finalPrice={vehiclePrice}
           informants={meetup.informants}
           mechanics={meetup.mechanics}
           pick={meetupPick}
@@ -492,6 +487,20 @@ export function StaffTransactionDetail({
           open={state === "approved"}
           userRole={userRole}
         />
+      ) : null}
+
+      {/* SN-3: the bought car's original papers go to the Confidential Informant once the seller is paid. */}
+      {kind === "sell" && state === "completed" && sellFlow ? (
+        <CapturePapersCard
+          transactionId={id}
+          custody={sellFlow.papersCustody ?? null}
+          canCapture={["marketing_specialist", "ceo"].includes(userRole)}
+        />
+      ) : null}
+
+      {/* BC-7: the previous owner's papers and ID copies, for the staff who sell the car on. */}
+      {kind === "buy" && ["sales_manager", "ceo", "confidential_informant", "head_accountant"].includes(userRole) ? (
+        <CarPapersCard transactionId={id} />
       ) : null}
 
       {kind === "buy" && carBuyers.some((buyer) => buyer.queue_state) ? (

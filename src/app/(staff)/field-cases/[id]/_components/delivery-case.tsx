@@ -21,6 +21,9 @@ import {
   DELIVERY_STATUSES,
   type DeliveryStatus,
   deliveryBalanceNote,
+  isFutureManilaInput,
+  manilaInputInstant,
+  manilaInputValue,
   nextDeliveryStatus,
   type PapersStatus,
 } from "@/lib/transactions/buy-flow";
@@ -49,7 +52,7 @@ export function DeliveryCase({
   readonly transaction: Row;
   readonly papersStatus: PapersStatus | null;
   readonly handover: Row;
-  readonly member: "informant" | "mechanic" | null;
+  readonly member: "informant" | null;
   readonly userRole: string;
   readonly userId: string;
   readonly papers: PaperDocumentRow[];
@@ -201,16 +204,27 @@ export function DeliveryCase({
                   placeholder="e.g. Heavy traffic on SLEX"
                 />
                 <Label htmlFor="delay-eta">Expected arrival</Label>
-                <Input id="delay-eta" type="datetime-local" value={eta} onChange={(e) => setEta(e.target.value)} />
+                {/* SH-12: an expected arrival in the past tells the buyer nothing useful, so it starts at
+                    now in Manila. */}
+                <Input
+                  id="delay-eta"
+                  type="datetime-local"
+                  min={manilaInputValue()}
+                  value={eta}
+                  onChange={(e) => setEta(e.target.value)}
+                />
+                {eta && !isFutureManilaInput(eta) ? (
+                  <p className="text-destructive text-xs">Set a future expected arrival.</p>
+                ) : null}
                 <Button
                   size="sm"
                   variant="outline"
                   className="self-start"
-                  disabled={busy}
+                  disabled={busy || (eta !== "" && !isFutureManilaInput(eta))}
                   onClick={() => {
                     const fd = new FormData();
                     fd.set("delay_note", delayNote);
-                    fd.set("expected_arrival", eta ? new Date(eta).toISOString() : "");
+                    fd.set("expected_arrival", manilaInputInstant(eta));
                     void send(reportDeliveryDelay, fd, "Delay reported.");
                   }}
                 >

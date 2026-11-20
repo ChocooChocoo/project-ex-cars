@@ -17,16 +17,22 @@ import {
   isDeliveryDate,
   isFieldArrangement,
   isFinancingRequest,
+  isFutureManilaInput,
   isHalfwayCashRequest,
+  isMeetupDate,
   isOnsiteCashRequest,
   isQueuedCashRequest,
   isQueuedRequest,
   isVisitSlot,
+  MEETUP_LEAD_DAYS,
   MISSED_INSTALLMENTS_BEFORE_REPOSSESSION,
   manilaDay,
+  manilaInputInstant,
+  manilaInputValue,
   missedInstallments,
   missingContractCopies,
   needsContract,
+  needsSmSignature,
   nextDeliveryStatus,
   nextDuePayment,
   nextStanding,
@@ -103,6 +109,52 @@ describe("manilaDay", () => {
   it("is still today at 2–5 AM in Manila, though UTC says yesterday", () => {
     expect(manilaDay(manila("2026-10-01", "03:00"))).toBe("2026-10-01");
     expect(manilaDay(manila("2026-10-01", "03:00"), DELIVERY_LEAD_DAYS)).toBe("2026-10-08");
+  });
+});
+
+describe("manilaInputValue and manilaInputInstant", () => {
+  it("reads and writes a datetime-local field as Manila wall clock", () => {
+    // 16:50Z is 00:50 the next day in Manila.
+    expect(manilaInputValue(new Date("2026-11-19T16:50:00Z"))).toBe("2026-11-20T00:50");
+    expect(manilaInputValue(manila("2026-11-19", "19:50"))).toBe("2026-11-19T19:50");
+  });
+
+  it("gives the typed value the Manila offset, or nothing when it is incomplete", () => {
+    expect(manilaInputInstant("2026-11-22T09:00")).toBe("2026-11-22T09:00:00+08:00");
+    expect(manilaInputInstant("")).toBe("");
+    expect(manilaInputInstant("2026-11-22")).toBe("");
+  });
+
+  it("accepts only a typed schedule that is still ahead", () => {
+    const now = manila("2026-11-19", "19:50");
+    expect(isFutureManilaInput("2026-11-19T21:00", now)).toBe(true);
+    expect(isFutureManilaInput("2026-11-19T19:49", now)).toBe(false);
+    expect(isFutureManilaInput("2026-11-18T21:00", now)).toBe(false);
+    expect(isFutureManilaInput("", now)).toBe(false);
+  });
+});
+
+describe("isMeetupDate", () => {
+  // 19:50 on Wednesday 2026-11-18 in Manila: the boundary is the date of Friday the 20th.
+  const now = manila("2026-11-18", "19:50");
+
+  it("counts two Manila calendar days, whatever the hour", () => {
+    expect(MEETUP_LEAD_DAYS).toBe(2);
+    expect(isMeetupDate(manila("2026-11-20", "09:00"), now)).toBe(true);
+    expect(isMeetupDate(manila("2026-11-20", "21:00"), now)).toBe(true);
+    expect(isMeetupDate(manila("2026-11-25", "10:00"), now)).toBe(true);
+  });
+
+  it("refuses tomorrow and the day after tomorrow's eve", () => {
+    expect(isMeetupDate(manila("2026-11-19", "21:00"), now)).toBe(false);
+    expect(isMeetupDate(manila("2026-11-18", "21:00"), now)).toBe(false);
+    expect(isMeetupDate(new Date("not a date"), now)).toBe(false);
+  });
+
+  it("reads the calendar date in Manila, not in UTC", () => {
+    // 16:00Z is midnight on the 20th in Manila; 15:00Z is still the 19th.
+    expect(isMeetupDate(new Date("2026-11-19T16:00:00Z"), now)).toBe(true);
+    expect(isMeetupDate(new Date("2026-11-19T15:00:00Z"), now)).toBe(false);
   });
 });
 
@@ -666,16 +718,16 @@ describe("contract", () => {
   const financedDelivery = { payment_method: "financing", arrangement_kind: "delivery" };
   const at = "2026-10-14T02:00:00.000Z";
 
-  it("is needed for a meet-up, a delivery and every financed sale, not for cash at a GCE visit", () => {
-    for (const details of [cashMeetup, cashDelivery, financedVisit, financedMeetup, financedDelivery]) {
+  it("BC-2: is needed for every sale, a cash GCE visit too", () => {
+    for (const details of [cashVisit, cashMeetup, cashDelivery, financedVisit, financedMeetup, financedDelivery]) {
       expect(needsContract(details)).toBe(true);
     }
-    expect(needsContract(cashVisit)).toBe(false);
-    expect(needsContract({ payment_method: "bank_transfer", arrangement_kind: "gce_visit" })).toBe(false);
+    expect(needsContract({ payment_method: "bank_transfer", arrangement_kind: "gce_visit" })).toBe(true);
     expect(needsContract(null)).toBe(false);
   });
 
-  it("is signed in the app for financing at a visit or a meet-up, on paper everywhere else", () => {
+  it("BC-2: is signed in the app at a GCE visit and for financing at a meet-up, on paper everywhere else", () => {
+    expect(signsInApp(cashVisit)).toBe(true);
     expect(signsInApp(financedVisit)).toBe(true);
     expect(signsInApp(financedMeetup)).toBe(true);
     expect(signsInApp(financedDelivery)).toBe(false);
@@ -683,10 +735,26 @@ describe("contract", () => {
     expect(signsInApp(cashDelivery)).toBe(false);
   });
 
+  it("BC-3: the Sales Manager signs for GCE only at a GCE visit", () => {
+    expect(needsSmSignature(cashVisit)).toBe(true);
+    expect(needsSmSignature(financedVisit)).toBe(true);
+    expect(needsSmSignature(cashMeetup)).toBe(false);
+    expect(needsSmSignature(cashDelivery)).toBe(false);
+  });
+
+  it("BC-4: a Full Payment at a GCE visit is paid before the Deed of Sale is signed", () => {
+    expect(paymentAllowedBeforeSigning(cashVisit, "full_payment")).toBe(true);
+    expect(
+      paymentAllowedBeforeSigning({ payment_method: "bank_transfer", arrangement_kind: "gce_visit" }, "balance"),
+    ).toBe(true);
+    expect(paymentAllowedBeforeSigning(financedVisit, "downpayment")).toBe(false);
+  });
+
   it("names who has not recorded keeping the signed copy", () => {
-    expect(missingContractCopies(cashMeetup, null)).toEqual(["Confidential Informant", "Mechanic"]);
-    expect(missingContractCopies(cashMeetup, { ci_copy_at: at })).toEqual(["Mechanic"]);
+    // BH-2: only the Confidential Informant keeps a signed copy; the Mechanic no longer does.
+    expect(missingContractCopies(cashMeetup, null)).toEqual(["Confidential Informant"]);
     expect(missingContractCopies(cashMeetup, { mechanic_copy_at: at })).toEqual(["Confidential Informant"]);
+    expect(missingContractCopies(cashMeetup, { ci_copy_at: at })).toEqual([]);
     expect(missingContractCopies(cashMeetup, { ci_copy_at: at, mechanic_copy_at: at })).toEqual([]);
     expect(missingContractCopies(cashDelivery, { ci_copy_at: at })).toEqual([]);
     expect(missingContractCopies(financedMeetup, { ci_copy_at: at })).toEqual([]);
@@ -694,17 +762,16 @@ describe("contract", () => {
   });
 
   it("lets a sale close only once the contract is signed and every copy is kept", () => {
-    expect(contractReadyForSale(cashVisit, null)).toBe(true);
+    expect(contractReadyForSale(cashVisit, null)).toBe(false);
+    expect(contractReadyForSale(cashVisit, { contract_state: "signed" })).toBe(true);
     expect(contractReadyForSale(financedVisit, null)).toBe(false);
     expect(contractReadyForSale(financedVisit, { contract_state: "approved" })).toBe(false);
     expect(contractReadyForSale(financedVisit, { contract_state: "signed" })).toBe(true);
     expect(contractReadyForSale(cashDelivery, { contract_state: "signed" })).toBe(false);
     expect(contractReadyForSale(cashDelivery, { contract_state: "signed", ci_copy_at: at })).toBe(true);
-    expect(contractReadyForSale(cashMeetup, { contract_state: "signed", ci_copy_at: at })).toBe(false);
-    expect(contractReadyForSale(cashMeetup, { contract_state: "signed", ci_copy_at: at, mechanic_copy_at: at })).toBe(
-      true,
-    );
-    expect(contractReadyForSale(cashMeetup, { ci_copy_at: at, mechanic_copy_at: at })).toBe(false);
+    expect(contractReadyForSale(cashMeetup, { contract_state: "signed" })).toBe(false);
+    expect(contractReadyForSale(cashMeetup, { contract_state: "signed", ci_copy_at: at })).toBe(true);
+    expect(contractReadyForSale(cashMeetup, { ci_copy_at: at })).toBe(false);
   });
 
   it("allows only the delivery fee, the reschedule fee and the downpayment of a delivery before signing", () => {

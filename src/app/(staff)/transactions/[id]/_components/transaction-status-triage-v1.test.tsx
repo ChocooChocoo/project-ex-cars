@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { TransactionStatusTriageV1 } from "./transaction-status-triage-v1";
@@ -128,5 +128,54 @@ describe("TransactionStatusTriageV1 Head Accountant (T05)", () => {
     renderTriage({ state: "completed", userRole: "head_accountant" });
 
     expect(screen.getByText(/this transaction is in a terminal state/)).toBeInTheDocument();
+  });
+});
+
+describe("TransactionStatusTriageV1 approval gate (BC-8)", () => {
+  const approveButton = () => screen.getByText("Approve").closest("button") ?? screen.getByText("Approve");
+
+  it("disables Approve and says what to verify first while the documents are unverified", () => {
+    renderTriage({ state: "under_review", paymentMethod: "cash", verifiedPrerequisites: false });
+
+    expect(approveButton()).toBeDisabled();
+    expect(screen.getByText("Verify the IDs and proof of billing first.")).toBeInTheDocument();
+  });
+
+  it("enables Approve once the API reports the verified IDs and proof of billing", () => {
+    renderTriage({ state: "under_review", paymentMethod: "cash", verifiedPrerequisites: true });
+
+    expect(approveButton()).toBeEnabled();
+    expect(screen.queryByText("Verify the IDs and proof of billing first.")).not.toBeInTheDocument();
+  });
+
+  it("leaves Approve enabled when the page did not send the flag", () => {
+    renderTriage({ state: "under_review", paymentMethod: "cash" });
+
+    expect(approveButton()).toBeEnabled();
+  });
+});
+
+describe("TransactionStatusTriageV1 rejection reason (BC-9)", () => {
+  it("asks for the reason in a modal instead of the yes/no confirmation", async () => {
+    const onTransition = vi.fn().mockResolvedValue(undefined);
+    renderTriage({ state: "under_review", paymentMethod: "cash", onTransition });
+
+    fireEvent.click(screen.getByText("Reject").closest("button") as HTMLButtonElement);
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Why is this request being rejected?")).toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    const confirm = within(dialog).getByRole("button", { name: "Reject request" });
+    expect(confirm).toBeDisabled();
+
+    fireEvent.change(within(dialog).getByLabelText("Reason for rejecting"), {
+      target: { value: "The proof of billing is not in the buyer's name" },
+    });
+    expect(confirm).toBeEnabled();
+    fireEvent.click(confirm);
+
+    await waitFor(() =>
+      expect(onTransition).toHaveBeenCalledWith("rejected", "The proof of billing is not in the buyer's name"),
+    );
   });
 });

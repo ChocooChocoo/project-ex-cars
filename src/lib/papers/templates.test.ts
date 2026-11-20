@@ -64,7 +64,6 @@ const saleRow = {
     engine_number: "ENG-9",
     chassis_number: null,
     vin: "VIN-123",
-    warranty_details: "1 year engine warranty",
   },
 };
 
@@ -116,27 +115,50 @@ describe("deed of sale fill", () => {
   });
 });
 
-describe("policy and warranty fill", () => {
-  it("prints the car's warranty terms as a draft for client review", () => {
-    const text = textOf(policyWarranty(paperSale(saleRow)));
-    expect(text).toContain("POLICY & WARRANTY");
-    expect(text).toContain("DRAFT");
-    expect(text).toContain("1 year engine warranty");
+const signers = { buyerUrl: "https://api/buyer.png", gceName: "Sam Manager", gceRole: "Sales Manager", gceUrl: null };
+
+describe("deed of sale signatures (BC-2 / BC-3)", () => {
+  it("puts the buyer and GCE's representative in signature-over-printed-name blocks", () => {
+    const paper = deedOfSale(paperSale(saleRow), signers);
+    expect(paper.signatures).toEqual([
+      {
+        party: "BUYER",
+        name: "Maria Santos",
+        caption: "Signature over printed name",
+        imageUrl: "https://api/buyer.png",
+      },
+      {
+        party: `SELLER: ${GCE_SELLER}`,
+        name: "By: Sam Manager",
+        caption: "Signature over printed name (Sales Manager)",
+        imageUrl: null,
+      },
+    ]);
   });
 
-  it("prints a blank line when the car has no warranty on record", () => {
-    const text = textOf(
-      policyWarranty(paperSale({ ...saleRow, vehicles: { ...saleRow.vehicles, warranty_details: null } })),
-    );
-    expect(text).toContain(`Warranty: ${PAPER_BLANK}`);
+  it("keeps empty lines for a paper signed by pen", () => {
+    const paper = deedOfSale(paperSale(saleRow));
+    expect(paper.signatures?.map((block) => block.imageUrl)).toEqual([null, null]);
+    expect(paper.signatures?.[1]?.name).toBe(`By: ${PAPER_BLANK}`);
+  });
+});
+
+describe("policy and warranty fill (BC-6)", () => {
+  it("prints GCE's standard warranty, the financing and the missed payment clauses with both signatures", () => {
+    const paper = policyWarranty(paperSale(policyRow), paperFinancing(policyRow), signers);
+    const text = textOf(paper);
+    expect(text).toContain("POLICY & WARRANTY");
+    expect(text).not.toContain("DRAFT");
+    expect(text).toContain("WARRANTY");
+    expect(text).toContain("Monthly installment: PHP 18,750.00");
+    expect(text).toContain("Four (4) consecutive missed monthly payments");
+    expect(paper.signatures).toHaveLength(2);
   });
 });
 
 describe("contract fill", () => {
-  const signatures = { buyer: "22222222-2222-4222-8222-222222222222/signature-buyer-1.png", ci: null };
-
   it("prints the contract body with the buyer, the car and the price", () => {
-    const text = textOf(contract(paperSale(saleRow), "The buyer pays in 24 monthly installments.", signatures));
+    const text = textOf(contract(paperSale(saleRow), "The buyer pays in 24 monthly installments.", signers));
 
     expect(text).toContain("CONTRACT");
     expect(text).toContain("The buyer pays in 24 monthly installments.");
@@ -146,17 +168,14 @@ describe("contract fill", () => {
     expect(text).toContain(GCE_SELLER);
   });
 
-  it("names the buyer and the Confidential Informant in the signature block", () => {
-    const text = textOf(contract(paperSale(saleRow), null, signatures));
-
-    expect(text).toContain("Buyer: Maria Santos");
-    expect(text).toContain("Confidential Informant");
-    expect(text).toContain(`Signature image: ${signatures.buyer}`);
-    expect(text).toContain(`Signature image: ${PAPER_BLANK}`);
+  it("signs on the sheet, not as text paths", () => {
+    const paper = contract(paperSale(saleRow), null, signers);
+    expect(textOf(paper)).not.toContain("Signature image:");
+    expect(paper.signatures?.[0]?.imageUrl).toBe("https://api/buyer.png");
   });
 
   it("prints the blank line note when GCE has no contract body yet", () => {
-    const text = textOf(contract(paperSale(saleRow), null, signatures));
+    const text = textOf(contract(paperSale(saleRow), null, null));
 
     expect(text).toContain(`TERMS\n${PAPER_BLANK}`);
     expect(text).toContain("GCE has not recorded the contract terms yet.");

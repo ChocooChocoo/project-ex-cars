@@ -5,7 +5,7 @@
 // and the state under row locks. Exports, arguments and results are the same as the old Server Actions.
 // Payment recording, verification and waivers call Laravel too (./payment-actions.ts, Phase 6).
 
-import { apiAction, laravelForm } from "@/lib/api/action";
+import { apiAction } from "@/lib/api/action";
 
 export { markInstallmentWaived, recordAdvancePayment, recordPayment, verifyPayment } from "./payment-actions";
 
@@ -25,10 +25,6 @@ export async function recordNoShow(formData: FormData) {
 
 export async function promoteQueuedRequest(formData: FormData) {
   return apiAction("/staff/trading/promote", form(formData));
-}
-
-export async function recordPaperwork(formData: FormData) {
-  return apiAction("/staff/trading/paperwork", laravelForm(formData));
 }
 
 export async function verifyTransactionDocument(formData: FormData) {

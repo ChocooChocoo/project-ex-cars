@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { approvedCeiling, GCE_LOCATION, halfwayPoint, sellerSafeNote, sellPapersVerified } from "./sell-flow";
+import {
+  approvedCeiling,
+  approvedCeilingOfKind,
+  GCE_LOCATION,
+  GCE_LOCATION_LABEL,
+  halfwayPoint,
+  sellerSafeNote,
+  sellPapersVerified,
+} from "./sell-flow";
 import { reviewDueAt } from "./state-machine";
 
 const doc = (document_kind: string, verification_state = "verified") => ({ document_kind, verification_state });
@@ -14,29 +22,28 @@ describe("sellPapersVerified", () => {
   });
   const fullIds = [id("passport", "front"), id("passport", "back"), id("umid", "front"), id("umid", "back")];
 
-  it("T10: needs both IDs front and back, the OR, the CR and the deed", () => {
-    const papers = [...fullIds, doc("official_receipt"), doc("certificate_of_registration"), doc("deed_of_sale")];
-    expect(sellPapersVerified(papers)).toBe(true);
-    expect(sellPapersVerified(papers.filter((paper) => paper.document_kind !== "certificate_of_registration"))).toBe(
-      false,
-    );
-    expect(sellPapersVerified([...papers.slice(1)])).toBe(false);
-    expect(sellPapersVerified([...fullIds.slice(0, 3), id("umid", "back", "pending"), ...papers.slice(4)])).toBe(false);
+  it("SN-11: needs only the two verified IDs, front and back, before a ceiling is proposed", () => {
+    expect(sellPapersVerified(fullIds)).toBe(true);
+    expect(sellPapersVerified(fullIds.slice(0, 3))).toBe(false);
+    expect(sellPapersVerified([...fullIds.slice(0, 3), id("umid", "back", "pending")])).toBe(false);
   });
 
-  it("needs two verified IDs, a verified ORCR and a verified deed of sale", () => {
+  it("SN-11: no longer waits for the OR, the CR or the deed of sale, which are inspected on site", () => {
+    expect(sellPapersVerified([...fullIds, doc("official_receipt"), doc("certificate_of_registration")])).toBe(true);
+    expect(sellPapersVerified([...fullIds, doc("orcr"), doc("deed_of_sale")])).toBe(true);
+    expect(sellPapersVerified(fullIds)).toBe(true);
+  });
+
+  it("still accepts an offer sent under the old rule, which uploaded the papers as well", () => {
     expect(sellPapersVerified([doc("valid_id"), doc("valid_id"), doc("orcr"), doc("deed_of_sale")])).toBe(true);
   });
 
-  it("refuses a missing or unverified paper", () => {
+  it("refuses a missing or unverified ID", () => {
     expect(sellPapersVerified([doc("valid_id"), doc("orcr"), doc("deed_of_sale")])).toBe(false);
     expect(sellPapersVerified([doc("valid_id"), doc("valid_id", "pending"), doc("orcr"), doc("deed_of_sale")])).toBe(
       false,
     );
-    expect(sellPapersVerified([doc("valid_id"), doc("valid_id"), doc("deed_of_sale")])).toBe(false);
-    expect(sellPapersVerified([doc("valid_id"), doc("valid_id"), doc("orcr", "rejected"), doc("deed_of_sale")])).toBe(
-      false,
-    );
+    expect(sellPapersVerified([])).toBe(false);
   });
 });
 
@@ -63,6 +70,49 @@ describe("approvedCeiling", () => {
       ]),
     ).toBe(450000);
   });
+
+  it("prefers the revision when both ceilings carry the same timestamp", () => {
+    // A fast hand-off can mint both rows in one second; the revision is still the newer decision.
+    const sameSecond = "2026-09-10T00:00:00Z";
+    expect(
+      approvedCeiling([
+        proposal("purchase_ceiling", "approved", 450000, sameSecond),
+        proposal("revised_ceiling", "approved", 415000, sameSecond),
+      ]),
+    ).toBe(415000);
+    expect(
+      approvedCeiling([
+        proposal("revised_ceiling", "approved", 415000, sameSecond),
+        proposal("purchase_ceiling", "approved", 450000, sameSecond),
+      ]),
+    ).toBe(415000);
+  });
+});
+
+describe("approvedCeilingOfKind (SH-6 facts grid)", () => {
+  const proposal = (proposal_kind: string, decision: string, proposed_amount: number, created_at: string) => ({
+    proposal_kind,
+    decision,
+    proposed_amount,
+    created_at,
+  });
+  const rows = [
+    proposal("purchase_ceiling", "approved", 500000, "2026-09-01T00:00:00Z"),
+    proposal("revised_ceiling", "approved", 415000, "2026-09-10T00:00:00Z"),
+    proposal("revised_ceiling", "rejected", 300000, "2026-09-12T00:00:00Z"),
+    proposal("revised_ceiling", "pending", 410000, "2026-09-13T00:00:00Z"),
+  ];
+
+  it("reads each ceiling kind on its own, so the grid can label them separately", () => {
+    expect(approvedCeilingOfKind(rows, "purchase_ceiling")).toBe(500000);
+    expect(approvedCeilingOfKind(rows, "revised_ceiling")).toBe(415000);
+  });
+
+  it("is null when that kind has no approved row yet", () => {
+    expect(approvedCeilingOfKind([], "revised_ceiling")).toBeNull();
+    expect(approvedCeilingOfKind(rows, "purchase_ceiling")).toBe(500000);
+    expect(approvedCeilingOfKind([rows[0]], "revised_ceiling")).toBeNull();
+  });
 });
 
 describe("reviewDueAt", () => {
@@ -75,10 +125,15 @@ describe("sellerSafeNote (T10)", () => {
   it("shows the seller only the notes meant for them", () => {
     expect(sellerSafeNote("Rejected at verification: The ORCR is blurred")).toBe("The ORCR is blurred");
     expect(sellerSafeNote("Price agreed at ₱500,000; acquisition field case created")).toContain("Price agreed");
+    // SH-6: the negotiated price is the seller's own, so it is safe where the ceiling never is.
+    expect(sellerSafeNote("Seller agreed to the negotiated price of ₱400,000; cleared for payment")).toContain(
+      "negotiated price",
+    );
   });
   it("hides ceilings, CEO decisions and the staff-only profitability note", () => {
     expect(sellerSafeNote("Purchase ceiling of ₱480,000 proposed to the CEO")).toBeNull();
     expect(sellerSafeNote("Purchase ceiling of ₱480,000 rejected by the CEO")).toBeNull();
+    expect(sellerSafeNote("Revised ceiling of ₱415,000 approved by the CEO")).toBeNull();
     expect(sellerSafeNote("Cancelled: not profitable after inspection. Margin too thin")).toBeNull();
     expect(sellerSafeNote(null)).toBeNull();
   });
@@ -90,5 +145,12 @@ describe("T12 halfwayPoint", () => {
     const point = halfwayPoint({ lat: 14, lng: 121 }, { lat: 14.5, lng: 120 });
     expect(point.lat).toBeCloseTo(14.25);
     expect(point.lng).toBeCloseTo(120.5);
+  });
+});
+
+describe("SH-14 GCE_LOCATION", () => {
+  it("pins GCE on DLSU-D Gate 3, Dasmariñas, not the old office pin", () => {
+    expect(GCE_LOCATION).toEqual({ lat: 14.32856, lng: 120.957 });
+    expect(GCE_LOCATION_LABEL).toBe("GCE, DLSU-D Gate 3, Dasmariñas, Cavite");
   });
 });

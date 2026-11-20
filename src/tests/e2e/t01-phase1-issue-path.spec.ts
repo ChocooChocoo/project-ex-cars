@@ -61,8 +61,10 @@ test.describe
       await page.getByLabel("Vehicle photos").setInputFiles(png("front.png"));
       await page.getByLabel("Valid ID #1 *").setInputFiles(png("id-1.png"));
       await page.getByLabel("Valid ID #2 *").setInputFiles(png("id-2.png"));
-      await page.getByLabel("ORCR *").setInputFiles(png("orcr.png"));
-      await page.getByLabel("Deed of Sale *").setInputFiles(png("deed.png"));
+      // SN-13: the OR, the CR and the deed of sale are declared on a checklist now, not uploaded.
+      await pickNamed(page, "Official Receipt (OR) *", "I have it");
+      await pickNamed(page, "Certificate of Registration (CR) *", "I have it");
+      await pickNamed(page, "Deed of Sale *", "I have it");
       await pickNamed(page, "ID type #1", "Passport");
       await pickNamed(page, "ID type #2", "Driver's License");
       await page.getByRole("button", { name: "Submit Vehicle", exact: true }).click();

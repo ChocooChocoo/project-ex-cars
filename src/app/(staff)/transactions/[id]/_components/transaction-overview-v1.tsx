@@ -3,6 +3,7 @@
 
 import { format } from "date-fns";
 
+import { MeetupMap } from "@/components/maps/lazy-maps";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { paymentMethodLabel, TRANSACTION_STATE_LABELS, transactionKindLabel } from "@/lib/transactions/labels";
@@ -117,6 +118,24 @@ const stageTone: Record<ApprovalStageStatus, string> = {
   todo: "border-muted/35 bg-muted/10 text-muted-foreground",
 };
 
+/**
+ * BH-7: the Sales Manager reads the buyer's two choices apart, as "Full Payment · Bank Transfer" or
+ * "Financing · PayMongo, 24 months". A row from before T04 has no `payment_option`, so the method stands in
+ * for it; Financing adds the installment method and the term the buyer asked for.
+ */
+export function paymentSummary(details: Record<string, unknown> | undefined): { option: string; method: string } {
+  const method = details?.payment_method ? String(details.payment_method) : null;
+  const option =
+    String(details?.payment_option ?? "") === "financing" || method === "financing" ? "Financing" : "Full Payment";
+  if (option === "Financing") {
+    const payMethod = String(details?.financing_pay_method ?? "") === "cash" ? "Cash" : "PayMongo";
+    const term = Number(details?.requested_term_months ?? 0);
+    return { option, method: term > 0 ? `${payMethod}, ${term} months` : payMethod };
+  }
+
+  return { option, method: method ? paymentMethodLabel(method) : "—" };
+}
+
 export function TransactionOverviewV1({
   id,
   kind,
@@ -146,6 +165,14 @@ export function TransactionOverviewV1({
   const amount = purchaseDetails?.final_price ?? sellDetails?.offered_amount;
   const amountLabel = kind === "buy" ? "final price" : kind === "sell" ? "offered amount" : "budget";
   const stages = deriveApprovalStages({ state, kind, vehicles, purchaseDetails, history, documents });
+  // BH-7: Payment option and Payment method are two facts, for every buy transaction.
+  const payment = kind === "buy" ? paymentSummary(purchaseDetails) : null;
+  // BH-8 / SH-12: the buyer's Meet Halfway pin, so the Sales Manager sees where the team meets them.
+  const meetupPoint =
+    purchaseDetails?.meetup_lat != null && purchaseDetails?.meetup_lng != null
+      ? { lat: Number(purchaseDetails.meetup_lat), lng: Number(purchaseDetails.meetup_lng) }
+      : null;
+  const meetupAddress = (purchaseDetails?.meetup_address as string | null | undefined) ?? null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -235,22 +262,33 @@ export function TransactionOverviewV1({
               </div>
               <div className="text-muted-foreground text-xs">{amountLabel}</div>
             </div>
-            <div className="min-w-0 space-y-1">
-              <div className="text-muted-foreground text-sm">
-                {kind === "buy" ? "Payment Method" : kind === "sell" ? "Valuation" : "Model"}
-              </div>
-              <div className="font-semibold text-2xl tabular-nums">
-                {kind === "buy"
-                  ? purchaseDetails?.payment_method
-                    ? paymentMethodLabel(String(purchaseDetails.payment_method))
-                    : "—"
-                  : kind === "sell"
+            {payment ? (
+              <>
+                <div className="min-w-0 space-y-1">
+                  <div className="text-muted-foreground text-sm">Payment option</div>
+                  <div className="font-semibold text-2xl">{payment.option}</div>
+                  <div className="text-muted-foreground text-xs">Full Payment or Financing</div>
+                </div>
+                <div className="min-w-0 space-y-1">
+                  <div className="text-muted-foreground text-sm">Payment method</div>
+                  <div className="font-semibold text-2xl">{payment.method}</div>
+                  <div className="text-muted-foreground text-xs">
+                    {payment.option === "Financing" ? "installments, and the term chosen" : "settled at GCE"}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="min-w-0 space-y-1">
+                <div className="text-muted-foreground text-sm">{kind === "sell" ? "Valuation" : "Model"}</div>
+                <div className="font-semibold text-2xl tabular-nums">
+                  {kind === "sell"
                     ? sellDetails?.valuation_amount
                       ? formatCurrency(Number(sellDetails.valuation_amount))
                       : "—"
                     : "—"}
+                </div>
               </div>
-            </div>
+            )}
             <div className="min-w-0 space-y-1">
               <div className="text-muted-foreground text-sm">
                 {kind === "buy" ? "Document Check" : kind === "sell" ? "Decision" : "Make"}
@@ -270,6 +308,23 @@ export function TransactionOverviewV1({
           </div>
         </CardContent>
       </Card>
+
+      {/* BH-8: the buyer pinned the halfway point; the Sales Manager reads it here (SH-8: no external map link). */}
+      {kind === "buy" && meetupPoint ? (
+        <Card className="shadow-xs">
+          <CardHeader className="px-4">
+            <CardTitle>Meet-up point</CardTitle>
+            <CardDescription>The buyer's halfway pin, inside CALABARZON.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2 px-4 text-sm">
+            <MeetupMap value={meetupPoint} editable={false} />
+            <p>
+              <span className="text-muted-foreground">Meet-up address: </span>
+              {meetupAddress ?? "Not given"}
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }

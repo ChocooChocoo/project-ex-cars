@@ -20,10 +20,3 @@ export async function startReconditioning(formData: FormData): Promise<Reconditi
 export async function completeReconditioning(formData: FormData): Promise<ReconditioningResult> {
   return apiAction("/staff/reconditioning/complete", Object.fromEntries(formData)) as Promise<ReconditioningResult>;
 }
-
-export async function markPapersProcessed(formData: FormData): Promise<ReconditioningResult> {
-  return apiAction(
-    "/staff/reconditioning/papers-processed",
-    Object.fromEntries(formData),
-  ) as Promise<ReconditioningResult>;
-}

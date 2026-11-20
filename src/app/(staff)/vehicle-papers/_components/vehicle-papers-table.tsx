@@ -34,6 +34,7 @@ export interface VehiclePaperRow {
   readonly buyer: string;
   readonly status: PapersStatus;
   readonly arrangementKind: string | null;
+  readonly paymentMethod: string | null;
   readonly updatedAt: string | null;
   readonly orcrUrl: string | null;
 }
@@ -163,12 +164,14 @@ export function VehiclePapersTable({
                             Print Deed of Sale
                           </Link>
                         </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                          <Link href={`/vehicle-papers/${row.transactionId}/policy-warranty`}>
-                            <Printer data-icon="inline-start" />
-                            Print Policy &amp; Warranty
-                          </Link>
-                        </DropdownMenuItem>
+                        {row.paymentMethod === "financing" ? (
+                          <DropdownMenuItem asChild>
+                            <Link href={`/vehicle-papers/${row.transactionId}/policy-warranty`}>
+                              <Printer data-icon="inline-start" />
+                              Print Policy &amp; Warranty
+                            </Link>
+                          </DropdownMenuItem>
+                        ) : null}
                         {canRelease && action ? (
                           <>
                             <DropdownMenuSeparator />
@@ -238,18 +241,22 @@ export function VehiclePapersTable({
                     </Link>
                   </Button>
                 </div>
-                <div className="flex flex-wrap items-center justify-between gap-3 p-4">
-                  <div className="flex flex-col gap-1">
-                    <span className="font-medium">Policy &amp; Warranty</span>
-                    <span className="text-muted-foreground text-xs">The warranty terms for this car.</span>
+                {viewing.paymentMethod === "financing" ? (
+                  <div className="flex flex-wrap items-center justify-between gap-3 p-4">
+                    <div className="flex flex-col gap-1">
+                      <span className="font-medium">Policy &amp; Warranty</span>
+                      <span className="text-muted-foreground text-xs">
+                        The warranty and missed payment policy of this financing sale.
+                      </span>
+                    </div>
+                    <Button asChild size="sm" variant="outline">
+                      <Link href={`/vehicle-papers/${viewing.transactionId}/policy-warranty`}>
+                        <Printer data-icon="inline-start" />
+                        Print
+                      </Link>
+                    </Button>
                   </div>
-                  <Button asChild size="sm" variant="outline">
-                    <Link href={`/vehicle-papers/${viewing.transactionId}/policy-warranty`}>
-                      <Printer data-icon="inline-start" />
-                      Print
-                    </Link>
-                  </Button>
-                </div>
+                ) : null}
               </div>
             </div>
           ) : null}

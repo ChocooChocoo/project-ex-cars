@@ -28,7 +28,6 @@ function renderSidebar(
       informants={[]}
       sellDetails={{}}
       onRecordPayment={noopRecord}
-      onRecordPaperwork={noop}
       onWaiveInstallment={noop}
       onInstructRepossession={noop}
       {...overrides}

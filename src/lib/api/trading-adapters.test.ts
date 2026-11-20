@@ -109,16 +109,13 @@ describe("results and errors keep the old shapes", () => {
   });
 
   it("sends repeated form keys as PHP arrays and files as multipart", async () => {
-    await staff.recordPaperwork(fd({ transaction_id: TX, document_kind: "invoice" }));
     await sellInspection.reportInspection(fd({ field_case_id: TX, photos: ["a", "b"] }));
-    const sent = api.mock.calls[1][2] as FormData;
+    const sent = api.mock.calls[0][2] as FormData;
     expect(sent).toBeInstanceOf(FormData);
     expect(sent.getAll("photos[]")).toEqual(["a", "b"]);
   });
 
   it("calls the id- and argument-style actions with their own routes", async () => {
-    await customer.removePurchaseDocument(TX);
-    expect(api).toHaveBeenLastCalledWith("DELETE", `/api/v1/trading/purchase-documents/${TX}`, undefined);
     await vehicles.archiveVehicle(TX);
     expect(api).toHaveBeenLastCalledWith("POST", `/api/v1/staff/vehicles/${TX}/archive`, undefined);
     await sellInspection.recordFieldPrice(TX, { status: "negotiated" });

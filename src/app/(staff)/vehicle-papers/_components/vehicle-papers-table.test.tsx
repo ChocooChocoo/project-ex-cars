@@ -28,6 +28,7 @@ const row: VehiclePaperRow = {
   buyer: "Maria Santos",
   status: "requested",
   arrangementKind: "gce_visit",
+  paymentMethod: "financing",
   updatedAt: "2026-10-20T08:00:00.000Z",
   orcrUrl: "https://example.test/orcr.pdf",
 };

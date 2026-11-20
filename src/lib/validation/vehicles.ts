@@ -12,12 +12,17 @@ export const vehicleSchema = z.object({
   make: z.string().min(1, "Make is required.").max(100),
   model: z.string().min(1, "Model is required.").max(100),
   year: z.coerce.number().int().min(1900, "Year must be 1900 or later.").max(2100),
-  condition: z.string().min(1).max(50),
   mileage: z.coerce.number().int().min(0, "Mileage cannot be negative.").optional(),
   fuel_type: z.string().max(50).optional().or(z.literal("")),
   transmission: z.string().max(50).optional().or(z.literal("")),
   exterior_color: z.string().max(50).optional().or(z.literal("")),
   interior_color: z.string().max(50).optional().or(z.literal("")),
+  // BC-11: a free-text description of the interior (leather seats, 7 seats, rear AC) shown on the showroom detail.
+  interior_features: z
+    .string()
+    .max(1000, "Interior features must be at most 1000 characters.")
+    .optional()
+    .or(z.literal("")),
   body_type: z.string().max(50).optional().or(z.literal("")),
   purpose: z.enum(VEHICLE_PURPOSES).optional().or(z.literal("")),
   engine: z.string().max(200).optional().or(z.literal("")),
@@ -30,7 +35,6 @@ export const vehicleSchema = z.object({
     .literal("")
     .or(z.coerce.number().min(0, "The markup cannot be negative.").max(100, "The markup cannot exceed 100%."))
     .optional(),
-  warranty_details: z.string().max(500).optional().or(z.literal("")),
   offer_details: z.string().max(500).optional().or(z.literal("")),
 });
 

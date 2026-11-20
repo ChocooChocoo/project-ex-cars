@@ -46,6 +46,11 @@ function baseData(overrides: Record<string, unknown> = {}) {
     has_known_issues: "no",
     meetup_method: "gce_visit",
     owner_number: "1",
+    papers_checklist: {
+      official_receipt: "has",
+      certificate_of_registration: "has",
+      deed_of_sale: "has",
+    },
     ...overrides,
   };
 }
@@ -84,6 +89,36 @@ describe("T12 sellVehicleSchema meet-up point", () => {
     expect(
       sellVehicleSchema.safeParse(baseData({ meetup_method: "meet_halfway", meetup_lat: 95, meetup_lng: 121 })).success,
     ).toBe(false);
+  });
+
+  it("keeps the meet-up pin inside CALABARZON (SH-14)", () => {
+    for (const [meetup_lat, meetup_lng] of [
+      [15.5, 121],
+      [10.3, 123.9],
+      [51.5, -0.12],
+    ]) {
+      const parsed = sellVehicleSchema.safeParse(baseData({ meetup_method: "meet_halfway", meetup_lat, meetup_lng }));
+      expect(parsed.success).toBe(false);
+      expect(parsed.error?.issues[0]?.message).toBe("Meet-ups must be inside CALABARZON.");
+    }
+    // GCE's office and a Dasmariñas halfway point are fine.
+    for (const [meetup_lat, meetup_lng] of [
+      [14.32856, 120.957],
+      [14.33, 120.94],
+    ]) {
+      expect(
+        sellVehicleSchema.safeParse(baseData({ meetup_method: "meet_halfway", meetup_lat, meetup_lng })).success,
+      ).toBe(true);
+    }
+  });
+
+  it("accepts the composed meet-up address, and does not require it (BH-8)", () => {
+    const base = { meetup_method: "meet_halfway", meetup_lat: 14.33, meetup_lng: 120.94 };
+    expect(sellVehicleSchema.safeParse(baseData(base)).success).toBe(true);
+    expect(
+      sellVehicleSchema.safeParse(baseData({ ...base, meetup_address: "Bagong Bayan, Dasmariñas, Cavite, Calabarzon" }))
+        .success,
+    ).toBe(true);
   });
 });
 
@@ -229,6 +264,75 @@ describe("SellVehicleForm condition", () => {
     for (const condition of ["Brand New", "Second Hand", ""]) {
       expect(sellVehicleSchema.safeParse(baseData({ condition })).success).toBe(false);
     }
+  });
+});
+
+describe("SellVehicleForm papers checklist (SN-13)", () => {
+  // Radix renders each answer twice (a hidden native option for form submission plus the visible item); only the
+  // visible item carries data-slot="select-item".
+  function visibleAnswers(): string[] {
+    return Array.from(document.querySelectorAll('[data-slot="select-item"]')).map((el) => el.textContent ?? "");
+  }
+
+  it("asks the three papers as has / does not have / expired instead of uploads", async () => {
+    render(<SellVehicleForm />);
+
+    expect(
+      screen.getByText(
+        "GCE respects the privacy of your vehicle papers. Answer this checklist now and bring the originals to the meet-up.",
+      ),
+    ).toBeInTheDocument();
+    for (const label of ["Official Receipt (OR) *", "Certificate of Registration (CR) *", "Deed of Sale *"]) {
+      expect(screen.getByLabelText(label)).toBeInTheDocument();
+    }
+
+    fireEvent.click(screen.getByLabelText("Official Receipt (OR) *"));
+    await waitFor(() => expect(visibleAnswers()).toEqual(["I have it", "I don't have it", "It is expired"]));
+  });
+
+  it("offers no expired answer for the deed of sale", async () => {
+    render(<SellVehicleForm />);
+
+    fireEvent.click(screen.getByLabelText("Deed of Sale *"));
+
+    await waitFor(() => expect(visibleAnswers()).toEqual(["I have it", "I don't have it"]));
+  });
+
+  it("carries the answers into the form state, so submitting is not blocked by the checklist", async () => {
+    render(<SellVehicleForm />);
+    const answer = async (label: string) => {
+      fireEvent.click(screen.getByLabelText(label));
+      await waitFor(() => expect(visibleAnswers().length).toBeGreaterThan(0), { timeout: 5000 });
+      const item = Array.from(document.querySelectorAll('[data-slot="select-item"]')).find(
+        (el) => el.textContent === "I have it",
+      ) as HTMLElement;
+      fireEvent.click(item);
+    };
+    fireEvent.submit(screen.getByRole("button", { name: "Submit Vehicle" }).closest("form") as HTMLFormElement);
+    expect(
+      await screen.findByText(
+        "Answer the papers checklist for the OR, the CR and the deed of sale.",
+        {},
+        { timeout: 5000 },
+      ),
+    ).toBeInTheDocument();
+
+    for (const label of ["Official Receipt (OR) *", "Certificate of Registration (CR) *", "Deed of Sale *"]) {
+      await answer(label);
+    }
+    await waitFor(
+      () =>
+        expect(screen.queryByText("Answer the papers checklist for the OR, the CR and the deed of sale.")).toBeNull(),
+      { timeout: 5000 },
+    );
+  }, 20_000);
+
+  it("keeps one upload slot per valid ID, front and back", () => {
+    render(<SellVehicleForm />);
+
+    expect(screen.getByText("Valid ID #1 *")).toBeInTheDocument();
+    expect(screen.getByText("Valid ID #2 *")).toBeInTheDocument();
+    expect(screen.getByLabelText("Vehicle photos")).toBeInTheDocument();
   });
 });
 

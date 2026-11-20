@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { updateFieldCase } from "@/app/(staff)/field-cases/actions";
 import { assignMechanic, createFieldCase } from "@/app/(staff)/transactions/actions";
 
-import { type FieldCaseRow, FieldCasesClient } from "./field-cases-client";
+import { type FieldCaseRow, FieldCasesClient, fieldCaseStateOptions } from "./field-cases-client";
 
 Element.prototype.hasPointerCapture = () => false;
 Element.prototype.releasePointerCapture = () => undefined;
@@ -107,7 +107,7 @@ describe("FieldCasesClient template table", () => {
     expect(within(menu).getByRole("menuitem", { name: "Update" })).toBeInTheDocument();
   });
 
-  it("saves the expenses entered in pesos as centavos", async () => {
+  it("shows the filed expenses total instead of a manual input (SN-6)", async () => {
     vi.mocked(updateFieldCase).mockResolvedValue({ success: true });
     render(
       <FieldCasesClient
@@ -128,14 +128,54 @@ describe("FieldCasesClient template table", () => {
     fireEvent.click(trigger);
     fireEvent.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: "Update" }));
     const dialog = await screen.findByRole("dialog");
-    const expenses = within(dialog).getByPlaceholderText("0.00");
-    // The form loads the saved ₱1,200.00 back in pesos.
-    expect(expenses).toHaveValue(1200);
+    // The saved ₱1,200.00 is read back from the itemised expenses; there is no expenses input to edit.
+    expect(within(dialog).getByText(/1,200\.00/)).toBeInTheDocument();
+    expect(within(dialog).queryByPlaceholderText("0.00")).not.toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
 
     await vi.waitFor(() => expect(updateFieldCase).toHaveBeenCalledTimes(1));
     const formData = vi.mocked(updateFieldCase).mock.calls[0]?.[0] as FormData;
-    expect(formData.get("expenses_cents")).toBe("120000");
+    // SN-6: the total is the server's job; the client never sends `expenses_cents`.
+    expect(formData.get("expenses_cents")).toBeNull();
+    expect(formData.get("state")).toBe("in_progress");
+  });
+
+  it("offers a field worker only In progress, Completed and Cancelled (SN-5)", async () => {
+    render(
+      <FieldCasesClient
+        cases={[fieldCase]}
+        canUpdate
+        canCreate={false}
+        canAssignMechanic={false}
+        informants={[]}
+        mechanics={[]}
+        userRole="mechanic"
+      />,
+    );
+
+    // The state list itself: Assigned and Accepted are set by the system, never picked by a worker.
+    expect(fieldCaseStateOptions("mechanic")).toEqual(["in_progress", "completed", "cancelled"]);
+    expect(fieldCaseStateOptions("sales_manager")).toEqual([
+      "assigned",
+      "accepted",
+      "in_progress",
+      "completed",
+      "cancelled",
+    ]);
+
+    const trigger = screen.getByRole("button", { name: "Open field case actions" });
+    fireEvent.pointerDown(trigger);
+    fireEvent.mouseDown(trigger, { button: 0 });
+    fireEvent.mouseUp(trigger, { button: 0 });
+    fireEvent.click(trigger);
+    fireEvent.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: "Update" }));
+    const dialog = await screen.findByRole("dialog");
+    const stateTrigger = within(dialog).getByRole("combobox");
+    fireEvent.pointerDown(stateTrigger);
+    fireEvent.click(stateTrigger);
+
+    const options = (await screen.findAllByRole("option")).map((option) => option.textContent);
+    expect(options).toEqual(["in progress", "completed", "cancelled"]);
   });
 });
 
@@ -231,5 +271,72 @@ describe("FieldCasesClient create modal", () => {
     const formData = vi.mocked(createFieldCase).mock.calls[0]?.[0] as FormData;
     expect(formData.get("vehicle_id")).toBe(vehicleId);
     expect(formData.get("assigned_confidential_informant")).toBe("informant-1");
+  });
+
+  it("refuses a schedule that has already passed (SH-12)", async () => {
+    const vehicleId = "11111111-1111-4111-8111-111111111111";
+    render(
+      <FieldCasesClient
+        cases={[]}
+        canUpdate
+        canCreate
+        canAssignMechanic
+        informants={[{ id: "informant-1", full_name: "Informant One" }]}
+        mechanics={[]}
+        userRole="confidential_informant"
+        transactions={[]}
+        vehicles={[{ id: vehicleId, make: "Toyota", model: "Camry", year: 2024, stock_code: "STK-001" }]}
+      />,
+    );
+
+    await openCreateModal();
+    const vehicleTrigger = await screen.findByRole("combobox", { name: "Select vehicle" });
+    fireEvent.pointerDown(vehicleTrigger);
+    fireEvent.click(vehicleTrigger);
+    fireEvent.click(await screen.findByRole("option", { name: /Toyota Camry/ }));
+    const workerTrigger = await screen.findByRole("combobox", { name: "Select worker" });
+    fireEvent.pointerDown(workerTrigger);
+    fireEvent.click(workerTrigger);
+    fireEvent.click(await screen.findByRole("option", { name: "Informant One" }));
+    fireEvent.change(screen.getByLabelText("Schedule (optional)"), { target: { value: "2020-01-02T10:00" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+
+    expect(await screen.findByText("Set a future schedule date and time.")).toBeInTheDocument();
+    expect(createFieldCase).not.toHaveBeenCalled();
+  });
+
+  it("sends a future schedule as a Manila instant, not the device's own time zone (SH-12)", async () => {
+    const vehicleId = "11111111-1111-4111-8111-111111111111";
+    render(
+      <FieldCasesClient
+        cases={[]}
+        canUpdate
+        canCreate
+        canAssignMechanic
+        informants={[{ id: "informant-1", full_name: "Informant One" }]}
+        mechanics={[]}
+        userRole="confidential_informant"
+        transactions={[]}
+        vehicles={[{ id: vehicleId, make: "Toyota", model: "Camry", year: 2024, stock_code: "STK-001" }]}
+      />,
+    );
+
+    await openCreateModal();
+    const vehicleTrigger = await screen.findByRole("combobox", { name: "Select vehicle" });
+    fireEvent.pointerDown(vehicleTrigger);
+    fireEvent.click(vehicleTrigger);
+    fireEvent.click(await screen.findByRole("option", { name: /Toyota Camry/ }));
+    const workerTrigger = await screen.findByRole("combobox", { name: "Select worker" });
+    fireEvent.pointerDown(workerTrigger);
+    fireEvent.click(workerTrigger);
+    fireEvent.click(await screen.findByRole("option", { name: "Informant One" }));
+    fireEvent.change(screen.getByLabelText("Schedule (optional)"), { target: { value: "2033-03-07T10:00" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+
+    await vi.waitFor(() => expect(createFieldCase).toHaveBeenCalledTimes(1));
+    const formData = vi.mocked(createFieldCase).mock.calls[0]?.[0] as FormData;
+    expect(formData.get("schedule")).toBe("2033-03-07T10:00:00+08:00");
   });
 });

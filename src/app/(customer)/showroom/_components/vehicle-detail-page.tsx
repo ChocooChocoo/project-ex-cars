@@ -58,10 +58,6 @@ export function VehicleDetailPage() {
             <Separator />
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
-                <span className="text-muted-foreground">Condition</span>
-                <p className="capitalize">{(v.condition as string) ?? "—"}</p>
-              </div>
-              <div>
                 <span className="text-muted-foreground">Mileage</span>
                 <p>{v.mileage ? `${(v.mileage as number).toLocaleString()} km` : "—"}</p>
               </div>
@@ -86,16 +82,25 @@ export function VehicleDetailPage() {
                 <p>{(v.exterior_color as string) ?? "—"}</p>
               </div>
               <div>
+                <span className="text-muted-foreground">Interior</span>
+                <p>{(v.interior_color as string) ?? "—"}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Best for</span>
+                <p className="capitalize">{(v.purpose as string) ?? "—"}</p>
+              </div>
+              <div>
                 <span className="text-muted-foreground">Stock Code</span>
                 <p>{(v.stock_code as string) ?? "—"}</p>
               </div>
             </div>
-            {(v.warranty_details as string) ? (
+            {/* BC-11: what the Marketing Specialist listed inside, under the Interior color above. */}
+            {(v.interior_features as string) ? (
               <>
                 <Separator />
                 <div>
-                  <span className="text-muted-foreground text-sm">Warranty</span>
-                  <p className="text-sm">{v.warranty_details as string}</p>
+                  <span className="text-muted-foreground text-sm">Interior features</span>
+                  <p className="whitespace-pre-wrap text-sm">{v.interior_features as string}</p>
                 </div>
               </>
             ) : null}

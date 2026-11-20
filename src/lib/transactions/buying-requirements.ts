@@ -19,9 +19,10 @@ export type BuyingReceiving = (typeof BUYING_RECEIVING_OPTIONS)[number]["value"]
 
 export type BuyingRequirements = { documents: string[]; information: string[] };
 
+// SN-15: GCE asks for two printed back-to-back copies of each ID, each copy signed three times.
 const BASE_DOCUMENTS = [
-  "Two different valid IDs, front and back, current and in your name",
-  "One recent proof of billing in your name (electric, water or internet bill)",
+  "Two different valid IDs. Bring the originals and two printed back-to-back photocopies of each ID, each copy signed three times.",
+  "One recent proof of billing in your name (electric, water or internet bill).",
 ];
 
 const PAYMENT: Record<BuyingPayment, BuyingRequirements> = {
@@ -35,6 +36,7 @@ const PAYMENT: Record<BuyingPayment, BuyingRequirements> = {
     information: [
       `Your payment term: ${FINANCING_TERM_MONTHS.join(", ")} months`,
       "The initial downpayment, paid after you inspect and accept the car",
+      "Bring your latest payslip; GCE checks it during the financing review.",
     ],
   },
 };

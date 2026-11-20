@@ -292,6 +292,11 @@ export async function recordVerifiedPayment(transactionId: string, amount: numbe
   laravelFixture("record-verified-payment", transactionId, amount);
 }
 
+// BC-2: a GCE-visit sale now has a contract; record it signed for specs that are not about the signing.
+export async function signContract(transactionId: string) {
+  laravelFixture("sign-contract", transactionId);
+}
+
 export async function recordDeliveryPayments(transactionId: string) {
   laravelFixture("record-delivery-payments", transactionId);
 }
@@ -324,6 +329,8 @@ export async function papersThenSold(page: Page, id: string, vehicleLabel: strin
   await open(page, `/sales_manager/transactions/${id}`);
   await page.getByRole("button", { name: "Receive papers" }).click();
   await expect(page.getByText("Papers received.")).toBeVisible();
+  await signContract(id);
+  await page.reload();
   await page.waitForLoadState("networkidle");
   await markSold(page).click();
   await expect(page.getByText("Transaction moved to completed.")).toBeVisible();

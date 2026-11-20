@@ -24,6 +24,9 @@ function devRouting() {
       return [
         { source: `/:role(${staff})`, destination: "/dashboard" },
         { source: `/:role(${staff})/recommendations`, destination: "/staff-recommendations" },
+        // Deployed, Apache rewrites /dashboard/... by the gce-role cookie; mirror that here so a staff page
+        // that links to /dashboard/transactions/<id> works in next dev too.
+        { source: "/dashboard/:path*", destination: "/:path*" },
         { source: `/:role(${staff})/:path*`, destination: "/:path*" },
         { source: "/customer/profile", destination: "/my-profile" },
         { source: "/customer/inquiries/:path*", destination: "/my-inquiries/:path*" },

@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { budgetExcessCents, budgetReleased, expensesCents } from "./field-budget";
+import {
+  budgetExcessCents,
+  budgetNoExcess,
+  budgetReleased,
+  expensesCents,
+  FIELD_EXPENSE_CATEGORIES,
+  fieldExpenseCategoryLabel,
+  fieldExpensePurpose,
+} from "./field-budget";
 
 describe("field budget (T10)", () => {
   it("returns the released cash the receipts do not cover", () => {
@@ -16,5 +24,50 @@ describe("field budget (T10)", () => {
     expect(budgetReleased("released")).toBe(true);
     expect(budgetReleased("paid")).toBe(true);
     expect(budgetReleased("approved")).toBe(false);
+  });
+});
+
+describe("field budget categories (BH-5)", () => {
+  it("offers the six categories in checklist order", () => {
+    expect(FIELD_EXPENSE_CATEGORIES.map((category) => category.label)).toEqual([
+      "Fuel",
+      "Tolls",
+      "Parking fee",
+      "Meals",
+      "Transportation fare",
+      "Other",
+    ]);
+  });
+
+  it("stores the joined labels in checklist order, whatever order they were ticked", () => {
+    expect(fieldExpensePurpose(["meals", "fuel", "tolls"])).toBe("Fuel, Tolls, Meals");
+    expect(fieldExpensePurpose([])).toBe("");
+  });
+
+  it("names the other expense when Other is ticked", () => {
+    expect(fieldExpensePurpose(["fuel", "other"], " Car wash ")).toBe("Fuel, Other: Car wash");
+    expect(fieldExpensePurpose(["other"])).toBe("Other");
+    expect(fieldExpensePurpose(["other"], "   ")).toBe("Other");
+  });
+
+  it("labels a single stored category", () => {
+    expect(fieldExpenseCategoryLabel("parking")).toBe("Parking fee");
+    expect(fieldExpenseCategoryLabel("transport")).toBe("Transportation fare");
+    expect(fieldExpenseCategoryLabel(undefined)).toBe("");
+  });
+});
+
+describe("zero excess (BH-3 / SN-2 / SH-11)", () => {
+  it("treats a budget with nothing left as no excess", () => {
+    expect(budgetNoExcess(100000, [{ amount: 1000 }])).toBe(true);
+    expect(budgetNoExcess(100000, [{ amount: 1200 }])).toBe(true);
+  });
+
+  it("still asks for a return when cash is left over", () => {
+    expect(budgetNoExcess(100000, [{ amount: 350 }])).toBe(false);
+  });
+
+  it("does not call an unreleased budget a zero excess", () => {
+    expect(budgetNoExcess(0, [])).toBe(false);
   });
 });

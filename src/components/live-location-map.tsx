@@ -60,14 +60,9 @@ export function LiveLocationMap({
       />
       <p className="text-muted-foreground text-xs">
         {point.at ? `Last seen ${new Date(point.at).toLocaleString()}. ` : "Live location. "}
-        <a
-          href={`https://www.google.com/maps?q=${point.lat},${point.lng}`}
-          target="_blank"
-          rel="noreferrer"
-          className="text-primary underline underline-offset-4"
-        >
-          Open in Google Maps
-        </a>
+        <span className="tabular-nums">
+          {point.lat.toFixed(5)}, {point.lng.toFixed(5)}
+        </span>
       </p>
     </div>
   );

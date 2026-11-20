@@ -26,12 +26,12 @@ function toFormDefaults(vehicle: Record<string, unknown>): VehicleFormData & { i
     make: (vehicle.make as string) ?? "",
     model: (vehicle.model as string) ?? "",
     year: (vehicle.year as number) ?? new Date().getFullYear(),
-    condition: (vehicle.condition as string) ?? "used",
     mileage: (vehicle.mileage as number | undefined) ?? undefined,
     fuel_type: (vehicle.fuel_type as string) ?? "",
     transmission: (vehicle.transmission as string) ?? "",
     exterior_color: (vehicle.exterior_color as string) ?? "",
     interior_color: (vehicle.interior_color as string) ?? "",
+    interior_features: (vehicle.interior_features as string) ?? "",
     body_type: (vehicle.body_type as string) ?? "",
     purpose: (vehicle.purpose as VehicleFormData["purpose"]) ?? "",
     engine: (vehicle.engine as string) ?? "",
@@ -40,7 +40,6 @@ function toFormDefaults(vehicle: Record<string, unknown>): VehicleFormData & { i
     // A number input needs a string, and the column comes back as a NUMERIC string from Supabase.
     financing_markup_pct: ((vehicle.financing_markup_pct as number | string | null)?.toString() ??
       "") as VehicleFormData["financing_markup_pct"],
-    warranty_details: (vehicle.warranty_details as string) ?? "",
     offer_details: (vehicle.offer_details as string) ?? "",
   };
 }

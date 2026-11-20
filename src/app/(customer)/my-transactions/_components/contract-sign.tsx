@@ -49,12 +49,15 @@ export function ContractSign({
   contractBody,
   signedAt,
   signingMethod = null,
+  waitsForGce = false,
 }: {
   readonly transactionId: string;
   readonly contractState: string | null;
   readonly contractBody: string | null;
   readonly signedAt: string | null;
   readonly signingMethod?: string | null;
+  /** BC-3: a GCE-visit sale is signed by the Sales Manager first; until then the e-signature waits. */
+  readonly waitsForGce?: boolean;
 }) {
   const router = useRouter();
   const [method, setMethod] = useState<Method>(signingMethod === "face_to_face" ? "face_to_face" : "e_signature");
@@ -117,7 +120,8 @@ export function ContractSign({
         </div>
       ) : contractState === "approved" ? (
         <p className="text-muted-foreground text-sm">
-          Read the whole contract, then choose how to sign. No payment is taken before you sign.
+          Read the whole contract, then choose how to sign. You can e-sign here or print and sign it on paper with GCE
+          staff. Your signature goes on the Deed of Sale over your printed name.
         </p>
       ) : (
         <p className="text-muted-foreground text-sm">
@@ -146,13 +150,15 @@ export function ContractSign({
                 <RadioGroupItem value="e_signature" id="sign-e" />
                 <Label htmlFor="sign-e" className="flex flex-col items-start gap-0.5 font-normal">
                   <span>E-signature</span>
-                  <span className="text-muted-foreground text-xs">Sign now in the app.</span>
+                  <span className="text-muted-foreground text-xs">
+                    {waitsForGce ? "Available once the Sales Manager has signed for GCE." : "Sign now in the app."}
+                  </span>
                 </Label>
               </div>
               <div className="flex items-start gap-2">
                 <RadioGroupItem value="face_to_face" id="sign-f2f" />
                 <Label htmlFor="sign-f2f" className="flex flex-col items-start gap-0.5 font-normal">
-                  <span>Face-to-face</span>
+                  <span>Print and sign on paper</span>
                   <span className="text-muted-foreground text-xs">
                     Sign the printed contract in front of GCE staff at your visit, meet-up or delivery.
                   </span>
@@ -161,7 +167,11 @@ export function ContractSign({
             </RadioGroup>
           </fieldset>
 
-          {method === "e_signature" ? (
+          {method === "e_signature" && waitsForGce ? (
+            <p className="text-muted-foreground text-sm">
+              The Sales Manager signs for GCE first. Come back here to e-sign once they have.
+            </p>
+          ) : method === "e_signature" ? (
             <>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="contract-signed-name">Type your full name</Label>
@@ -190,7 +200,7 @@ export function ContractSign({
             </p>
           ) : (
             <Button type="submit" className="self-start" disabled={signing}>
-              {signing ? "Saving..." : "Sign face-to-face"}
+              {signing ? "Saving..." : "Sign on paper"}
             </Button>
           )}
         </form>

@@ -17,7 +17,9 @@ describe("LiveLocationMap", () => {
       <LiveLocationMap fieldCaseId="case-1" initial={{ lat: 14.6, lng: 121.1, at: "2026-11-06T01:00:00.000Z" }} />,
     );
     expect(screen.getByTitle("Confidential Informant live location")).toBeInTheDocument();
-    expect(screen.getByText(/Open in Google Maps/)).toBeInTheDocument();
+    // SH-8: no external map redirect; the position stays on the in-app map.
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    expect(screen.getByText("14.60000, 121.10000")).toBeInTheDocument();
   });
 
   it("waits for a shared location before drawing the map", () => {

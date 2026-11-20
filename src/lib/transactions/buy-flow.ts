@@ -90,6 +90,25 @@ export function manilaDay(now: Date = new Date(), daysAhead = 0): string {
   return new Date(now.getTime() + MANILA_OFFSET_MS + daysAhead * DAY_MS).toISOString().slice(0, 10);
 }
 
+// The value a `datetime-local` input reads and writes for a Manila wall clock, "YYYY-MM-DDTHH:mm". It is
+// typed and shown as Manila time, so the device's own time zone never moves a staff schedule.
+export function manilaInputValue(now: Date = new Date()): string {
+  const manila = new Date(now.getTime() + MANILA_OFFSET_MS).toISOString();
+  return `${manila.slice(0, 10)}T${manila.slice(11, 16)}`;
+}
+
+// A typed `datetime-local` value is a Manila wall clock; this writes the offset in, or "" when it is not a
+// date and time at all.
+export function manilaInputInstant(value: string): string {
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value) ? `${value}:00+08:00` : "";
+}
+
+// A typed `datetime-local` value that is still ahead: an earlier one would send the team nowhere.
+export function isFutureManilaInput(value: string, now: Date = new Date()): boolean {
+  const at = new Date(manilaInputInstant(value));
+  return !Number.isNaN(at.getTime()) && at.getTime() > now.getTime();
+}
+
 export function isSundayInManila(date: string): boolean {
   const noon = new Date(`${date}T12:00:00+08:00`);
   return !Number.isNaN(noon.getTime()) && noon.getUTCDay() === 0;
@@ -143,6 +162,17 @@ export const DELIVERY_LEAD_MESSAGE = "Delivery must be scheduled at least 7 days
 // A delivery is booked at least 7 days after the request date.
 export function isDeliveryDate(schedule: Date, requestedAt: Date = new Date()): boolean {
   return schedule.getTime() >= requestedAt.getTime() + DELIVERY_LEAD_DAYS * 24 * 60 * 60 * 1000;
+}
+
+// BH-1: a halfway meet-up is at least 2 calendar days ahead in Manila; a GCE visit may be booked the same
+// day, as long as its hour is still ahead.
+export const MEETUP_LEAD_DAYS = 2;
+export const MEETUP_LEAD_MESSAGE = "A halfway meet-up must be booked at least 2 days ahead.";
+
+// Only the Manila calendar date counts: a meet-up late on the second day ahead is as valid as one at 9 AM.
+export function isMeetupDate(schedule: Date, requestedAt: Date = new Date()): boolean {
+  if (Number.isNaN(schedule.getTime()) || Number.isNaN(requestedAt.getTime())) return false;
+  return manilaDay(schedule) >= manilaDay(requestedAt, MEETUP_LEAD_DAYS);
 }
 
 // §3 Meet Halfway (§8 by bank transfer): paid at an agreed Calabarzon location; these requests queue per car.
@@ -315,7 +345,8 @@ export const PAPERS_STATUS_LABELS: Record<PapersStatus, string> = {
   released_to_ci: "Papers Released to CI",
   handed_over: "Released",
   received: "Papers Received",
-  returned: "Papers Returned to CI",
+  // BC-5: papers returned after an unsuccessful sale wait, on hold, for the next buyer.
+  returned: "On Hold",
 };
 
 // Meet Halfway and Delivery: the CI carries the papers to the buyer. A GCE visit hands them to the
@@ -348,25 +379,35 @@ export const CONTRACT_STATE_LABELS: Record<ContractState, string> = {
   signed: "Contract Signed",
 };
 
+// BC-2: every sale has a contract; the buyer signs the Deed of Sale on it.
 export function needsContract(details: SaleDetails): boolean {
-  return isFieldArrangement(details) || details?.payment_method === "financing";
+  return (
+    isFieldArrangement(details) || details?.arrangement_kind === "gce_visit" || details?.payment_method === "financing"
+  );
 }
 
-// Financing at a GCE visit or a meet-up: the Sales Manager writes the contract, the Head Accountant
-// approves it and the buyer signs it in the app. Everywhere else the buyer signs the printed contract on
-// site and the Confidential Informant reports it.
+// A GCE visit (any payment) and financing at a meet-up: the Sales Manager writes the contract, the Head
+// Accountant approves it and the buyer signs it in the app (or chooses to sign the printed copy). A delivery
+// and a cash meet-up are signed on paper on site and the Confidential Informant reports it.
 export function signsInApp(details: SaleDetails): boolean {
-  return details?.payment_method === "financing" && details.arrangement_kind !== "delivery";
+  return (
+    details?.arrangement_kind === "gce_visit" ||
+    (details?.payment_method === "financing" && details.arrangement_kind !== "delivery")
+  );
+}
+
+// BC-3: at a GCE visit the Sales Manager signs for GCE before the buyer signs in the app.
+export function needsSmSignature(details: SaleDetails): boolean {
+  return details?.arrangement_kind === "gce_visit";
 }
 
 type CopiesLike = { ci_copy_at?: unknown; mechanic_copy_at?: unknown } | null;
 
-// Who has not yet recorded keeping a signed copy. The Confidential Informant keeps one in the field; at
-// a cash Meet Halfway the Mechanic keeps one too.
+// Who has not yet recorded keeping a signed copy. BH-2: on a field arrangement the Confidential Informant handles
+// the contract, so the Mechanic never keeps a copy and is not waited on.
 export function missingContractCopies(details: SaleDetails, handover: CopiesLike): string[] {
   const missing: string[] = [];
   if (isFieldArrangement(details) && !handover?.ci_copy_at) missing.push("Confidential Informant");
-  if (isHalfwayCashRequest(details) && !handover?.mechanic_copy_at) missing.push("Mechanic");
   return missing;
 }
 
@@ -384,6 +425,8 @@ const PRE_DELIVERY_PAYMENT_KINDS: readonly unknown[] = ["delivery_fee", "resched
 // T04 X2: a Cash or Bank Transfer meet-up may also take its downpayment before the contract is signed there.
 export function paymentAllowedBeforeSigning(details: SaleDetails, paymentKind: unknown): boolean {
   if (isHalfwayCashRequest(details)) return paymentKind === "downpayment";
+  // BC-4: a Full Payment at a GCE visit is paid at the office before the Deed of Sale is signed.
+  if (isOnsiteCashRequest(details)) return true;
   return details?.arrangement_kind === "delivery" && PRE_DELIVERY_PAYMENT_KINDS.includes(paymentKind);
 }
 
@@ -406,7 +449,7 @@ export function contractTemplate(sale: {
 }): string {
   const { terms } = sale;
   return [
-    "VEHICLE SALE AND IN-HOUSE FINANCING CONTRACT",
+    terms ? "VEHICLE SALE AND IN-HOUSE FINANCING CONTRACT" : "VEHICLE SALE CONTRACT",
     "",
     `Seller: ${GCE_SELLER}. Buyer: ${sale.buyer}.`,
     `Vehicle: ${sale.vehicle}.`,
@@ -419,7 +462,11 @@ export function contractTemplate(sale: {
       : []),
     "",
     "The buyer has inspected the vehicle and accepts it in its present condition.",
-    "The vehicle stays under this contract until every payment is made. If the payments are not made, GCE will take back the vehicle.",
+    ...(terms
+      ? [
+          "The vehicle stays under this contract until every payment is made. If the payments are not made, GCE will take back the vehicle.",
+        ]
+      : ["The buyer has paid the full price. The Deed of Sale transfers the vehicle to the buyer."]),
     "",
     `Signed by the buyer and by ${GCE_SELLER}.`,
   ].join("\n");
@@ -476,8 +523,8 @@ export function onlinePaymentsDue(
   context: OnlinePaymentContext = {},
 ): OnlinePayment[] {
   if (details?.payment_method === "bank_transfer") {
-    // A GCE visit has no contract, so its full price is due online straight away.
-    if (!needsContract(details) || context.contract_state === "signed") {
+    // A GCE visit is paid in full before the Deed of Sale is signed, so its whole price is due straight away.
+    if (!needsContract(details) || context.contract_state === "signed" || details.arrangement_kind === "gce_visit") {
       const remaining =
         Number(context.final_price ?? details.final_price ?? 0) - verifiedTowardPrice(context.payments ?? []);
       return remaining > 0 ? [balancePart(remaining)] : [];
