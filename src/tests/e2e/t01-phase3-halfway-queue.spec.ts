@@ -25,7 +25,12 @@ import { archiveListedTestVehicles, canCreateTestVehicle, createTestVehicle } fr
 test.describe
   .serial("T01 Phase 3 halfway queue", () => {
     test.skip(!seedPassword || !canCreateTestVehicle(), "SEED_USER_PASSWORD and the local Laravel app are required");
-    test.use({ actionTimeout: 60_000 });
+    // BH-8: the meet-up point starts from the device location (Bacoor, Cavite here).
+    test.use({
+      actionTimeout: 60_000,
+      permissions: ["geolocation"],
+      geolocation: { latitude: 14.4624, longitude: 120.9645 },
+    });
     test.afterAll(archiveListedTestVehicles);
     test.beforeAll(setCustomerAddress);
 
@@ -53,8 +58,10 @@ test.describe
 
       await open(page, `/sales_manager/transactions/${firstId}`);
       await page.getByRole("button", { name: /^Transition Reject/ }).click();
-      // T03: the transition asks for confirmation first.
-      await page.getByRole("alertdialog").getByRole("button").last().click();
+      // BC-9: a rejection always carries a reason.
+      const reject = page.getByRole("dialog");
+      await reject.getByLabel("Reason for rejecting").fill("The buyer cancelled the meet-up.");
+      await reject.getByRole("button", { name: "Reject request" }).click();
       await expect(page.getByText("Transaction moved to rejected.")).toBeVisible();
 
       await open(page, `/sales_manager/transactions/${secondId}`);
@@ -76,7 +83,7 @@ test.describe
 
       // Scenario 2 step 6: paper contract signed at the meet-up, both copies kept. (The CI's "cash reported"
       // step was removed in T10; the Head Accountant's verification replaces it.)
-      await ciClosesFieldCase(page, casePath, { mechanicCopy: true });
+      await ciClosesFieldCase(page, casePath);
 
       await signInAs(page, "sales_manager@gce.local");
       await open(page, `/sales_manager/transactions/${secondId}`);

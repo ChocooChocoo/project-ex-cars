@@ -1,20 +1,32 @@
 import { type Page, test } from "@playwright/test";
 
-import { db, expect, open, png, seedPassword, signInAs } from "./support/t01";
+import { db, expect, open, png, seedPassword, signInAs, verifyAll } from "./support/t01";
 import { canCreateTestVehicle } from "./support/test-vehicle";
 
-// T01 Selling (§1) branch: the inspection finds an issue → Inspection Issue Report → revised ceiling →
-// CEO approves → the seller agrees → purchase funds requested and paid → the offer completes → the
-// field expense is reimbursed once the car is sold. The resale is set through the Laravel test fixtures (the
-// resale flow itself is covered by the Phase 2 spec); every other step goes through the UI.
+// T01 Selling (§1) branch: the inspection finds a hidden issue → Inspection Issue Report → revised ceiling →
+// CEO approves → second negotiation records the final price → the CI's purchase funds are released and the seller
+// is paid → the offer completes → the field expense is reimbursed once the car is sold. The resale is set through
+// the Laravel test fixtures (the resale flow itself is covered by the Phase 2 spec); every other step goes through
+// the UI.
 
 const tag = Math.floor(100 + Math.random() * 899);
-const recalculated = 450_000 + tag; // unique amount, so the Finance row is easy to find
+const finalPrice = 450_000 + tag; // unique amount, so the Finance row is easy to find
+const travel = 850;
 const expenseNote = `Fuel and toll ${tag}`;
 
 async function pickNamed(page: Page, name: RegExp | string, option?: string | RegExp) {
   await page.getByRole("combobox", { name }).click();
   await (option ? page.getByRole("option", { name: option }) : page.getByRole("option").first()).click();
+}
+
+// Clicks a flow button and, when it asks "Are you sure", confirms in the dialog.
+async function press(page: Page, name: string | RegExp) {
+  await page.getByRole("button", typeof name === "string" ? { name, exact: true } : { name }).click();
+  const dialog = page.getByRole("alertdialog");
+  if (await dialog.isVisible({ timeout: 1_500 }).catch(() => false)) {
+    await dialog.getByRole("button").last().click();
+    await expect(dialog).toBeHidden();
+  }
 }
 
 async function financeRow(page: Page) {
@@ -23,7 +35,7 @@ async function financeRow(page: Page) {
   return page
     .getByRole("row")
     .filter({ hasText: "Car purchase fund" })
-    .filter({ hasText: `₱${recalculated.toLocaleString()}` });
+    .filter({ hasText: `₱${(finalPrice + travel).toLocaleString()}` });
 }
 
 test.describe
@@ -59,42 +71,40 @@ test.describe
       await page.getByLabel("Describe the other issues *").fill("Aircon weak");
       await pickNamed(page, /^Meet-up method/, "Meet Halfway within Calabarzon");
       await page.getByLabel("Vehicle photos").setInputFiles(png("front.png"));
-      await page.getByLabel("Valid ID #1 *").setInputFiles(png("id-1.png"));
-      await page.getByLabel("Valid ID #2 *").setInputFiles(png("id-2.png"));
-      // SN-13: the OR, the CR and the deed of sale are declared on a checklist now, not uploaded.
+      // T10: two IDs, each front and back. SN-13: the OR, the CR and the deed of sale are a checklist now.
+      await pickNamed(page, "ID type #1", "Passport");
+      await pickNamed(page, "ID type #2", "Driver's License");
+      for (const n of [1, 2]) {
+        await page.getByLabel(`Front of ID #${n}`).setInputFiles(png(`id-${n}-front.png`));
+        await page.getByLabel(`Back of ID #${n}`).setInputFiles(png(`id-${n}-back.png`));
+      }
       await pickNamed(page, "Official Receipt (OR) *", "I have it");
       await pickNamed(page, "Certificate of Registration (CR) *", "I have it");
       await pickNamed(page, "Deed of Sale *", "I have it");
-      await pickNamed(page, "ID type #1", "Passport");
-      await pickNamed(page, "ID type #2", "Driver's License");
-      await page.getByRole("button", { name: "Submit Vehicle", exact: true }).click();
+      await press(page, "Submit Vehicle");
       await page.waitForURL(/\/my-transactions\/[0-9a-f-]{36}/, { timeout: 30_000 });
       transactionId = page.url().match(/[0-9a-f-]{36}/)?.[0] ?? "";
 
       await signInAs(page, "marketing_specialist@gce.local");
       await open(page, `/marketing_specialist/transactions/${transactionId}`);
-      const verify = page.getByRole("button", { name: "Verify", exact: true });
-      for (let left = 4; left > 0; left--) {
-        await verify.first().click();
-        await expect(verify).toHaveCount(left - 1);
-      }
+      await verifyAll(page, 4);
       await page.getByLabel("Purchase ceiling (₱)").fill("500000");
-      await page.getByRole("button", { name: "Propose ceiling to CEO" }).click();
+      await press(page, "Propose ceiling to CEO");
       await expect(page.getByText("Ceiling sent to the CEO.")).toBeVisible();
 
       await signInAs(page, "ceo@gce.local");
       await open(page, `/ceo/transactions/${transactionId}`);
-      await page.getByRole("button", { name: "Approve", exact: true }).click();
+      await press(page, "Approve");
       await expect(page.getByText("Ceiling approved.")).toBeVisible();
 
       await signInAs(page, "marketing_specialist@gce.local");
       await open(page, `/marketing_specialist/transactions/${transactionId}`);
       await page.getByLabel(/^Agreed price/).fill("480000");
       await page.getByLabel("Meet-up date and time").fill("2033-01-15T10:00");
-      await page.getByLabel("Meet-up location").fill("Petron SLEX Southbound");
+      // SH-12: the meet-up point is the seller's pin, shown read-only.
       await pickNamed(page, "Confidential Informant");
-      await pickNamed(page, "Mechanic (optional)");
-      await page.getByRole("button", { name: "Create field case" }).click();
+      await pickNamed(page, "Mechanic");
+      await press(page, "Create field case");
       await expect(page.getByText("Price recorded. Field case created.")).toBeVisible();
       const caseLink = page.getByRole("link", { name: "Open field case" });
       await expect(caseLink).toBeVisible();
@@ -104,88 +114,92 @@ test.describe
     test("field team checks the seller and the car, finds an issue, and files expenses", async ({ page }) => {
       await signInAs(page, "confidential_informant@gce.local");
       await open(page, `/confidential_informant${casePath}`);
-      await page.getByRole("button", { name: "Confirm identity" }).click();
+      await press(page, "Confirm identity");
       await expect(page.getByText("Identity confirmed.")).toBeVisible();
-      await page.getByLabel("Expense amount").fill("850");
-      await page.getByLabel("Expense description").fill(expenseNote);
-      await page.getByLabel("Proof of expense").setInputFiles(png("receipt.png"));
-      await page.getByRole("button", { name: "File expense" }).click();
+      // BH-5: the purpose is a category checklist; "Other" carries the unique note this spec looks for later.
+      await page.getByLabel("Expense amount").fill(String(travel));
+      await page.getByLabel("Other", { exact: true }).check();
+      await page.getByLabel("Other expense").fill(expenseNote);
+      await page.getByLabel("Receipt photo").setInputFiles(png("receipt.png"));
+      await press(page, "File expense");
       await expect(page.getByText("Expense filed.")).toBeVisible();
 
       await signInAs(page, "mechanic@gce.local");
       await open(page, `/mechanic${casePath}`);
-      await page.getByRole("button", { name: "Confirm plate" }).click();
+      await press(page, "Confirm plate");
       await expect(page.getByText("Plate and chassis confirmed.")).toBeVisible();
       await page.waitForLoadState("networkidle");
-      await pickNamed(page, "Inspection outcome", "Issue found");
-      await page.locator("#issue").fill("Compressor failing; aircon needs overhaul");
-      await page.locator("#estimate").fill("30000");
-      await page.locator("#inspection-photos").setInputFiles(png("aircon.png"));
-      await page.getByRole("button", { name: "Report inspection" }).click();
+      // SH-7: every part is answered; one needs repair, with its cost and a photo (a hidden issue).
+      for (const part of await page.getByRole("button", { name: "Good condition", exact: true }).all()) {
+        await part.click();
+      }
+      await page.getByRole("button", { name: "Needs repair", exact: true }).first().click();
+      await page.locator('[id^="repair-cost-"]').first().fill("30000");
+      await page.locator('[id^="repair-note-"]').first().fill("Compressor failing; aircon needs overhaul");
+      await page.locator('[id^="repair-photos-"]').first().setInputFiles(png("aircon.png"));
+      await press(page, "Report inspection");
       await expect(page.getByText("Inspection reported.")).toBeVisible();
     });
 
-    test("Inspection Issue Report → revised ceiling → CEO approves → seller agrees", async ({ page }) => {
+    test("Inspection Issue Report → revised ceiling → CEO approves → second negotiation", async ({ page }) => {
       await signInAs(page, "marketing_specialist@gce.local");
       await open(page, `/marketing_specialist/transactions/${transactionId}`);
       await page.locator("#profitable").click();
       await page.getByRole("option", { name: "Still profitable" }).click();
       await page.locator("#profit-reason").fill("Resale margin holds after a ₱30,000 aircon overhaul.");
-      await page.locator("#recalculated").fill(String(recalculated));
       await page.locator("#new-ceiling").fill("460000");
       await page.locator("#seller-remarks").fill("The aircon compressor needs replacing before resale.");
-      await page.getByRole("button", { name: "Send to CEO" }).click();
+      await press(page, "Send to CEO");
       await expect(page.getByText("Revised ceiling sent to the CEO.")).toBeVisible();
 
       await signInAs(page, "ceo@gce.local");
       await open(page, `/ceo/transactions/${transactionId}`);
       await expect(page.getByText(/Revised ceiling/).first()).toBeVisible();
-      await page.getByRole("button", { name: "Approve", exact: true }).click();
+      await press(page, "Approve");
       await expect(page.getByText("Ceiling approved.")).toBeVisible();
 
-      // T03 C13: once approved, the seller sees the new price with GCE's remarks.
+      // SH-6: the seller sees GCE's remarks, never the ceiling.
       await signInAs(page, "customer@gce.local");
       await open(page, `/customer/my-transactions/${transactionId}`);
       const counter = page.getByRole("region", { name: "GCE counter-offer" });
-      await expect(counter).toContainText(`₱${recalculated.toLocaleString()}`);
       await expect(counter).toContainText("The aircon compressor needs replacing before resale.");
+      await expect(counter).not.toContainText("460,000");
 
+      // The approved revised ceiling is a maximum: the Marketing Specialist records the price the seller accepted.
       await signInAs(page, "marketing_specialist@gce.local");
       await open(page, `/marketing_specialist/transactions/${transactionId}`);
-      await page.getByRole("button", { name: "Seller agrees" }).click();
-      await expect(page.getByText("Seller's agreement recorded.")).toBeVisible();
-      await expect(page.getByText("Cleared for payment. Request the purchase funds in Finance.")).toBeVisible();
+      await page.locator("#negotiated-price").fill("461000");
+      await expect(page.getByText(/The agreed price cannot exceed the approved ceiling/)).toBeVisible();
+      await page.locator("#negotiated-price").fill(String(finalPrice));
+      await press(page, "Seller agrees");
+      await expect(page.getByText("Agreed price recorded.")).toBeVisible();
+      await expect(page.getByText("Cleared for payment. The fund requester pays the seller.")).toBeVisible();
     });
 
-    test("the seller is paid through Finance and the offer completes", async ({ page }) => {
-      await signInAs(page, "account_manager@gce.local");
-      await open(page, "/account_manager/finance");
-      await page.getByRole("button", { name: "Request Purchase Funds" }).click();
-      const dialog = page.getByRole("dialog");
-      await dialog.getByRole("combobox").click();
-      await page.getByRole("option", { name: new RegExp(`Seller payment · ${transactionId.slice(0, 8)}`) }).click();
-      await dialog.getByRole("spinbutton").fill(String(recalculated));
-      await dialog.getByRole("button", { name: "Submit Request" }).click();
-      await expect(page.getByText("Purchase fund request created. Awaiting Head Accountant release.")).toBeVisible();
+    test("the CI's purchase funds are released, the seller is paid and the offer completes", async ({ page }) => {
+      // On a Meet Halfway the assigned Confidential Informant requests the car payment plus the travel estimate.
+      await signInAs(page, "confidential_informant@gce.local");
+      await open(page, `/confidential_informant${casePath}`);
+      await page.locator("#travel-budget").fill(String(travel));
+      await press(page, "Request funds");
+      await expect(page.getByText("Funds requested from the Head Accountant.")).toBeVisible();
 
       await signInAs(page, "head_accountant@gce.local");
-      await open(page, "/head_accountant/finance");
-      const row = await financeRow(page);
-      for (const step of ["Approve", "Release", "Receive", "Mark Paid"]) {
-        await row.getByRole("button", { name: step, exact: true }).click();
-        await expect(
-          row.getByText(
-            step === "Mark Paid"
-              ? "paid"
-              : step === "Receive"
-                ? "received"
-                : step === "Release"
-                  ? "released"
-                  : "approved",
-            { exact: true },
-          ),
-        ).toBeVisible();
+      for (const [step, done] of [
+        ["Approve", "approved"],
+        ["Release", "released"],
+      ] as const) {
+        await open(page, "/head_accountant/finance");
+        const row = await financeRow(page);
+        await row.getByRole("button", { name: "Open Car purchase fund" }).click();
+        await page.getByRole("dialog").getByRole("button", { name: step, exact: true }).click();
+        await expect(page.getByText(`Disbursement ${done}.`)).toBeVisible();
       }
+
+      await signInAs(page, "confidential_informant@gce.local");
+      await open(page, `/confidential_informant${casePath}`);
+      await press(page, /^Record seller paid/);
+      await expect(page.getByText("Seller payment recorded.")).toBeVisible();
 
       const { data } = await db().from("transactions").select("current_state").eq("id", transactionId).single();
       expect(data?.current_state).toBe("completed");
@@ -212,7 +226,7 @@ test.describe
       const { data: rows } = await db()
         .from("field_case_expenses")
         .select("reimbursed_at")
-        .eq("description", expenseNote);
+        .eq("description", `Other: ${expenseNote}`);
       expect(rows?.[0]?.reimbursed_at).toBeTruthy();
     });
   });

@@ -10,9 +10,10 @@ import {
   futureSlot,
   headAccountantApproves,
   open,
-  pick,
   pickByLabel,
   proposeTerms,
+  recordAndVerifyPayments,
+  recordPayment,
   resetCustomerStanding,
   seedPassword,
   signInAs,
@@ -26,13 +27,6 @@ import { archiveListedTestVehicles, canCreateTestVehicle, createTestVehicle } fr
 const SIGN_BEFORE_PAYMENT = "The buyer must sign the contract before a payment is recorded.";
 
 const markSold = (page: Page) => page.getByRole("button", { name: /Mark Sold to This Buyer/ });
-
-async function recordPayment(page: Page, amount: string, method: string, kind: string) {
-  await page.locator("#pay_amount").fill(amount);
-  await pick(page, "pay_method", method);
-  await pick(page, "pay_kind", kind);
-  await page.getByRole("button", { name: "Record Payment" }).click();
-}
 
 test.describe
   .serial("Buying revision phase 3", () => {
@@ -73,7 +67,7 @@ test.describe
       // No payment before the signature.
       await signInAs(page, "sales_manager@gce.local");
       await open(page, `/sales_manager/transactions/${id}`);
-      await recordPayment(page, "100000", "Bank Transfer", "Downpayment");
+      await recordPayment(page, "100000", "Downpayment");
       await expect(page.getByText(SIGN_BEFORE_PAYMENT)).toBeVisible();
 
       // The Sales Manager writes the contract from the pre-made one and sends it.
@@ -131,7 +125,7 @@ test.describe
       await signInAs(page, "sales_manager@gce.local");
       await open(page, `/sales_manager/transactions/${id}`);
       await expect(page.getByText("Contract Signed").first()).toBeVisible();
-      await recordPayment(page, "100000", "Bank Transfer", "Downpayment");
+      await recordPayment(page, "100000", "Downpayment");
       await expect(page.getByText("Payment recorded.")).toBeVisible();
     });
 
@@ -193,7 +187,7 @@ test.describe
         page.getByText("The signed contract is not fully kept. Still to record a copy: Mechanic."),
       ).toBeVisible();
       await page.screenshot({ path: "test-results/phase3-contract-not-kept-desktop.png", fullPage: true });
-      await recordPayment(page, "500000", "Cash", "Full payment");
+      await recordPayment(page, "500000", "Full payment");
       await expect(page.getByText("Payment recorded.")).toBeVisible();
       await page.waitForLoadState("networkidle");
       await markSold(page).click();
@@ -230,20 +224,12 @@ test.describe
       // The fee and the downpayment come before delivery day, so before the contract is signed.
       await signInAs(page, "head_accountant@gce.local");
       await open(page, `/head_accountant/transactions/${id}`);
-      const verify = page.getByRole("button", { name: "Verify", exact: true });
-      for (const [kind, amount, expected] of [
-        ["Delivery fee", "2500", 1],
-        ["Downpayment", "50000", 2],
-      ] as const) {
-        await recordPayment(page, amount, "Bank Transfer", kind);
-        await expect(verify).toHaveCount(expected);
-      }
-      for (let left = 2; left > 0; left--) {
-        await verify.first().click();
-        await expect(verify).toHaveCount(left - 1);
-      }
+      await recordAndVerifyPayments(page, [
+        ["2500", "Delivery fee"],
+        ["50000", "Downpayment"],
+      ]);
       // The balance is not.
-      await recordPayment(page, "450000", "Cash", "Balance on delivery");
+      await recordPayment(page, "450000", "Balance on delivery");
       await expect(page.getByText(SIGN_BEFORE_PAYMENT)).toBeVisible();
 
       await signInAs(page, "sales_manager@gce.local");
@@ -296,7 +282,7 @@ test.describe
       // Mark as Sold waits for the CI's signed copy.
       await signInAs(page, "sales_manager@gce.local");
       await open(page, `/sales_manager/transactions/${id}`);
-      await recordPayment(page, "450000", "Cash", "Balance on delivery");
+      await recordPayment(page, "450000", "Balance on delivery");
       await expect(page.getByText("Payment recorded.")).toBeVisible();
       await page.waitForLoadState("networkidle");
       await markSold(page).click();

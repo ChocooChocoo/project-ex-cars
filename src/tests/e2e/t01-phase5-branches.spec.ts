@@ -11,8 +11,8 @@ import {
   headAccountantApproves,
   open,
   papersThenSold,
-  pick,
   proposeTerms,
+  recordPayment,
   seedPassword,
   signInAs,
   verifyAll,
@@ -54,10 +54,7 @@ async function claimPayAndSell(page: Page, id: string, downpayment: number, labe
   await buyerSignsContract(page, id);
   await signInAs(page, "sales_manager@gce.local");
   await open(page, `/sales_manager/transactions/${id}`);
-  await page.locator("#pay_amount").fill(String(downpayment));
-  await pick(page, "pay_method", "Bank Transfer");
-  await pick(page, "pay_kind", "Downpayment");
-  await page.getByRole("button", { name: "Record Payment" }).click();
+  await recordPayment(page, String(downpayment), "Downpayment");
   await expect(page.getByText("Payment recorded.")).toBeVisible();
 
   await signInAs(page, "head_accountant@gce.local");

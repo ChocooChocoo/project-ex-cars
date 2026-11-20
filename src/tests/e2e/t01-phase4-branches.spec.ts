@@ -8,8 +8,8 @@ import {
   expect,
   futureSlot,
   open,
-  pick,
   pickByLabel,
+  recordAndVerifyPayments,
   resetCustomerStanding,
   seedPassword,
   signInAs,
@@ -96,21 +96,10 @@ test.describe
       // Head Accountant records and verifies the fee and the downpayment.
       await signInAs(page, "head_accountant@gce.local");
       await open(page, `/head_accountant/transactions/${id}`);
-      const verify = page.getByRole("button", { name: "Verify", exact: true });
-      for (const [kind, amount, expected] of [
-        ["Delivery fee", "2500", 1],
-        ["Downpayment", "50000", 2],
-      ] as const) {
-        await page.locator("#pay_amount").fill(amount);
-        await pick(page, "pay_method", "Bank Transfer");
-        await pick(page, "pay_kind", kind);
-        await page.getByRole("button", { name: "Record Payment" }).click();
-        await expect(verify).toHaveCount(expected);
-      }
-      for (let left = 2; left > 0; left--) {
-        await verify.first().click();
-        await expect(verify).toHaveCount(left - 1);
-      }
+      await recordAndVerifyPayments(page, [
+        ["2500", "Delivery fee"],
+        ["50000", "Downpayment"],
+      ]);
 
       // The buyer asked in advance for a new date; the Sales Manager moves it and sends the team.
       await signInAs(page, "sales_manager@gce.local");

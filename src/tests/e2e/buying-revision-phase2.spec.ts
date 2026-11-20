@@ -7,8 +7,9 @@ import {
   expect,
   futureSlot,
   open,
-  pick,
   pickByLabel,
+  recordDeliveryPayments,
+  recordPayment,
   resetCustomerStanding,
   seedPassword,
   signContract,
@@ -70,8 +71,14 @@ test.describe
       // Released: the CI finds the request on the Vehicle Papers tab and marks it released.
       await signInAs(page, "confidential_informant@gce.local");
       await open(page, "/confidential_informant/vehicle-papers");
-      const request = page.getByRole("row").filter({ hasText: "E2E Test P2-VISIT" });
-      await expect(request).toHaveCount(1);
+      await page.getByRole("tab", { name: /To buyers/ }).click();
+      // Earlier runs can leave rows for the same test car; act on the newest one still waiting (rows are oldest first).
+      const request = page
+        .getByRole("row")
+        .filter({ hasText: "E2E Test P2-VISIT" })
+        .filter({ hasText: "Papers Requested" })
+        .last();
+      await expect(request).toBeVisible();
       await page.screenshot({ path: "test-results/phase2-ci-requests-desktop.png" });
       await page.setViewportSize({ width: 390, height: 844 });
       await page.screenshot({ path: "test-results/phase2-ci-requests-mobile.png" });
@@ -79,28 +86,27 @@ test.describe
       await request.getByRole("button", { name: /Actions for/ }).click();
       await page.getByRole("menuitem", { name: "Mark Released" }).click();
       await expect(page.getByText("Papers released to the Sales Manager.")).toBeVisible();
-      await expect(request.getByText("Released", { exact: true })).toBeVisible();
+      expect(await papersStatus(id)).toBe("handed_over"); // shown as "Released"
 
       // Still not sold until the Sales Manager has received them.
       await signInAs(page, "sales_manager@gce.local");
       await open(page, `/sales_manager/transactions/${id}`);
       await expect(page.getByText("Released", { exact: true }).first()).toBeVisible();
+      // BC-4: the cash is taken at the visit, so Mark Sold asks for it first.
+      await markSold(page).click();
+      await expect(page.getByText(/Record the buyer's payment before marking the car sold/)).toBeVisible();
+      await recordPayment(page, "500000", "Full payment");
+      await expect(page.getByText("Payment recorded.")).toBeVisible();
       await markSold(page).click();
       await expect(page.getByText(PAPERS_FIRST)).toBeVisible();
 
-      // Papers Received, then the cash is recorded and the car is sold.
+      // Papers Received, then the contract is signed and the car is sold.
       await page.getByRole("button", { name: "Receive papers" }).click();
       await expect(page.getByText("Papers received.")).toBeVisible();
       await expect(page.getByText("Papers Received").first()).toBeVisible();
       await page.setViewportSize({ width: 390, height: 844 });
       await page.screenshot({ path: "test-results/phase2-papers-received-mobile.png", fullPage: true });
       await page.setViewportSize({ width: 1280, height: 720 });
-      await markSold(page).click();
-      await expect(page.getByText(/Record the buyer's payment before marking the car sold/)).toBeVisible();
-      await page.locator("#pay_amount").fill("500000");
-      await pick(page, "pay_method", "Cash");
-      await page.getByRole("button", { name: "Record Payment" }).click();
-      await expect(page.getByText("Payment recorded.")).toBeVisible();
       // BC-2: the cash GCE visit is signed before it is sold.
       await markSold(page).click();
       await expect(page.getByText("The buyer must sign the contract before the car is marked sold.")).toBeVisible();
@@ -127,28 +133,13 @@ test.describe
       });
       await approveAsSalesManager(page, id);
       await pickByLabel(page, "Address serviceable", "Yes, we can deliver");
-      await page.getByLabel("Delivery fee (₱)").fill("2500");
-      await page.getByLabel("Downpayment (₱)").fill("50000");
+      // Delivery is free inside CALABARZON and the downpayment is fixed at 10% of the price.
       await page.getByRole("button", { name: "Confirm and notify buyer" }).click();
+      await page.getByRole("alertdialog").getByRole("button", { name: "Confirm", exact: true }).click();
       await expect(page.getByText("Delivery terms sent to the buyer.")).toBeVisible();
 
-      await signInAs(page, "head_accountant@gce.local");
-      await open(page, `/head_accountant/transactions/${id}`);
-      const verify = page.getByRole("button", { name: "Verify", exact: true });
-      for (const [kind, amount, expected] of [
-        ["Delivery fee", "2500", 1],
-        ["Downpayment", "50000", 2],
-      ] as const) {
-        await page.locator("#pay_amount").fill(amount);
-        await pick(page, "pay_method", "Bank Transfer");
-        await pick(page, "pay_kind", kind);
-        await page.getByRole("button", { name: "Record Payment" }).click();
-        await expect(verify).toHaveCount(expected);
-      }
-      for (let left = 2; left > 0; left--) {
-        await verify.first().click();
-        await expect(verify).toHaveCount(left - 1);
-      }
+      // The downpayment is paid online through PayMongo; the fixture records the verified row a checkout creates.
+      await recordDeliveryPayments(id);
 
       await signInAs(page, "sales_manager@gce.local");
       await open(page, `/sales_manager/transactions/${id}`);

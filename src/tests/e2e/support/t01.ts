@@ -147,6 +147,9 @@ export async function buyerRequest(
   else await pick(page, "payment_method", options.method === "Bank Transfer" ? "Bank Transfer (via PayMongo)" : "Cash");
   await pick(page, "arrangement_kind", options.arrangement);
   if (options.when) await fillSlot(page, options.when);
+  // BH-8: a halfway meet-up pins its point from the device location; the buyer types the block or landmark.
+  const landmark = page.getByLabel("Block, lot, street / landmark");
+  if (await landmark.isVisible().catch(() => false)) await landmark.fill("Beside the covered court");
   // Every financing request asks for a term.
   if (options.term || options.method === "Financing") await pick(page, "requested_term", options.term ?? "1 year");
   const acknowledge = page.getByLabel(/I have reviewed this car's condition/);
@@ -224,11 +227,23 @@ export async function ceoConfirms(page: Page, id: string) {
 
 export const markSold = (page: Page) => page.getByRole("button", { name: /Mark Sold to This Buyer/ });
 
-export async function recordPayment(page: Page, amount: string, method: string, kind: string) {
-  await page.locator("#pay_amount").fill(amount);
-  await pick(page, "pay_method", method);
-  await pick(page, "pay_kind", kind);
+// The payment due is read-only (amount, kind and method come from the sale), so recording it is one click. A
+// Bank Transfer buy, paid online, only offers the manual form, which takes the amount and kind typed here.
+export async function recordPayment(page: Page, amount: string, kind: string) {
+  const manual = page.locator("#manual_amount");
+  if (await manual.isVisible().catch(() => false)) {
+    await manual.fill(amount);
+    await pick(page, "manual_kind", kind);
+  }
   await page.getByRole("button", { name: "Record Payment" }).click();
+}
+
+// A recorded payment hides the form until the Head Accountant checks it, so each one is recorded, then verified.
+export async function recordAndVerifyPayments(page: Page, payments: readonly (readonly [string, string])[]) {
+  for (const [amount, kind] of payments) {
+    await recordPayment(page, amount, kind);
+    await verifyAll(page, 1);
+  }
 }
 
 // The field case a request's "Open field case" link points at, without the role prefix.
@@ -317,6 +332,7 @@ export async function papersThenSold(page: Page, id: string, vehicleLabel: strin
   await expect(page.getByText("Papers requested from the Confidential Informant.")).toBeVisible();
   await signInAs(page, "confidential_informant@gce.local");
   await open(page, "/confidential_informant/vehicle-papers");
+  await page.getByRole("tab", { name: /To buyers/ }).click();
   // Earlier runs can leave rows for the same test car; act on the newest one still waiting for the CI (rows are oldest first).
   const request = page.getByRole("row").filter({ hasText: vehicleLabel }).filter({ hasText: "Papers Requested" });
   await request
@@ -338,11 +354,11 @@ export async function papersThenSold(page: Page, id: string, vehicleLabel: strin
 
 // Field flows (meet-up, delivery): the assigned CI records the papers, Buyer Met, the signing (paper
 // contract, or the buyer's in-app signature already given), a signed copy, the cash when paid on site,
-// and hands the papers to the buyer. The Mechanic's copy is recorded when the flow needs it.
+// and hands the papers to the buyer. BH-2: the Mechanic keeps no contract copy.
 export async function ciClosesFieldCase(
   page: Page,
   casePath: string,
-  options: { papersReleased?: boolean; cash?: boolean; mechanicCopy?: boolean } = {},
+  options: { papersReleased?: boolean; cash?: boolean } = {},
 ) {
   await signInAs(page, "confidential_informant@gce.local");
   await open(page, `/confidential_informant${casePath}`);
@@ -362,12 +378,6 @@ export async function ciClosesFieldCase(
   }
   await page.getByRole("button", { name: "Hand papers to buyer" }).click();
   await expect(page.getByText("Papers handed to the buyer.")).toBeVisible();
-  if (options.mechanicCopy) {
-    await signInAs(page, "mechanic@gce.local");
-    await open(page, `/mechanic${casePath}`);
-    await page.getByRole("button", { name: "Record my signed copy" }).click();
-    await expect(page.getByText("Your signed copy is recorded.")).toBeVisible();
-  }
 }
 
 // ---------------------------------------------------------------------------------------------

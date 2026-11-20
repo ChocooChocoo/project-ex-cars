@@ -13,7 +13,7 @@ import {
   markSold,
   open,
   pickByLabel,
-  recordPayment,
+  recordAndVerifyPayments,
   resetCustomerStanding,
   seedPassword,
   signInAs,
@@ -257,18 +257,10 @@ test.describe
 
       await signInAs(page, "head_accountant@gce.local");
       await open(page, `/head_accountant/transactions/${id}`);
-      const verify = page.getByRole("button", { name: "Verify", exact: true });
-      for (const [kind, amount, expected] of [
-        ["Delivery fee", "2500", 1],
-        ["Downpayment", "100000", 2],
-      ] as const) {
-        await recordPayment(page, amount, "Bank Transfer", kind);
-        await expect(verify).toHaveCount(expected);
-      }
-      for (let left = 2; left > 0; left--) {
-        await verify.first().click();
-        await expect(verify).toHaveCount(left - 1);
-      }
+      await recordAndVerifyPayments(page, [
+        ["2500", "Delivery fee"],
+        ["100000", "Downpayment"],
+      ]);
 
       await signInAs(page, "sales_manager@gce.local");
       await open(page, `/sales_manager/transactions/${id}`);

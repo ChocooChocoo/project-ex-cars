@@ -8,7 +8,7 @@ const expect = baseExpect.configure({ timeout: 20_000 });
 
 // T01 Phase 1 — Selling Scenario (GCE Process Flows §1), no-issue path:
 // seller submits → Marketing Specialist verifies and proposes → CEO approves → price agreed →
-// field team checks, inspects and files expenses → car cleared for payment.
+// the Mechanic confirms the seller and the car and answers the parts checklist → car cleared for payment.
 // Needs migration 00049 applied and the seeded role accounts, each with at least one
 // active Confidential Informant and Mechanic in the worker directory.
 
@@ -133,26 +133,27 @@ test.describe
       fieldCasePath = new URL((await caseLink.getAttribute("href")) ?? "", page.url()).pathname.replace(/^\/[^/]+/, "");
     });
 
-    test("Mechanic confirms identity and files the meet-up expense", async ({ page }) => {
+    test("Mechanic confirms identity and files no expense", async ({ page }) => {
       await signInAs(page, "mechanic@gce.local");
       await page.goto(`/mechanic${fieldCasePath}`);
+      await page.waitForLoadState("networkidle");
       await press(page, "Confirm identity");
       await expect(page.getByRole("button", { name: "Confirm identity" })).toHaveCount(0);
-
-      await page.getByLabel("Expense amount").fill("850");
-      await page.getByLabel("Expense purpose").fill("Fuel and toll");
-      await page.getByLabel("Receipt photo").setInputFiles(png("receipt.png"));
-      await press(page, "File expense");
-      await expect(page.getByText("Fuel and toll")).toBeVisible();
+      // SH-9: only the Confidential Informant files meet-up expenses.
+      await expect(page.getByRole("button", { name: "File expense" })).toHaveCount(0);
     });
 
-    test("Mechanic confirms the plate and reports no issues", async ({ page }) => {
+    test("Mechanic confirms the plate and reports every part in good condition", async ({ page }) => {
       await signInAs(page, "mechanic@gce.local");
       await page.goto(`/mechanic${fieldCasePath}`);
+      await page.waitForLoadState("networkidle");
       await press(page, "Confirm plate");
-      await pick(page, "Inspection outcome", "No issues found");
+      // SH-7: the parts checklist replaces the outcome dropdown; every part needs an answer.
+      for (const part of await page.getByRole("button", { name: "Good condition", exact: true }).all()) {
+        await part.click();
+      }
       await press(page, "Report inspection");
-      await expect(page.getByText("No issues found. The car is cleared for payment.")).toBeVisible();
+      await expect(page.getByText("Inspection reported.")).toBeVisible();
     });
 
     test("the cleared car is offered for the seller payment", async ({ page }) => {
