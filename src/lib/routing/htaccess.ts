@@ -1,5 +1,5 @@
 import { GCE_ROLES } from "../auth/roles";
-import { isStaffRole, landingPath, resolveInternalPath } from "./paths";
+import { isStaffRole, landingPath, resolveInternalPath, SUPPLIER_ROLE } from "./paths";
 
 // Apache maps role-prefixed browser URLs to shared static files. The `gce-role` cookie is only a routing
 // hint; Laravel authorises every request and SessionProvider checks the session in the browser.
@@ -77,7 +77,7 @@ export function buildHtaccess(dynamicBases: readonly string[]): string {
     "RewriteRule ^profile/$ /%2/profile/ [R=302,L]",
   );
   for (const role of GCE_ROLES) {
-    const target = isStaffRole(role) ? `/${role}/$1` : `/${role}/showroom/`;
+    const target = isStaffRole(role) ? `/${role}/$1` : `${landingPath(role)}/`;
     lines.push(FIRST_PASS, hasRole(role), `RewriteRule ^dashboard/(.*)$ ${target} [R=302,L]`);
   }
 
@@ -99,7 +99,10 @@ export function buildHtaccess(dynamicBases: readonly string[]): string {
   lines.push("", "# Role-prefixed paths are served from the shared export folders.");
   for (const role of GCE_ROLES) {
     const r = esc(role);
-    if (isStaffRole(role)) {
+    if (role === SUPPLIER_ROLE) {
+      // The supplier portal is one export folder; anything else under /supplier/ lands on it.
+      lines.push(`RewriteRule ^${r}/portal(/.*)?$ portal$1 [L]`, `RewriteRule ^${r}/ portal/ [L]`);
+    } else if (isStaffRole(role)) {
       lines.push(`RewriteRule ^${r}/$ ${trim(resolveInternalPath(role, "dashboard"))}/ [L]`);
       lines.push(`RewriteRule ^${r}/dashboard/(.*)$ ${trim(resolveInternalPath(role, "dashboard"))}/$1 [L]`);
       lines.push(`RewriteRule ^${r}/recommendations(.*)$ ${trim(resolveInternalPath(role, "recommendations"))}$1 [L]`);

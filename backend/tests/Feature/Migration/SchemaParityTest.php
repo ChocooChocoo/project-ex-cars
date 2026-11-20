@@ -75,7 +75,7 @@ class SchemaParityTest extends TestCase
         $this->assertRejected(fn () => DB::table('vehicles')->insert(['stock_code' => 'X1', 'make' => 'A', 'model' => 'B', 'year' => 2021, 'listing_state' => 'gone']), 'unknown listing_state');
         $this->assertRejected(fn () => DB::table('vehicles')->insert(['stock_code' => 'X2', 'make' => 'A', 'model' => 'B', 'year' => 1800]), 'year below 1900');
         $this->assertRejected(fn () => DB::table('profiles')->where('id', $u)->update(['region_code' => '12AB']), 'PSGC code not 9 digits');
-        $this->assertRejected(fn () => DB::table('user_roles')->insert(['account_id' => $u, 'role' => 'supplier']), 'retired supplier role');
+        $this->assertRejected(fn () => DB::table('user_roles')->insert(['account_id' => $u, 'role' => 'vendor']), 'unknown role');
         $this->assertRejected(fn () => DB::table('customer_reviews')->insert(['transaction_id' => $this->transaction($u, null), 'customer_id' => $u, 'rating' => 5, 'body' => '   ']), 'blank review body');
 
         DB::table('profiles')->where('id', $u)->update(['region_code' => '040000000']);

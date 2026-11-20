@@ -71,11 +71,23 @@ export async function signUp(formData: FormData) {
     return { error: "You must agree to the Terms and Conditions and the Company Policy." };
   }
 
-  const parsed = z.object({ email: emailSchema, password: newPasswordSchema, full_name: fullNameSchema }).safeParse({
-    email: formData.get("email"),
-    password: formData.get("password"),
-    full_name: formData.get("full_name"),
-  });
+  // Notes line 40: a supplier signs up with their company name and waits for the Account Manager's approval.
+  const supplier = formData.has("company_name");
+  const parsed = z
+    .object({
+      email: emailSchema,
+      password: newPasswordSchema,
+      full_name: fullNameSchema,
+      company_name: supplier
+        ? z.string().trim().min(1, "Enter your company name.").max(200)
+        : z.null().transform(() => undefined),
+    })
+    .safeParse({
+      email: formData.get("email"),
+      password: formData.get("password"),
+      full_name: formData.get("full_name"),
+      company_name: formData.get("company_name"),
+    });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid registration details." };
   }
@@ -83,11 +95,15 @@ export async function signUp(formData: FormData) {
   // Laravel creates user + profile + customer role in one transaction and emails the verification link
   // (to the frontend /auth/confirm, so it works from another device). T04 A3: no session until verified.
   try {
-    const result = await apiWrite<{ notice: string }>("POST", "/api/v1/auth/register", {
-      ...parsed.data,
-      accept_terms: true,
-      accept_policy: true,
-    });
+    const result = await apiWrite<{ notice: string }>(
+      "POST",
+      `/api/v1/auth/${supplier ? "register-supplier" : "register"}`,
+      {
+        ...parsed.data,
+        accept_terms: true,
+        accept_policy: true,
+      },
+    );
     return { notice: result.data.notice };
   } catch (error) {
     return { error: errorMessage(error) };

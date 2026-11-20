@@ -23,6 +23,7 @@ import { PolicyDialog } from "./policy-dialog";
 const formSchema = z
   .object({
     fullName: fullNameSchema,
+    companyName: z.string().trim().max(200),
     email: emailSchema,
     password: newPasswordSchema,
     confirmPassword: z.string(),
@@ -52,7 +53,8 @@ const POLICY_FIELDS = [
   },
 ] as const;
 
-export function RegisterForm() {
+/** `supplier`: notes line 40, the supplier sign-up with a company name; the account waits for approval. */
+export function RegisterForm({ supplier = false }: { readonly supplier?: boolean }) {
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [read, setRead] = useState<Record<(typeof POLICY_FIELDS)[number]["name"], boolean>>({
@@ -64,6 +66,7 @@ export function RegisterForm() {
     resolver: zodResolver(formSchema),
     defaultValues: {
       fullName: "",
+      companyName: "",
       email: "",
       password: "",
       confirmPassword: "",
@@ -73,12 +76,17 @@ export function RegisterForm() {
   });
 
   const onSubmit = async (data: FormValues) => {
+    if (supplier && !data.companyName) {
+      form.setError("companyName", { message: "Enter your company name." });
+      return;
+    }
     setLoading(true);
 
     const formData = new FormData();
     formData.set("email", data.email);
     formData.set("password", data.password);
     formData.set("full_name", data.fullName);
+    if (supplier) formData.set("company_name", data.companyName);
     formData.set("accept_terms", String(data.acceptTerms));
     formData.set("accept_policy", String(data.acceptPolicy));
 
@@ -124,6 +132,25 @@ export function RegisterForm() {
             </Field>
           )}
         />
+        {supplier ? (
+          <Controller
+            control={form.control}
+            name="companyName"
+            render={({ field, fieldState }) => (
+              <Field className="gap-1.5" data-invalid={fieldState.invalid}>
+                <FieldLabel htmlFor="register-company">Supplier Company Name</FieldLabel>
+                <Input
+                  {...field}
+                  id="register-company"
+                  type="text"
+                  autoComplete="organization"
+                  aria-invalid={fieldState.invalid}
+                />
+                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+              </Field>
+            )}
+          />
+        ) : null}
         <Controller
           control={form.control}
           name="email"

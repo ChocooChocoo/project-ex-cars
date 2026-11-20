@@ -29,6 +29,12 @@ export default function RegisterV1() {
                 Login
               </Link>
             </p>
+            <p className="text-center text-muted-foreground text-xs">
+              Selling vehicles to GCE as a company?{" "}
+              <Link prefetch={false} href="register-supplier" className="text-primary">
+                Sign up as a supplier
+              </Link>
+            </p>
           </div>
         </div>
       </div>

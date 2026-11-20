@@ -9,6 +9,7 @@ export const GCE_ROLES = [
   "sales_manager",
   "head_security",
   "super_admin",
+  "supplier",
 ] as const;
 
 export type GceRole = (typeof GCE_ROLES)[number];
@@ -24,6 +25,7 @@ export const ROLE_LABELS: Record<GceRole, string> = {
   sales_manager: "Sales Manager",
   head_security: "Head Security",
   super_admin: "Super Admin",
+  supplier: "Supplier",
 };
 
 export const STAFF_ROLES: GceRole[] = [
@@ -210,6 +212,7 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
     "settings",
     "staff-records",
     "create-walk-in",
+    "suppliers",
     "attendance",
     "employee-requests",
     "payroll",
@@ -232,6 +235,7 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
     "roadmap",
     "staff-records",
     "create-walk-in",
+    "suppliers",
     "attendance",
     "employee-requests",
     "payroll",
@@ -308,6 +312,8 @@ export const ROLE_NAV_ACCESS: Record<GceRole, Set<string> | "all"> = {
     "announcements",
   ]),
   super_admin: new Set(["users", "roles", "settings"]),
+  // Notes Part 1: a supplier has their own portal and nothing else.
+  supplier: new Set(["supplier-dashboard", "supplier-posting"]),
 };
 
 /** Landing page path for each role after sign-in (resolved to role-prefixed URL by {@link landingPath}). */
@@ -322,4 +328,5 @@ export const ROLE_LANDING_PAGES: Record<GceRole, string> = {
   confidential_informant: "/dashboard",
   head_security: "/dashboard",
   super_admin: "/users",
+  supplier: "/portal",
 };

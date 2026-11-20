@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\Role;
 use App\Http\Controllers\AccountAdminController;
 use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\Auth\RegistrationController;
@@ -10,14 +11,20 @@ use App\Http\Controllers\Catalogue\InspectionController;
 use App\Http\Controllers\Catalogue\RecommendationController;
 use App\Http\Controllers\Catalogue\ShowroomController;
 use App\Http\Controllers\Catalogue\StaffVehicleController;
-use App\Http\Controllers\FileController;
-use App\Http\Controllers\MeController;
-use App\Http\Controllers\Messaging\InquiryController;
-use App\Http\Controllers\Messaging\NotificationController;
-use App\Enums\Role;
 use App\Http\Controllers\Field\FieldCaseActionController;
 use App\Http\Controllers\Field\FieldReadController;
+use App\Http\Controllers\FileController;
+use App\Http\Controllers\Finance\CheckoutController;
+use App\Http\Controllers\Finance\FieldBudgetController;
+use App\Http\Controllers\Finance\FinanceController;
+use App\Http\Controllers\Finance\FinanceReadController;
+use App\Http\Controllers\Finance\FinancingTermsController;
+use App\Http\Controllers\Finance\PaymentController;
+use App\Http\Controllers\Finance\PayMongoWebhookController;
+use App\Http\Controllers\MeController;
+use App\Http\Controllers\Messaging\InquiryController;
 use App\Http\Controllers\Messaging\InquiryWorkflowController;
+use App\Http\Controllers\Messaging\NotificationController;
 use App\Http\Controllers\Staff\AdminController;
 use App\Http\Controllers\Staff\AnnouncementController;
 use App\Http\Controllers\Staff\AttendanceController;
@@ -28,14 +35,8 @@ use App\Http\Controllers\Staff\ReportController;
 use App\Http\Controllers\Staff\RoadmapController;
 use App\Http\Controllers\Staff\SecurityDutyController;
 use App\Http\Controllers\Staff\StaffRecordController;
+use App\Http\Controllers\Supplier\SupplierController;
 use App\Http\Controllers\ThumbnailController;
-use App\Http\Controllers\Finance\CheckoutController;
-use App\Http\Controllers\Finance\FieldBudgetController;
-use App\Http\Controllers\Finance\FinanceController;
-use App\Http\Controllers\Finance\FinanceReadController;
-use App\Http\Controllers\Finance\FinancingTermsController;
-use App\Http\Controllers\Finance\PaymentController;
-use App\Http\Controllers\Finance\PayMongoWebhookController;
 use App\Http\Controllers\Trading\CustomerTradingController;
 use App\Http\Controllers\Trading\CustomerTradingReadController;
 use App\Http\Controllers\Trading\DeliveryController;
@@ -44,8 +45,8 @@ use App\Http\Controllers\Trading\HandoverController;
 use App\Http\Controllers\Trading\PapersReadController;
 use App\Http\Controllers\Trading\ReconditioningController;
 use App\Http\Controllers\Trading\SellFlowController;
-use App\Http\Controllers\Trading\SellPapersController;
 use App\Http\Controllers\Trading\SellIntakeController;
+use App\Http\Controllers\Trading\SellPapersController;
 use App\Http\Controllers\Trading\StaffTradingReadController;
 use App\Http\Controllers\Trading\StaffTransactionController;
 use App\Http\Controllers\Trading\VehicleWriteController;
@@ -58,6 +59,7 @@ Route::prefix('v1')->group(function () {
         Route::post('login', [SessionController::class, 'store'])->middleware('throttle:login');
         Route::post('logout', [SessionController::class, 'destroy']);
         Route::post('register', [RegistrationController::class, 'store'])->middleware('throttle:auth-email');
+        Route::post('register-supplier', [SupplierController::class, 'register'])->middleware('throttle:auth-email');
         Route::post('email/resend', [RegistrationController::class, 'resend'])->middleware('throttle:auth-email');
         Route::get('email/verify/{id}/{hash}', [RegistrationController::class, 'verify'])
             ->middleware(['signed:relative', 'throttle:6,1'])->name('verification.verify');
@@ -128,6 +130,20 @@ Route::prefix('v1')->group(function () {
         });
 
         Route::post('admin/accounts/walk-in', [AccountAdminController::class, 'storeWalkIn'])->middleware('role:account_manager,ceo');
+        // Notes Part 1: supplier accounts, their approval, the supplier portal and the staff view of supplier posts.
+        Route::post('admin/accounts/supplier', [SupplierController::class, 'store'])->middleware('role:account_manager,ceo');
+        Route::get('admin/suppliers', [SupplierController::class, 'approvals'])->middleware('role:account_manager,ceo');
+        Route::post('admin/suppliers/decide', [SupplierController::class, 'decide'])->middleware('role:account_manager,ceo');
+        Route::middleware('role:supplier')->prefix('supplier')->group(function () {
+            Route::get('dashboard', [SupplierController::class, 'dashboard']);
+            Route::post('posts', [SupplierController::class, 'storePost'])->middleware('throttle:20,1');
+            Route::post('posts/{id}', [SupplierController::class, 'updatePost']);
+            Route::post('posts/{id}/withdraw', [SupplierController::class, 'withdrawPost']);
+        });
+        Route::middleware('role:'.implode(',', Role::SUPPLIER_POST_VIEWERS))->prefix('staff')->group(function () {
+            Route::get('supplier-posts', [SupplierController::class, 'staffIndex']);
+            Route::get('supplier-posts/{id}', [SupplierController::class, 'staffShow']);
+        });
         Route::post('admin/accounts/employee', [AccountAdminController::class, 'storeEmployee'])->middleware('role:ceo,account_manager');
         Route::post('admin/roles', [AccountAdminController::class, 'assignRole'])->middleware('role:ceo,super_admin');
         Route::post('admin/account-state', [StaffRecordController::class, 'accountState'])->middleware('role:ceo,account_manager,super_admin');

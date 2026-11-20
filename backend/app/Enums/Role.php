@@ -15,12 +15,17 @@ enum Role: string
     case SalesManager = 'sales_manager';
     case HeadSecurity = 'head_security';
     case SuperAdmin = 'super_admin';
+    /** Notes Part 1: an outside company that offers vehicles to GCE. Not staff, not a customer. */
+    case Supplier = 'supplier';
 
     /** Business staff. Super Admin is deliberately absent: IT support sees no business data. */
     public const STAFF = ['ceo', 'account_manager', 'head_accountant', 'confidential_informant', 'marketing_specialist', 'mechanic', 'sales_manager', 'head_security'];
 
     /** Roles a new employee account can get (never CEO). */
     public const EMPLOYEE = ['account_manager', 'head_accountant', 'confidential_informant', 'marketing_specialist', 'mechanic', 'sales_manager', 'head_security'];
+
+    /** Notes line 56: the staff who may read supplier vehicle posts. */
+    public const SUPPLIER_POST_VIEWERS = ['confidential_informant', 'marketing_specialist', 'ceo'];
 
     /** May open the staff transaction list/detail (roles.ts TRANSACTION_VIEWER_ROLES). */
     public const TRANSACTION_VIEWERS = ['ceo', 'account_manager', 'head_accountant', 'confidential_informant', 'sales_manager', 'marketing_specialist'];

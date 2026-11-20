@@ -150,40 +150,51 @@ does not answer.
 
 ## Phase 1 — Supplier accounts and portal
 
-Status: 🔲 Not Started
+Status: ✅ Done
 
 Goal: suppliers have accounts and a private portal where they post vehicles for GCE.
 
 Tasks
-- [ ] Add `supplier` to `backend/app/Enums/Role.php`, the active role CHECK in a new migration in
+- [x] Add `supplier` to `backend/app/Enums/Role.php`, the active role CHECK in a new migration in
   `backend/database/migrations/`, and `src/lib/auth/roles.ts`. Do not restore the historical Supabase supplier code.
   Add the `/supplier/…` prefix to `src/scripts/generate-htaccess.ts` and a `(supplier)` route group with a client
   layout that checks `/api/v1/me`.
-- [ ] Migration: `supplier_profiles` (`user_id` unique FK, `company_name` varchar 200, `approval_state`
+- [x] Migration: `supplier_profiles` (`user_id` unique FK, `company_name` varchar 200, `approval_state`
   `pending|approved|rejected`, `approved_by`, `approved_at`).
-- [ ] Account Manager "Create Supplier Account": sidebar item in `src/navigation/sidebar/sidebar-items.ts`, page that
+- [x] Account Manager "Create Supplier Account": sidebar item in `src/navigation/sidebar/sidebar-items.ts`, page that
   reuses the Create Walk-in Account form with one extra required field "Supplier Company Name". Laravel creates the
   user and profile as `approved` and queues a notice to the given Gmail address ("You now have an account on the GCE
   website", with the set-password link from the existing reset mail). Never email a password.
-- [ ] Self-registration (decision 1): a supplier sign-up page creates a `pending` profile. Account Manager gets a
+- [x] Self-registration (decision 1): a supplier sign-up page creates a `pending` profile. Account Manager gets a
   "Supplier approvals" list with Approve / Reject. Pending and rejected suppliers get 403 on every supplier endpoint.
-- [ ] Migration: `supplier_vehicle_posts` (`supplier_id`, make, model, year, mileage, asking price, description,
+- [x] Migration: `supplier_vehicle_posts` (`supplier_id`, make, model, year, mileage, asking price, description,
   `state` `posted|proposed|approved|rejected|assigned|purchased|withdrawn`, timestamps) and private photos through
   `App\Services\FileService` (2 MiB per file, `compressFormFiles` on the client).
-- [ ] Supplier portal: Dashboard with three counts (transactions with GCE, vehicles posted, vehicles purchased) and a
+- [x] Supplier portal: Dashboard with three counts (transactions with GCE, vehicles posted, vehicles purchased) and a
   Vehicle Posting tab (create, edit while `posted`, withdraw). Purchased posts leave the active list and stay in
   history. No showroom link in the supplier layout.
-- [ ] Policy: a supplier reads only their own posts. Staff read access only for Confidential Informant, Marketing
+- [x] Policy: a supplier reads only their own posts. Staff read access only for Confidential Informant, Marketing
   Specialist and CEO (line 56); an assigned Mechanic reads only the post linked to their field case.
+
+Implementation notes
+- Routes: the supplier portal is the `portal/` export folder, served at `/supplier/portal` and
+  `/supplier/portal/vehicles` (`src/lib/routing/paths.ts`, `htaccess.ts`, `next.config.mjs`). The customer shell
+  moved to `src/components/portal-shell.tsx` so both portals share it.
+- "Create Supplier Account" is its own form on the new `/suppliers` page (with the approvals list), not the walk-in
+  dialog: the walk-in form asks staff to type a password, and a supplier sets their own from the queued
+  `SupplierAccountCreated` mail.
+- Self-registration is `/auth/v1/register-supplier` (`RegisterForm supplier`), linked from the customer sign-up.
+- A pending or rejected supplier can sign in, but every `/supplier/*` endpoint answers 403 and the portal shows why.
+- The Mechanic's access to a linked post comes in Phase 3 through the sell transaction, not the post itself.
 
 Dependencies: none.
 
 Done when
-- [ ] Account Manager creates a supplier and the notice mail is queued with no password in it.
-- [ ] A pending supplier cannot log in to the portal; an approved one can.
-- [ ] Supplier A cannot read supplier B's posts or photos (PHP test).
-- [ ] Sales Manager and Head Accountant get 403 on supplier posts; CI, MS and CEO get 200.
-- [ ] Dashboard counts match seeded data.
+- [x] Account Manager creates a supplier and the notice mail is queued with no password in it.
+- [x] A pending supplier cannot log in to the portal; an approved one can.
+- [x] Supplier A cannot read supplier B's posts or photos (PHP test).
+- [x] Sales Manager and Head Accountant get 403 on supplier posts; CI, MS and CEO get 200.
+- [x] Dashboard counts match seeded data.
 
 Next: Phase 2 →
 

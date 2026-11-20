@@ -215,6 +215,12 @@ export const sidebarItems: NavGroup[] = [
         icon: Users,
       },
       {
+        id: "suppliers",
+        title: "Suppliers",
+        url: "/suppliers",
+        icon: Forklift,
+      },
+      {
         id: "attendance",
         title: "Attendance",
         url: "/attendance",
@@ -362,6 +368,24 @@ export const sidebarItems: NavGroup[] = [
         icon: SquareArrowUpRight,
         badge: "soon",
         disabled: true,
+      },
+    ],
+  },
+  {
+    id: 8,
+    label: "Supplier Portal",
+    items: [
+      {
+        id: "supplier-dashboard",
+        title: "Dashboard",
+        url: "/portal",
+        icon: LayoutDashboard,
+      },
+      {
+        id: "supplier-posting",
+        title: "Vehicle Posting",
+        url: "/portal/vehicles",
+        icon: Car,
       },
     ],
   },

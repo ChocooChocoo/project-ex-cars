@@ -31,6 +31,8 @@ function devRouting() {
         { source: "/customer/profile", destination: "/my-profile" },
         { source: "/customer/inquiries/:path*", destination: "/my-inquiries/:path*" },
         { source: "/customer/:path*", destination: "/:path*" },
+        { source: "/supplier/portal/:path*", destination: "/portal/:path*" },
+        { source: "/supplier/portal", destination: "/portal" },
       ];
     },
   };

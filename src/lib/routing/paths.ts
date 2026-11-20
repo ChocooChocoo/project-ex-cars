@@ -16,6 +16,9 @@ export function isStaffRole(role: string): boolean {
   return role === SUPER_ADMIN_ROLE || (STAFF_ROLES as readonly string[]).includes(role);
 }
 
+/** Notes Part 1: suppliers have their own portal under /supplier/portal (export folder `portal/`). */
+export const SUPPLIER_ROLE = "supplier";
+
 export function isKnownRole(role: string): role is GceRole {
   return (GCE_ROLES as readonly string[]).includes(role);
 }
@@ -23,6 +26,8 @@ export function isKnownRole(role: string): role is GceRole {
 export function resolveInternalPath(role: string, segment: string): string {
   // Strip trailing slash for matching.
   const seg = segment.endsWith("/") ? segment.slice(0, -1) : segment;
+
+  if (role === SUPPLIER_ROLE) return seg.startsWith("portal") ? `/${seg}` : "/portal";
 
   if (isStaffRole(role)) {
     if (seg === "dashboard") return "/dashboard";
@@ -49,5 +54,6 @@ export function landingPath(role: string): string {
   if (role === "marketing_specialist" || role === "sales_manager") return `/${role}/vehicles`;
   if (role === SUPER_ADMIN_ROLE) return `/${role}/users`;
   if (role === "customer") return `/${role}/showroom`;
+  if (role === SUPPLIER_ROLE) return `/${role}/portal`;
   return `/${role}/dashboard`;
 }

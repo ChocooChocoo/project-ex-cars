@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
@@ -23,14 +24,14 @@ class FileService
 
     public const PRIVATE_BUCKETS = [
         'transaction-documents', 'message-attachments', 'reconditioning-receipts',
-        'request-attachments', 'security-evidence', 'report-evidence',
+        'request-attachments', 'security-evidence', 'report-evidence', 'supplier-posts',
     ];
 
     private const IMAGES = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
 
     private const PDF = ['application/pdf' => 'pdf'];
 
-    public function disk(string $bucket): \Illuminate\Contracts\Filesystem\Filesystem
+    public function disk(string $bucket): Filesystem
     {
         return Storage::disk(in_array($bucket, self::PUBLIC_BUCKETS, true) ? 'public' : 'local');
     }
@@ -39,7 +40,7 @@ class FileService
     public function allowed(string $bucket): array
     {
         return match ($bucket) {
-            'showroom-media', 'avatars' => self::IMAGES,
+            'showroom-media', 'avatars', 'supplier-posts' => self::IMAGES,
             default => self::IMAGES + self::PDF,
         };
     }

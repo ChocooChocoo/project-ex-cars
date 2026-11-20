@@ -19,6 +19,20 @@ export function notificationHref(
     return access === "all" || access?.has("field-cases") ? rolePath(role, `/field-cases/${row.reference_id}`) : null;
   }
 
+  // Notes Part 1: supplier posts open in the supplier's portal or in the staff Supplier Vehicles page.
+  if (row.reference_table === "supplier_vehicle_posts") {
+    if (role === "supplier") return rolePath(role, `/portal/vehicles?post=${row.reference_id}`);
+    const access = ROLE_NAV_ACCESS[role as GceRole];
+    return access === "all" || access?.has("supplier-vehicles")
+      ? rolePath(role, `/supplier-vehicles?post=${row.reference_id}`)
+      : null;
+  }
+  if (row.reference_table === "supplier_profiles") {
+    if (role === "supplier") return rolePath(role, "/portal");
+    const access = ROLE_NAV_ACCESS[role as GceRole];
+    return access === "all" || access?.has("suppliers") ? rolePath(role, "/suppliers") : null;
+  }
+
   // T06: a price revision request opens the car it is about.
   if (row.reference_table === "vehicles") {
     const access = ROLE_NAV_ACCESS[role as GceRole];

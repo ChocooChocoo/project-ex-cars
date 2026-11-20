@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { GCE_ROLES } from "../auth/roles";
 import { buildHtaccess } from "./htaccess";
-import { landingPath } from "./paths";
+import { landingPath, resolveInternalPath } from "./paths";
 
 const text = buildHtaccess(["showroom", "vehicles"]);
 
@@ -50,5 +50,15 @@ describe("buildHtaccess (src/proxy.ts parity for the static build)", () => {
         expect(lines.slice(Math.max(0, i - 3), i)).toContain("RewriteCond %{ENV:REDIRECT_STATUS} ^$");
       }
     });
+  });
+});
+
+describe("supplier portal routing (notes Part 1)", () => {
+  it("lands a supplier on /supplier/portal and serves only the portal export folder", () => {
+    expect(landingPath("supplier")).toBe("/supplier/portal");
+    expect(resolveInternalPath("supplier", "portal/vehicles")).toBe("/portal/vehicles");
+    expect(resolveInternalPath("supplier", "showroom")).toBe("/portal");
+    expect(text).toContain("RewriteRule ^supplier/portal(/.*)?$ portal$1 [L]");
+    expect(text).not.toContain("RewriteRule ^supplier/showroom");
   });
 });
