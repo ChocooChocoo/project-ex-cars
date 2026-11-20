@@ -76,7 +76,7 @@ export default function LoginV1() {
             </p>
             <p className="text-center text-muted-foreground text-xs">
               Don&apos;t have an account?{" "}
-              <Link prefetch={false} href="register" className="text-primary">
+              <Link prefetch={false} href="/auth/v1/register" className="text-primary">
                 Register
               </Link>
             </p>
