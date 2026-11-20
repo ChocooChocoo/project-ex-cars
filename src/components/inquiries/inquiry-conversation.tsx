@@ -268,7 +268,8 @@ export function InquiryConversation({
             <div className="min-w-0">
               <div className="truncate font-medium text-sm">{vehicleName}</div>
               <div className="truncate text-muted-foreground text-xs capitalize leading-3">
-                {intention === "buy_now" ? "Buy Now" : "Inquiry"} · {state.replace("_", " ")}
+                {intention === "buy_now" ? "Buy Now" : intention === "supplier_offer" ? "Supplier vehicle" : "Inquiry"}{" "}
+                · {state.replace("_", " ")}
               </div>
             </div>
           </div>
