@@ -3,12 +3,13 @@ import { describe, expect, it } from "vitest";
 import { BUYING_PAYMENT_OPTIONS, BUYING_RECEIVING_OPTIONS, buyingRequirements } from "./buying-requirements";
 
 describe("T12 buying requirements", () => {
-  it("asks every combination for the two IDs and the proof of billing", () => {
+  it("asks every combination for two IDs, proof of billing, and a payslip", () => {
     for (const payment of BUYING_PAYMENT_OPTIONS) {
       for (const receiving of BUYING_RECEIVING_OPTIONS) {
         const { documents } = buyingRequirements(payment.value, receiving.value);
         expect(documents.some((doc) => doc.startsWith("Two different valid IDs"))).toBe(true);
         expect(documents.some((doc) => doc.includes("proof of billing"))).toBe(true);
+        expect(documents).toContain("Your latest payslip.");
       }
     }
   });
@@ -22,12 +23,10 @@ describe("T12 buying requirements", () => {
     expect(documents).toContain("One recent proof of billing in your name (electric, water or internet bill).");
   });
 
-  it("SN-15: asks financing for a payslip and never for the OR/CR", () => {
+  it("explains the financing review without asking for the OR/CR", () => {
     const { documents, information } = buyingRequirements("financing", "delivery");
-    expect(documents).toContain("Payslip (latest)");
-    expect(information).toContain("Bring your latest payslip; GCE checks it during the financing review.");
+    expect(information).toContain("GCE also checks your payslip during the financing review.");
     expect([...documents, ...information].join(" ")).not.toMatch(/OR\/CR/);
-    expect(buyingRequirements("cash", "delivery").documents).not.toContain("Payslip (latest)");
     expect(buyingRequirements("cash", "delivery").information.join(" ")).not.toMatch(/payslip/i);
   });
 

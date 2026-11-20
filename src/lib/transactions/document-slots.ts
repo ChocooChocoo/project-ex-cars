@@ -1,6 +1,5 @@
-// T06: the buyer's documents laid out as the three things GCE asks for: Valid ID #1 and #2 (front and back
-// each) and one proof of billing. A slot holds the active upload, or the latest rejected one so the buyer sees
-// what to fix. The first ID type uploaded fills ID #1, the next different type fills ID #2.
+// A slot holds the active upload or the latest rejected one so the buyer sees what to fix.
+// The first ID type uploaded fills ID #1; the next different type fills ID #2.
 
 export type SlotDocument = {
   id?: unknown;
@@ -20,7 +19,7 @@ function pick<T extends SlotDocument>(docs: T[]): T | null {
 /** `documents` newest first, as the page loads them. */
 export function documentSlots<T extends SlotDocument>(
   documents: T[],
-): { ids: [IdSlot<T>, IdSlot<T>]; billing: T | null } {
+): { ids: [IdSlot<T>, IdSlot<T>]; billing: T | null; payslip: T | null } {
   const ids = documents.filter((doc) => doc.document_kind === "valid_id");
   // Types in upload order (oldest first), active ones before types that only have rejected uploads.
   const types: string[] = [];
@@ -46,5 +45,6 @@ export function documentSlots<T extends SlotDocument>(
   return {
     ids: [slot(types[0]), slot(types[1])],
     billing: pick(documents.filter((doc) => doc.document_kind === "proof_of_billing")),
+    payslip: pick(documents.filter((doc) => doc.document_kind === "payslip")),
   };
 }

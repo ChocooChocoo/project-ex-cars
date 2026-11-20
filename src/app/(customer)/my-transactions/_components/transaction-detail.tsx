@@ -343,6 +343,7 @@ export function TransactionDetail({
   const hasBilling = documents.some(
     (d) => d.document_kind === "proof_of_billing" && d.verification_state !== "rejected",
   );
+  const hasPayslip = documents.some((d) => d.document_kind === "payslip" && d.verification_state !== "rejected");
   // SN-14: a customer cannot delete a submitted document, so the upload slots appear for a first upload and again
   // only when GCE asked for a replacement (document_resubmission_requested).
   const sellerNeedsIdResubmission = buyerDocuments.some(
@@ -397,11 +398,7 @@ export function TransactionDetail({
     } finally {
       setUploading(false);
     }
-    toast.success(
-      docKind === "valid_id"
-        ? "Valid ID uploaded. GCE staff will verify it."
-        : "Proof of billing uploaded. GCE staff will verify it.",
-    );
+    toast.success(`${transactionDocumentLabel(docKind)} uploaded. GCE staff will verify it.`);
     router.refresh();
   }
   // Buy detail form state
@@ -1097,6 +1094,7 @@ export function TransactionDetail({
                       {queuedCashSaved ? ` · Condition ${acknowledgedAt ? "acknowledged" : "not acknowledged"}` : ""}
                       {savedDelivery ? ` · Delivery terms ${deliveryTermsAgreedAt ? "agreed" : "not agreed"}` : ""}
                       {hasBilling ? " · Proof of billing uploaded" : " · Proof of billing pending"}
+                      {hasPayslip ? " · Payslip uploaded" : " · Payslip pending"}
                     </p>
                     {queuedCashSaved ? (
                       <p className="text-muted-foreground text-xs">
@@ -1112,6 +1110,7 @@ export function TransactionDetail({
                         savedLocationMissing ||
                         !idsComplete ||
                         !hasBilling ||
+                        !hasPayslip ||
                         (!bookedSlot && !booksAfterApproval) ||
                         (queuedCashSaved && !acknowledgedAt) ||
                         (savedDelivery && !deliveryTermsAgreedAt)

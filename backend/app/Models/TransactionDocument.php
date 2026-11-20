@@ -9,12 +9,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 // Generated from the final Supabase schema (table `transaction_documents`). Mass assignment stays closed until a phase adds $fillable for its actor.
 class TransactionDocument extends Model
 {
+    public const BUYER_REQUIRED_KINDS = ['valid_id', 'proof_of_billing', 'payslip'];
+
     /**
      * SH-10: the kinds a customer may ever receive. `expense_proof` (the Confidential Informant's meet-up receipts)
      * and `inspection_photo` (the Mechanic's evidence) are staff-only and never leave the server for a customer.
      */
     public const CUSTOMER_KINDS = [
-        'valid_id', 'proof_of_billing', 'sell_photo', 'issue_photo', 'payment_receipt', 'sale_document',
+        ...self::BUYER_REQUIRED_KINDS, 'sell_photo', 'issue_photo', 'payment_receipt', 'sale_document',
         'sale_certificate', 'deed_of_sale', 'official_receipt', 'certificate_of_registration', 'orcr',
     ];
 

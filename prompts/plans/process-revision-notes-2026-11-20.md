@@ -135,8 +135,7 @@ does not answer.
    plus-code point and the client's address text. Check it on the map before changing it.
 6. Deed of Sale "Expired" (line 115): prior plan gives the Deed only Has / Doesn't Have. Default: follow the notes and
    allow Expired for all three.
-7. Payslip (line 110): required for every buyer or only for financing? Default: financing only, with step text that
-   says so.
+7. Payslip (line 110): required for every buyer, whatever the payment method.
 8. Paper routing (line 159): "depending on the seller's chosen method" — does the MS receive originals for GCE Visit
    and the CI for Meet-up? Default: yes, as written.
 9. Signed ID copies (line 156): photographed with the OR/CR/Deed? Default: yes, as an optional "Signed ID copies"

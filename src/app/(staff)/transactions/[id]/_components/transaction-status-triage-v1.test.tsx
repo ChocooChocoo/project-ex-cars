@@ -150,14 +150,18 @@ describe("TransactionStatusTriageV1 approval gate (BC-8)", () => {
     renderTriage({ state: "under_review", paymentMethod: "cash", verifiedPrerequisites: false });
 
     expect(approveButton()).toBeDisabled();
-    expect(screen.getByText("Verify the IDs and proof of billing first.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Verify both IDs, the proof of billing, and the latest payslip first."),
+    ).toBeInTheDocument();
   });
 
-  it("enables Approve once the API reports the verified IDs and proof of billing", () => {
+  it("enables Approve once the API reports that every required document is verified", () => {
     renderTriage({ state: "under_review", paymentMethod: "cash", verifiedPrerequisites: true });
 
     expect(approveButton()).toBeEnabled();
-    expect(screen.queryByText("Verify the IDs and proof of billing first.")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Verify both IDs, the proof of billing, and the latest payslip first."),
+    ).not.toBeInTheDocument();
   });
 
   it("leaves Approve enabled when the page did not send the flag", () => {

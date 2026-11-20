@@ -60,12 +60,16 @@ trait TradingFixtures
         return $at->utc();
     }
 
-    /** The four ID images and a proof of billing, as rows ($state = pending|verified). */
+    /** The four ID images, proof of billing, and payslip, as rows ($state = pending|verified). */
     protected function buyerDocuments(string $transactionId, string $uploader, string $state = 'pending'): void
     {
-        foreach ([['passport', 'front'], ['passport', 'back'], ['umid', 'front'], ['umid', 'back'], [null, null]] as [$type, $side]) {
+        foreach ([
+            ['valid_id', 'passport', 'front'], ['valid_id', 'passport', 'back'],
+            ['valid_id', 'umid', 'front'], ['valid_id', 'umid', 'back'],
+            ['proof_of_billing', null, null], ['payslip', null, null],
+        ] as [$kind, $type, $side]) {
             DB::table('transaction_documents')->insert([
-                'id' => (string) Str::uuid(), 'transaction_id' => $transactionId, 'document_kind' => $type ? 'valid_id' : 'proof_of_billing',
+                'id' => (string) Str::uuid(), 'transaction_id' => $transactionId, 'document_kind' => $kind,
                 'id_type' => $type, 'id_side' => $side, 'storage_path' => "{$transactionId}/x-".Str::random(6).'.jpg', 'uploader_id' => $uploader,
                 'verification_state' => $state, 'upload_date' => now(),
             ]);

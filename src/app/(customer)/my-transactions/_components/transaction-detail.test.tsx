@@ -488,15 +488,16 @@ describe("TransactionDetail ID sides", () => {
     signed_url: null,
   };
 
-  it("T06: lists two valid IDs, front and back, and one proof of billing", () => {
+  it("lists the four ID images, proof of billing, and latest payslip", () => {
     renderPendingBuy([pendingFront]);
 
     expect(screen.getByText("Valid ID #1")).toBeInTheDocument();
     expect(screen.getByText("Valid ID #2")).toBeInTheDocument();
     expect(screen.getByText("Proof of billing")).toBeInTheDocument();
+    expect(screen.getByLabelText("Latest payslip")).toBeInTheDocument();
     expect(screen.getAllByLabelText("Front")).toHaveLength(1);
     expect(screen.getAllByLabelText("Back")).toHaveLength(2);
-    expect(screen.getAllByText("Missing")).toHaveLength(4);
+    expect(screen.getAllByText("Missing")).toHaveLength(5);
   });
 
   it("shows the side of an ID and never offers to remove it (SN-14)", () => {

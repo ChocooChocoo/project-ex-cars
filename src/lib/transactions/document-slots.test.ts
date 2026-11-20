@@ -18,6 +18,7 @@ describe("documentSlots (T06)", () => {
         { idType: null, front: null, back: null },
       ],
       billing: null,
+      payslip: null,
     });
   });
 

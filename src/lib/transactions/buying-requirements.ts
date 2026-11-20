@@ -23,6 +23,7 @@ export type BuyingRequirements = { documents: string[]; information: string[] };
 const BASE_DOCUMENTS = [
   "Two different valid IDs. Bring the originals and two printed back-to-back photocopies of each ID, each copy signed three times.",
   "One recent proof of billing in your name (electric, water or internet bill).",
+  "Your latest payslip.",
 ];
 
 const PAYMENT: Record<BuyingPayment, BuyingRequirements> = {
@@ -32,11 +33,11 @@ const PAYMENT: Record<BuyingPayment, BuyingRequirements> = {
     information: ["The full price, paid online through PayMongo checkout before the car is handed over"],
   },
   financing: {
-    documents: ["Payslip (latest)"],
+    documents: [],
     information: [
       `Your payment term: ${FINANCING_TERM_MONTHS.join(", ")} months`,
       "The initial downpayment, paid after you inspect and accept the car",
-      "Bring your latest payslip; GCE checks it during the financing review.",
+      "GCE also checks your payslip during the financing review.",
     ],
   },
 };

@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import { MeetupMap } from "@/components/maps/lazy-maps";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { buyerIdsComplete } from "@/lib/transactions/buy-flow";
 import { paymentMethodLabel, TRANSACTION_STATE_LABELS, transactionKindLabel } from "@/lib/transactions/labels";
 import { SELL_PAPER_KINDS, sellPapersVerified } from "@/lib/transactions/sell-flow";
 import type { TransactionState } from "@/lib/transactions/state-machine";
@@ -51,20 +52,20 @@ export function deriveApprovalStages(args: {
   // so the state alone implies processing. Cancelled can come straight from pending.
   const processedDone = hasProcessedHistory || ["under_review", "approved", "completed", "rejected"].includes(state);
 
-  let verifiedByDocs = false;
-  if (documents) {
-    const verifiedIds = documents.filter(
-      (doc) => String(doc.document_kind) === "valid_id" && String(doc.verification_state) === "verified",
-    ).length;
-    const verifiedBilling = documents.filter(
-      (doc) => String(doc.document_kind) === "proof_of_billing" && String(doc.verification_state) === "verified",
-    ).length;
-    verifiedByDocs = verifiedIds >= 2 && verifiedBilling >= 1;
-  }
-  const purchaseDocVerified = String(purchaseDetails?.document_check_state ?? "") === "verified";
-  // Approval implies the documents were verified first: the server blocks
-  // under_review → approved without 2 verified IDs + verified billing.
-  const verifiedDone = verifiedByDocs || purchaseDocVerified || ["approved", "completed"].includes(state);
+  const verified = (documents ?? []).filter((doc) => doc.verification_state === "verified");
+  const verifiedByDocs = documents
+    ? buyerIdsComplete(
+        verified.map(({ document_kind, verification_state, id_type, id_side }) => ({
+          document_kind,
+          verification_state,
+          id_type,
+          id_side,
+        })),
+      ) &&
+      verified.some((doc) => doc.document_kind === "proof_of_billing") &&
+      verified.some((doc) => doc.document_kind === "payslip")
+    : purchaseDetails?.document_check_state === "verified";
+  const verifiedDone = verifiedByDocs || ["approved", "completed"].includes(state);
 
   const approvedDone =
     ["approved", "completed"].includes(state) || historyEntries.some((entry) => String(entry.to_state) === "approved");

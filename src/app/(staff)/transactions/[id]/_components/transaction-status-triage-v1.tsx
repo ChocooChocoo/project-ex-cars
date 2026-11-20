@@ -35,7 +35,7 @@ const TRANSACTION_ACTION_LABELS: Record<TransactionState, string> = {
 const STATE_GUIDANCE: Record<TransactionState, (kind: string) => string> = {
   pending: (kind) => `This ${kind} request is still with the buyer, or waits for Sales to move it into review.`,
   under_review: (kind) =>
-    `This ${kind} request is waiting for the Sales Manager (7-day window). Verify 2 valid IDs and the proof of billing, then approve or reject.`,
+    `This ${kind} request is waiting for the Sales Manager (7-day window). Verify both IDs, the proof of billing, and the latest payslip before approving.`,
   approved: (kind) =>
     `This ${kind} request is approved. After the visit, record the payment and mark the car sold, or record that the buyer declined.`,
   rejected: (kind) => `This ${kind} request was rejected and its visit slot released.`,
@@ -45,7 +45,7 @@ const STATE_GUIDANCE: Record<TransactionState, (kind: string) => string> = {
 
 export type VisitOutcome = "declined" | "legit" | "not_legit" | "no_show";
 
-const PREREQUISITES_HINT = "Verify the IDs and proof of billing first.";
+const PREREQUISITES_HINT = "Verify both IDs, the proof of billing, and the latest payslip first.";
 
 export function TransactionStatusTriageV1({
   state,
@@ -70,7 +70,7 @@ export function TransactionStatusTriageV1({
   readonly userRole: string;
   readonly transitioning: boolean;
   readonly onTransition: (to: TransactionState, reason?: string) => Promise<void>;
-  /** BC-8: two verified IDs (front and back) and a verified proof of billing, as the API decided it. */
+  /** Whether the API has all the verified buyer documents. */
   readonly verifiedPrerequisites?: boolean | null;
   readonly paymentMethod?: string | null;
   readonly papersRequested?: boolean;
@@ -152,7 +152,7 @@ export function TransactionStatusTriageV1({
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             {allowed.map((to) => {
               // T06: approving or rejecting a request asks for confirmation first. BC-8: Approve stays disabled
-              // until the documents card reports two verified IDs (front and back) and a verified proof of billing;
+              // until the API reports that every required buyer document is verified;
               // the API refuses the same approval, because both read `verified_prerequisites`.
               const decision = to === "approved" ? "approve" : to === "rejected" ? "reject" : null;
               const blocked = to === "approved" && verifiedPrerequisites === false;

@@ -26,7 +26,7 @@ class BuyingApprovalTest extends TestCase
         // BC-8: one rule behind both answers, so the disabled button and the refused API cannot drift.
         $this->act($sm)->getJson("/api/v1/staff/transactions/{$id}")->assertOk()->assertJsonPath('verifiedPrerequisites', false);
         $this->again()->postJson('/api/v1/staff/trading/transition', ['id' => $id, 'to_state' => 'approved'])->assertStatus(422)
-            ->assertJsonPath('message', "Two verified valid IDs and a verified proof of billing are required before approval. Verify the buyer's documents first.");
+            ->assertJsonPath('message', 'Verify both valid IDs, the proof of billing, and the latest payslip before approving.');
         $this->assertSame('under_review', DB::table('transactions')->where('id', $id)->value('current_state'));
 
         // Unverified uploads do not count either: the page still reports false.
@@ -38,6 +38,8 @@ class BuyingApprovalTest extends TestCase
         $this->again()->getJson("/api/v1/staff/transactions/{$id}")->assertJsonPath('verifiedPrerequisites', false, 'a verified proof of billing is still missing');
 
         DB::table('transaction_documents')->where('transaction_id', $id)->where('document_kind', 'proof_of_billing')->update(['verification_state' => 'verified']);
+        $this->again()->getJson("/api/v1/staff/transactions/{$id}")->assertJsonPath('verifiedPrerequisites', false);
+        DB::table('transaction_documents')->where('transaction_id', $id)->where('document_kind', 'payslip')->update(['verification_state' => 'verified']);
         $this->again()->getJson("/api/v1/staff/transactions/{$id}")->assertJsonPath('verifiedPrerequisites', true);
         $this->again()->postJson('/api/v1/staff/trading/transition', ['id' => $id, 'to_state' => 'approved'])->assertOk();
         $this->assertSame('approved', DB::table('transactions')->where('id', $id)->value('current_state'));

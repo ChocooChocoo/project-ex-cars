@@ -80,22 +80,20 @@ export function TransactionDocumentsCard({
   readonly onRejectDocument: (documentId: string, reason: string) => Promise<void>;
 }) {
   // Same rules as the server guard in verifyTransactionDocument: the Marketing Specialist checks a seller's
-  // papers, the Sales Manager a buyer's IDs and proof of billing, the Head Accountant everything else.
+  // papers, the Sales Manager the required buyer documents, the Head Accountant everything else.
   const canVerify = (documentKind: unknown) =>
     kind === "sell" && (SELL_PAPER_KINDS as readonly unknown[]).includes(documentKind)
       ? userRole === "marketing_specialist"
       : userRole === "head_accountant" ||
         (userRole === "sales_manager" &&
           kind === "buy" &&
-          ["valid_id", "proof_of_billing"].includes(String(documentKind)));
+          ["valid_id", "proof_of_billing", "payslip"].includes(String(documentKind)));
 
   return (
     <Card className="min-w-0 shadow-xs">
       <CardHeader>
         <CardTitle>Documents</CardTitle>
-        <CardDescription>
-          IDs, proof of billing and papers the customer submitted. Click an image to enlarge it.
-        </CardDescription>
+        <CardDescription>Documents the customer submitted. Click an image to enlarge it.</CardDescription>
         <CardAction>
           <Badge variant="outline" className="font-medium tabular-nums">
             {documents.length} {documents.length === 1 ? "document" : "documents"}
@@ -105,7 +103,6 @@ export function TransactionDocumentsCard({
       <CardContent className="flex flex-col gap-4">
         {/* SN-13: the seller's answers above the uploads; an older offer that sent OR/CR/Deed files has none. */}
         {kind === "sell" && papersChecklist ? <SellerPapersChecklist checklist={papersChecklist} /> : null}
-        {/* T10: only the buyer uploads IDs and proof of billing; staff verify them here. */}
         {documents.length === 0 ? (
           <p className="text-muted-foreground text-sm">No documents.</p>
         ) : (

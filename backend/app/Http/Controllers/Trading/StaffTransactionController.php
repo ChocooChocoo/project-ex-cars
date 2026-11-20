@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Trading;
 
 use App\Http\Controllers\Controller;
+use App\Models\TransactionDocument;
 use App\Services\Finance\Money;
 use App\Services\Finance\PaymentRules;
 use App\Services\Trading\BuyRules;
@@ -53,16 +54,17 @@ class StaffTransactionController extends Controller
     /**
      * BC-8: the one rule behind both the approval gate and the button state the page reads
      * (`verified_prerequisites` from StaffTradingReadController::show), so the UI and the API cannot drift: two
-     * valid IDs, each with a verified front and back, and a verified proof of billing.
+     * valid IDs with both sides verified, verified proof of billing, and a verified payslip.
      */
     public static function verifiedPrerequisites(string $id): bool
     {
-        $ids = DB::table('transaction_documents')->where('transaction_id', $id)->where('document_kind', 'valid_id')
+        $documents = DB::table('transaction_documents')->where('transaction_id', $id)
+            ->whereIn('document_kind', TransactionDocument::BUYER_REQUIRED_KINDS)
             ->where('verification_state', 'verified')->get(['document_kind', 'verification_state', 'id_type', 'id_side']);
-        $billing = DB::table('transaction_documents')->where('transaction_id', $id)->where('document_kind', 'proof_of_billing')
-            ->where('verification_state', 'verified')->count();
 
-        return BuyRules::buyerIdsComplete($ids) && $billing >= 1;
+        return BuyRules::buyerIdsComplete($documents)
+            && $documents->contains('document_kind', 'proof_of_billing')
+            && $documents->contains('document_kind', 'payslip');
     }
 
     /** transitionTransaction: the state machine (state-machine.ts) plus the approval and Mark Sold gates. */
@@ -97,7 +99,7 @@ class StaffTransactionController extends Controller
 
             if ($toState === 'approved') {
                 abort_unless(self::verifiedPrerequisites($id), 422,
-                    "Two verified valid IDs and a verified proof of billing are required before approval. Verify the buyer's documents first.");
+                    'Verify both valid IDs, the proof of billing, and the latest payslip before approving.');
             }
             $team = null;
             $downpayment = null;
@@ -323,7 +325,7 @@ class StaffTransactionController extends Controller
         return response()->json(['success' => true]);
     }
 
-    /** verifyTransactionDocument: HA verifies papers; SM the buyer's IDs/billing; MS a seller's papers. */
+    /** HA verifies papers; SM the required buyer documents; MS a seller's papers. */
     public function verifyTransactionDocument(Request $request): JsonResponse
     {
         $role = $this->role($request);
@@ -339,19 +341,19 @@ class StaffTransactionController extends Controller
             abort_if($doc->verification_state !== 'pending', 409, 'Only pending documents can be verified or rejected.');
             $parent = DB::table('transactions')->where('id', $doc->transaction_id)->first(['transaction_kind', 'customer_id']);
             $sellPaper = $parent?->transaction_kind === 'sell' && in_array($doc->document_kind, self::SELL_PAPER_KINDS, true);
+            $buyerDocument = $parent?->transaction_kind === 'buy' && in_array($doc->document_kind, TransactionDocument::BUYER_REQUIRED_KINDS, true);
             $allowed = $sellPaper ? $role === 'marketing_specialist'
-                : $role === 'head_accountant' || ($role === 'sales_manager' && $parent?->transaction_kind === 'buy' && in_array($doc->document_kind, ['valid_id', 'proof_of_billing'], true));
+                : $role === 'head_accountant' || ($role === 'sales_manager' && $buyerDocument);
             abort_unless($allowed, 403, $sellPaper ? "The Marketing Specialist verifies a seller's papers." : 'This document is verified by the Head Accountant.');
             DB::table('transaction_documents')->where('id', $documentId)->update(['verification_state' => $decision, 'verifier_id' => $actorId, 'rejection_reason' => $reason ?: null]);
             if ($decision === 'rejected' && $parent?->customer_id) {
                 Trading::notify(['userId' => $parent->customer_id], 'document_resubmission_requested', 'Please resubmit a document',
                     'GCE could not accept your '.str_replace('_', ' ', $doc->document_kind).'.'.($reason ? " What to fix: {$reason}" : '').' Upload a new one on your request page.', $doc->transaction_id);
             }
-            if (in_array($doc->document_kind, ['valid_id', 'proof_of_billing'], true)) {
-                $count = fn (array $kinds, string $state) => DB::table('transaction_documents')->where('transaction_id', $doc->transaction_id)
-                    ->whereIn('document_kind', $kinds)->where('verification_state', $state)->count();
-                $state = $count(['valid_id'], 'verified') >= 2 && $count(['proof_of_billing'], 'verified') >= 1 ? 'verified'
-                    : ($count(['valid_id', 'proof_of_billing'], 'rejected') > 0 ? 'rejected' : 'pending');
+            if ($buyerDocument) {
+                $rejected = DB::table('transaction_documents')->where('transaction_id', $doc->transaction_id)
+                    ->whereIn('document_kind', TransactionDocument::BUYER_REQUIRED_KINDS)->where('verification_state', 'rejected')->exists();
+                $state = self::verifiedPrerequisites($doc->transaction_id) ? 'verified' : ($rejected ? 'rejected' : 'pending');
                 DB::table('purchase_details')->where('transaction_id', $doc->transaction_id)
                     ->update(['document_check_state' => $state, 'checked_by' => $actorId, 'checked_at' => now(), 'updated_at' => now()]);
             }

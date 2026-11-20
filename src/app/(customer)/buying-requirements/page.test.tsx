@@ -21,12 +21,12 @@ describe("SN-15: the buying guide states what to bring", () => {
     expect(screen.getByText(BILLING_TEXT)).toBeInTheDocument();
   });
 
-  it("keeps the latest payslip and says GCE checks it during the financing review", () => {
+  it("requires the latest payslip for every payment method", () => {
     render(<BuyingRequirementsPage />);
 
     expect(
       screen.getByText(
-        /A payslip is needed only for In-House Financing.*Cash and bank transfer buyers do not need one\./,
+        /Prepare your latest payslip, whatever your payment method.*GCE also checks it during the financing review/,
       ),
     ).toBeInTheDocument();
   });
@@ -42,7 +42,11 @@ describe("SN-15: the buying guide states what to bring", () => {
       "Two different valid IDs. Bring the originals and two printed back-to-back photocopies of each ID, each copy signed three times.",
     );
     expect(picker).toHaveTextContent("One recent proof of billing in your name (electric, water or internet bill).");
-    expect(picker).toHaveTextContent("Payslip (latest)");
-    expect(picker).toHaveTextContent("Bring your latest payslip; GCE checks it during the financing review.");
+    expect(picker).toHaveTextContent("Your latest payslip.");
+    expect(picker).toHaveTextContent("GCE also checks your payslip during the financing review.");
+
+    fireEvent.click(screen.getByRole("radio", { name: /^Cash/ }));
+    expect(picker).toHaveTextContent("Your latest payslip.");
+    expect(picker).not.toHaveTextContent("during the financing review");
   });
 });

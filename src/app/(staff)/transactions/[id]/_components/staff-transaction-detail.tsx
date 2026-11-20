@@ -89,7 +89,7 @@ export function StaffTransactionDetail({
     mechanics: { id: string; full_name: string | null }[];
   } | null;
   readonly headSecurity?: { id: string; full_name: string | null }[];
-  /** BC-8: the API's own answer for "two verified IDs and a verified proof of billing". */
+  /** Whether the API has all the verified buyer documents. */
   readonly verifiedPrerequisites?: boolean | null;
 }) {
   const router = useRouter();

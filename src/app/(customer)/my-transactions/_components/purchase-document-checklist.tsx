@@ -24,7 +24,7 @@ export const VALID_ID_TYPES = [
 ] as const;
 
 export type DocumentUpload = {
-  kind: "valid_id" | "proof_of_billing";
+  kind: "valid_id" | "proof_of_billing" | "payslip";
   idType?: string;
   side?: "front" | "back";
   file: File;
@@ -105,10 +105,7 @@ function UploadRow({
   );
 }
 
-// T06: first-time buyers found the old single upload box confusing. The section now lists exactly what GCE
-// needs, two valid IDs (front and back) and one proof of billing, with the status of each.
-// SN-11: a seller sends only the two IDs (the OR/CR/Deed are declared on the checklist), so the billing slot is
-// left out for that audience.
+// Sellers send only the two IDs; the other upload slots apply to buyers.
 export function PurchaseDocumentChecklist({
   documents,
   canUpload,
@@ -138,14 +135,15 @@ export function PurchaseDocumentChecklist({
           </>
         ) : (
           <>
-            To buy a car, send GCE <span className="font-medium text-foreground">2 different valid IDs</span> (a photo
-            of the front and the back of each) and{" "}
-            <span className="font-medium text-foreground">1 proof of billing</span> (a recent utility, internet or phone
-            bill in your name). JPEG, PNG, WebP or PDF, up to 2 MB each. GCE staff check every file.
+            To buy a car, send GCE <span className="font-medium text-foreground">2 different valid IDs</span> (front and
+            back of each), <span className="font-medium text-foreground">1 proof of billing</span> (a recent utility,
+            internet or phone bill in your name), and{" "}
+            <span className="font-medium text-foreground">your latest payslip</span>. JPEG, PNG, WebP or PDF, up to 2 MB
+            each. GCE staff check every file.
           </>
         )}
       </p>
-      <ol className={`grid gap-3 ${seller ? "md:grid-cols-2" : "md:grid-cols-3"}`}>
+      <ol className="grid gap-3 md:grid-cols-2">
         {slots.ids.map((slot, index) => {
           const idType = slot.idType ?? chosenTypes[index];
           const otherType = slots.ids[1 - index].idType ?? chosenTypes[1 - index];
@@ -191,15 +189,26 @@ export function PurchaseDocumentChecklist({
           );
         })}
         {seller ? null : (
-          <li className="flex flex-col gap-3 rounded-lg border p-3">
-            <p className="font-medium text-sm">Proof of billing</p>
-            <UploadRow
-              label="Bill"
-              doc={slots.billing}
-              disabled={disabled}
-              onFile={(file) => onUpload({ kind: "proof_of_billing", file })}
-            />
-          </li>
+          <>
+            <li className="flex flex-col gap-3 rounded-lg border p-3">
+              <p className="font-medium text-sm">Proof of billing</p>
+              <UploadRow
+                label="Bill"
+                doc={slots.billing}
+                disabled={disabled}
+                onFile={(file) => onUpload({ kind: "proof_of_billing", file })}
+              />
+            </li>
+            <li className="flex flex-col gap-3 rounded-lg border p-3">
+              <p className="font-medium text-sm">Payslip</p>
+              <UploadRow
+                label="Latest payslip"
+                doc={slots.payslip}
+                disabled={disabled}
+                onFile={(file) => onUpload({ kind: "payslip", file })}
+              />
+            </li>
+          </>
         )}
       </ol>
       {uploading ? <p className="text-muted-foreground text-xs">Uploading...</p> : null}
