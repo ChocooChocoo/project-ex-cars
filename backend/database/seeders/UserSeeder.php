@@ -33,7 +33,11 @@ class UserSeeder extends Seeder
         'mechanic4' => ['mechanic', 'Ramon Dela Cruz', 'mechanic4@gce.local'],
         'sales_manager' => ['sales_manager', 'Fatima Castro', 'sales_manager@gce.local'],
         'head_security' => ['head_security', 'Gregorio Villanueva', 'head_security@gce.local'],
+        'supplier' => ['supplier', 'Ramon Santos', 'supplier@gce.local'],
     ];
+
+    /** Notes Part 1: the seeded supplier's company; the account is approved so the portal opens. */
+    public const SUPPLIER_COMPANY = 'Santos Auto Supply';
 
     /** @return array<string, string> key => user id */
     public function run(): array
@@ -51,8 +55,17 @@ class UserSeeder extends Seeder
             DB::table('users')->insert(['id' => $id, 'email' => $email, 'password' => $hash, 'email_verified_at' => now()]);
             DB::table('profiles')->insert(['id' => $id, 'full_name' => $name, 'account_state' => 'active', 'activated_at' => now()]);
             DB::table('user_roles')->insert(['account_id' => $id, 'role' => $role, 'active' => true]);
+            if ($role === 'supplier') {
+                self::supplierProfile($id);
+            }
         }
 
         return $ids;
+    }
+
+    /** No timestamps: seeded rows stay identical between runs (SchemaParityTest). */
+    public static function supplierProfile(string $userId): void
+    {
+        DB::table('supplier_profiles')->insert(['user_id' => $userId, 'company_name' => self::SUPPLIER_COMPANY, 'approval_state' => 'approved']);
     }
 }

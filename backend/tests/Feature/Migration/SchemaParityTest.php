@@ -254,8 +254,8 @@ class SchemaParityTest extends TestCase
         $first = $snapshot();
         $second = $snapshot();
         $this->assertSame($first, $second);
-        $this->assertSame(16, $first['users'][0], 'one account per role plus the extra field staff');
-        $this->assertSame(10, DB::table('user_roles')->distinct()->count('role'), 'all ten roles seeded');
+        $this->assertSame(17, $first['users'][0], 'one account per role plus the extra field staff');
+        $this->assertSame(11, DB::table('user_roles')->distinct()->count('role'), 'all eleven roles seeded');
         $this->assertSame(129, $first['rbac_permissions'][0]);
     }
 }
