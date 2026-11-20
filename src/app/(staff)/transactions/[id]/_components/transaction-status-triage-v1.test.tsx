@@ -56,6 +56,18 @@ describe("TransactionStatusTriageV1 cash-buy rules (T05)", () => {
     expect(screen.queryByText("Buyer declined")).not.toBeInTheDocument();
   });
 
+  it("hides Buyer declined from the CEO too once the papers are requested on a cash buy", () => {
+    renderTriage({
+      state: "approved",
+      paymentMethod: "cash",
+      papersRequested: true,
+      userRole: "ceo",
+      visit: { kind: "gce_visit", schedule: "2026-10-05T02:00:00.000Z" },
+    });
+
+    expect(screen.queryByText("Buyer declined")).not.toBeInTheDocument();
+  });
+
   it("shows Buyer declined before the papers are requested", () => {
     renderTriage({
       state: "approved",

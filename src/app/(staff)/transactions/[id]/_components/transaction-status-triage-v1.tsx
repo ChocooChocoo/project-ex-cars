@@ -81,9 +81,9 @@ export function TransactionStatusTriageV1({
   const cashBuy = kind === "buy" && isDirectPayment({ payment_method: paymentMethod });
   const allowed = getAllowedTransitions(state, userRole);
   const canRecordOutcome = kind === "buy" && state === "approved" && ["sales_manager", "ceo"].includes(userRole);
-  // T05: once the papers are requested, the Sales Manager loses the decline outcomes on a CASH buy. A
+  // T05: once the papers are requested, a CASH buy can no longer be declined (Laravel refuses it for every role). A
   // delivery's "Buyer unavailable" (a no-show) is still recorded.
-  const declinesBlocked = cashBuy && papersRequested && userRole === "sales_manager";
+  const declinesBlocked = cashBuy && papersRequested;
   // §3 steps 6–7 / §4 steps 7c–8: Meet Halfway and Delivery declines are classified. A halfway no-show
   // is allowed 2h30m after the meet-up; a delivery buyer is "unavailable" once the team has arrived.
   const delivery = visit?.kind === "delivery";
