@@ -329,6 +329,7 @@ class HandoverController extends Controller
                 $uploaded[] = $files->storeAt($ci, 'transaction-documents', $ciPath)['path'];
                 $this->setHandover($sale, $actorId, [
                     'signature_path' => $buyerPath, 'ci_signature_path' => $ciPath, 'contract_state' => 'signed', 'contract_signed_at' => now(), 'signing_method' => 'in_app',
+                    'papers_ci_id' => $actorId,
                 ], 'Contract signed in the field by the buyer and the Confidential Informant');
                 Trading::notify(['role' => 'sales_manager'], 'contract_signed', 'Contract signed in the field',
                     'The buyer and the Confidential Informant signed the contract on the device.', $sale->id);
@@ -343,13 +344,10 @@ class HandoverController extends Controller
         return response()->json(['success' => true]);
     }
 
-    /**
-     * BC-3: the Sales Manager signs a GCE-visit sale for GCE, before the buyer signs it in the app. The signature
-     * is drawn on the Deed of Sale (and the Policy & Warranty on financing) above the Sales Manager's printed name.
-     */
+    /** The Sales Manager signs for GCE, including when a field buyer has already e-signed. */
     public function recordSmSignature(Request $request, FileService $files): JsonResponse
     {
-        abort_unless(in_array($this->role($request), ['sales_manager', 'ceo'], true), 403, 'Only the Sales Manager signs for GCE at a GCE visit.');
+        abort_unless(in_array($this->role($request), ['sales_manager', 'ceo'], true), 403, 'Only the Sales Manager or CEO can sign for GCE here.');
         $file = $request->file('signature');
         abort_if(! $file || $file->getSize() === 0, 422, 'Draw your signature.');
         abort_if($file->getSize() > FileService::MAX_BYTES, 422, 'The signature must be 2 MB or smaller.');
@@ -359,8 +357,9 @@ class HandoverController extends Controller
             Trading::run(function () use ($request, $files, $file, &$stored) {
                 $sale = $this->sale($request->input('transaction_id'));
                 $actorId = $request->user()->id;
-                abort_unless(BuyRules::needsSmSignature($sale->details), 422, 'Only a GCE-visit sale is signed by the Sales Manager.');
-                abort_if(($sale->handover->contract_state ?? null) === 'signed', 409, 'The buyer has already signed the contract.');
+                $method = $sale->handover->signing_method ?? null;
+                abort_if($method === 'face_to_face', 422, 'This contract will be signed in person.');
+                abort_if(($sale->handover->contract_state ?? null) === 'signed' && $method !== 'e_signature', 409, 'The contract is already signed.');
                 abort_if(($sale->handover->sm_signature_path ?? null) !== null, 409, 'You have already signed this sale.');
                 $path = "{$sale->id}/signature-sm-".now()->getTimestampMs().'.png';
                 $stored = $files->storeAt($file, 'transaction-documents', $path)['path'];

@@ -137,6 +137,58 @@ class RulesTest extends TestCase
         $this->assertSame('signed', DB::table('sale_handovers')->where('transaction_id', $id)->value('contract_state'));
         // The buyer reads the contract body only once it is approved.
         $this->act($buyer)->getJson("/api/v1/my-transactions/{$id}")->assertOk()->assertJsonPath('transaction.sale_handovers.contract_body', 'Terms');
+        $paper = $this->act($sm)->getJson("/api/v1/papers/{$id}/contract")->assertOk()
+            ->assertJsonPath('source.profiles.full_name', $buyer->profile->full_name)
+            ->assertJsonPath('signatures.gceName', $sm->profile->full_name);
+        $this->get($paper->json('signatures.buyerUrl'))->assertOk();
+        $this->get($paper->json('signatures.gceUrl'))->assertOk();
+    }
+
+    #[Test]
+    public function a_sales_manager_countersigns_a_meetup_after_the_buyer_signs_online(): void
+    {
+        $buyer = $this->customer();
+        $sm = $this->account('sales_manager');
+        $id = $this->buyRequest($buyer, $this->vehicle(), 'financing', 'meetup', null, ['current_state' => 'approved']);
+        DB::table('sale_handovers')->insert(['transaction_id' => $id, 'contract_state' => 'approved', 'contract_body' => 'Terms']);
+
+        $path = "{$id}/signature-1.png";
+        $this->act($buyer)->post('/api/v1/trading/uploads', ['path' => $path, 'file' => UploadedFile::fake()->image('buyer.png')])->assertOk();
+        $this->again()->postJson('/api/v1/trading/sign-contract', [
+            'transaction_id' => $id, 'signed_name' => 'Juan Reyes', 'signature_path' => $path,
+        ])->assertOk();
+        $this->act($sm)->post('/api/v1/staff/trading/handover/record-sm-signature', [
+            'transaction_id' => $id, 'signature' => UploadedFile::fake()->image('sm.png'),
+        ])->assertOk();
+        $this->assertDatabaseHas('sale_handovers', ['transaction_id' => $id, 'signed_name' => 'Juan Reyes']);
+        DB::table('profiles')->where('id', $buyer->id)->update(['full_name' => null]);
+
+        $paper = $this->getJson("/api/v1/papers/{$id}/contract")->assertOk()
+            ->assertJsonPath('source.profiles.full_name', 'Juan Reyes')
+            ->assertJsonPath('signatures.gceRole', 'Sales Representative')
+            ->assertJsonPath('signatures.gceName', $sm->profile->full_name);
+        $this->get($paper->json('signatures.buyerUrl'))->assertOk();
+        $this->get($paper->json('signatures.gceUrl'))->assertOk();
+    }
+
+    #[Test]
+    public function a_face_to_face_contract_prints_the_buyer_name_without_digital_signatures(): void
+    {
+        $buyer = $this->customer();
+        $sm = $this->account('sales_manager');
+        $id = $this->buyRequest($buyer, $this->vehicle(), 'cash', 'gce_visit', null, ['current_state' => 'approved']);
+        DB::table('sale_handovers')->insert(['transaction_id' => $id, 'contract_state' => 'approved']);
+        $this->act($sm)->post('/api/v1/staff/trading/handover/record-sm-signature', [
+            'transaction_id' => $id, 'signature' => UploadedFile::fake()->image('sm.png'),
+        ])->assertOk();
+        $this->act($buyer)->postJson('/api/v1/trading/sign-contract', [
+            'transaction_id' => $id, 'signing_method' => 'face_to_face',
+        ])->assertOk();
+
+        $this->act($sm)->getJson("/api/v1/papers/{$id}/contract")->assertOk()
+            ->assertJsonPath('source.profiles.full_name', $buyer->profile->full_name)
+            ->assertJsonPath('signatures.buyerUrl', null)
+            ->assertJsonPath('signatures.gceUrl', null);
     }
 
     #[Test]

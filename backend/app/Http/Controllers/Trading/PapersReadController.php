@@ -9,7 +9,6 @@ use App\Models\PurchaseDetail;
 use App\Models\Transaction;
 use App\Models\Vehicle;
 use App\Services\FileService;
-use App\Services\Trading\BuyRules;
 use App\Support\ApiRow;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
@@ -156,6 +155,11 @@ class PapersReadController extends Controller
         abort_if($paper === 'policy-warranty' && $details?->payment_method !== 'financing', 404, 'A Policy & Warranty is issued only for a financing sale.');
 
         $profile = DB::table('profiles')->where('id', $tx->customer_id)->first(['full_name', 'address']);
+        $handover = DB::table('sale_handovers')->where('transaction_id', $transactionId)->first();
+        if (trim((string) ($profile?->full_name ?? '')) === '' && $handover?->signed_name) {
+            $profile ??= (object) ['address' => null];
+            $profile->full_name = $handover->signed_name;
+        }
         $source = ApiRow::of($tx, ['id', 'opened_at', 'completed_at']) + [
             'purchase_details' => ApiRow::of($details, ['final_price', 'payment_method', 'arrangement_kind']),
             'profiles' => $profile ? (array) $profile : null,
@@ -168,7 +172,6 @@ class PapersReadController extends Controller
                 ['total_amount', 'down_payment', 'duration_months', 'number_of_payments', 'monthly_payment', 'first_due_date']);
             $result['source']['installment_accounts'] = ApiRow::of(InstallmentAccount::query()->where('purchase_transaction_id', $transactionId)->first(), ['opening_balance']);
         }
-        $handover = DB::table('sale_handovers')->where('transaction_id', $transactionId)->first();
         if ($paper === 'contract') {
             $result += [
                 'contractBody' => $handover?->contract_body,
@@ -177,34 +180,39 @@ class PapersReadController extends Controller
             ];
         }
         if ($paper !== 'missed-payment-policy') {
-            $result['signatures'] = self::signatures($files, $details, $handover);
+            $result['signatures'] = self::signatures($files, $details, $handover, $paper === 'contract');
         }
 
         return response()->json($result);
     }
 
     /**
-     * BC-2 / BC-3: the images drawn above the printed names. The buyer's own e-signature; for GCE, the Sales
-     * Manager's at a GCE visit and the Confidential Informant's in the field. A paper signed face-to-face has none,
-     * so its lines stay empty for pen.
+     * Prefer the office signer on a visit and the field signer otherwise, but keep each signature tied to its signer.
      *
      * @return array{buyerUrl: ?string, gceName: ?string, gceRole: string, gceUrl: ?string}
      */
-    private static function signatures(FileService $files, ?object $details, ?object $handover): array
+    private static function signatures(FileService $files, ?object $details, ?object $handover, bool $isContract): array
     {
-        $atOffice = BuyRules::needsSmSignature($details);
-        $gcePath = $atOffice ? $handover?->sm_signature_path : $handover?->ci_signature_path;
-        $gceSigner = $atOffice ? $handover?->sm_signed_by : $handover?->papers_ci_id;
-        if (! $atOffice && ! $gceSigner && $handover?->ci_signature_path) {
+        $smPath = $handover?->sm_signature_path;
+        $ciPath = $handover?->ci_signature_path;
+        $atOffice = $details?->arrangement_kind === 'gce_visit';
+        $useSm = $smPath && ($atOffice || ! $ciPath);
+        $gcePath = $useSm ? $smPath : $ciPath;
+        $gceSigner = $useSm ? $handover?->sm_signed_by : $handover?->papers_ci_id;
+        if (! $useSm && ! $gceSigner && $ciPath) {
             $gceSigner = DB::table('field_cases')->where('transaction_id', $handover->transaction_id)->whereIn('case_kind', ['delivery', 'buyer_meetup'])
                 ->where('state', '!=', 'cancelled')->value('assigned_confidential_informant');
         }
 
+        $paperOnly = $handover?->signing_method === 'face_to_face';
+
+        $role = $useSm || (! $gcePath && $atOffice) ? 'Sales Manager' : 'Confidential Informant';
+
         return [
-            'buyerUrl' => $files->signedUrl('transaction-documents', $handover?->signature_path, self::SHORT_LINK_SECONDS),
-            'gceName' => $gceSigner ? DB::table('profiles')->where('id', $gceSigner)->value('full_name') : null,
-            'gceRole' => $atOffice ? 'Sales Manager' : 'Confidential Informant',
-            'gceUrl' => $files->signedUrl('transaction-documents', $gcePath, self::SHORT_LINK_SECONDS),
+            'buyerUrl' => $paperOnly ? null : $files->signedUrl('transaction-documents', $handover?->signature_path, self::SHORT_LINK_SECONDS),
+            'gceName' => ! $paperOnly && $gcePath && $gceSigner ? DB::table('profiles')->where('id', $gceSigner)->value('full_name') : null,
+            'gceRole' => $isContract ? 'Sales Representative' : $role,
+            'gceUrl' => $paperOnly ? null : $files->signedUrl('transaction-documents', $gcePath, self::SHORT_LINK_SECONDS),
         ];
     }
 }

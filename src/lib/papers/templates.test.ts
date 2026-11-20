@@ -172,6 +172,7 @@ describe("contract fill", () => {
     const paper = contract(paperSale(saleRow), null, signers);
     expect(textOf(paper)).not.toContain("Signature image:");
     expect(paper.signatures?.[0]?.imageUrl).toBe("https://api/buyer.png");
+    expect(paper.signatures?.[1]).toMatchObject({ party: "Sales Representative", name: "By: Sam Manager" });
   });
 
   it("prints the blank line note when GCE has no contract body yet", () => {

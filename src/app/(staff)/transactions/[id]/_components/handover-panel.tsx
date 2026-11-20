@@ -131,8 +131,7 @@ export function HandoverPanel({
 
 // Contract: nothing is handed over or marked sold before it is signed. At a GCE visit (any payment) and for
 // financing at a meet-up the Sales Manager writes it here and the Head Accountant approves it; a delivery or a
-// cash meet-up is signed on paper in the field, so this card only reports. BC-3: at a GCE visit the Sales Manager
-// also signs for GCE here, before the buyer signs.
+// cash meet-up normally signs in the field. The Sales Manager can countersign a buyer's e-signature here.
 export function ContractCard({
   transactionId,
   details,
@@ -155,10 +154,15 @@ export function ContractCard({
   const [smSignature, setSmSignature] = useState<HTMLCanvasElement | null>(null);
 
   const inApp = signsInApp(details);
-  const smSigns = needsSmSignature(details);
+  const smSignsFirst = needsSmSignature(details);
   const smSigned = Boolean(handover.sm_signature_path);
   const state = (handover.contract_state as ContractState | null | undefined) ?? null;
-  const canSmSign = open && smSigns && !smSigned && state !== "signed" && ["sales_manager", "ceo"].includes(userRole);
+  const signedOnline = state === "signed" && handover.signing_method === "e_signature";
+  const showGceSignature =
+    state !== null &&
+    handover.signing_method !== "face_to_face" &&
+    (state === "signed" ? signedOnline : inApp || state === "approved");
+  const canSmSign = open && showGceSignature && !smSigned && ["sales_manager", "ceo"].includes(userRole);
   const canWrite =
     open &&
     inApp &&
@@ -198,7 +202,7 @@ export function ContractCard({
         toast.error(result.error);
         return;
       }
-      toast.success("Signed for GCE. The buyer can now sign.");
+      toast.success(signedOnline ? "GCE countersignature saved." : "Signed for GCE.");
       setSmSignature(null);
       router.refresh();
     } finally {
@@ -211,10 +215,10 @@ export function ContractCard({
       <CardHeader>
         <CardTitle>Contract</CardTitle>
         <CardDescription>
-          {smSigns
+          {smSignsFirst
             ? "The Sales Manager writes it, the Head Accountant approves it, the Sales Manager signs for GCE, then the buyer signs. The buyer's and your signatures go on the Deed of Sale."
             : inApp
-              ? "The Sales Manager writes it, the Head Accountant approves it, then the buyer signs it. No payment is recorded before the signature."
+              ? "The Head Accountant approves the contract before the buyer signs. The Sales Manager also signs for GCE."
               : "The buyer signs the printed contract at the meet-up or on delivery, and the Confidential Informant reports it. No payment is recorded before the signature."}
         </CardDescription>
       </CardHeader>
@@ -320,7 +324,7 @@ export function ContractCard({
         {state === "pending_approval" && !canReview ? (
           <p className="text-muted-foreground">Waiting for the Head Accountant to approve or return it.</p>
         ) : null}
-        {smSigns && state !== null ? (
+        {showGceSignature ? (
           <div className="flex flex-col gap-2 border-t pt-3">
             <p className="flex flex-wrap items-center gap-2">
               <span className="text-muted-foreground">GCE signature</span>

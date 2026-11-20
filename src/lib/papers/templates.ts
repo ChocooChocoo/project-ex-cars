@@ -240,7 +240,7 @@ function signatureLines(sale: PaperSale, signatures: PaperSignatures): string {
 
 // BC-2 / BC-3: BUYER and SELLER blocks, each a signature over a printed name. GCE signs through its
 // representative, named on the block when the API knows who signed.
-function signatureBlocks(sale: PaperSale, signers: PaperSigners | null): PaperSignatureBlock[] {
+function signatureBlocks(sale: PaperSale, signers: PaperSigners | null, isContract = false): PaperSignatureBlock[] {
   return [
     {
       party: "BUYER",
@@ -249,9 +249,9 @@ function signatureBlocks(sale: PaperSale, signers: PaperSigners | null): PaperSi
       imageUrl: signers?.buyerUrl ?? null,
     },
     {
-      party: `SELLER: ${GCE_SELLER}`,
+      party: isContract ? "Sales Representative" : `SELLER: ${GCE_SELLER}`,
       name: `By: ${signers?.gceName ?? PAPER_BLANK}`,
-      caption: `Signature over printed name${signers?.gceRole ? ` (${signers.gceRole})` : ""}`,
+      caption: `Signature over printed name${!isContract && signers?.gceRole ? ` (${signers.gceRole})` : ""}`,
       imageUrl: signers?.gceUrl ?? null,
     },
   ];
@@ -270,7 +270,7 @@ export function contract(sale: PaperSale, contractBody: string | null, signers: 
       body === "" ? `TERMS\n${PAPER_BLANK}\nGCE has not recorded the contract terms yet.` : `TERMS\n${body}`,
       `The BUYER and the SELLER have read this contract and sign it on ${sale.date}.`,
     ],
-    signatures: signatureBlocks(sale, signers),
+    signatures: signatureBlocks(sale, signers, true),
   };
 }
 

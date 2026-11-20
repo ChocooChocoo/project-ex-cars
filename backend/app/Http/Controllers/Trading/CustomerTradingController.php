@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Trading;
 
 use App\Http\Controllers\Controller;
 use App\Jobs\CheckTransactionDocument;
+use App\Models\TransactionDocument;
 use App\Services\FileService;
 use App\Services\Trading\BuyRules;
 use App\Services\Trading\Trading;
@@ -74,7 +75,7 @@ class CustomerTradingController extends Controller
 
     /**
      * POST /trading/uploads: stores a picked file at the key the browser chose, after checking it is a
-     * key this customer may write: `{own transaction id}/{valid_id|proof_of_billing|signature}-...`, or a
+     * key this customer may write: a buyer document or signature under their own transaction, or a
      * key granted by prepareSellUploads (signed `token`). The action that uses the path checks it again.
      */
     public function upload(Request $request, FileService $files): JsonResponse
@@ -85,7 +86,8 @@ class CustomerTradingController extends Controller
         if (is_string($token) && $token !== '') {
             abort_unless(self::validGrant($request->user()->id, $path, $token), 403, 'This upload link has expired. Try again.');
         } else {
-            abort_unless(preg_match('#^([0-9a-f-]{36})/(valid_id|proof_of_billing|signature)-[\w.-]+$#i', $path, $m) === 1, 422, 'Invalid upload.');
+            $kinds = implode('|', [...TransactionDocument::BUYER_REQUIRED_KINDS, 'signature']);
+            abort_unless(preg_match("#^([0-9a-f-]{36})/({$kinds})-[\w.-]+$#i", $path, $m) === 1, 422, 'Invalid upload.');
             $this->ownTx($request, $m[1]);
         }
         $files->storeAt($request->file('file'), self::BUCKET, $path);
@@ -110,7 +112,7 @@ class CustomerTradingController extends Controller
     {
         $data = $request->validate([
             'transaction_id' => ['required', 'uuid'],
-            'document_kind' => ['required', 'in:valid_id,proof_of_billing'],
+            'document_kind' => ['required', 'in:'.implode(',', TransactionDocument::BUYER_REQUIRED_KINDS)],
             'id_type' => ['nullable', 'in:'.implode(',', self::ID_TYPES)],
             'id_side' => ['nullable', 'in:front,back'],
         ], ['*' => 'Invalid document upload.']);
@@ -125,7 +127,7 @@ class CustomerTradingController extends Controller
 
         Trading::run(function () use ($request, $transactionId, $kind, $idType, $idSide, $path) {
             $tx = $this->ownTx($request, $transactionId, lock: true);
-            // SN-14: a buy takes its IDs and proof of billing here. SN-11: a sell offer only ever replaces a valid
+            // A buy takes its required documents here. A sell offer only ever replaces a valid
             // ID that staff rejected (the OR/CR/Deed are declared on the checklist instead), so the same slot is
             // freed and the resubmission the Marketing Specialist asked for can actually happen.
             $sellIdReplacement = $tx->transaction_kind === 'sell'
@@ -345,6 +347,8 @@ class CustomerTradingController extends Controller
             abort_unless(BuyRules::buyerIdsComplete($documents), 422, 'Upload the front and back of two valid IDs first.');
             abort_unless($documents->contains(fn ($d) => $d->document_kind === 'proof_of_billing' && $d->verification_state !== 'rejected'), 422,
                 'Upload a proof of billing before sending the request.');
+            abort_unless($documents->contains(fn ($d) => $d->document_kind === 'payslip' && $d->verification_state !== 'rejected'), 422,
+                'Upload your latest payslip before submitting.');
             abort_if($queued && $visitOnly, 422, 'Your account is limited to GCE visits.');
             $scheduledAt = $slot ? CarbonImmutable::parse($slot->schedule, 'UTC') : null;
             if ($bookedAtRequest) {
@@ -556,12 +560,15 @@ class CustomerTradingController extends Controller
             $details = DB::table('purchase_details')->where('transaction_id', $tx->id)->first(['arrangement_kind']);
             abort_if(BuyRules::needsSmSignature($details) && ! $handover?->sm_signature_path, 422,
                 'Wait for the Sales Manager to sign for GCE, then sign here.');
-            $name = trim((string) $request->input('signed_name'));
-            abort_if($name === '', 422, 'Type your full name to sign.');
+            $signed = $request->validate(['signed_name' => ['required', 'string', 'max:150']], [
+                'signed_name.required' => 'Type your full name to sign.',
+            ]);
+            $name = trim($signed['signed_name']);
             $signature = (string) $request->input('signature_path');
             abort_unless(str_starts_with($signature, "{$tx->id}/signature-") && app(FileService::class)->exists(self::BUCKET, $signature), 422, 'Draw your signature to sign.');
             DB::table('sale_handovers')->where('transaction_id', $tx->id)->update([
                 'contract_state' => 'signed', 'contract_signed_at' => now(), 'signing_method' => 'e_signature', 'signature_path' => $signature,
+                'signed_name' => $name,
             ]);
             Trading::history($tx->id, $tx->current_state, $tx->current_state, $userId, "Contract signed by {$name}");
             Trading::notify(['role' => 'sales_manager'], 'contract_signed', 'Contract signed by the buyer', "{$name} signed the contract.", $tx->id);
