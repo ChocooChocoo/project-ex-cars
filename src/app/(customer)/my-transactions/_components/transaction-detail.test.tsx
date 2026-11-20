@@ -748,3 +748,26 @@ describe("TransactionDetail financial summary", () => {
     expect(summary.getByText("Paid to date").nextElementSibling).toHaveTextContent("₱1,000");
   });
 });
+
+describe("TransactionDetail GCE Visit map after submitting (notes line 125)", () => {
+  it("keeps the GCE office map once the buy requirements are submitted", () => {
+    render(
+      <TransactionDetail
+        transaction={{
+          ...transaction,
+          current_state: "under_review",
+          purchase_details: { arrangement_kind: "gce_visit", payment_plan: "full" },
+        }}
+        history={[]}
+        documents={[]}
+        payments={[]}
+        installmentAccount={null}
+        paymentTerms={null}
+        viewingArrangements={[]}
+        autofill={null}
+      />,
+    );
+    expect(screen.getByRole("heading", { name: "Where to meet" })).toBeInTheDocument();
+    expect(screen.getByText(/GCE visits happen at the office on the pin/)).toBeInTheDocument();
+  });
+});

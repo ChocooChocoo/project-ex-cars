@@ -15,6 +15,8 @@ import {
   CALABARZON_LEAFLET_BOUNDS,
   clampToCalabarzon,
   isInCalabarzon,
+  isNearMidpoint,
+  MEETUP_MAX_OFFSET_KM,
   type MeetupAddressParts,
 } from "@/lib/transactions/meetup-area";
 import { GCE_LOCATION, GCE_LOCATION_LABEL, halfwayPoint, type LatLng } from "@/lib/transactions/sell-flow";
@@ -50,8 +52,9 @@ function FitPoints({ points }: { readonly points: LatLng[] }) {
 }
 
 /**
- * The one shared meet-up map (SH-14 / BH-8). GCE is pinned on DLSU-D Gate 3; the pin starts halfway between GCE
- * and the viewer's device and may only be dragged inside CALABARZON. The reverse geocode that fills the address
+ * The one shared meet-up map (SH-14 / BH-8). GCE is pinned on its plus code; the pin starts halfway between GCE
+ * and the viewer's device and may only be dragged inside CALABARZON and within `MEETUP_MAX_OFFSET_KM` of that
+ * suggested midpoint. The reverse geocode that fills the address
  * runs on `dragend` and once when the editable pin is placed from the device location.
  *
  * Leaflet needs `window`, so this file is loaded only through `next/dynamic` with `ssr: false`.
@@ -63,6 +66,8 @@ export function MeetupMap({
   editable = true,
   showGce = true,
   height = MEETUP_MAP_HEIGHT,
+  origin = null,
+  onOrigin,
 }: {
   readonly value?: LatLng | null;
   readonly onChange?: (point: LatLng) => void;
@@ -71,6 +76,9 @@ export function MeetupMap({
   readonly editable?: boolean;
   readonly showGce?: boolean;
   readonly height?: string;
+  /** The suggested midpoint the pin must stay near (saved with the pin); null means no radius limit yet. */
+  readonly origin?: LatLng | null;
+  readonly onOrigin?: (point: LatLng) => void;
 }) {
   const [client, setClient] = useState<LatLng | null>(null);
   const [pin, setPin] = useState<LatLng>(value ?? GCE_LOCATION);
@@ -78,6 +86,7 @@ export function MeetupMap({
   const [looking, setLooking] = useState(false);
   // The last point that passed both checks, so a drop in Metro Manila goes back there instead.
   const lastValid = useRef<LatLng>(value ?? GCE_LOCATION);
+  const midpoint = useRef<LatLng | null>(origin);
 
   function place(point: LatLng) {
     setPin(point);
@@ -112,6 +121,8 @@ export function MeetupMap({
   function locate() {
     if (!("geolocation" in navigator)) {
       setState("unavailable");
+      midpoint.current = GCE_LOCATION;
+      onOrigin?.(GCE_LOCATION);
       place(GCE_LOCATION);
       return;
     }
@@ -125,6 +136,8 @@ export function MeetupMap({
         // A device location outside CALABARZON starts the pin at GCE; it can still be dragged from there.
         const start = isInCalabarzon(suggested) ? suggested : GCE_LOCATION;
         lastValid.current = start;
+        midpoint.current = start;
+        onOrigin?.(start);
         place(start);
         // BH-8: fill the address for the suggested pin too (one lookup per locate), so the buyer only drags when
         // the halfway point is not where they want to meet.
@@ -132,6 +145,8 @@ export function MeetupMap({
       },
       () => {
         setState("unavailable");
+        midpoint.current = GCE_LOCATION;
+        onOrigin?.(GCE_LOCATION);
         place(GCE_LOCATION);
       },
       { enableHighAccuracy: true, timeout: 10_000 },
@@ -142,6 +157,10 @@ export function MeetupMap({
   useEffect(() => {
     if (!value) locate();
   }, []);
+
+  useEffect(() => {
+    if (origin) midpoint.current = origin;
+  }, [origin]);
 
   useEffect(() => {
     if (value) {
@@ -161,6 +180,15 @@ export function MeetupMap({
       setState("moved");
       place(inside);
       toast.error("Meet-ups must be inside CALABARZON. The pin was moved back inside.");
+      return;
+    }
+    if (!isNearMidpoint(point, midpoint.current)) {
+      const back = lastValid.current;
+      marker.setLatLng([back.lat, back.lng]);
+      place(back);
+      toast.error(
+        `Keep the meet-up point within ${MEETUP_MAX_OFFSET_KM} km of the suggested halfway point. The pin was moved back.`,
+      );
       return;
     }
     // The bbox alone also covers Metro Manila and the sea, so the candidate only becomes the saved value
@@ -223,7 +251,7 @@ export function MeetupMap({
         {showGce ? (
           <li className="flex items-center gap-1.5">
             <span className="size-2.5 rounded-full bg-amber-500" aria-hidden="true" />
-            GCE, DLSU-D Gate 3
+            GCE office
           </li>
         ) : null}
         {client ? (

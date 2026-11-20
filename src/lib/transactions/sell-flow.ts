@@ -23,10 +23,11 @@ export const SELL_MEETUP_METHOD_LABELS: Record<SellMeetupMethod, string> = {
 
 export type LatLng = { lat: number; lng: number };
 
-/** GCE's office: DLSU-D Gate 3, Gov. Dominador Mangubat Blvd, Bagong Bayan, Dasmariñas, Cavite. */
-export const GCE_LOCATION: LatLng = { lat: 14.32856, lng: 120.957 };
+/** GCE's office: plus code 8XG3+XC8 (7Q62 area), Dominador Mangubat Blvd, Dasmariñas, Cavite. Same point as the
+ * attendance geofence in `backend/app/Services/Staff/Attendance.php`. */
+export const GCE_LOCATION: LatLng = { lat: 14.32741, lng: 120.95359 };
 
-export const GCE_LOCATION_LABEL = "GCE, DLSU-D Gate 3, Dasmariñas, Cavite";
+export const GCE_LOCATION_LABEL = "GCE, 8XG3+XC8, Dominador Mangubat Blvd, Dasmariñas, Cavite";
 
 // ponytail: straight-line average of the two points, accurate enough inside CALABARZON. Use a driving-route
 // midpoint (a routing API) if the panel needs travel time to be equal on both sides.

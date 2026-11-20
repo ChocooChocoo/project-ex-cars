@@ -235,4 +235,23 @@ class MeetupPointTest extends TestCase
             'meetup_lat' => 15.5, 'meetup_lng' => 121, 'meetup_address' => 'Somewhere north',
         ])->assertStatus(422)->assertJson(['message' => BuyRules::OUTSIDE_CALABARZON_MESSAGE]);
     }
+
+    #[Test]
+    public function a_buyer_pin_beyond_5_km_of_its_midpoint_is_refused_and_one_inside_is_saved(): void
+    {
+        $buyer = $this->customer();
+        $id = $this->buyRequest($buyer, $this->vehicle(), 'cash', 'meetup');
+        $body = ['transaction_id' => $id, 'payment_method' => 'cash', 'arrangement_kind' => 'meetup',
+            'acknowledge_condition' => 'yes', 'meetup_address' => 'Block 4 Lot 5, Bagong Bayan, Dasmariñas',
+            'meetup_origin_lat' => 14.3, 'meetup_origin_lng' => 121.0];
+
+        // ~11 km north of the midpoint, still inside CALABARZON.
+        $this->act($buyer)->postJson('/api/v1/trading/buy-details', $body + ['meetup_lat' => 14.4, 'meetup_lng' => 121.0])
+            ->assertStatus(422)->assertJson(['message' => BuyRules::TOO_FAR_FROM_MIDPOINT_MESSAGE]);
+        $this->again()->postJson('/api/v1/trading/buy-details', $body + ['meetup_lat' => 14.33, 'meetup_lng' => 121.0])->assertOk();
+
+        $row = DB::table('purchase_details')->where('transaction_id', $id)->first();
+        $this->assertSame(14.3, (float) $row->meetup_origin_lat);
+        $this->assertTrue(BuyRules::isNearMidpoint(14.33, 121.0, null, null));
+    }
 }

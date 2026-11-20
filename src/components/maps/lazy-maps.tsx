@@ -29,6 +29,8 @@ export function MeetupMap(props: {
   readonly editable?: boolean;
   readonly showGce?: boolean;
   readonly height?: string;
+  readonly origin?: LatLng | null;
+  readonly onOrigin?: (point: LatLng) => void;
 }) {
   return <LazyMeetupMap {...props} />;
 }

@@ -5,9 +5,12 @@ import {
   CALABARZON_LEAFLET_BOUNDS,
   clampToCalabarzon,
   composeMeetupAddress,
+  distanceKm,
   emptyMeetupAddress,
   isInCalabarzon,
+  isNearMidpoint,
   latLngLabel,
+  MEETUP_MAX_OFFSET_KM,
   sameLatLng,
 } from "./meetup-area";
 import { GCE_LOCATION } from "./sell-flow";
@@ -74,5 +77,22 @@ describe("meet-up address", () => {
     expect(sameLatLng({ lat: 14.3, lng: 121 }, { lat: 14.3000001, lng: 121 })).toBe(true);
     expect(sameLatLng({ lat: 14.3, lng: 121 }, { lat: 14.4, lng: 121 })).toBe(false);
     expect(sameLatLng(null, { lat: 14.3, lng: 121 })).toBe(false);
+  });
+});
+
+describe("meet-up pin radius (notes line 120)", () => {
+  const midpoint = { lat: 14.3, lng: 121.0 };
+
+  it("accepts a pin inside the radius and rejects one beyond it, even inside CALABARZON", () => {
+    expect(MEETUP_MAX_OFFSET_KM).toBe(5);
+    expect(isNearMidpoint({ lat: 14.33, lng: 121.0 }, midpoint)).toBe(true); // ~3.3 km
+    const far = { lat: 14.4, lng: 121.0 }; // ~11 km, still in the box
+    expect(isInCalabarzon(far)).toBe(true);
+    expect(isNearMidpoint(far, midpoint)).toBe(false);
+  });
+
+  it("has no limit without a midpoint and measures great-circle km", () => {
+    expect(isNearMidpoint({ lat: 13.5, lng: 122 }, null)).toBe(true);
+    expect(distanceKm(midpoint, { lat: 14.4, lng: 121.0 })).toBeCloseTo(11.12, 1);
   });
 });

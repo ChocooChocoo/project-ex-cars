@@ -444,6 +444,12 @@ export function TransactionDetail({
       ? { lat: Number(purchaseDetails.meetup_lat), lng: Number(purchaseDetails.meetup_lng) }
       : null,
   );
+  // The suggested midpoint the pin must stay near; null on a saved pin, so a saved pin can move freely.
+  const [meetupOrigin, setMeetupOrigin] = useState<LatLng | null>(
+    purchaseDetails?.meetup_origin_lat != null && purchaseDetails?.meetup_origin_lng != null
+      ? { lat: Number(purchaseDetails.meetup_origin_lat), lng: Number(purchaseDetails.meetup_origin_lng) }
+      : null,
+  );
   const meetupLocation = composeMeetupAddress(meetupAddress);
   const locationRequired = arrangementKind === "meetup" || arrangementKind === "delivery";
   // T10: the re-scheduling window is measured from the first delivery time the buyer booked.
@@ -499,6 +505,10 @@ export function TransactionDetail({
       if (meetupPoint) {
         fd.set("meetup_lat", String(meetupPoint.lat));
         fd.set("meetup_lng", String(meetupPoint.lng));
+        if (meetupOrigin) {
+          fd.set("meetup_origin_lat", String(meetupOrigin.lat));
+          fd.set("meetup_origin_lng", String(meetupOrigin.lng));
+        }
       }
     } else {
       fd.set("location", location);
@@ -571,6 +581,10 @@ export function TransactionDetail({
       if (meetupPoint) {
         fd.set("meetup_lat", String(meetupPoint.lat));
         fd.set("meetup_lng", String(meetupPoint.lng));
+        if (meetupOrigin) {
+          fd.set("meetup_origin_lat", String(meetupOrigin.lat));
+          fd.set("meetup_origin_lng", String(meetupOrigin.lng));
+        }
       }
     } else {
       fd.set("location", location);
@@ -1022,6 +1036,8 @@ export function TransactionDetail({
                     <MeetupMap
                       value={meetupPoint}
                       onChange={(point) => setMeetupPoint(point)}
+                      origin={meetupOrigin}
+                      onOrigin={setMeetupOrigin}
                       onAddress={(next) =>
                         next && setMeetupAddress((current) => ({ ...next, block_lot: current.block_lot }))
                       }
@@ -1180,6 +1196,8 @@ export function TransactionDetail({
                       <MeetupMap
                         value={meetupPoint}
                         onChange={(point) => setMeetupPoint(point)}
+                        origin={meetupOrigin}
+                        onOrigin={setMeetupOrigin}
                         onAddress={(next) =>
                           next && setMeetupAddress((current) => ({ ...next, block_lot: current.block_lot }))
                         }

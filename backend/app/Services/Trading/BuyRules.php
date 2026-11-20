@@ -2,6 +2,8 @@
 
 namespace App\Services\Trading;
 
+use App\Services\Finance\Money;
+use App\Services\Finance\PaymentRules;
 use Carbon\CarbonImmutable;
 
 /** PHP port of the pure rules in src/lib/transactions/buy-flow.ts and state-machine.ts that the server checks. */
@@ -38,6 +40,25 @@ final class BuyRules
 
         return (float) $lat >= $b['south'] && (float) $lat <= $b['north']
             && (float) $lng >= $b['west'] && (float) $lng <= $b['east'];
+    }
+
+    /** meetup-area.ts MEETUP_MAX_OFFSET_KM: how far a halfway pin may sit from the suggested midpoint. */
+    public const MEETUP_MAX_OFFSET_KM = 5;
+
+    public const TOO_FAR_FROM_MIDPOINT_MESSAGE = 'Keep the meet-up point within 5 km of the suggested halfway point.';
+
+    /** Haversine distance check; no saved midpoint means no limit (older clients and saved pins). */
+    public static function isNearMidpoint(mixed $lat, mixed $lng, mixed $originLat, mixed $originLng): bool
+    {
+        if (! is_numeric($originLat) || ! is_numeric($originLng)) {
+            return true;
+        }
+        $rad = M_PI / 180;
+        $dLat = ((float) $originLat - (float) $lat) * $rad;
+        $dLng = ((float) $originLng - (float) $lng) * $rad;
+        $h = sin($dLat / 2) ** 2 + cos((float) $lat * $rad) * cos((float) $originLat * $rad) * sin($dLng / 2) ** 2;
+
+        return 2 * 6371 * asin(sqrt($h)) <= self::MEETUP_MAX_OFFSET_KM;
     }
 
     /** state-machine.ts TRANSITION_RULES: from → to → roles. */
@@ -219,13 +240,13 @@ final class BuyRules
     /** Money paid toward the car and confirmed by GCE; fees and rejected payments never count. */
     public static function verifiedTowardPrice(iterable $payments): float
     {
-        return \App\Services\Finance\PaymentRules::verifiedTowardPrice($payments) / 100;
+        return PaymentRules::verifiedTowardPrice($payments) / 100;
     }
 
     /** Summed in centavos (Money), so many DECIMAL rows add up exactly before the float comparison. */
     public static function verifiedPaid(iterable $payments, string $kind): float
     {
-        return \App\Services\Finance\Money::sum(collect($payments)->filter(fn ($p) => $p->payment_kind === $kind && $p->verified_by)) / 100;
+        return Money::sum(collect($payments)->filter(fn ($p) => $p->payment_kind === $kind && $p->verified_by)) / 100;
     }
 
     public static function upfrontPaymentsCleared(?object $d, iterable $payments): bool

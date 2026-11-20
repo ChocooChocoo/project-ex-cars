@@ -73,3 +73,21 @@ export function composeMeetupAddress(parts: MeetupAddressParts): string {
 export function latLngLabel(point: LatLng): string {
   return `${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`;
 }
+
+/** Line 120 of the revision notes: a halfway pin may only move this far from the suggested midpoint. */
+export const MEETUP_MAX_OFFSET_KM = 5;
+
+/** Great-circle distance in kilometres (haversine). */
+export function distanceKm(a: LatLng, b: LatLng): number {
+  const rad = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * rad;
+  const dLng = (b.lng - a.lng) * rad;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.sqrt(h));
+}
+
+/** True when the pin is within `MEETUP_MAX_OFFSET_KM` of the suggested midpoint. No midpoint, no limit. */
+export function isNearMidpoint(pin: LatLng, midpoint: LatLng | null | undefined): boolean {
+  if (!midpoint) return true;
+  return distanceKm(pin, midpoint) <= MEETUP_MAX_OFFSET_KM;
+}

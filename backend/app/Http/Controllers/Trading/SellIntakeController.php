@@ -140,6 +140,8 @@ class SellIntakeController extends Controller
             'meetup_method' => ['required', 'in:meet_halfway,gce_visit'],
             'meetup_lat' => ['nullable', 'numeric', 'between:-90,90'],
             'meetup_lng' => ['nullable', 'numeric', 'between:-180,180'],
+            'meetup_origin_lat' => ['nullable', 'numeric', 'between:-90,90'],
+            'meetup_origin_lng' => ['nullable', 'numeric', 'between:-180,180'],
             // BH-8: the Region/Province/City/Barangay + typed block and lot, composed by the browser.
             'meetup_address' => ['nullable', 'string', 'max:500'],
             'owner_number' => ['required', 'in:1,2,3,4'],
@@ -156,6 +158,7 @@ class SellIntakeController extends Controller
         abort_if($halfway && (! isset($data['meetup_lat'], $data['meetup_lng'])), 422, 'Set the meet-up point on the map.');
         // SH-14: a halfway pin outside the CALABARZON box is refused, whatever the browser sent.
         abort_if($halfway && ! BuyRules::isInCalabarzon($data['meetup_lat'], $data['meetup_lng']), 422, BuyRules::OUTSIDE_CALABARZON_MESSAGE);
+        abort_if($halfway && ! BuyRules::isNearMidpoint($data['meetup_lat'], $data['meetup_lng'], $data['meetup_origin_lat'] ?? null, $data['meetup_origin_lng'] ?? null), 422, BuyRules::TOO_FAR_FROM_MIDPOINT_MESSAGE);
         $meetupAddress = $halfway ? trim((string) ($data['meetup_address'] ?? '')) : '';
         $transactionId = $data['transaction_id'];
         $userId = $request->user()->id;
@@ -217,6 +220,8 @@ class SellIntakeController extends Controller
                 'declared_issues' => $data['has_known_issues'] === 'yes' ? trim((string) $data['declared_issues']) : null,
                 'meetup_method' => $data['meetup_method'], 'meetup_lat' => $halfway ? $data['meetup_lat'] : null, 'meetup_lng' => $halfway ? $data['meetup_lng'] : null,
                 'meetup_address' => $meetupAddress !== '' ? $meetupAddress : null,
+                'meetup_origin_lat' => $halfway ? ($data['meetup_origin_lat'] ?? null) : null,
+                'meetup_origin_lng' => $halfway ? ($data['meetup_origin_lng'] ?? null) : null,
                 // SN-13: the OR/CR/Deed answers, so staff and the seller read the same checklist.
                 'papers_checklist' => json_encode($papersChecklist),
                 'owner_number' => (int) $data['owner_number'], 'created_at' => now(), 'updated_at' => now(),

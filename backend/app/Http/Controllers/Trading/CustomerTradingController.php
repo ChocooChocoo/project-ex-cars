@@ -194,6 +194,8 @@ class CustomerTradingController extends Controller
             // BH-8: a Meet Halfway meet-up is a pin inside CALABARZON plus its composed address, not a PSGC address.
             'meetup_lat' => ['nullable', 'numeric', 'between:-90,90'],
             'meetup_lng' => ['nullable', 'numeric', 'between:-180,180'],
+            'meetup_origin_lat' => ['nullable', 'numeric', 'between:-90,90'],
+            'meetup_origin_lng' => ['nullable', 'numeric', 'between:-180,180'],
             'meetup_address' => ['nullable', 'string', 'max:500'],
             'notes' => ['nullable', 'string', 'max:500'],
             'acknowledge_condition' => ['nullable', 'in:yes'],
@@ -244,9 +246,12 @@ class CustomerTradingController extends Controller
                 $lng = $data['meetup_lng'] ?? $existing?->meetup_lng;
                 abort_if($lat === null || $lng === null, 422, 'Set the meet-up point on the map.');
                 abort_unless(BuyRules::isInCalabarzon($lat, $lng), 422, BuyRules::OUTSIDE_CALABARZON_MESSAGE);
+                // Notes line 120: only a newly sent pin is checked against its midpoint; a stored pin already passed.
+                $origin = isset($data['meetup_lat']) ? ['meetup_origin_lat' => $data['meetup_origin_lat'] ?? null, 'meetup_origin_lng' => $data['meetup_origin_lng'] ?? null] : [];
+                abort_unless(BuyRules::isNearMidpoint($lat, $lng, $origin['meetup_origin_lat'] ?? null, $origin['meetup_origin_lng'] ?? null), 422, BuyRules::TOO_FAR_FROM_MIDPOINT_MESSAGE);
                 $meetupAddress = trim((string) ($data['meetup_address'] ?? '')) ?: trim((string) ($existing?->meetup_address ?? ''));
                 abort_if($meetupAddress === '', 422, 'Type the block, lot or landmark of the meet-up point.');
-                $meetupPoint = ['meetup_lat' => $lat, 'meetup_lng' => $lng, 'meetup_address' => $meetupAddress];
+                $meetupPoint = ['meetup_lat' => $lat, 'meetup_lng' => $lng, 'meetup_address' => $meetupAddress] + $origin;
                 $location = $meetupAddress;
             } elseif ($kind === 'delivery') {
                 abort_if($location === '' && ! $request->filled('address'), 422, 'Enter a location for delivery.');
@@ -414,6 +419,8 @@ class CustomerTradingController extends Controller
             // BH-8: a financed meet-up books the map pin and its composed address, as the cash path does.
             'meetup_lat' => ['nullable', 'numeric', 'between:-90,90'],
             'meetup_lng' => ['nullable', 'numeric', 'between:-180,180'],
+            'meetup_origin_lat' => ['nullable', 'numeric', 'between:-90,90'],
+            'meetup_origin_lng' => ['nullable', 'numeric', 'between:-180,180'],
             'meetup_address' => ['nullable', 'string', 'max:500'],
         ], ['*' => 'Invalid response.']);
         $userId = $request->user()->id;
@@ -453,11 +460,14 @@ class CustomerTradingController extends Controller
                 $lng = $data['meetup_lng'] ?? $existing?->meetup_lng;
                 abort_if($lat === null || $lng === null, 422, 'Set the meet-up point on the map.');
                 abort_unless(BuyRules::isInCalabarzon($lat, $lng), 422, BuyRules::OUTSIDE_CALABARZON_MESSAGE);
+                // Notes line 120: only a newly sent pin is checked against its midpoint; a stored pin already passed.
+                $origin = isset($data['meetup_lat']) ? ['meetup_origin_lat' => $data['meetup_origin_lat'] ?? null, 'meetup_origin_lng' => $data['meetup_origin_lng'] ?? null] : [];
+                abort_unless(BuyRules::isNearMidpoint($lat, $lng, $origin['meetup_origin_lat'] ?? null, $origin['meetup_origin_lng'] ?? null), 422, BuyRules::TOO_FAR_FROM_MIDPOINT_MESSAGE);
                 $meetupAddress = trim((string) ($data['meetup_address'] ?? ''))
                     ?: trim((string) ($existing?->meetup_address ?? $existing?->location ?? ''));
                 abort_if($meetupAddress === '', 422, 'Type the block, lot or landmark of the meet-up point.');
                 $location = $meetupAddress;
-                $meetupPoint = ['meetup_lat' => $lat, 'meetup_lng' => $lng, 'meetup_address' => $meetupAddress];
+                $meetupPoint = ['meetup_lat' => $lat, 'meetup_lng' => $lng, 'meetup_address' => $meetupAddress] + $origin;
             }
             $when = Trading::when($visit);
             // A time saved before approval is replaced by this appointment.

@@ -139,6 +139,8 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
   const [issuePhotoError, setIssuePhotoError] = useState<string | null>(null);
   // BH-8: Region / Province / City / Barangay come from the pin; the block and lot are typed.
   const [meetupAddress, setMeetupAddress] = useState<MeetupAddressParts>(emptyMeetupAddress());
+  // The suggested midpoint the pin must stay near; sent so Laravel enforces the same radius.
+  const [meetupOrigin, setMeetupOrigin] = useState<{ lat: number; lng: number } | null>(null);
   const nameById = useMemo(() => new Map(checklistNodes.map((node) => [node.id, node.name])), [checklistNodes]);
 
   const checklistTree = useMemo(() => {
@@ -257,6 +259,10 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
       fd.set("meetup_lng", String(data.meetup_lng));
       const composed = composeMeetupAddress(meetupAddress);
       if (composed) fd.set("meetup_address", composed);
+      if (meetupOrigin) {
+        fd.set("meetup_origin_lat", String(meetupOrigin.lat));
+        fd.set("meetup_origin_lng", String(meetupOrigin.lng));
+      }
     }
     fd.set("id_type_1", idTypes.id_type_1);
     fd.set("id_type_2", idTypes.id_type_2);
@@ -588,8 +594,8 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
             <Field data-invalid={!!errors.meetup_lat}>
               <FieldLabel>Meet-up point *</FieldLabel>
               <FieldDescription>
-                We suggest the halfway point between GCE and your location. Drag the pin to adjust it, inside
-                CALABARZON. The address fills in once you drop the pin, and you type the block and lot.
+                We suggest the halfway point between GCE and your location. Drag the pin to adjust it, within 5 km of
+                it, inside CALABARZON. The address fills in once you drop the pin, and you type the block and lot.
               </FieldDescription>
               <MeetupMap
                 value={
@@ -600,6 +606,8 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
                   setValue("meetup_lng", point.lng, { shouldValidate: isSubmitted });
                 }}
                 onAddress={(next) => next && setMeetupAddress((current) => ({ ...next, block_lot: current.block_lot }))}
+                origin={meetupOrigin}
+                onOrigin={setMeetupOrigin}
               />
               <MeetupAddressFields value={meetupAddress} onChange={setMeetupAddress} />
               {errors.meetup_lat && <FieldError errors={[{ message: errors.meetup_lat.message }]} />}

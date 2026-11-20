@@ -149,8 +149,8 @@ describe("T12 halfwayPoint", () => {
 });
 
 describe("SH-14 GCE_LOCATION", () => {
-  it("pins GCE on DLSU-D Gate 3, Dasmariñas, not the old office pin", () => {
-    expect(GCE_LOCATION).toEqual({ lat: 14.32856, lng: 120.957 });
-    expect(GCE_LOCATION_LABEL).toBe("GCE, DLSU-D Gate 3, Dasmariñas, Cavite");
+  it("pins GCE on the client's plus code 8XG3+XC8, not DLSU-D Gate 3", () => {
+    expect(GCE_LOCATION).toEqual({ lat: 14.32741, lng: 120.95359 });
+    expect(GCE_LOCATION_LABEL).toBe("GCE, 8XG3+XC8, Dominador Mangubat Blvd, Dasmariñas, Cavite");
   });
 });
