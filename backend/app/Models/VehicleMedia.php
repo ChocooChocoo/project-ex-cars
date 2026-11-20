@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 // Generated from the final Supabase schema (table `vehicle_media`). Mass assignment stays closed until a phase adds $fillable for its actor.
 class VehicleMedia extends Model
 {
+    public const VISIBLE_KINDS = ['photo', '360_view'];
+
     use HasUuids;
 
     protected $table = 'vehicle_media';

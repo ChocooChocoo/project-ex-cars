@@ -66,6 +66,7 @@ class CatalogueTest extends TestCase
         $draft = $this->vehicle(['listing_state' => 'draft']);
         (new VehicleMedia)->forceFill(['vehicle_id' => $car->id, 'media_kind' => 'photo', 'storage_path' => 'a.png', 'display_order' => 1, 'public_state' => true, 'uploaded_by' => $customer->id])->save();
         (new VehicleMedia)->forceFill(['vehicle_id' => $car->id, 'media_kind' => 'photo', 'storage_path' => 'b.png', 'display_order' => 0, 'public_state' => false, 'uploaded_by' => $customer->id])->save();
+        (new VehicleMedia)->forceFill(['vehicle_id' => $car->id, 'media_kind' => 'interior', 'storage_path' => 'c.png', 'display_order' => 2, 'public_state' => true, 'uploaded_by' => $customer->id])->save();
 
         $this->as($customer)->getJson("/api/v1/catalogue/vehicles/{$draft->id}")->assertNotFound();
         $response = $this->as($customer)->getJson("/api/v1/catalogue/vehicles/{$car->id}")->assertOk();
@@ -171,6 +172,7 @@ class CatalogueTest extends TestCase
         $photo = UploadedFile::fake()->createWithContent('car.png', self::png());
 
         $this->as($this->account('ceo'))->post("/api/v1/staff/vehicles/{$car->id}/media", ['media_kind' => 'photo', 'file' => $photo], ['Accept' => 'application/json'])->assertForbidden();
+        $this->as($ms)->post("/api/v1/staff/vehicles/{$car->id}/media", ['media_kind' => 'interior', 'file' => $photo], ['Accept' => 'application/json'])->assertUnprocessable();
         $created = $this->as($ms)->post("/api/v1/staff/vehicles/{$car->id}/media", ['media_kind' => 'photo', 'file' => $photo], ['Accept' => 'application/json'])->assertCreated();
         $path = $created->json('storage_path');
         $this->assertStringStartsWith("{$car->id}/", $path);

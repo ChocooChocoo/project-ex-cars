@@ -66,7 +66,7 @@ class StaffVehicleController extends Controller
     {
         $user = $request->user();
         $vehicle = Vehicle::query()->findOrFail($id);
-        $media = VehicleMedia::query()->where('vehicle_id', $id)->orderBy('display_order')
+        $media = VehicleMedia::query()->where('vehicle_id', $id)->whereIn('media_kind', VehicleMedia::VISIBLE_KINDS)->orderBy('display_order')
             ->get(['id', 'media_kind', 'storage_path', 'display_order']);
 
         $proposal = $user->hasRole('ceo')
@@ -137,7 +137,7 @@ class StaffVehicleController extends Controller
     {
         Vehicle::query()->findOrFail($id);
         $data = $request->validate([
-            'media_kind' => ['required', 'in:photo,360_view,interior'],
+            'media_kind' => ['required', 'in:'.implode(',', VehicleMedia::VISIBLE_KINDS)],
             'file' => ['required', 'file'],
         ], ['media_kind.*' => 'Invalid media kind', 'file.required' => 'Vehicle and file are required']);
 

@@ -52,6 +52,7 @@ class ShowroomController extends Controller
     {
         $vehicle = Vehicle::query()->where('id', $id)->where('listing_state', 'available')->firstOrFail();
         $media = VehicleMedia::query()->where('vehicle_id', $id)->where('public_state', true)
+            ->whereIn('media_kind', VehicleMedia::VISIBLE_KINDS)
             ->orderBy('display_order')->get(['id', 'media_kind', 'storage_path', 'display_order']);
 
         return response()->json(['vehicle' => self::publicVehicle($vehicle), 'media' => ApiRow::list($media)]);

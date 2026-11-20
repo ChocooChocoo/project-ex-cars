@@ -10,17 +10,16 @@ import { ChevronLeft, ChevronRight, RotateCw, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { publicStorageUrl } from "@/lib/api/config";
-import type { VehicleMediaKind } from "@/lib/vehicles/media-kinds";
 
 export interface VehicleMediaItem {
   id: string;
-  media_kind: VehicleMediaKind;
+  media_kind: string;
   storage_path: string;
   display_order: number;
 }
 
-type ViewerMode = "360" | "photo" | "interior";
-const MODE_LABELS: Record<ViewerMode, string> = { "360": "360°", photo: "Gallery", interior: "Interior" };
+type ViewerMode = "360" | "photo";
+const MODE_LABELS: Record<ViewerMode, string> = { "360": "360°", photo: "Gallery" };
 
 function mediaUrl(storagePath: string): string {
   return publicStorageUrl("showroom-media", storagePath);
@@ -29,20 +28,15 @@ function mediaUrl(storagePath: string): string {
 export function VehicleMediaViewer({ media }: { readonly media: VehicleMediaItem[] }) {
   const byOrder = (a: VehicleMediaItem, b: VehicleMediaItem) => a.display_order - b.display_order;
   const photos = media.filter((m) => m.media_kind === "photo");
-  const interiors = media.filter((m) => m.media_kind === "interior").sort(byOrder);
   const spinFrames = media.filter((m) => m.media_kind === "360_view").sort(byOrder);
 
-  // Interior is its own tab, shown only when the car has interior photos.
-  const modes = (["360", "photo", "interior"] as const).filter((m) =>
-    m === "360" ? spinFrames.length >= 3 : (m === "photo" ? photos : interiors).length > 0,
-  );
+  const modes = (["360", "photo"] as const).filter((m) => (m === "360" ? spinFrames.length >= 3 : photos.length > 0));
 
   const [mode, setMode] = useState<ViewerMode>(modes[0] ?? "photo");
   const [photoIndex, setPhotoIndex] = useState(0);
-  const slides = mode === "interior" ? interiors : photos;
-  const has360 = spinFrames.length >= 3;
+  const activeMode = modes.includes(mode) ? mode : modes[0];
 
-  if (media.length === 0) {
+  if (!activeMode) {
     return (
       <div className="flex aspect-[4/3] items-center justify-center rounded-lg bg-muted lg:col-span-2">
         <p className="text-muted-foreground">No vehicle images available yet.</p>
@@ -52,19 +46,19 @@ export function VehicleMediaViewer({ media }: { readonly media: VehicleMediaItem
 
   return (
     <div className="flex flex-col gap-3 lg:col-span-2">
-      {mode === "360" && has360 ? (
+      {activeMode === "360" ? (
         <SpinViewer frames={spinFrames} />
       ) : (
         <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg bg-muted">
           <Image
-            src={mediaUrl(slides[photoIndex]?.storage_path ?? "")}
+            src={mediaUrl((photos[photoIndex] ?? photos[0]).storage_path)}
             alt=""
             unoptimized
             fill
             sizes="(max-width: 1024px) 100vw, 66vw"
             className="object-cover"
           />
-          {slides.length > 1 ? (
+          {photos.length > 1 ? (
             <>
               <Button
                 type="button"
@@ -72,7 +66,7 @@ export function VehicleMediaViewer({ media }: { readonly media: VehicleMediaItem
                 size="icon"
                 aria-label="Previous photo"
                 className="absolute top-1/2 left-2 -translate-y-1/2"
-                onClick={() => setPhotoIndex((photoIndex - 1 + slides.length) % slides.length)}
+                onClick={() => setPhotoIndex((photoIndex - 1 + photos.length) % photos.length)}
               >
                 <ChevronLeft className="size-4" />
               </Button>
@@ -82,7 +76,7 @@ export function VehicleMediaViewer({ media }: { readonly media: VehicleMediaItem
                 size="icon"
                 aria-label="Next photo"
                 className="absolute top-1/2 right-2 -translate-y-1/2"
-                onClick={() => setPhotoIndex((photoIndex + 1) % slides.length)}
+                onClick={() => setPhotoIndex((photoIndex + 1) % photos.length)}
               >
                 <ChevronRight className="size-4" />
               </Button>
@@ -98,8 +92,8 @@ export function VehicleMediaViewer({ media }: { readonly media: VehicleMediaItem
               <button
                 key={m}
                 type="button"
-                aria-pressed={mode === m}
-                className={`min-h-11 rounded-md px-3 py-1 font-medium text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-0 ${mode === m ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                aria-pressed={activeMode === m}
+                className={`min-h-11 rounded-md px-3 py-1 font-medium text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-0 ${activeMode === m ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
                 onClick={() => {
                   setMode(m);
                   setPhotoIndex(0);
@@ -229,7 +223,7 @@ function SpinViewer({ frames }: { readonly frames: VehicleMediaItem[] }) {
           fill
           loading="eager"
           sizes="(max-width: 1024px) 100vw, 66vw"
-          className="pointer-events-none object-cover"
+          className="pointer-events-none object-contain"
           style={{ opacity: i === shown ? 1 : 0 }}
           onLoad={() => setLoaded((n) => n + 1)}
           onError={() => setLoaded((n) => n + 1)}

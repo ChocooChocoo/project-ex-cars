@@ -19,9 +19,11 @@ describe("T04 vehicle media interior migration", () => {
     expect(migration).toMatch(/CHECK \(media_kind IN \('photo', '360_view', 'interior'\)\)/);
   });
 
-  it("matches the media kinds the app accepts", () => {
+  it("keeps the historical interior kind while the app accepts only photos and spin frames", () => {
     const kinds = migration.match(/CHECK \(media_kind IN \(([^)]*)\)\)/)?.[1] ?? "";
-    expect([...kinds.matchAll(/'([a-z0-9_]+)'/g)].map((m) => m[1]).sort()).toEqual([...VEHICLE_MEDIA_KINDS].sort());
+    expect([...kinds.matchAll(/'([a-z0-9_]+)'/g)].map((m) => m[1]).sort()).toEqual(
+      [...VEHICLE_MEDIA_KINDS, "interior"].sort(),
+    );
   });
 
   it("only replaces the constraint", () => {

@@ -19,20 +19,6 @@ describe("VehicleMediaViewer", () => {
     expect(screen.queryByRole("button", { name: "Interior" })).not.toBeInTheDocument();
   });
 
-  it("adds an Interior tab next to Gallery and shows only interior photos in it", () => {
-    render(<VehicleMediaViewer media={[item("p1", "photo"), item("i1", "interior"), item("i2", "interior", 1)]} />);
-
-    expect(screen.getByRole("button", { name: "Gallery" })).toHaveAttribute("aria-pressed", "true");
-    expect(imageSrcs()[0]).toContain("veh/p1.jpg");
-
-    fireEvent.click(screen.getByRole("button", { name: "Interior" }));
-
-    expect(screen.getByRole("button", { name: "Interior" })).toHaveAttribute("aria-pressed", "true");
-    expect(imageSrcs()[0]).toContain("veh/i1.jpg");
-    fireEvent.click(screen.getByRole("button", { name: "Next photo" }));
-    expect(imageSrcs()[0]).toContain("veh/i2.jpg");
-  });
-
   it("keeps interior photos out of the gallery", () => {
     render(<VehicleMediaViewer media={[item("p1", "photo"), item("i1", "interior")]} />);
 
@@ -41,19 +27,20 @@ describe("VehicleMediaViewer", () => {
     expect(screen.queryByRole("button", { name: "Next photo" })).not.toBeInTheDocument();
   });
 
-  it("offers 360, Gallery and Interior together", () => {
+  it("offers 360° and Gallery without exposing legacy interior images", () => {
     const spin = [item("s1", "360_view", 0), item("s2", "360_view", 1), item("s3", "360_view", 2)];
     render(<VehicleMediaViewer media={[...spin, item("p1", "photo"), item("i1", "interior")]} />);
 
-    for (const name of ["360°", "Gallery", "Interior"]) {
-      expect(screen.getByRole("button", { name })).toBeInTheDocument();
-    }
+    expect(screen.getByRole("button", { name: "360°" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByRole("button", { name: "Interior" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Gallery" }));
+    expect(imageSrcs()[0]).toContain("veh/p1.jpg");
   });
 
-  it("opens on the interior photos when they are the only media", () => {
+  it("shows the empty state when only legacy interior photos exist", () => {
     render(<VehicleMediaViewer media={[item("i1", "interior")]} />);
 
-    expect(imageSrcs()[0]).toContain("veh/i1.jpg");
+    expect(screen.getByText("No vehicle images available yet.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Interior" })).not.toBeInTheDocument();
   });
 
@@ -64,6 +51,7 @@ describe("VehicleMediaViewer", () => {
     const srcs = imageSrcs();
     expect(srcs).toHaveLength(4);
     for (const n of [0, 1, 2, 3]) expect(srcs.some((src) => src.includes(`veh/s${n}.jpg`))).toBe(true);
+    for (const frame of screen.getAllByRole("presentation")) expect(frame).toHaveClass("object-contain");
   });
 });
 

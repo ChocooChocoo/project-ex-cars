@@ -17,17 +17,13 @@ import { Field, FieldLabel } from "@/components/ui/field";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { publicStorageUrl } from "@/lib/api/config";
 import { compressImage } from "@/lib/uploads/compress-image";
-import type { VehicleMediaKind } from "@/lib/vehicles/media-kinds";
+import { isVehicleMediaKind, type VehicleMediaKind } from "@/lib/vehicles/media-kinds";
 
 const UPLOADED_MESSAGE: Record<VehicleMediaKind, string> = {
   photo: "Photo uploaded.",
   "360_view": "360° frame uploaded.",
-  interior: "Interior photo uploaded.",
 };
-const BADGE_LABEL: Record<VehicleMediaKind, string> = { photo: "Photo", "360_view": "360°", interior: "Interior" };
-
-// S4: a fixed, free shot list so every listing shows the same interior views.
-const INTERIOR_SHOTS = ["Dashboard", "Front seats", "Rear seats", "Odometer", "Trunk", "Roof lining"];
+const BADGE_LABEL: Record<VehicleMediaKind, string> = { photo: "Photo", "360_view": "360°" };
 
 export interface StaffMediaRow {
   id: string;
@@ -82,9 +78,8 @@ export function VehicleMediaManager({
     router.refresh();
   }
 
-  const spinFrames = media.filter((m) => m.media_kind === "360_view");
-  const photos = media.filter((m) => m.media_kind === "photo");
-  const interiors = media.filter((m) => m.media_kind === "interior");
+  const visibleMedia = media.filter((m) => isVehicleMediaKind(m.media_kind));
+  const spinCount = visibleMedia.filter((m) => m.media_kind === "360_view").length;
 
   return (
     <Card>
@@ -108,7 +103,6 @@ export function VehicleMediaManager({
                 <SelectGroup>
                   <SelectItem value="photo">Photo</SelectItem>
                   <SelectItem value="360_view">360° Frame</SelectItem>
-                  <SelectItem value="interior">Interior</SelectItem>
                 </SelectGroup>
               </SelectContent>
             </Select>
@@ -129,29 +123,14 @@ export function VehicleMediaManager({
 
         <p className="text-muted-foreground text-xs">
           Upload consecutive 360° frames in order: customers drag to rotate through them on the showroom. 3 or more
-          frames enable the 360° viewer; photos appear in the gallery; interior photos get their own Interior tab.
+          frames enable the 360° viewer. Regular photos appear in the gallery.
         </p>
 
-        {kind === "interior" ? (
-          <div className="rounded-lg border bg-muted/40 p-3 text-sm">
-            <p className="font-medium">Interior shot list</p>
-            <ol className="mt-1.5 grid list-inside list-decimal gap-x-6 gap-y-0.5 text-muted-foreground sm:grid-cols-2">
-              {INTERIOR_SHOTS.map((shot) => (
-                <li key={shot}>{shot}</li>
-              ))}
-            </ol>
-            <p className="mt-2 text-muted-foreground text-xs">
-              Use a phone camera held in landscape. Panorama mode on the phone also works and costs nothing. Upload the
-              shots in the order above.
-            </p>
-          </div>
-        ) : null}
-
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-          {media.length === 0 ? (
+          {visibleMedia.length === 0 ? (
             <p className="text-muted-foreground text-sm">No media uploaded yet.</p>
           ) : (
-            media.map((m) => (
+            visibleMedia.map((m) => (
               <div key={m.id} className="relative aspect-[4/3] overflow-hidden rounded-lg border">
                 <Image
                   src={publicStorageUrl("showroom-media", m.storage_path)}
@@ -184,8 +163,8 @@ export function VehicleMediaManager({
         </div>
 
         <p className="text-muted-foreground text-xs">
-          {spinFrames.length} 360° frame(s) · {photos.length} photo(s) · {interiors.length} interior photo(s). 360°
-          frames must be uploaded in rotating order (front, side, back, other side, ...).
+          {spinCount} 360° frame(s) · {visibleMedia.length - spinCount} photo(s). 360° frames must be uploaded in
+          rotating order (front, side, back, other side, ...).
         </p>
       </CardContent>
     </Card>
