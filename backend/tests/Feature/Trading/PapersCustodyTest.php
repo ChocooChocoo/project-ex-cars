@@ -5,11 +5,13 @@ namespace Tests\Feature\Trading;
 use App\Models\User;
 use App\Services\Finance\PaymentRules;
 use App\Services\Trading\BuyRules;
+use App\Services\Trading\Trading;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Feature\Trading\Concerns\TradingFixtures;
 use Tests\TestCase;
@@ -40,7 +42,7 @@ class PapersCustodyTest extends TestCase
         return ['tx' => $tx, 'vehicle' => $vehicle, 'seller' => $seller];
     }
 
-    private function capture(User $user, string $tx, array $extra = []): \Illuminate\Testing\TestResponse
+    private function capture(User $user, string $tx, array $extra = []): TestResponse
     {
         return $this->act($user)->post('/api/v1/staff/trading/sell/capture-papers', [
             'transaction_id' => $tx,
@@ -67,7 +69,7 @@ class PapersCustodyTest extends TestCase
         $this->capture($ms, $car['tx'], ['extra' => [UploadedFile::fake()->image('page2.jpg')]])->assertOk();
         $items = DB::table('vehicle_document_items')->where('vehicle_id', $car['vehicle'])->get();
         $this->assertEqualsCanonicalizing(['official_receipt', 'certificate_of_registration', 'deed_of_sale'], $items->pluck('document_kind')->all());
-        $this->assertSame(['with_ci'], $items->pluck('custody_state')->unique()->values()->all());
+        $this->assertSame(['on_hold'], $items->pluck('custody_state')->unique()->values()->all());
         $this->assertSame([$car['tx']], $items->pluck('source_transaction_id')->unique()->values()->all());
         $this->assertSame(4, DB::table('transaction_documents')->where('transaction_id', $car['tx'])->where('verification_state', 'verified')->count());
         $this->assertSame(1, DB::table('notifications')->where('kind', 'vehicle_papers_received')->count());
@@ -76,7 +78,7 @@ class PapersCustodyTest extends TestCase
         // SN-4: the CI's "From sellers" list, with the seller and one link per paper.
         $list = $this->act($ci)->getJson('/api/v1/staff/vehicle-papers')->assertOk()->json('fromSellers');
         $this->assertCount(1, $list);
-        $this->assertSame('with_ci', $list[0]['custody_state']);
+        $this->assertSame('on_hold', $list[0]['custody_state']);
         $this->assertSame($car['tx'], $list[0]['source_transaction_id']);
         $this->assertSame(['official_receipt', 'certificate_of_registration', 'deed_of_sale'], array_column($list[0]['papers'], 'document_kind'));
         $this->assertNotNull($list[0]['papers'][0]['url']);
@@ -86,10 +88,15 @@ class PapersCustodyTest extends TestCase
         $buy = $this->buyRequest($buyer, $car['vehicle'], 'cash', 'gce_visit', null, ['current_state' => 'approved']);
         $this->act($ms)->getJson("/api/v1/staff/transactions/{$buy}/car-papers")->assertForbidden();
         $papers = $this->act($sm)->getJson("/api/v1/staff/transactions/{$buy}/car-papers")->assertOk();
-        $papers->assertJsonPath('custodyState', 'with_ci')->assertJsonCount(4, 'documents');
+        $papers->assertJsonPath('custodyState', 'on_hold')->assertJsonCount(4, 'documents');
 
         // BC-4: a full-cash GCE visit requests the papers with no verified payment; the CI's release marks them Released.
         $this->act($sm)->postJson('/api/v1/staff/trading/handover/request-papers-release', ['transaction_id' => $buy])->assertOk();
+        // Notes line 159: no seller method on record (the fixture has no sell_details), so the CI receives them.
+        $this->assertSame('confidential_informant', DB::table('sale_handovers')->where('transaction_id', $buy)->value('custodian_role'));
+        // Another car's papers stay private to its own buy request.
+        $other = $this->buyRequest($this->customer(), $this->vehicle(), 'cash', 'gce_visit', null, ['current_state' => 'approved']);
+        $this->act($sm)->getJson("/api/v1/staff/transactions/{$other}/car-papers")->assertOk()->assertJsonCount(0, 'documents');
         $this->act($ci)->postJson('/api/v1/staff/trading/handover/approve-papers-release', ['transaction_id' => $buy])->assertOk();
         $this->assertSame(['released'], DB::table('vehicle_document_items')->where('vehicle_id', $car['vehicle'])->pluck('custody_state')->unique()->values()->all());
     }
@@ -123,5 +130,26 @@ class PapersCustodyTest extends TestCase
         $this->assertTrue(BuyRules::needsContract(DB::table('purchase_details')->where('transaction_id', $cash)->first()));
         $this->assertTrue(PaymentRules::allowedBeforeSigning(DB::table('purchase_details')->where('transaction_id', $cash)->first(), 'full'));
         $this->assertFalse(PaymentRules::allowedBeforeSigning(DB::table('purchase_details')->where('transaction_id', $financed)->first(), 'downpayment'));
+    }
+
+    #[Test]
+    public function a_gce_visit_captures_papers_once_the_price_is_agreed_and_a_sale_releases_them(): void
+    {
+        $car = $this->boughtCar('approved');
+        DB::table('sell_details')->insert(['id' => (string) Str::uuid(), 'transaction_id' => $car['tx'], 'offered_amount' => 450000,
+            'meetup_method' => 'gce_visit', 'created_at' => now(), 'updated_at' => now()]);
+        $ms = $this->account('marketing_specialist');
+
+        $this->capture($ms, $car['tx'])->assertStatus(422);
+        DB::table('sell_details')->where('transaction_id', $car['tx'])->update(['agreed_price' => 430000]);
+        $this->capture($ms, $car['tx'], ['signed_id_copies' => UploadedFile::fake()->image('ids.jpg')])->assertOk();
+        $this->assertSame(1, DB::table('transaction_documents')->where('transaction_id', $car['tx'])->where('note', 'Signed ID copies of the seller')->count());
+
+        $buy = $this->buyRequest($this->customer(), $car['vehicle'], 'cash', 'gce_visit', null, ['current_state' => 'approved']);
+        $this->act($this->account('sales_manager'))->postJson('/api/v1/staff/trading/handover/request-papers-release', ['transaction_id' => $buy])->assertOk();
+        $this->assertSame('marketing_specialist', DB::table('sale_handovers')->where('transaction_id', $buy)->value('custodian_role'));
+
+        Trading::finalizeBuySale(DB::table('transactions')->where('id', $buy)->first(), $ms->id);
+        $this->assertSame(['released'], DB::table('vehicle_document_items')->where('vehicle_id', $car['vehicle'])->pluck('custody_state')->unique()->values()->all());
     }
 }

@@ -468,6 +468,7 @@ export function StaffTransactionDetail({
           fieldArrangement={isFieldArrangement(purchaseDetails ?? null)}
           open={state === "approved"}
           userRole={userRole}
+          custodianRole={(handover.custodian_role as string | null | undefined) ?? null}
         />
       ) : null}
 
@@ -489,8 +490,14 @@ export function StaffTransactionDetail({
         />
       ) : null}
 
-      {/* SN-3: the bought car's original papers go to the Confidential Informant once the seller is paid. */}
-      {kind === "sell" && state === "completed" && sellFlow ? (
+      {/* SN-3: the bought car's original papers are captured once the seller is paid; notes line 156: for a GCE
+          Visit, as soon as the price is agreed at the office. */}
+      {kind === "sell" &&
+      sellFlow &&
+      (state === "completed" ||
+        (sellDetails?.meetup_method === "gce_visit" &&
+          sellDetails?.agreed_price != null &&
+          !["rejected", "cancelled"].includes(state))) ? (
         <CapturePapersCard
           transactionId={id}
           custody={sellFlow.papersCustody ?? null}

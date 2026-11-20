@@ -8,7 +8,7 @@ import { OLDEST_LISTED_YEAR, SELL_CONDITION_VALUES, SELL_PAPER_STATUSES } from "
 
 const OUTSIDE_CALABARZON = "Meet-ups must be inside CALABARZON.";
 const PAPERS_MISSING = "Answer the papers checklist for the OR, the CR and the deed of sale.";
-const DEED_STATUS = ["has", "does_not_have"] as const;
+export const SIGNED_ID_COPIES_MESSAGE = "Confirm that you will bring the signed copies of your valid IDs.";
 
 // SH-14 / BH-8: a meet-up pin is only valid inside the CALABARZON box. The geocoded region check needs the
 // network, so it runs on the map; the box is the part the schema can prove from the coordinates alone.
@@ -135,11 +135,13 @@ export const sellVehicleSchema = z
         {
           official_receipt: z.enum(SELL_PAPER_STATUSES),
           certificate_of_registration: z.enum(SELL_PAPER_STATUSES),
-          deed_of_sale: z.enum(DEED_STATUS),
+          deed_of_sale: z.enum(SELL_PAPER_STATUSES),
         },
         { error: PAPERS_MISSING },
       ),
     ),
+    // Notes line 116: the seller must confirm the signed ID copies before the offer is sent.
+    signed_id_copies: z.literal(true, { error: SIGNED_ID_COPIES_MESSAGE }),
     // C10: 1st, 2nd, 3rd, or 4 for "4th owner or more".
     owner_number: z.enum(["1", "2", "3", "4"], { error: "Choose which owner you are." }).transform(Number),
   })

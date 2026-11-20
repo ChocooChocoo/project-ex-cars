@@ -87,7 +87,7 @@ export const SELL_CONDITION_VALUES = ["Like New", "Good", "Fair"] as const;
 
 /**
  * SN-13: the seller declares the car's papers instead of uploading them, and brings the originals to the meet-up.
- * The OR and the CR may be expired; a deed of sale either exists or does not.
+ * Each paper may be expired (notes line 115), the deed of sale included.
  */
 export const SELL_PAPER_STATUSES = ["has", "does_not_have", "expired"] as const;
 
@@ -113,10 +113,12 @@ export const SELL_PAPER_FIELDS = [
   {
     key: "deed_of_sale",
     label: "Deed of Sale",
-    // A deed of sale is a contract, so it cannot expire: it was either signed or never existed.
-    statuses: ["has", "does_not_have"] as const,
+    statuses: SELL_PAPER_STATUSES,
   },
 ] as const;
+
+/** Notes line 116: the seller confirms the signed ID copies they bring; stored in `papers_checklist`. */
+export const SIGNED_ID_COPIES_LABEL = "I will bring 2 printed copies of each valid ID, each signed 3 times.";
 
 export type SellPaperKind = (typeof SELL_PAPER_FIELDS)[number]["key"];
 export type SellPapersChecklist = Record<SellPaperKind, SellPaperStatus>;

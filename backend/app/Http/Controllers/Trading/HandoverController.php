@@ -114,9 +114,23 @@ class HandoverController extends Controller
                 'The Head Accountant must check the payment before the papers are requested.');
             abort_if($sale->papers && $sale->papers !== 'returned', 409, 'The papers were already requested.');
             $this->setPapers($sale, $actorId, 'requested');
+            DB::table('sale_handovers')->where('transaction_id', $sale->id)->update(['custodian_role' => self::custodianRole($sale->id)]);
             Trading::notify(['role' => 'confidential_informant'], 'papers_release_requested', 'Vehicle papers requested',
                 "The Sales Manager asks for a sold car's papers. Approve and hand them over from Vehicle Papers.", $sale->id);
         });
+    }
+
+    /**
+     * Notes line 159: who receives the originals follows the seller's method. A GCE Visit seller left them with the
+     * Marketing Specialist; a halfway seller with the Confidential Informant. Cars with no seller record: the CI.
+     */
+    public static function custodianRole(string $saleTransactionId): string
+    {
+        $vehicleId = DB::table('transactions')->where('id', $saleTransactionId)->value('vehicle_id');
+        $source = DB::table('vehicle_document_items')->where('vehicle_id', $vehicleId)->whereNotNull('source_transaction_id')->value('source_transaction_id');
+        $method = $source ? DB::table('sell_details')->where('transaction_id', $source)->value('meetup_method') : null;
+
+        return $method === 'gce_visit' ? 'marketing_specialist' : 'confidential_informant';
     }
 
     public function approvePapersRelease(Request $request): JsonResponse

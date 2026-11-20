@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Trading;
 
+use App\Services\Trading\SellFlow;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -58,6 +59,7 @@ class SellPapersTest extends TestCase
             'offered_amount' => 400000, 'has_known_issues' => 'no', 'meetup_method' => 'gce_visit', 'owner_number' => '1',
             'transaction_id' => $transactionId, 'id_type_1' => 'passport', 'id_type_2' => 'umid',
             'papers_checklist' => ['official_receipt' => 'has', 'certificate_of_registration' => 'expired', 'deed_of_sale' => 'does_not_have'],
+            'signed_id_copies' => 'yes',
         ] + $uploads;
     }
 
@@ -71,7 +73,7 @@ class SellPapersTest extends TestCase
 
         // The answers are stored on sell_details, keyed by document kind.
         $checklist = json_decode(DB::table('sell_details')->where('transaction_id', $id)->value('papers_checklist'), true);
-        $this->assertEquals(['official_receipt' => 'has', 'certificate_of_registration' => 'expired', 'deed_of_sale' => 'does_not_have'], $checklist);
+        $this->assertEquals(['official_receipt' => 'has', 'certificate_of_registration' => 'expired', 'deed_of_sale' => 'does_not_have', 'signed_id_copies' => true], $checklist);
         // Only the photos and the four ID images are files; the papers live on the checklist.
         $kinds = DB::table('transaction_documents')->where('transaction_id', $id)->pluck('document_kind')->unique()->sort()->values()->all();
         $this->assertSame(['sell_photo', 'valid_id'], $kinds);
@@ -88,7 +90,6 @@ class SellPapersTest extends TestCase
         foreach ([
             'no checklist at all' => [],
             'an unknown answer' => ['official_receipt' => 'maybe', 'certificate_of_registration' => 'has', 'deed_of_sale' => 'has'],
-            'a deed that claims to be expired' => ['official_receipt' => 'has', 'certificate_of_registration' => 'has', 'deed_of_sale' => 'expired'],
             'one paper left unanswered' => ['official_receipt' => 'has', 'certificate_of_registration' => 'has'],
         ] as $case => $answers) {
             $body = $form;
@@ -100,6 +101,13 @@ class SellPapersTest extends TestCase
             $this->again()->postJson('/api/v1/trading/sell', $body)->assertStatus(422);
             $this->assertSame(0, DB::table('transactions')->where('id', $transactionId)->count(), "refused: {$case}");
         }
+        // Notes line 116: the signed ID copies tick is required.
+        $body = $form;
+        unset($body['signed_id_copies']);
+        $this->again()->postJson('/api/v1/trading/sell', $body)->assertStatus(422)->assertJson(['message' => 'Confirm that you will bring the signed copies of your valid IDs.']);
+        // Notes line 115: an expired deed of sale is accepted.
+        $form['papers_checklist']['deed_of_sale'] = 'expired';
+        $this->again()->postJson('/api/v1/trading/sell', $form)->assertOk();
     }
 
     #[Test]
@@ -182,7 +190,7 @@ class SellPapersTest extends TestCase
         $this->assertSame(0, DB::table('transaction_documents')->where('transaction_id', $id)->whereIn('document_kind', ['official_receipt', 'certificate_of_registration', 'deed_of_sale', 'orcr'])->count());
 
         DB::table('transaction_documents')->where('transaction_id', $id)->where('document_kind', 'valid_id')->update(['verification_state' => 'verified']);
-        $this->assertTrue(\App\Services\Trading\SellFlow::papersVerified(DB::table('transaction_documents')->where('transaction_id', $id)->get(['document_kind', 'verification_state', 'id_type', 'id_side'])));
+        $this->assertTrue(SellFlow::papersVerified(DB::table('transaction_documents')->where('transaction_id', $id)->get(['document_kind', 'verification_state', 'id_type', 'id_side'])));
 
         $this->act($this->account('marketing_specialist'))->postJson('/api/v1/staff/trading/sell/propose-purchase-ceiling', [
             'transaction_id' => $id, 'amount' => 380000,

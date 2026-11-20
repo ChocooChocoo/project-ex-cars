@@ -21,6 +21,7 @@ function baseData(overrides: Record<string, unknown> = {}) {
       certificate_of_registration: "has",
       deed_of_sale: "has",
     },
+    signed_id_copies: true,
     ...overrides,
   };
 }
@@ -58,18 +59,26 @@ describe("sellVehicleSchema papers checklist (SN-13)", () => {
     }
   });
 
-  it("rejects an answer outside the three statuses, and a deed that claims to be expired", () => {
-    expect(
-      sellVehicleSchema.safeParse(
-        baseData({
-          papers_checklist: { official_receipt: "maybe", certificate_of_registration: "has", deed_of_sale: "has" },
-        }),
-      ).success,
-    ).toBe(false);
+  it("accepts an expired deed of sale (notes line 115)", () => {
     expect(
       sellVehicleSchema.safeParse(
         baseData({
           papers_checklist: { official_receipt: "has", certificate_of_registration: "has", deed_of_sale: "expired" },
+        }),
+      ).success,
+    ).toBe(true);
+  });
+
+  it("requires the signed ID copies tick (notes line 116)", () => {
+    expect(sellVehicleSchema.safeParse(baseData({ signed_id_copies: undefined })).success).toBe(false);
+    expect(sellVehicleSchema.safeParse(baseData({ signed_id_copies: false })).success).toBe(false);
+  });
+
+  it("rejects an answer outside the three statuses", () => {
+    expect(
+      sellVehicleSchema.safeParse(
+        baseData({
+          papers_checklist: { official_receipt: "maybe", certificate_of_registration: "has", deed_of_sale: "has" },
         }),
       ).success,
     ).toBe(false);
@@ -83,6 +92,6 @@ describe("sellVehicleSchema papers checklist (SN-13)", () => {
       "certificate_of_registration",
       "deed_of_sale",
     ]);
-    expect(SELL_PAPER_FIELDS.at(-1)?.statuses).toEqual(["has", "does_not_have"]);
+    expect(SELL_PAPER_FIELDS.at(-1)?.statuses).toEqual(["has", "does_not_have", "expired"]);
   });
 });

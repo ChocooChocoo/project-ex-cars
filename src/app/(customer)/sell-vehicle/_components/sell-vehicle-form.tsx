@@ -33,6 +33,7 @@ import {
   SELL_CONDITIONS,
   SELL_PAPER_FIELDS,
   SELL_PAPER_STATUS_LABELS,
+  SIGNED_ID_COPIES_LABEL,
 } from "@/lib/vehicles/catalog";
 
 export interface ConditionChecklistNode {
@@ -125,6 +126,7 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
   const [idFilesError, setIdFilesError] = useState<string | null>(null);
   // SN-13: the seller's answers about the OR, the CR and the deed of sale, keyed by document kind.
   const [papersChecklist, setPapersChecklist] = useState<Record<string, string>>({});
+  const signedIdCopies = watch("signed_id_copies");
 
   const [photos, setPhotos] = useState<File[]>([]);
   const [photoError, setPhotoError] = useState<string | null>(null);
@@ -268,6 +270,7 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
     fd.set("id_type_2", idTypes.id_type_2);
     // SN-13: one JSON field, like condition_items, so the three answers travel together.
     fd.set("papers_checklist", JSON.stringify(papersChecklist));
+    fd.set("signed_id_copies", data.signed_id_copies ? "yes" : "");
     if (hasIssues && selectedConditionItems.length > 0) {
       fd.set("condition_items", JSON.stringify(selectedConditionItems));
     }
@@ -663,6 +666,20 @@ export function SellVehicleForm({ checklistNodes = [] }: { readonly checklistNod
             ) : errors.papers_checklist ? (
               <FieldError errors={[{ message: SELL_PAPERS_MESSAGE }]} />
             ) : null}
+          </Field>
+          <Field data-invalid={!!errors.signed_id_copies}>
+            <div className="flex items-start gap-2 text-sm">
+              <Checkbox
+                id="sell-signed-id-copies"
+                checked={signedIdCopies === true}
+                onCheckedChange={(checked) =>
+                  setValue("signed_id_copies", (checked === true) as true, { shouldValidate: isSubmitted })
+                }
+                aria-invalid={!!errors.signed_id_copies}
+              />
+              <label htmlFor="sell-signed-id-copies">{SIGNED_ID_COPIES_LABEL} *</label>
+            </div>
+            {errors.signed_id_copies ? <FieldError errors={[{ message: errors.signed_id_copies.message }]} /> : null}
           </Field>
           <Field data-invalid={!!idFilesError}>
             <FieldLabel>Your valid IDs (JPEG/PNG/WebP/PDF, max 2 MB each)</FieldLabel>

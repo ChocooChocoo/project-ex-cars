@@ -6,6 +6,7 @@ use App\Services\NotificationService;
 use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -72,7 +73,7 @@ final class Trading
     }
 
     /** Active holders of the field roles (was the list_field_case_workers RPC). */
-    public static function fieldWorkers(): \Illuminate\Support\Collection
+    public static function fieldWorkers(): Collection
     {
         return DB::table('user_roles as r')->join('profiles as p', 'p.id', '=', 'r.account_id')
             ->where('r.active', true)->whereIn('r.role', ['confidential_informant', 'mechanic', 'head_security'])
@@ -226,6 +227,8 @@ final class Trading
             return;
         }
         self::markVehicleSold($sale->vehicle_id);
+        // Notes line 158: the seller's papers are On Hold while the car is unsold and Released once it sells.
+        self::setPapersCustody($sale->id, 'released');
         self::notifySaleCompleted($sale);
 
         $competitors = DB::table('transactions')->where('vehicle_id', $sale->vehicle_id)->where('transaction_kind', 'buy')

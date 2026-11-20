@@ -51,6 +51,7 @@ function baseData(overrides: Record<string, unknown> = {}) {
       certificate_of_registration: "has",
       deed_of_sale: "has",
     },
+    signed_id_copies: true,
     ...overrides,
   };
 }
@@ -290,12 +291,12 @@ describe("SellVehicleForm papers checklist (SN-13)", () => {
     await waitFor(() => expect(visibleAnswers()).toEqual(["I have it", "I don't have it", "It is expired"]));
   });
 
-  it("offers no expired answer for the deed of sale", async () => {
+  it("offers an expired answer for the deed of sale too (notes line 115)", async () => {
     render(<SellVehicleForm />);
 
     fireEvent.click(screen.getByLabelText("Deed of Sale *"));
 
-    await waitFor(() => expect(visibleAnswers()).toEqual(["I have it", "I don't have it"]));
+    await waitFor(() => expect(visibleAnswers()).toEqual(["I have it", "I don't have it", "It is expired"]));
   });
 
   it("carries the answers into the form state, so submitting is not blocked by the checklist", async () => {

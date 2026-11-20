@@ -39,9 +39,11 @@ class SellIntakeController extends Controller
     private const PAPER_STATUSES = [
         'official_receipt' => ['has', 'does_not_have', 'expired'],
         'certificate_of_registration' => ['has', 'does_not_have', 'expired'],
-        // A deed of sale is a contract, so it cannot expire: it was either signed or never existed.
-        'deed_of_sale' => ['has', 'does_not_have'],
+        // Notes line 115: the deed may be expired too.
+        'deed_of_sale' => ['has', 'does_not_have', 'expired'],
     ];
+
+    private const SIGNED_COPIES_MESSAGE = 'Confirm that you will bring the signed copies of your valid IDs.';
 
     private const CHECKLIST_MESSAGE = 'Answer the papers checklist for the OR, the CR and the deed of sale.';
 
@@ -148,11 +150,13 @@ class SellIntakeController extends Controller
             'transaction_id' => ['required', 'uuid'],
             // SN-13: the three papers are declared, not uploaded, so the JSON answers are required.
             'papers_checklist' => ['required'],
+            // Notes line 116: 2 printed copies of each valid ID, each signed 3 times.
+            'signed_id_copies' => ['accepted'],
             'id_type_1' => ['required', 'in:'.implode(',', CustomerTradingController::ID_TYPES)],
             'id_type_2' => ['required', 'in:'.implode(',', CustomerTradingController::ID_TYPES)],
-        ], ['transaction_id.*' => 'Invalid upload. Please try again.', 'id_type_1.*' => 'Choose the type of both valid IDs.', 'id_type_2.*' => 'Choose the type of both valid IDs.', 'papers_checklist.required' => self::CHECKLIST_MESSAGE]);
+        ], ['transaction_id.*' => 'Invalid upload. Please try again.', 'id_type_1.*' => 'Choose the type of both valid IDs.', 'id_type_2.*' => 'Choose the type of both valid IDs.', 'papers_checklist.required' => self::CHECKLIST_MESSAGE, 'signed_id_copies.accepted' => self::SIGNED_COPIES_MESSAGE]);
         abort_if($data['id_type_1'] === $data['id_type_2'], 422, 'Use two different valid IDs.');
-        $papersChecklist = self::papersChecklist($request->input('papers_checklist'));
+        $papersChecklist = self::papersChecklist($request->input('papers_checklist')) + ['signed_id_copies' => true];
         abort_if($data['has_known_issues'] === 'yes' && trim((string) ($data['declared_issues'] ?? '')) === '', 422, 'Tick the issues, or tick Others and describe them.');
         $halfway = $data['meetup_method'] === 'meet_halfway';
         abort_if($halfway && (! isset($data['meetup_lat'], $data['meetup_lng'])), 422, 'Set the meet-up point on the map.');

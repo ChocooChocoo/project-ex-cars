@@ -3,6 +3,9 @@
 namespace Tests\Feature\Trading;
 
 use App\Jobs\CheckTransactionDocument;
+use App\Models\User;
+use App\Services\Trading\Trading;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -10,6 +13,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\Feature\Trading\Concerns\TradingFixtures;
 use Tests\TestCase;
 
@@ -43,7 +47,7 @@ class TransitionTest extends TestCase
             'has_known_issues' => 'no', 'meetup_method' => $meetup, 'meetup_lat' => 14.2, 'meetup_lng' => 121.1, 'owner_number' => '1',
             'transaction_id' => $prepared['transactionId'], 'id_type_1' => 'passport', 'id_type_2' => 'umid',
             // SN-13: the OR, the CR and the deed of sale are declared, so no file of them is sent.
-            'papers_checklist' => ['official_receipt' => 'has', 'certificate_of_registration' => 'has', 'deed_of_sale' => 'has']];
+            'papers_checklist' => ['official_receipt' => 'has', 'certificate_of_registration' => 'has', 'deed_of_sale' => 'has'], 'signed_id_copies' => 'yes'];
         foreach ($files as $i => $file) {
             $grant = $prepared['uploads'][$i];
             $this->again()->post('/api/v1/trading/uploads', ['path' => $grant['path'], 'token' => $grant['token'], 'file' => UploadedFile::fake()->image('a.jpg')])->assertOk();
@@ -272,12 +276,12 @@ class TransitionTest extends TestCase
     {
         $vehicle = $this->vehicle();
         $buyer = $this->customer();
-        $soon = $this->buyRequest($buyer, $vehicle, 'cash', 'meetup', \Carbon\CarbonImmutable::now()->addHours(3), ['current_state' => 'approved', 'queue_state' => 'active']);
+        $soon = $this->buyRequest($buyer, $vehicle, 'cash', 'meetup', CarbonImmutable::now()->addHours(3), ['current_state' => 'approved', 'queue_state' => 'active']);
         $this->act($buyer)->postJson('/api/v1/trading/cancel', ['id' => $soon])->assertStatus(422);
 
         $later = $this->buyRequest($this->customer(), $this->vehicle(), 'cash', 'gce_visit', $this->slot(), ['current_state' => 'under_review']);
         $owner = DB::table('transactions')->where('id', $later)->value('customer_id');
-        $this->act(\App\Models\User::find($owner))->postJson('/api/v1/trading/cancel', ['id' => $later, 'reason' => 'Changed my mind'])->assertOk();
+        $this->act(User::find($owner))->postJson('/api/v1/trading/cancel', ['id' => $later, 'reason' => 'Changed my mind'])->assertOk();
         $this->again()->postJson('/api/v1/trading/cancel', ['id' => $later])->assertStatus(409);
         $this->assertSame('cancelled', DB::table('transactions')->where('id', $later)->value('current_state'));
         $this->assertSame('cancelled', DB::table('viewing_arrangements')->where('purchase_transaction_id', $later)->value('confirmation_state'));
@@ -328,8 +332,8 @@ class TransitionTest extends TestCase
         $account = (string) Str::uuid();
         DB::table('installment_accounts')->insert(['id' => $account, 'purchase_transaction_id' => $id, 'financed_total' => 550000, 'opening_balance' => 500000, 'start_date' => now()->toDateString(), 'state' => 'active']);
         DB::table('installments')->insert(['id' => (string) Str::uuid(), 'account_id' => $account, 'sequence_no' => 1, 'due_date' => now()->addMonth()->toDateString(), 'amount_due' => 50000, 'state' => 'upcoming']);
-        $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
-        \App\Services\Trading\Trading::markVehicleSold($vehicle);
+        $this->expectException(HttpException::class);
+        Trading::markVehicleSold($vehicle);
     }
 
     #[Test]

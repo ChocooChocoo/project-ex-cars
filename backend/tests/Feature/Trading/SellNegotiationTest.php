@@ -43,7 +43,7 @@ class SellNegotiationTest extends TestCase
         $form = ['make' => 'Honda', 'model' => 'City', 'year' => 2019, 'mileage' => 40000, 'condition' => 'Good', 'offered_amount' => 400000,
             'has_known_issues' => 'no', 'meetup_method' => $meetup, 'meetup_lat' => 14.2, 'meetup_lng' => 121.1, 'owner_number' => '1',
             'transaction_id' => $prepared['transactionId'], 'id_type_1' => 'passport', 'id_type_2' => 'umid',
-            'papers_checklist' => ['official_receipt' => 'has', 'certificate_of_registration' => 'has', 'deed_of_sale' => 'has']];
+            'papers_checklist' => ['official_receipt' => 'has', 'certificate_of_registration' => 'has', 'deed_of_sale' => 'has'], 'signed_id_copies' => 'yes'];
         foreach ($files as $i => $file) {
             $grant = $prepared['uploads'][$i];
             $this->again()->post('/api/v1/trading/uploads', ['path' => $grant['path'], 'token' => $grant['token'], 'file' => UploadedFile::fake()->image('a.jpg')])->assertOk();

@@ -23,8 +23,8 @@ const PAPERS = [
 
 const MAX_EXTRA = 4;
 
-// SN-3: after GCE pays the seller, the Marketing Specialist photographs the physical OR, CR and Deed of Sale and
-// sends them to the Confidential Informant, who keeps the originals until a buyer's sale.
+// SN-3: after GCE pays the seller (a GCE Visit: once the price is agreed), the Marketing Specialist photographs the
+// physical OR, CR and Deed of Sale and sends them to Vehicle Papers. They stay On Hold until a buyer's sale.
 export function CapturePapersCard({
   transactionId,
   custody,
@@ -38,6 +38,7 @@ export function CapturePapersCard({
   const [busy, setBusy] = useState(false);
   const [files, setFiles] = useState<Partial<Record<(typeof PAPERS)[number]["name"], File>>>({});
   const [extra, setExtra] = useState<File[]>([]);
+  const [signedIds, setSignedIds] = useState<File | null>(null);
   const ready = PAPERS.every((paper) => files[paper.name]);
 
   async function send() {
@@ -48,6 +49,7 @@ export function CapturePapersCard({
       if (file) fd.set(paper.name, file);
     }
     for (const page of extra) fd.append("extra", page);
+    if (signedIds) fd.set("signed_id_copies", signedIds);
     setBusy(true);
     const result = await captureVehiclePapers(await compressFormFiles(fd));
     setBusy(false);
@@ -64,8 +66,8 @@ export function CapturePapersCard({
       <CardHeader>
         <CardTitle>Vehicle papers</CardTitle>
         <CardDescription>
-          Photograph the seller&apos;s original OR, CR and Deed of Sale, then send them to the Confidential Informant
-          with the originals.
+          Photograph the seller&apos;s original OR, CR and Deed of Sale and the signed ID copies, then send them to
+          Vehicle Papers. They stay On Hold until the car is sold.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3 text-sm">
@@ -91,6 +93,16 @@ export function CapturePapersCard({
                 />
               </div>
             ))}
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="paper-signed-ids">Signed ID copies (optional)</Label>
+              <Input
+                id="paper-signed-ids"
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={(e) => setSignedIds(e.target.files?.[0] ?? null)}
+              />
+            </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="paper-extra">Extra pages (optional, up to {MAX_EXTRA})</Label>
               <Input

@@ -11,7 +11,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
- * SN-3: once GCE has paid the seller, the Marketing Specialist photographs the physical OR, CR and the previous
+ * SN-3: once GCE has paid the seller (or, for a GCE Visit, once the price is agreed at the office: notes line 156),
+ * the Marketing Specialist photographs the physical OR, CR and the previous
  * owner's Deed of Sale and sends them to the Confidential Informant, who keeps the originals until a buyer's sale.
  * The photos are verified transaction documents on the sell transaction; `vehicle_document_items` is the custody
  * record per paper (see the 2026_11_20_000008 migration).
@@ -37,15 +38,17 @@ class SellPapersController extends Controller
         }
         $extra = $request->file('extra') ?? [];
         $extra = is_array($extra) ? array_values(array_filter($extra)) : [$extra];
+        // Notes line 156: an optional photo of the seller's signed ID copies, kept with the papers.
+        $signedIds = $request->file('signed_id_copies');
         abort_if(count($extra) > self::MAX_EXTRA, 422, 'Add at most '.self::MAX_EXTRA.' extra pages.');
 
         $actorId = $request->user()->id;
         $stored = [];
         try {
-            Trading::run(function () use ($request, $files, $id, $extra, $actorId, &$stored) {
+            Trading::run(function () use ($request, $files, $id, $extra, $signedIds, $actorId, &$stored) {
                 $tx = Trading::lockTx($id);
                 abort_unless($tx && $tx->transaction_kind === 'sell' && $tx->vehicle_id, 404, 'Sell offer not found.');
-                abort_unless($tx->current_state === 'completed', 422, 'Capture the papers after GCE has paid the seller.');
+                abort_unless($tx->current_state === 'completed' || self::gceVisitAgreed($tx), 422, 'Capture the papers after GCE has paid the seller.');
                 abort_if(DB::table('vehicle_document_items')->where('vehicle_id', $tx->vehicle_id)->whereNotNull('custody_state')->exists(), 409,
                     'The papers of this car were already sent to the Confidential Informant.');
 
@@ -64,8 +67,11 @@ class SellPapersController extends Controller
                     $path = $put($request->file($kind), $kind, 'Original captured by the Marketing Specialist');
                     DB::table('vehicle_document_items')->updateOrInsert(['vehicle_id' => $tx->vehicle_id, 'document_kind' => $kind], [
                         'required_state' => true, 'submitted_state' => 'verified', 'storage_path' => $path, 'checker_id' => $actorId, 'checked_at' => $now,
-                        'source_transaction_id' => $tx->id, 'custody_state' => 'with_ci', 'received_at' => $now,
+                        'source_transaction_id' => $tx->id, 'custody_state' => 'on_hold', 'received_at' => $now,
                     ]);
+                }
+                if ($signedIds) {
+                    $put($signedIds, 'sale_document', 'Signed ID copies of the seller');
                 }
                 foreach ($extra as $i => $file) {
                     $put($file, 'sale_document', 'Extra page '.($i + 1).' of the vehicle papers');
@@ -82,5 +88,16 @@ class SellPapersController extends Controller
         }
 
         return response()->json(['success' => true]);
+    }
+
+    /** A GCE Visit sell whose price was agreed at the office, still open: the papers are on the table. */
+    public static function gceVisitAgreed(object $tx): bool
+    {
+        if (in_array($tx->current_state, Trading::TERMINAL, true)) {
+            return false;
+        }
+        $details = DB::table('sell_details')->where('transaction_id', $tx->id)->first(['meetup_method', 'agreed_price']);
+
+        return $details?->meetup_method === 'gce_visit' && $details->agreed_price !== null;
     }
 }

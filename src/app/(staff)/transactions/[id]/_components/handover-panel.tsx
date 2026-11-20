@@ -43,9 +43,12 @@ export function HandoverPanel({
   fieldArrangement,
   open,
   userRole,
+  custodianRole = null,
 }: {
   readonly transactionId: string;
   readonly papersStatus: PapersStatus | null;
+  /** Notes line 159: who receives the originals, from the seller's method. */
+  readonly custodianRole?: string | null;
   readonly fieldArrangement: boolean;
   readonly open: boolean;
   readonly userRole: string;
@@ -94,6 +97,12 @@ export function HandoverPanel({
             {papersStatus ? PAPERS_STATUS_LABELS[papersStatus] : "With the Confidential Informant"}
           </Badge>
         </p>
+        {custodianRole ? (
+          <p className="flex flex-wrap items-center gap-2">
+            <span className="text-muted-foreground">Released to</span>
+            <span>{custodianRole === "marketing_specialist" ? "Marketing Specialist" : "Confidential Informant"}</span>
+          </p>
+        ) : null}
         {waiting ? <p className="text-muted-foreground">{waiting}</p> : null}
         {canAct && inStore ? (
           <Button

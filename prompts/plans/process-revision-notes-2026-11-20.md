@@ -295,35 +295,35 @@ Done when
 
 ## Phase 5 — Seller checklist, paper capture and custody
 
-Status: 🔲 Not Started
+Status: ✅ Done
 
 Goal: the seller confirms signed ID copies, papers are captured per method, and custody follows the sale.
 
 Tasks
-- [ ] Line 115 (decision 6): allow `expired` for Deed of Sale in `SELL_PAPER_STATUSES` (`src/lib/vehicles/catalog.ts`),
+- [x] Line 115 (decision 6): allow `expired` for Deed of Sale in `SELL_PAPER_STATUSES` (`src/lib/vehicles/catalog.ts`),
   the zod rule in `src/lib/validation/transactions.ts` and `SellIntakeController`.
-- [ ] Line 116: required checkbox "I will bring 2 printed copies of each valid ID, each signed 3 times" in
+- [x] Line 116: required checkbox "I will bring 2 printed copies of each valid ID, each signed 3 times" in
   `sell-vehicle-form.tsx`; store as `papers_checklist.signed_id_copies = true`; validate in zod and
   `SellIntakeController` (`accepted`); show on the MS `transaction-documents-card.tsx` checklist block.
-- [ ] Line 156 (decision 9): MS "Capture vehicle papers" is available during the GCE Visit (after the agreed price,
+- [x] Line 156 (decision 9): MS "Capture vehicle papers" is available during the GCE Visit (after the agreed price,
   before purchase), not only after `completePurchase`. Add an optional "Signed ID copies" photo slot.
-- [ ] Line 158: seller-origin `vehicle_document_items` start as `on_hold` (not `with_ci`) and show "On Hold" until
+- [x] Line 158: seller-origin `vehicle_document_items` start as `on_hold` (not `with_ci`) and show "On Hold" until
   the car is sold; `Trading::finalizeBuySale` sets them `released`. Keep `with_ci` readable for old rows.
-- [ ] Lines 139, 141: "Request Paper Release" (`HandoverController::requestPapersRelease`) attaches the car's
+- [x] Lines 139, 141: "Request Paper Release" (`HandoverController::requestPapersRelease`) attaches the car's
   seller-origin `vehicle_document_items` to the handover, so the Sales Manager sees the CI's recorded papers and
   images on the buy transaction without a CI action. For a full-payment GCE Visit the papers appear immediately.
-- [ ] Line 159 (decision 8): add `custodian_role` (`marketing_specialist|confidential_informant`) to the release
+- [x] Line 159 (decision 8): add `custodian_role` (`marketing_specialist|confidential_informant`) to the release
   record, set from the seller's original method (GCE Visit → MS, Meet-up → CI). Add "Papers returned" for the CI on a
   failed sale: sets items back to `on_hold` and the handover to `returned`, with an audit entry.
 
 Dependencies: none.
 
 Done when
-- [ ] Sell offer without the signed-copies tick is rejected (UI and 422); MS sees the tick.
-- [ ] Deed of Sale accepts Expired.
-- [ ] Seller papers show On Hold before sale and Released after; a returned sale shows On Hold again
+- [x] Sell offer without the signed-copies tick is rejected (UI and 422); MS sees the tick.
+- [x] Deed of Sale accepts Expired.
+- [x] Seller papers show On Hold before sale and Released after; a returned sale shows On Hold again
   (`PapersCustodyTest.php`).
-- [ ] Request Paper Release shows the seller-origin images to the Sales Manager; another car's papers return 403.
+- [x] Request Paper Release shows the seller-origin images to the Sales Manager; another car's papers return 403.
 
 ← Previous: Phase 4 | Next: Phase 6 →
 

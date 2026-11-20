@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { transactionDocumentLabel } from "@/lib/transactions/document-media";
 import { SELL_PAPER_KINDS } from "@/lib/transactions/sell-flow";
-import { SELL_PAPER_FIELDS, SELL_PAPER_STATUS_LABELS } from "@/lib/vehicles/catalog";
+import { SELL_PAPER_FIELDS, SELL_PAPER_STATUS_LABELS, SIGNED_ID_COPIES_LABEL } from "@/lib/vehicles/catalog";
 
 // T03 C11/SM2: result of the automatic OR/CR and ID check. Advisory only; staff Verify stays the decision.
 const AUTO_CHECK_LABELS: Record<string, string> = {
@@ -48,6 +48,15 @@ function SellerPapersChecklist({ checklist }: { readonly checklist: Record<strin
           );
         })}
       </dl>
+      {/* Notes line 116: older offers have no answer, so only a confirmed tick is shown. */}
+      {checklist.signed_id_copies === true ? (
+        <p className="text-sm">
+          <Badge variant="secondary" className="mr-2 h-5 px-2 text-[11px]">
+            Confirmed
+          </Badge>
+          {SIGNED_ID_COPIES_LABEL}
+        </p>
+      ) : null}
     </section>
   );
 }
