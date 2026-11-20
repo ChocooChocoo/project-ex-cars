@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 
-import { ArrowRight, Building2, Car, MapPin, Truck } from "lucide-react";
+import { ArrowRight, Building2, Car, Download, MapPin, Truck } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -126,6 +126,11 @@ export default function LandingPage() {
               </Button>
               <Button asChild size="lg" variant="outline">
                 <Link href="/auth/v1/register">Register</Link>
+              </Button>
+              <Button asChild size="lg" variant="outline" className="min-h-11">
+                <a href="/assets/apk/gce-app-release.apk" download>
+                  <Download aria-hidden="true" /> Download Mobile App
+                </a>
               </Button>
             </HeroLine>
           </HeroCopy>

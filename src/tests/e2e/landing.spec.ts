@@ -16,6 +16,17 @@ test.describe("landing page", () => {
     await expect(page).toHaveURL(/\/auth\/v1\/login$/);
   });
 
+  test("a signed-out Android user downloads the APK without leaving the landing page", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/");
+    const link = page.getByRole("link", { name: "Download Mobile App" });
+    const [download] = await Promise.all([page.waitForEvent("download"), link.click()]);
+
+    expect(download.suggestedFilename()).toBe("gce-app-release.apk");
+    expect(await download.failure()).toBeNull();
+    await expect(page).toHaveURL("/");
+  });
+
   // T11: financing now applies each car's own markup, so the total is no longer a fixed price × 1.1, and the
   // percentage is GCE's own figure that buyers must never see.
   test("the financing estimate shows a total above the car's price, with no percentage", async ({ page }) => {

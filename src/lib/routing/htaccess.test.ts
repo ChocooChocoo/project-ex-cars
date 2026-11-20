@@ -15,6 +15,14 @@ describe("buildHtaccess (src/proxy.ts parity for the static build)", () => {
     expect(text).toContain('<Files "404.html">\n  Header always set Cache-Control "no-store"\n</Files>');
   });
 
+  it("serves APK files as attachments before enforcing page authentication", () => {
+    expect(text).toContain("AddType application/vnd.android.package-archive .apk");
+    expect(text).toContain('<FilesMatch "\\.apk$">\n  Header set Content-Disposition "attachment"\n</FilesMatch>');
+    expect(text.indexOf("RewriteCond %{REQUEST_FILENAME} -f")).toBeLessThan(
+      text.indexOf("RewriteRule ^(.+)$ /auth/v1/login/"),
+    );
+  });
+
   it("maps segment files before the auth/ exclusion, so login and reset pages get their page data", () => {
     expect(text.indexOf("(__next\\.")).toBeLessThan(text.indexOf("RewriteRule ^(_next|auth|template|unauthorized)"));
   });

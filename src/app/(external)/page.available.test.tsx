@@ -1,4 +1,4 @@
-import { render, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 
 const { browserApi } = vi.hoisted(() => ({
@@ -28,4 +28,12 @@ import LandingPage from "./page";
 it("reads the public landing endpoint", async () => {
   render(<LandingPage />);
   await waitFor(() => expect(browserApi).toHaveBeenCalledWith("GET", "/api/v1/catalogue/landing"));
+});
+
+it("offers the Android installer as a direct download", async () => {
+  render(<LandingPage />);
+  const link = await screen.findByRole("link", { name: "Download Mobile App" });
+
+  expect(link).toHaveAttribute("href", "/assets/apk/gce-app-release.apk");
+  expect(link).toHaveAttribute("download");
 });
