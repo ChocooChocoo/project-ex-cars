@@ -113,9 +113,39 @@ export function AppSidebar({
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton asChild>
-              <Link prefetch={false} href={brand.href}>
-                <GceLogo className="text-primary" compact aria-hidden="true" />
-                <span className="truncate font-semibold text-base">{brand.label}</span>
+              <Link
+                prefetch={false}
+                href={brand.href}
+                aria-label={brand.label === "GCE Admin" ? "Global Car Exchange, GCE Admin" : brand.label}
+              >
+                <GceLogo
+                  className="hidden text-primary group-data-[collapsible=icon]:block"
+                  compact
+                  aria-hidden="true"
+                />
+                <div className="min-w-0 group-data-[collapsible=icon]:hidden">
+                  {/* biome-ignore lint/performance/noImgElement: The static export serves the supplied wordmark directly. */}
+                  <img
+                    src="/assets/logo/GCE-LOGO-LIGHTMODE.png"
+                    alt="Global Car Exchange"
+                    width={2016}
+                    height={238}
+                    className="h-auto w-40 max-w-full dark:hidden"
+                  />
+                  {/* biome-ignore lint/performance/noImgElement: CSS switches to the supplied dark wordmark before hydration. */}
+                  <img
+                    src="/assets/logo/GCE-LOGO-DARKMODE.png"
+                    alt="Global Car Exchange"
+                    width={2016}
+                    height={238}
+                    className="hidden h-auto w-40 max-w-full dark:block"
+                  />
+                </div>
+                {brand.label === "GCE Admin" ? (
+                  <span className="shrink-0 font-medium text-xs group-data-[collapsible=icon]:hidden">
+                    {brand.label}
+                  </span>
+                ) : null}
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
