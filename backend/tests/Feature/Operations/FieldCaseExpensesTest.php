@@ -2,7 +2,10 @@
 
 namespace Tests\Feature\Operations;
 
+use App\Http\Controllers\Field\FieldCaseActionController;
+use App\Http\Controllers\Finance\FieldBudgetController;
 use App\Models\User;
+use App\Services\Trading\BuyRules;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -186,7 +189,7 @@ class FieldCaseExpensesTest extends TestCase
             ->assertJsonPath('message', 'A field worker can only set In progress, Completed or Cancelled.');
         $this->again()->postJson($url, $base + ['state' => 'accepted'])->assertStatus(422);
         $this->assertSame('in_progress', DB::table('field_cases')->where('id', $setup['case'])->value('state'));
-        $this->assertSame(['in_progress', 'completed', 'cancelled'], \App\Http\Controllers\Field\FieldCaseActionController::WORKER_STATES);
+        $this->assertSame(['in_progress', 'completed', 'cancelled'], FieldCaseActionController::WORKER_STATES);
 
         // The first update accepts the case on the worker's behalf.
         $this->assertNull(DB::table('field_cases')->where('id', $setup['case'])->value('accepted_at'));
@@ -247,12 +250,14 @@ class FieldCaseExpensesTest extends TestCase
             ->assertJsonPath('message', 'Say what the other expense is.');
 
         // The stored purpose is the labels in checklist order, with the typed "Other" appended, so finance reads it.
-        $this->again()->postJson($url, ['field_case_id' => $case, 'amount' => '2000.50', 'categories' => ['meals', 'fuel', 'tolls', 'other'], 'other' => 'Car wash'])
+        $this->again()->postJson($url, ['field_case_id' => $case, 'amount' => '2000.50', 'categories' => ['parking', 'fuel', 'tolls', 'other'], 'other' => 'Car wash'])
             ->assertOk();
         $budget = DB::table('disbursement_requests')->where('field_case_id', $case)->first();
-        $this->assertSame('Fuel, Tolls, Meals, Other: Car wash', $budget->purpose);
+        $this->assertSame('Gas, Toll Fee, Parking, Other: Car wash', $budget->purpose);
         $this->assertSame(200050, (int) $budget->amount_cents);
-        $this->assertSame($budget->purpose, \App\Http\Controllers\Finance\FieldBudgetController::purposeFromCategories(['meals', 'fuel', 'tolls', 'other'], 'Car wash'));
+        $this->assertSame($budget->purpose, FieldBudgetController::purposeFromCategories(['parking', 'fuel', 'tolls', 'other'], 'Car wash'));
+        // An older client's Meals still validates and keeps its label.
+        $this->assertSame('Meals', FieldBudgetController::purposeFromCategories(['meals']));
     }
 
     #[Test]
@@ -263,10 +268,10 @@ class FieldCaseExpensesTest extends TestCase
         $delivery = (object) ['arrangement_kind' => 'delivery', 'payment_method' => 'cash'];
         $visit = (object) ['arrangement_kind' => 'gce_visit', 'payment_method' => 'cash'];
 
-        $this->assertSame(['Confidential Informant'], \App\Services\Trading\BuyRules::missingContractCopies($meetup, null));
-        $this->assertSame(['Confidential Informant'], \App\Services\Trading\BuyRules::missingContractCopies($delivery, null));
-        $this->assertSame([], \App\Services\Trading\BuyRules::missingContractCopies($visit, null));
-        $this->assertSame([], \App\Services\Trading\BuyRules::missingContractCopies($meetup, (object) ['ci_copy_at' => now()]));
+        $this->assertSame(['Confidential Informant'], BuyRules::missingContractCopies($meetup, null));
+        $this->assertSame(['Confidential Informant'], BuyRules::missingContractCopies($delivery, null));
+        $this->assertSame([], BuyRules::missingContractCopies($visit, null));
+        $this->assertSame([], BuyRules::missingContractCopies($meetup, (object) ['ci_copy_at' => now()]));
     }
 
     /** `fileExpense` for a case setup array, with the expected status, to keep the assertions readable. */
@@ -276,5 +281,21 @@ class FieldCaseExpensesTest extends TestCase
             'field_case_id' => $setup['case'], 'amount' => $amount, 'description' => 'Fuel',
             'proof' => UploadedFile::fake()->image('receipt.jpg'),
         ])->assertStatus($expectStatus);
+    }
+
+    #[Test]
+    public function a_buy_transaction_read_carries_no_field_expenses_or_their_proofs(): void
+    {
+        $ci = $this->account('confidential_informant');
+        $setup = $this->releasedBudget($ci, 1000);
+        $this->fileExpense($ci, $setup['case']);
+
+        // Notes line 207: meet-up expenses stay on the field case, never on the buying transaction.
+        DB::table('transactions')->where('id', $setup['tx'])->update(['current_state' => 'approved']);
+        $body = $this->act($this->account('sales_manager'))->getJson("/api/v1/staff/transactions/{$setup['tx']}")->assertOk()->json();
+        $this->assertNull($body['sellFlow'] ?? null);
+        $kinds = array_column($body['documents'] ?? [], 'document_kind');
+        $this->assertNotContains('expense_proof', $kinds);
+        $this->assertStringNotContainsString('field_case_expenses', json_encode($body));
     }
 }

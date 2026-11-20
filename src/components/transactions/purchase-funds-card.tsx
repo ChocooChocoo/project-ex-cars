@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { recordBudgetReturn } from "@/app/(staff)/field-cases/budget-actions";
 import { recordSellerPaid, requestPurchaseFunds } from "@/app/(staff)/finance/actions";
+import { ExcessReturnChoice } from "@/components/transactions/excess-return-choice";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -50,6 +51,8 @@ export function PurchaseFundsCard({
   canRequest,
   isRequester,
   cleared,
+  vehicle = null,
+  seller = null,
 }: {
   readonly transactionId: string;
   readonly fieldCaseId: string;
@@ -60,11 +63,13 @@ export function PurchaseFundsCard({
   readonly canRequest: boolean;
   readonly isRequester: boolean;
   readonly cleared: boolean;
+  /** Notes line 164: the car being processed and its seller, so the fund and its return name them. */
+  readonly vehicle?: Row | null;
+  readonly seller?: string | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [travel, setTravel] = useState("");
-  const [returned, setReturned] = useState("");
   const excess = purchaseExcessCents(fund, agreedPrice, expenses) / 100;
   const released = fund ? budgetReleased(fund.status) : false;
 
@@ -94,6 +99,27 @@ export function PurchaseFundsCard({
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3 text-sm">
+        {vehicle || seller ? (
+          <dl className="grid gap-2 sm:grid-cols-2">
+            {vehicle ? (
+              <div>
+                <dt className="text-muted-foreground text-xs">Vehicle</dt>
+                <dd>
+                  {[vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" ")}
+                  {vehicle.stock_code ? (
+                    <span className="block text-muted-foreground text-xs">{String(vehicle.stock_code)}</span>
+                  ) : null}
+                </dd>
+              </div>
+            ) : null}
+            {seller ? (
+              <div>
+                <dt className="text-muted-foreground text-xs">Seller</dt>
+                <dd>{seller}</dd>
+              </div>
+            ) : null}
+          </dl>
+        ) : null}
         {fund ? (
           <dl className="grid gap-2 sm:grid-cols-2">
             <div>
@@ -189,48 +215,20 @@ export function PurchaseFundsCard({
             <p className="text-muted-foreground text-xs">Pay the seller once the inspection clears the car.</p>
           )
         ) : null}
-        {/* BH-3 / SN-2 / SH-11: zero excess is one click and never asks for a cash amount. */}
-        {isRequester && fund && released && !fund.returned_at && excess === 0 ? (
-          <Button
-            size="sm"
-            variant="outline"
-            className="self-start"
-            disabled={busy}
-            onClick={() =>
-              send(recordBudgetReturn, { field_case_id: fieldCaseId, returned: "0" }, "No excess recorded.")
+        {/* BH-3 / SN-2 / SH-11 and notes lines 209-213: the requester says whether anything is left. */}
+        {isRequester && fund && released && !fund.returned_at ? (
+          <ExcessReturnChoice
+            idPrefix="funds-return"
+            excess={excess}
+            busy={busy}
+            onRecord={(value) =>
+              send(
+                recordBudgetReturn,
+                { field_case_id: fieldCaseId, returned: value },
+                value === "0" ? "No excess recorded." : "Return recorded.",
+              )
             }
-          >
-            No excess — mark completed
-          </Button>
-        ) : null}
-        {isRequester && fund && released && !fund.returned_at && excess > 0 ? (
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="funds-returned">Cash returned (₱)</Label>
-              <Input
-                id="funds-returned"
-                type="number"
-                min="0"
-                placeholder={String(excess)}
-                value={returned}
-                onChange={(e) => setReturned(e.target.value)}
-              />
-            </div>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={busy}
-              onClick={() =>
-                send(
-                  recordBudgetReturn,
-                  { field_case_id: fieldCaseId, returned: returned === "" ? String(excess) : returned },
-                  "Return recorded.",
-                )
-              }
-            >
-              Record excess returned
-            </Button>
-          </div>
+          />
         ) : null}
       </CardContent>
     </Card>

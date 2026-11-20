@@ -19,7 +19,11 @@ import { approvePrice } from "@/app/(staff)/vehicles/actions";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { MeetupMap } from "@/components/maps/lazy-maps";
 import { TransactionStatusBadge } from "@/components/transaction-status-badge";
-import { InspectionResult, type InspectionResultData } from "@/components/transactions/inspection-result";
+import {
+  InspectionResult,
+  type InspectionResultData,
+  inspectionRepairParts,
+} from "@/components/transactions/inspection-result";
 import { PurchaseFundsCard } from "@/components/transactions/purchase-funds-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -119,6 +123,9 @@ export function SellFlowPanel({
   const state = (transaction.current_state ?? "pending") as TransactionState;
   const vehicle = transaction.vehicles as { condition?: string | null; mileage?: number | null } | null;
   const isMs = userRole === "marketing_specialist";
+  const hiddenIssueDeduction = inspectionRepairParts(data.inspection)
+    .filter((part) => part.is_hidden_issue)
+    .reduce((sum, part) => sum + Number(part.cost ?? 0), 0);
   const isCeo = userRole === "ceo";
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({});
@@ -461,6 +468,8 @@ export function SellFlowPanel({
             canRequest={isMs && method === "gce_visit" && state === "approved"}
             isRequester={Boolean(data.fundIsMine)}
             cleared={Boolean(sellDetails?.cleared_for_payment_at)}
+            vehicle={(transaction.vehicles as Record<string, unknown> | null) ?? null}
+            seller={((transaction.profiles as Record<string, unknown> | null)?.full_name as string | null) ?? null}
           />
         ) : null}
 
@@ -600,6 +609,18 @@ export function SellFlowPanel({
               // records the price the seller actually accepted, within it.
               <div className="flex flex-col gap-2 pt-1">
                 <p className="font-medium text-xs">Record second negotiation</p>
+                {/* Notes line 170: the negotiation starts from the inspection and what the hidden issues cost. */}
+                <dl className="grid gap-1 text-xs sm:grid-cols-2">
+                  <div>
+                    <dt className="text-muted-foreground">Hidden-issue deduction</dt>
+                    <dd className="tabular-nums">{formatCurrency(hiddenIssueDeduction)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Approved revised ceiling</dt>
+                    <dd className="tabular-nums">{ceiling === null ? "—" : formatCurrency(ceiling)}</dd>
+                  </div>
+                </dl>
+                {data.inspection ? <InspectionResult result={data.inspection} title="Inspection report" /> : null}
                 <div className="flex flex-wrap items-end gap-2">
                   <Field
                     label={`Agreed price (₱, max ${ceiling === null ? "—" : formatCurrency(ceiling)})`}

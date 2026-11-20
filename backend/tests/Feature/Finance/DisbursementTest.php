@@ -150,6 +150,27 @@ class DisbursementTest extends TestCase
     }
 
     #[Test]
+    public function approve_and_release_is_one_click_and_a_retry_moves_no_more_cash(): void
+    {
+        $ceo = $this->account('ceo');
+        $this->act($ceo)->postJson('/api/v1/staff/finance/create-disbursement', ['title' => 'Tyres', 'amount_cents' => 200_000, 'purpose' => 'Stock'])->assertOk();
+        $id = DB::table('disbursement_requests')->value('id');
+        $revenueBefore = DB::table('financial_entries')->where('entry_kind', 'revenue')->sum('amount_cents');
+
+        $this->again()->postJson('/api/v1/staff/finance/advance', ['disbursement_id' => $id, 'event_kind' => 'approve_release'])->assertOk();
+        $this->again()->postJson('/api/v1/staff/finance/advance', ['disbursement_id' => $id, 'event_kind' => 'approve_release'])->assertOk();
+
+        $row = DB::table('disbursement_requests')->where('id', $id)->first();
+        $this->assertSame('released', $row->status);
+        $this->assertSame($ceo->id, $row->approved_by);
+        $this->assertSame($ceo->id, $row->released_by);
+        $this->assertSame(1, DB::table('financial_entries')->where('idempotency_key', 'release:'.$id)->count());
+        // Notes line 191: a release is an outflow, not a lower revenue.
+        $this->assertEquals($revenueBefore, DB::table('financial_entries')->where('entry_kind', 'revenue')->sum('amount_cents'));
+        $this->assertSame('disbursement', DB::table('financial_entries')->where('idempotency_key', 'release:'.$id)->value('entry_kind'));
+    }
+
+    #[Test]
     public function financial_entries_are_recorded_in_centavos_and_verified_once(): void
     {
         $ha = $this->account('head_accountant');

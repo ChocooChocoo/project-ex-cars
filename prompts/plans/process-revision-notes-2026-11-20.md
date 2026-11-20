@@ -331,47 +331,55 @@ Done when
 
 ## Phase 6 — Finance, field budget, negotiation and reconditioning wording
 
-Status: 🔲 Not Started
+Status: ✅ Done
 
 Goal: one-click fund release, explicit excess-return choices, hidden-issue deduction at negotiation, and the
 reconditioning wording the client asked for.
 
 Tasks
-- [ ] Line 190: `FinanceController::advance` accepts `approve_release`: approve and release in one `DB::transaction`,
+- [x] Line 190: `FinanceController::advance` accepts `approve_release`: approve and release in one `DB::transaction`,
   one `financial_entries` disbursement row, idempotent on retry. `finance-client.tsx` shows one "Approve & Release"
   button; keep "Release" for requests already approved. Extend `DisbursementTest.php`.
-- [ ] Line 191: test that a release lowers Cash on hand and leaves Revenue unchanged (`FinanceLedgerTest.php`). If the
+- [x] Line 191: test that a release lowers Cash on hand and leaves Revenue unchanged (`FinanceLedgerTest.php`). If the
   Finance summary shows a Revenue figure that the client reads as balance, label it "Revenue (sales)" next to "Cash
   on hand".
-- [ ] Lines 163, 192, 209–213: `FieldBudgetCard` and `PurchaseFundsCard` show two choices: "Excess budget to return"
+- [x] Lines 163, 192, 209–213: `FieldBudgetCard` and `PurchaseFundsCard` show two choices: "Excess budget to return"
   (amount input) and "Budget was exact for the trip" (no input), then "Record Excess Return". Exact → existing zero
   path (`returned_cents = 0`, system-confirmed) plus a read-only "No excess return" row in Head Accountant Finance,
   with no action button. Positive → existing confirm flow.
-- [ ] Line 164: `PurchaseFundsCard` and the excess-return screen show the vehicle (stock code, year make model) and
+- [x] Line 164: `PurchaseFundsCard` and the excess-return screen show the vehicle (stock code, year make model) and
   seller.
-- [ ] Line 208: change `FIELD_EXPENSE_CATEGORIES` (`src/lib/transactions/field-budget.ts:24-31`) labels to Gas, Toll
+- [x] Line 208: change `FIELD_EXPENSE_CATEGORIES` (`src/lib/transactions/field-budget.ts:24-31`) labels to Gas, Toll
   Fee, Parking, Other possible expenses, and drop Meals and Transportation fare from new requests. Keep the old values
   in the backend `in:` rule so old rows still display.
-- [ ] Line 207: remove `field_case_expenses` and `expense_proof` from staff buy-transaction read responses and UI;
+- [x] Line 207: remove `field_case_expenses` and `expense_proof` from staff buy-transaction read responses and UI;
   keep them on the field case for CI and Mechanic. Extend `FieldCaseExpensesTest.php`.
-- [ ] Line 170: in `sell-flow-panel.tsx` second negotiation, show the structured inspection result and "Hidden-issue
+- [x] Line 170: in `sell-flow-panel.tsx` second negotiation, show the structured inspection result and "Hidden-issue
   deduction" = sum of hidden-issue repair costs, next to the approved revised ceiling.
-- [ ] Line 182: rename the reconditioning "Complete reconditioning" button to "Finalize Repair" (`reconditioning-panel.tsx:471`;
+- [x] Line 182: rename the reconditioning "Complete reconditioning" button to "Finalize Repair" (`reconditioning-panel.tsx:471`;
   update `src/tests/e2e/t01-phase5-branches.spec.ts:234`). No new transition.
-- [ ] Line 179 (decision 10): when a car leaves reconditioning, set its showroom condition label to the agreed term;
+- [x] Line 179 (decision 10): when a car leaves reconditioning, set its showroom condition label to the agreed term;
   show it on the showroom detail.
-- [ ] Line 237 (decision 11): make the part name editable on prefilled reconditioning rows; keep `result_id`.
-- [ ] Line 193 (decision 12): Head Accountant reconditioning detail shows each repaired part's result with the
+- [x] Line 237 (decision 11): make the part name editable on prefilled reconditioning rows; keep `result_id`.
+- [x] Line 193 (decision 12): Head Accountant reconditioning detail shows each repaired part's result with the
   completion photo, labelled "After reconditioning", separate from the field inspection.
+
+Implementation notes
+- Line 207 found a real leak: `expense_proof` documents filed on a buyer meet-up came back on the staff buy
+  transaction read. `StaffTradingReadController::show` now drops them for buy transactions.
+- Both excess-return cards share `src/components/transactions/excess-return-choice.tsx`.
+- Line 193: the Head Accountant's reconditioning card lists the job's repaired parts (name, brand, cost, photo) once
+  the job is completed. No new completion-photo field was added; the part photos are the ones in the repair report.
+- Line 179: the showroom shows a "Reconditioned" badge; `vehicles.condition` is set on Finalize Repair.
 
 Dependencies: none. Line 237 and 193 touch the same `reconditioning-panel.tsx`; do them together.
 
 Done when
-- [ ] One click approves and releases; a retry leaves Cash on hand unchanged.
-- [ ] Both return choices work; exact budget creates a "No excess return" row with nothing to receive.
-- [ ] Budget checklist shows Gas, Toll Fee, Parking, Other possible expenses.
-- [ ] A buy transaction response contains no field expense proofs.
-- [ ] Second negotiation shows the deduction; the button reads "Finalize Repair" and the car moves to Ready for
+- [x] One click approves and releases; a retry leaves Cash on hand unchanged.
+- [x] Both return choices work; exact budget creates a "No excess return" row with nothing to receive.
+- [x] Budget checklist shows Gas, Toll Fee, Parking, Other possible expenses.
+- [x] A buy transaction response contains no field expense proofs.
+- [x] Second negotiation shows the deduction; the button reads "Finalize Repair" and the car moves to Ready for
   Pricing.
 
 ← Previous: Phase 5 | Next: Phase 7 →

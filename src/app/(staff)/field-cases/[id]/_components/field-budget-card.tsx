@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { recordBudgetReturn, requestFieldBudget } from "@/app/(staff)/field-cases/budget-actions";
+import { ExcessReturnChoice } from "@/components/transactions/excess-return-choice";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,7 +16,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   budgetExcessCents,
-  budgetNoExcess,
   budgetReleased,
   expensesCents,
   FIELD_EXPENSE_CATEGORIES,
@@ -59,11 +59,9 @@ export function FieldBudgetCard({
   const [amount, setAmount] = useState("");
   const [categories, setCategories] = useState<string[]>([]);
   const [other, setOther] = useState("");
-  const [returned, setReturned] = useState("");
   const live = budget && budget.status !== "rejected" ? budget : null;
   const releasedCents = live && budgetReleased(live.status) ? Number(live.amount_cents) : 0;
   const excess = budgetExcessCents(releasedCents, expenses) / 100;
-  const noExcess = budgetNoExcess(releasedCents, expenses);
   const purpose = fieldExpensePurpose(categories, other);
   const otherTicked = categories.includes("other");
 
@@ -225,47 +223,14 @@ export function FieldBudgetCard({
         ) : null}
 
         {isInformant && live && releasedCents > 0 && !live.returned_at ? (
-          noExcess ? (
-            // BH-3 / SN-2 / SH-11: nothing came back, so nothing is returned and no Head Accountant task is created.
-            <div className="flex flex-col gap-2 border-t pt-3">
-              <p className="text-muted-foreground">The receipts used the whole budget. No cash to return.</p>
-              <Button
-                size="sm"
-                className="self-start"
-                disabled={busy}
-                onClick={() => send(recordBudgetReturn, { returned: "0" }, "No excess recorded.")}
-              >
-                No excess — mark completed
-              </Button>
-            </div>
-          ) : (
-            <div className="flex flex-wrap items-end gap-2 border-t pt-3">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="budget-returned">Cash returned (₱)</Label>
-                <Input
-                  id="budget-returned"
-                  type="number"
-                  min="0"
-                  placeholder={String(excess)}
-                  value={returned}
-                  onChange={(e) => setReturned(e.target.value)}
-                />
-              </div>
-              <Button
-                size="sm"
-                disabled={busy}
-                onClick={() =>
-                  send(
-                    recordBudgetReturn,
-                    { returned: returned === "" ? String(excess) : returned },
-                    "Return recorded.",
-                  )
-                }
-              >
-                Record excess returned
-              </Button>
-            </div>
-          )
+          <ExcessReturnChoice
+            idPrefix="budget-return"
+            excess={excess}
+            busy={busy}
+            onRecord={(value) =>
+              send(recordBudgetReturn, { returned: value }, value === "0" ? "No excess recorded." : "Return recorded.")
+            }
+          />
         ) : null}
       </CardContent>
     </Card>

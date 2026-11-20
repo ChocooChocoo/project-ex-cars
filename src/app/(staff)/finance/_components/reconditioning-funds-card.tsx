@@ -19,6 +19,7 @@ export type ReconditioningFundRow = {
     refund_due_cents: number | null;
     refunded_at: string | null;
     vehicles?: { make: string | null; model: string | null; year: number | null } | null;
+    parts?: Array<{ part_name: string; replacement_brand: string | null; cost: number; photo_url: string | null }>;
   } | null;
   reconditioning_fund_receipts?: Array<{ storage_path: string; signed_url?: string | null }>;
 };
@@ -63,6 +64,33 @@ export function ReconditioningFundsCard({ requests }: { readonly requests: Recon
                   ) : null}
                 </div>
               </div>
+              {/* Notes line 193: once the job is done, the parts the Mechanic actually repaired, with photos. */}
+              {job.state === "completed" && job.parts?.length ? (
+                <section className="flex flex-col gap-1" aria-label="After reconditioning">
+                  <h3 className="font-medium text-xs">After reconditioning</h3>
+                  <ul className="flex flex-col gap-1 text-xs">
+                    {job.parts.map((part) => (
+                      <li key={part.part_name} className="flex flex-wrap items-center gap-2">
+                        <span>
+                          {part.part_name}
+                          {part.replacement_brand ? ` (${part.replacement_brand})` : ""}
+                        </span>
+                        <span className="text-muted-foreground tabular-nums">{formatCurrency(part.cost)}</span>
+                        {part.photo_url ? (
+                          <a
+                            href={part.photo_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-primary underline underline-offset-4"
+                          >
+                            Photo
+                          </a>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
               <div className="flex flex-wrap items-center gap-3">
                 {request.reconditioning_fund_receipts?.length ? (
                   request.reconditioning_fund_receipts.map((receipt) => (

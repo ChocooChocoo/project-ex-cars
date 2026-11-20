@@ -8,6 +8,7 @@ use App\Services\Finance\Money;
 use App\Services\Trading\Trading;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -120,6 +121,7 @@ class ReconditioningController extends Controller
                 // SH-4: no new photo is fine when the row comes from the inspection and has one to reuse.
                 abort_if(! ($parts[$index]['result_id'] ?? null) || ! $this->inspectionPhoto((string) $parts[$index]['result_id']), 422, 'Add a photo of every part.');
                 $photos[$index] = null;
+
                 continue;
             }
             abort_if($photo->getSize() > FileService::MAX_BYTES || ! in_array((new \finfo(FILEINFO_MIME_TYPE))->file($photo->getRealPath()), ['image/jpeg', 'image/png', 'image/webp'], true), 422,
@@ -143,8 +145,9 @@ class ReconditioningController extends Controller
                 // One photo per part row; a reused inspection photo is copied into the reconditioning bucket.
                 $paths = [];
                 foreach (array_values($parts) as $i => $part) {
-                    if ($photos[$i] instanceof \Illuminate\Http\UploadedFile) {
+                    if ($photos[$i] instanceof UploadedFile) {
                         $paths[$i] = $stored[] = $files->store($photos[$i], 'reconditioning-receipts', "parts/{$job->id}")['path'];
+
                         continue;
                     }
                     $source = $this->inspectionPhoto((string) $part['result_id']);
@@ -227,7 +230,7 @@ class ReconditioningController extends Controller
             // SH-1: the car leaves "Repairing" for every role. It is ready to be repriced, exactly as the no-issue
             // path leaves a bought car; nothing (no Sales Manager papers step) sits between the two states any more.
             DB::table('vehicles')->where('id', $job->vehicle_id)->where('listing_state', 'repairing')
-                ->update(['listing_state' => 'awaiting_price_approval', 'updated_at' => now()]);
+                ->update(['listing_state' => 'awaiting_price_approval', 'condition' => 'Reconditioned', 'updated_at' => now()]);
             if ($refund > 0) {
                 self::notifyRole('head_accountant', 'Reconditioning refund due', 'Repairs cost '.self::peso($actual / 100).'. The Mechanic must return '.self::peso($refund / 100).' of the released funds.',
                     'transactions', $job->transaction_id);

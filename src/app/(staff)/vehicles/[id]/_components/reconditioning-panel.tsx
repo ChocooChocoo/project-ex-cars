@@ -321,7 +321,6 @@ export function ReconditioningPanel({
                       aria-label={`Part ${index + 1} name`}
                       placeholder="Part name"
                       value={part.part_name}
-                      readOnly={part.result_id !== null}
                       onChange={(e) => setPart(index, "part_name", e.target.value)}
                     />
                     <Input
@@ -468,7 +467,7 @@ export function ReconditioningPanel({
                   )
                 }
               >
-                Complete reconditioning
+                Finalize Repair
               </Button>
             </section>
           </>

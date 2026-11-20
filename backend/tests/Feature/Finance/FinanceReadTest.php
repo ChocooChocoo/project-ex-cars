@@ -35,7 +35,7 @@ class FinanceReadTest extends TestCase
         // BH-5: the budget covers are a ticked category list now; the stored purpose is the joined labels.
         $this->act($ci)->postJson('/api/v1/staff/field-budget/request', ['field_case_id' => $case, 'amount' => '1500.50', 'categories' => ['fuel', 'tolls']])->assertOk();
         $this->act($other)->postJson('/api/v1/staff/field-budget/request', ['field_case_id' => $otherCase, 'amount' => 900, 'categories' => ['fuel']])->assertOk();
-        $this->assertSame('Fuel, Tolls', DB::table('disbursement_requests')->where('field_case_id', $case)->value('purpose'));
+        $this->assertSame('Gas, Toll Fee', DB::table('disbursement_requests')->where('field_case_id', $case)->value('purpose'));
         DB::table('financial_entries')->insert(['id' => (string) Str::uuid(), 'entry_kind' => 'revenue', 'amount_cents' => 100, 'description' => 'x', 'recorded_by' => $ci->id, 'recorded_at' => now(), 'created_at' => now()]);
 
         $page = $this->act($ci)->getJson('/api/v1/staff/finance')->assertOk();

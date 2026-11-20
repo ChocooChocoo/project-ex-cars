@@ -172,7 +172,7 @@ describe("FinanceClient", () => {
     expect(screen.queryByRole("button", { name: "Record Entry" })).not.toBeInTheDocument();
   });
 
-  it("lets finance roles approve a draft disbursement", () => {
+  it("lets finance roles approve and release a draft disbursement in one click (notes line 190)", () => {
     render(
       <FinanceClient
         entries={[]}
@@ -200,9 +200,9 @@ describe("FinanceClient", () => {
     );
     openDisbursements();
     // T03 HA4: actions live in the request's detail view.
-    expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Approve & Release" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Open Car purchase fund/ }));
-    expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Approve & Release" })).toBeInTheDocument();
   });
 
   it("finance-client informant cannot see Record button", () => {

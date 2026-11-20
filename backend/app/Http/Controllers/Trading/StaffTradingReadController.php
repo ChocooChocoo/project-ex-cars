@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Trading;
 use App\Http\Controllers\Catalogue\ShowroomController;
 use App\Http\Controllers\Controller;
 use App\Models\FieldCase;
+use App\Models\InspectionIssueReport;
 use App\Models\Installment;
 use App\Models\InstallmentAccount;
 use App\Models\PaymentRecord;
@@ -17,10 +18,13 @@ use App\Models\TransactionDocument;
 use App\Models\TransactionStatusHistory;
 use App\Models\Vehicle;
 use App\Models\VehicleInspection;
+use App\Models\VehiclePriceProposal;
 use App\Models\ViewingArrangement;
 use App\Services\FileService;
+use App\Services\Trading\Deadlines;
 use App\Services\Trading\Trading;
 use App\Support\ApiRow;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -41,7 +45,7 @@ class StaffTradingReadController extends Controller
     {
         $user = $request->user();
         // ponytail: kept from the old page (it ran checkAndNotifyOverdueReviews on render); drop once the Phase 6 cron runs trading:deadlines.
-        \App\Services\Trading\Deadlines::notify();
+        Deadlines::notify();
         $query = Transaction::query()->orderByDesc('updated_at');
         if ($user->hasRole('sales_manager')) {
             $query->where('transaction_kind', 'buy');
@@ -134,12 +138,12 @@ class StaffTradingReadController extends Controller
                 ->first(['id', 'status', 'amount_cents', 'purpose', 'requested_by', 'returned_cents', 'returned_at', 'return_confirmed_at']);
             $expenses = $fieldCase ? DB::table('field_case_expenses')->where('field_case_id', $fieldCase->id)->orderBy('submitted_at')
                 ->get(['id', 'amount', 'description', 'submitted_at', 'reimbursed_at']) : collect();
-            $iso = fn ($v) => $v ? \Carbon\CarbonImmutable::parse($v, 'UTC')->toJSON() : null;
+            $iso = fn ($v) => $v ? CarbonImmutable::parse($v, 'UTC')->toJSON() : null;
             $sellFlow = [
-                'proposals' => ApiRow::list(\App\Models\VehiclePriceProposal::query()->where('transaction_id', $id)->orderByDesc('created_at')
+                'proposals' => ApiRow::list(VehiclePriceProposal::query()->where('transaction_id', $id)->orderByDesc('created_at')
                     ->get(['id', 'proposal_kind', 'proposed_amount', 'decision', 'notes', 'created_at'])),
                 'fieldCase' => ApiRow::of($fieldCase),
-                'issueReport' => ApiRow::of(\App\Models\InspectionIssueReport::query()->where('transaction_id', $id)->first()),
+                'issueReport' => ApiRow::of(InspectionIssueReport::query()->where('transaction_id', $id)->first()),
                 // SH-7 / SH-3: the part-by-part inspection, with costs and private photo links, for the Marketing
                 // Specialist now and the Head Accountant from Phase 8.
                 'inspection' => $fieldCase ? VehicleInspection::pack($fieldCase->id, $id) : null,
@@ -167,7 +171,9 @@ class StaffTradingReadController extends Controller
             // BC-8: the same rule the approval gate enforces, so the page can disable Approve with one source of truth.
             'verifiedPrerequisites' => $buy ? StaffTransactionController::verifiedPrerequisites($id) : null,
             'history' => ApiRow::list(TransactionStatusHistory::query()->where('transaction_id', $id)->orderBy('changed_at')->get()),
-            'documents' => CustomerTradingReadController::signedDocuments(TransactionDocument::query()->where('transaction_id', $id)->orderByDesc('upload_date')->get()),
+            // Notes line 207: a buying transaction shows no meet-up expense receipts; they stay on the field case.
+            'documents' => CustomerTradingReadController::signedDocuments(TransactionDocument::query()->where('transaction_id', $id)
+                ->when(! $isSell, fn ($q) => $q->where('document_kind', '!=', 'expense_proof'))->orderByDesc('upload_date')->get()),
             'payments' => $payments,
             'installmentAccount' => $account ? ApiRow::of($account) + ['installments' => ApiRow::list(Installment::query()->where('account_id', $account->id)->orderBy('sequence_no')->get())] : null,
             'paymentTerms' => ApiRow::of(PaymentTerm::query()->where('purchase_transaction_id', $id)->first()),

@@ -28,30 +28,28 @@ describe("field budget (T10)", () => {
 });
 
 describe("field budget categories (BH-5)", () => {
-  it("offers the six categories in checklist order", () => {
+  it("offers the four categories the notes list, in checklist order (line 208)", () => {
     expect(FIELD_EXPENSE_CATEGORIES.map((category) => category.label)).toEqual([
-      "Fuel",
-      "Tolls",
-      "Parking fee",
-      "Meals",
-      "Transportation fare",
-      "Other",
+      "Gas",
+      "Toll Fee",
+      "Parking",
+      "Other possible expenses",
     ]);
   });
 
   it("stores the joined labels in checklist order, whatever order they were ticked", () => {
-    expect(fieldExpensePurpose(["meals", "fuel", "tolls"])).toBe("Fuel, Tolls, Meals");
+    expect(fieldExpensePurpose(["parking", "fuel", "tolls"])).toBe("Gas, Toll Fee, Parking");
     expect(fieldExpensePurpose([])).toBe("");
   });
 
   it("names the other expense when Other is ticked", () => {
-    expect(fieldExpensePurpose(["fuel", "other"], " Car wash ")).toBe("Fuel, Other: Car wash");
-    expect(fieldExpensePurpose(["other"])).toBe("Other");
-    expect(fieldExpensePurpose(["other"], "   ")).toBe("Other");
+    expect(fieldExpensePurpose(["fuel", "other"], " Car wash ")).toBe("Gas, Other: Car wash");
+    expect(fieldExpensePurpose(["other"])).toBe("Other possible expenses");
+    expect(fieldExpensePurpose(["other"], "   ")).toBe("Other possible expenses");
   });
 
   it("labels a single stored category", () => {
-    expect(fieldExpenseCategoryLabel("parking")).toBe("Parking fee");
+    expect(fieldExpenseCategoryLabel("parking")).toBe("Parking");
     expect(fieldExpenseCategoryLabel("transport")).toBe("Transportation fare");
     expect(fieldExpenseCategoryLabel(undefined)).toBe("");
   });

@@ -29,12 +29,13 @@ class FieldBudgetController extends Controller
      * every existing finance reader keeps working.
      */
     public const EXPENSE_CATEGORIES = [
-        'fuel' => 'Fuel',
-        'tolls' => 'Tolls',
-        'parking' => 'Parking fee',
+        // Notes line 208. Meals and transport are no longer offered but still accepted for older clients.
+        'fuel' => 'Gas',
+        'tolls' => 'Toll Fee',
+        'parking' => 'Parking',
         'meals' => 'Meals',
         'transport' => 'Transportation fare',
-        'other' => 'Other',
+        'other' => 'Other possible expenses',
     ];
 
     /** @param  list<string>  $categories */

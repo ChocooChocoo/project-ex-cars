@@ -142,9 +142,9 @@ const ENTRY_LABELS: Record<FinancialEntryKind, string> = {
 };
 
 const DISBURSEMENT_FLOW: Record<string, { label: string; next: string | null }> = {
-  // Requests are created as drafts; the server moves draft → approved, so the button must too.
-  draft: { label: "Draft", next: "approved" },
-  submitted: { label: "Submitted", next: "approved" },
+  // Notes line 190: a new request is approved and released in one click. "Release" stays for approved ones.
+  draft: { label: "Draft", next: "approve_release" },
+  submitted: { label: "Submitted", next: "approve_release" },
   approved: { label: "Approved", next: "released" },
   rejected: { label: "Rejected", next: null },
   released: { label: "Released", next: "received" },
@@ -155,6 +155,7 @@ const DISBURSEMENT_FLOW: Record<string, { label: string; next: string | null }> 
 const DISBURSEMENT_EVENT_LABELS: Record<string, string> = {
   submitted: "Submit",
   approved: "Approve",
+  approve_release: "Approve & Release",
   rejected: "Reject",
   released: "Release",
   received: "Receive",
@@ -518,7 +519,13 @@ function DisbursementsTable({
                   </td>
                   <td className="max-w-64 truncate px-2 py-2 text-muted-foreground">{row.purpose}</td>
                   <td className="px-2 py-2">
-                    <Badge variant={statusVariant(row.status)}>{row.status}</Badge>
+                    <div className="flex flex-wrap gap-1">
+                      <Badge variant={statusVariant(row.status)}>{row.status}</Badge>
+                      {/* Notes lines 163, 192: an exact budget is a read-only record, with nothing to receive. */}
+                      {row.returned_at && Number(row.returned_cents ?? 0) === 0 ? (
+                        <Badge variant="outline">No excess return</Badge>
+                      ) : null}
+                    </div>
                   </td>
                   <td className="px-2 py-2 text-muted-foreground">
                     <ChevronRight className="size-4" aria-hidden="true" />
@@ -803,7 +810,8 @@ export function FinanceClient({
       return;
     }
     // Event kinds are already past tense ("approved", "rejected"); only "paid" needs a verb.
-    toast.success(`Disbursement ${eventKind === "paid" ? "marked paid" : eventKind}.`);
+    const done: Record<string, string> = { paid: "marked paid", approve_release: "approved and released" };
+    toast.success(`Disbursement ${done[eventKind] ?? eventKind}.`);
     setDetail(null);
     setRejectReason("");
     router.refresh();
@@ -881,7 +889,7 @@ export function FinanceClient({
         ) : null}
         <Card>
           <CardContent className="flex flex-col gap-1 pt-4">
-            <span className="text-muted-foreground text-xs">Revenue</span>
+            <span className="text-muted-foreground text-xs">Revenue (sales)</span>
             <span className="font-semibold text-2xl text-green-600 dark:text-green-400">
               ₱{(revenueTotal / 100).toLocaleString()}
             </span>

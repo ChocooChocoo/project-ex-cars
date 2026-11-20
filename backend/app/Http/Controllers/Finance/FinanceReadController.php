@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Finance;
 
+use App\Http\Controllers\Catalogue\InspectionController;
 use App\Http\Controllers\Controller;
 use App\Models\VehicleInspection;
 use App\Services\FileService;
@@ -148,6 +149,7 @@ class FinanceReadController extends Controller
             $tx = $txId ? $byTransaction->get($txId) : null;
             if (! $tx) {
                 $out[$request->id] = null;
+
                 continue;
             }
             $sell = $sells->get($tx->id);
@@ -199,7 +201,7 @@ class FinanceReadController extends Controller
      */
     private static function inspections(Collection $transactionIds, ?object $user): array
     {
-        if (! \App\Http\Controllers\Catalogue\InspectionController::canReadFundResult($user) || $transactionIds->isEmpty()) {
+        if (! InspectionController::canReadFundResult($user) || $transactionIds->isEmpty()) {
             return [];
         }
         $cases = DB::table('field_cases')->whereIn('transaction_id', $transactionIds)->where('case_kind', 'acquisition')
@@ -287,13 +289,18 @@ class FinanceReadController extends Controller
             ->get(['f.id', 'f.amount_cents', 'f.reason', 'f.shortfall_reason', 'f.created_at', 'd.status as d_status', 'f.disbursement_id', 'j.id as job_id', 'j.vehicle_id',
                 'j.state as job_state', 'j.refund_due_cents', 'j.refunded_at', 'v.make as v_make', 'v.model as v_model', 'v.year as v_year']);
         $receipts = DB::table('reconditioning_fund_receipts')->whereIn('fund_request_id', $requests->pluck('id'))->get(['fund_request_id', 'storage_path'])->groupBy('fund_request_id');
+        // Notes line 193: what the Mechanic actually repaired, part by part, for the Head Accountant.
+        $parts = DB::table('reconditioning_parts')->whereIn('job_id', $requests->pluck('job_id')->filter()->unique())
+            ->orderBy('created_at')->get(['job_id', 'part_name', 'replacement_brand', 'estimated_cost_cents', 'photo_path'])->groupBy('job_id');
 
         return $requests->map(fn ($r) => [
             'id' => $r->id, 'amount_cents' => (int) $r->amount_cents, 'reason' => $r->reason, 'shortfall_reason' => $r->shortfall_reason, 'created_at' => ApiRow::iso($r->created_at),
             'disbursement_requests' => $r->disbursement_id ? ['status' => $r->d_status] : null,
             'reconditioning_jobs' => $r->job_id ? ['id' => $r->job_id, 'vehicle_id' => $r->vehicle_id, 'state' => $r->job_state,
                 'refund_due_cents' => $r->refund_due_cents === null ? null : (int) $r->refund_due_cents, 'refunded_at' => ApiRow::iso($r->refunded_at),
-                'vehicles' => self::vehicle($r)] : null,
+                'vehicles' => self::vehicle($r),
+                'parts' => ($parts[$r->job_id] ?? collect())->map(fn ($p) => ['part_name' => $p->part_name, 'replacement_brand' => $p->replacement_brand,
+                    'cost' => (int) $p->estimated_cost_cents / 100, 'photo_url' => $files->signedUrl('reconditioning-receipts', $p->photo_path)])->values()] : null,
             'reconditioning_fund_receipts' => ($receipts[$r->id] ?? collect())->map(fn ($x) => ['storage_path' => $x->storage_path,
                 'signed_url' => $files->signedUrl('reconditioning-receipts', $x->storage_path)])->values(),
         ])->all();

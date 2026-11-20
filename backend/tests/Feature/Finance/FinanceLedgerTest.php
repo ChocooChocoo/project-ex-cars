@@ -241,7 +241,7 @@ class FinanceLedgerTest extends TestCase
         // The field case page the requester opens carries it too.
         $budgetRow = $this->act($ci)->getJson('/api/v1/staff/field-cases/'.$case)->assertOk()->json('money.budget');
         $this->assertSame('File the trip first', $budgetRow['rejection_reason']);
-        $this->assertSame('Fuel', $budgetRow['purpose']);
+        $this->assertSame('Gas', $budgetRow['purpose']);
     }
 
     #[Test]

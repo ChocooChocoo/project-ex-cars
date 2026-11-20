@@ -21,18 +21,22 @@ export function budgetReleased(status: unknown): boolean {
  * BH-5: what a field budget covers. The checklist replaces free text; the saved `purpose` is the joined labels so
  * the finance screens keep reading the same column. Mirrors FieldBudgetController::EXPENSE_CATEGORIES.
  */
+// Notes line 208: Gas, Toll Fee, Parking, Other possible expenses. Meals and transport are no longer offered; the
+// server still accepts them so an old row keeps its label.
 export const FIELD_EXPENSE_CATEGORIES = [
-  { value: "fuel", label: "Fuel" },
-  { value: "tolls", label: "Tolls" },
-  { value: "parking", label: "Parking fee" },
-  { value: "meals", label: "Meals" },
-  { value: "transport", label: "Transportation fare" },
-  { value: "other", label: "Other" },
+  { value: "fuel", label: "Gas" },
+  { value: "tolls", label: "Toll Fee" },
+  { value: "parking", label: "Parking" },
+  { value: "other", label: "Other possible expenses" },
 ] as const;
 
 export type FieldExpenseCategory = (typeof FIELD_EXPENSE_CATEGORIES)[number]["value"];
 
-const CATEGORY_LABELS = new Map<string, string>(FIELD_EXPENSE_CATEGORIES.map(({ value, label }) => [value, label]));
+const CATEGORY_LABELS = new Map<string, string>([
+  ...FIELD_EXPENSE_CATEGORIES.map(({ value, label }): [string, string] => [value, label]),
+  ["meals", "Meals"],
+  ["transport", "Transportation fare"],
+]);
 
 /** The one-line purpose stored on a disbursement request, in checklist order ("Fuel, Tolls, Other: car wash"). */
 export function fieldExpensePurpose(categories: readonly string[], other = ""): string {

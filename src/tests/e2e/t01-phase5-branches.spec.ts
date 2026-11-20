@@ -231,7 +231,7 @@ test.describe
       await page.waitForLoadState("networkidle");
       await page.locator("#recon-final").fill("Tyres replaced, panels repainted, interior detailed");
       await page.locator("#recon-actual").fill("38500");
-      await page.getByRole("button", { name: "Complete reconditioning" }).click();
+      await page.getByRole("button", { name: "Finalize Repair" }).click();
       await expect(page.getByText("Reconditioning completed.")).toBeVisible();
 
       // SH-2: there is no Sales Manager "papers re-processed" step any more — completing the

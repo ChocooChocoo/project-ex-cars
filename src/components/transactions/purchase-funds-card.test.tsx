@@ -41,16 +41,17 @@ describe("PurchaseFundsCard rejection reason (BH-4)", () => {
   });
 });
 
-describe("PurchaseFundsCard zero excess (BH-3 / SN-2)", () => {
-  it("offers one click and no cash input when nothing is left", () => {
+describe("PurchaseFundsCard excess return choice (notes lines 209-213)", () => {
+  it("preselects 'Budget was exact' with no cash input when nothing is left", () => {
     render(<PurchaseFundsCard {...base} fund={{ id: "d1", status: "paid", amount_cents: 45_000_000 }} />);
-    expect(screen.getByRole("button", { name: "No excess — mark completed" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Budget was exact for the trip" })).toBeChecked();
     expect(screen.queryByLabelText("Cash returned (₱)")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Record Excess Return" })).toBeEnabled();
   });
 
-  it("asks for the cash returned when there is an excess", () => {
+  it("preselects 'Excess budget to return' and asks for the cash when there is an excess", () => {
     render(<PurchaseFundsCard {...base} fund={{ id: "d1", status: "paid", amount_cents: 45_500_000 }} />);
+    expect(screen.getByRole("radio", { name: "Excess budget to return" })).toBeChecked();
     expect(screen.getByLabelText("Cash returned (₱)")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "No excess — mark completed" })).not.toBeInTheDocument();
   });
 });

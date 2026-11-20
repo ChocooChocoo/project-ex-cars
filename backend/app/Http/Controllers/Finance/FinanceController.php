@@ -150,7 +150,8 @@ class FinanceController extends Controller
         $this->allow($request, ['ceo', 'head_accountant'], 'Not authorized to advance disbursements');
         $data = $request->validate([
             'disbursement_id' => ['required', 'uuid'],
-            'event_kind' => ['required', 'in:submitted,approved,rejected,released,received,paid'],
+            // Notes line 190: `approve_release` approves and releases in one step.
+            'event_kind' => ['required', 'in:submitted,approved,rejected,released,received,paid,approve_release'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ], ['*' => 'Invalid action.']);
         $kind = $data['event_kind'];
@@ -166,36 +167,53 @@ class FinanceController extends Controller
                 return;
             }
             $locked = DB::table('disbursement_requests')->where('id', $data['disbursement_id'])->lockForUpdate()->first();
+            if ($kind === 'approve_release') {
+                // A retry after the release went through is a no-op, so the cash leaves once.
+                if (in_array($locked->status, ['released', 'received', 'paid'], true)) {
+                    return;
+                }
+                abort_unless(in_array($locked->status, ['draft', 'submitted'], true), 409, "Cannot approve and release a {$locked->status} request.");
+                $this->step($locked, 'approved', $actor, $data['notes'] ?? null);
+                $this->step(DB::table('disbursement_requests')->where('id', $locked->id)->first(), 'released', $actor, null);
+
+                return;
+            }
             if ($kind === 'rejected') {
                 abort_unless(in_array($locked->status, ['draft', 'submitted'], true), 409, 'Only draft or submitted requests can be rejected.');
             } else {
                 abort_unless((self::NEXT[$locked->status] ?? null) === $kind, 409, "Cannot move from {$locked->status} to {$kind}.");
             }
-            $by = ['approved' => 'approved_by', 'released' => 'released_by', 'received' => 'received_by'][$kind] ?? null;
-            // BH-4: the rejection reason travels with the request so its requester reads why it was refused.
-            $reason = trim((string) ($data['notes'] ?? ''));
-            DB::table('disbursement_requests')->where('id', $locked->id)->update(['status' => $kind, 'updated_at' => now()]
-                + ($by ? [$by => $actor] : []) + ($kind === 'rejected' ? ['rejection_reason' => $reason !== '' ? $reason : null] : []));
-            Disbursements::event($locked->id, $kind, $actor, $data['notes'] ?? null);
-            // SN-10: releasing the cash is the outflow; the description is the request's own reason. One entry per
-            // request however often the release is retried — `completePurchase` posts nothing, it only spends it.
-            if ($kind === 'released') {
-                Ledger::post('disbursement', (int) $locked->amount_cents, "Funds released: {$locked->title}. {$locked->purpose}",
-                    'release:'.$locked->id, (string) $actor, $locked->purchase_transaction_id, $locked->field_case_id);
-            }
-            // The reconditioning ledger follows the same step (the vehicle page reads the fund request's own state).
-            $fundState = match (true) {
-                $kind === 'approved' => 'approved',
-                in_array($kind, ['released', 'received', 'paid'], true) => 'released',
-                $kind === 'rejected' => 'rejected',
-                default => null,
-            };
-            if ($fundState) {
-                DB::table('reconditioning_fund_requests')->where('disbursement_id', $locked->id)->update(['state' => $fundState, 'updated_at' => now()]);
-            }
+            $this->step($locked, $kind, $actor, $data['notes'] ?? null);
         });
 
         return response()->json(['success' => true]);
+    }
+
+    /** One move of a locked disbursement request: status, actor column, event, ledger and reconditioning state. */
+    private function step(object $locked, string $kind, string $actor, ?string $notes): void
+    {
+        $by = ['approved' => 'approved_by', 'released' => 'released_by', 'received' => 'received_by'][$kind] ?? null;
+        // BH-4: the rejection reason travels with the request so its requester reads why it was refused.
+        $reason = trim((string) ($notes ?? ''));
+        DB::table('disbursement_requests')->where('id', $locked->id)->update(['status' => $kind, 'updated_at' => now()]
+            + ($by ? [$by => $actor] : []) + ($kind === 'rejected' ? ['rejection_reason' => $reason !== '' ? $reason : null] : []));
+        Disbursements::event($locked->id, $kind, $actor, $notes);
+        // SN-10: releasing the cash is the outflow; the description is the request's own reason. One entry per
+        // request however often the release is retried — `completePurchase` posts nothing, it only spends it.
+        if ($kind === 'released') {
+            Ledger::post('disbursement', (int) $locked->amount_cents, "Funds released: {$locked->title}. {$locked->purpose}",
+                'release:'.$locked->id, (string) $actor, $locked->purchase_transaction_id, $locked->field_case_id);
+        }
+        // The reconditioning ledger follows the same step (the vehicle page reads the fund request's own state).
+        $fundState = match (true) {
+            $kind === 'approved' => 'approved',
+            in_array($kind, ['released', 'received', 'paid'], true) => 'released',
+            $kind === 'rejected' => 'rejected',
+            default => null,
+        };
+        if ($fundState) {
+            DB::table('reconditioning_fund_requests')->where('disbursement_id', $locked->id)->update(['state' => $fundState, 'updated_at' => now()]);
+        }
     }
 
     /** Selling step 13: a field expense is reimbursed once the car GCE bought is sold on. */

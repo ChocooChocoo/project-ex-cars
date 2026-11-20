@@ -50,6 +50,12 @@ export function VehicleDetailPage() {
             <div>
               <span className="font-bold text-3xl">₱{((v.current_price as number) ?? 0).toLocaleString()}</span>
             </div>
+            {/* Notes line 179: a car that went through reconditioning says so. */}
+            {v.condition === "Reconditioned" ? (
+              <Badge variant="secondary" className="w-fit">
+                Reconditioned
+              </Badge>
+            ) : null}
             {(v.offer_details as string) ? (
               <Badge variant="outline" className="w-fit text-green-700">
                 {v.offer_details as string}

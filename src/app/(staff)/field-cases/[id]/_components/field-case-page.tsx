@@ -162,6 +162,8 @@ export function FieldCasePage() {
           canRequest={isInformant && approved}
           isRequester={Boolean(fund && fund.requested_by === userId)}
           cleared={Boolean(sell?.cleared_for_payment_at)}
+          vehicle={(transaction.vehicles as Record<string, unknown> | null) ?? null}
+          seller={((transaction.profiles as Record<string, unknown> | null)?.full_name as string | null) ?? null}
         />
       ) : null}
     </div>
