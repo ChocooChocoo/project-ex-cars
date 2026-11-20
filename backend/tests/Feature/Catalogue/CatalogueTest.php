@@ -159,7 +159,7 @@ class CatalogueTest extends TestCase
         $this->assertSame(['make' => 'Toyota', 'model' => 'Vios', 'year' => 2020], $accountant->json('proposals.0.vehicles'));
 
         $detail = $this->as($this->account('ceo'))->getJson("/api/v1/staff/vehicles/{$car->id}")->assertOk();
-        $this->assertSame(['vehicle', 'media', 'proposal', 'reconditioning', 'revision'], array_keys($detail->json()));
+        $this->assertSame(['vehicle', 'media', 'proposal', 'reconditioning', 'inspection', 'revision'], array_keys($detail->json()));
     }
 
     #[Test]

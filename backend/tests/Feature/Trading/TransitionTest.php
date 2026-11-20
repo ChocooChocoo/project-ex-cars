@@ -36,15 +36,14 @@ class TransitionTest extends TestCase
                 $files[] = ['kind' => 'valid_id', 'key' => "id_{$side}_path_{$n}"];
             }
         }
-        foreach (['official_receipt', 'certificate_of_registration', 'deed_of_sale'] as $kind) {
-            $files[] = ['kind' => $kind, 'key' => "{$kind}_path"];
-        }
         $prepared = $this->act($customer)->postJson('/api/v1/trading/sell/prepare-uploads', [
             'files' => array_map(fn ($f) => ['kind' => $f['kind'], 'type' => 'image/jpeg', 'size' => 1000], $files),
         ])->assertOk()->json();
         $form = ['make' => 'Honda', 'model' => 'City', 'year' => 2019, 'mileage' => 40000, 'condition' => 'Good', 'offered_amount' => 400000,
             'has_known_issues' => 'no', 'meetup_method' => $meetup, 'meetup_lat' => 14.2, 'meetup_lng' => 121.1, 'owner_number' => '1',
-            'transaction_id' => $prepared['transactionId'], 'id_type_1' => 'passport', 'id_type_2' => 'umid'];
+            'transaction_id' => $prepared['transactionId'], 'id_type_1' => 'passport', 'id_type_2' => 'umid',
+            // SN-13: the OR, the CR and the deed of sale are declared, so no file of them is sent.
+            'papers_checklist' => ['official_receipt' => 'has', 'certificate_of_registration' => 'has', 'deed_of_sale' => 'has']];
         foreach ($files as $i => $file) {
             $grant = $prepared['uploads'][$i];
             $this->again()->post('/api/v1/trading/uploads', ['path' => $grant['path'], 'token' => $grant['token'], 'file' => UploadedFile::fake()->image('a.jpg')])->assertOk();
@@ -60,6 +59,28 @@ class TransitionTest extends TestCase
         return $id;
     }
 
+    /** SH-7: a published checklist tree (system → component → parts) for the seller meet-up inspection tests. */
+    private function checklistParts(int $count = 2): array
+    {
+        $systemId = (string) Str::uuid();
+        $componentId = (string) Str::uuid();
+        DB::table('inspection_checklist_nodes')->insert(['id' => $systemId, 'parent_id' => null, 'level' => 'system', 'name' => 'Brakes', 'display_order' => 0]);
+        DB::table('inspection_checklist_nodes')->insert(['id' => $componentId, 'parent_id' => $systemId, 'level' => 'component', 'name' => 'Brake System', 'display_order' => 1]);
+        $parts = [];
+        foreach (array_slice(['Brake Pads', 'Brake Discs', 'Brake Lines'], 0, $count) as $i => $name) {
+            $parts[] = $id = (string) Str::uuid();
+            DB::table('inspection_checklist_nodes')->insert(['id' => $id, 'parent_id' => $componentId, 'level' => 'part', 'name' => $name, 'display_order' => 2 + $i]);
+        }
+
+        return $parts;
+    }
+
+    /** SH-7: `results[]` must answer every leaf part; a `for_repair` part also carries its cost. */
+    private function inspectionResults(array $parts, array $answers): string
+    {
+        return json_encode(array_map(fn (string $id) => ['node_id' => $id] + ($answers[$id] ?? ['status' => 'good']), $parts));
+    }
+
     #[Test]
     public function selling_no_issue_branch_reaches_cleared_for_payment(): void
     {
@@ -69,14 +90,18 @@ class TransitionTest extends TestCase
         $ci = $this->account('confidential_informant');
         $mechanic = $this->account('mechanic');
         $id = $this->sellOffer($seller);
+        $parts = $this->checklistParts();
+        $allGood = $this->inspectionResults($parts, []);
 
-        // The OCR job ran (sync queue) and, with no provider set up, left the papers for manual review.
+        // The OCR job ran (sync queue) and, with no provider set up, left each ID front for manual review.
         $this->assertSame(0, DB::table('transaction_documents')->where('transaction_id', $id)->where('auto_check_status', 'pending')->count());
-        $this->assertSame(4, DB::table('transaction_documents')->where('transaction_id', $id)->where('auto_check_status', 'manual_review')->count(), 'the OR, the CR and each ID front');
+        $this->assertSame(2, DB::table('transaction_documents')->where('transaction_id', $id)->where('auto_check_status', 'manual_review')->count(), 'each ID front, and no OR/CR to check (SN-11)');
+        $this->assertSame(0, DB::table('transaction_documents')->where('transaction_id', $id)->whereIn('document_kind', ['official_receipt', 'certificate_of_registration', 'deed_of_sale'])->count(), 'SN-13: no paper files are kept');
 
-        // A ceiling needs verified papers; only the Marketing Specialist verifies a seller's papers.
+        // Difference: a ceiling needs verified IDs; only the Marketing Specialist verifies a seller's IDs, and the
+        // OR/CR/Deed are declared on the checklist and inspected on site (SN-11), so they need no verification.
         $this->act($ms)->postJson('/api/v1/staff/trading/sell/propose-purchase-ceiling', ['transaction_id' => $id, 'amount' => 380000])->assertStatus(422);
-        $paper = DB::table('transaction_documents')->where('transaction_id', $id)->where('document_kind', 'deed_of_sale')->value('id');
+        $paper = DB::table('transaction_documents')->where('transaction_id', $id)->where('document_kind', 'valid_id')->value('id');
         $this->act($this->account('head_accountant'))->postJson('/api/v1/staff/trading/verify-document', ['document_id' => $paper, 'decision' => 'verified'])->assertForbidden();
         DB::table('transaction_documents')->where('transaction_id', $id)->where('document_kind', '!=', 'sell_photo')->update(['verification_state' => 'verified']);
 
@@ -99,12 +124,19 @@ class TransitionTest extends TestCase
         $this->again()->postJson('/api/v1/staff/trading/sell/record-agreed-price', $agreed)->assertStatus(409);
         $case = DB::table('field_cases')->where('transaction_id', $id)->where('case_kind', 'acquisition')->value('id');
 
-        $this->act($mechanic)->post('/api/v1/staff/field/report-inspection', ['field_case_id' => $case, 'outcome' => 'no_issues'])->assertStatus(422);
+        // SH-7: the checklist answers are refused until both on-site checks are confirmed.
+        $this->act($mechanic)->post('/api/v1/staff/field/report-inspection', ['field_case_id' => $case, 'results' => $allGood])->assertStatus(422);
         $this->act($mechanic)->postJson('/api/v1/staff/field/confirm-field-check', ['field_case_id' => $case, 'check' => 'identity'])->assertForbidden();
         $this->act($ci)->postJson('/api/v1/staff/field/confirm-field-check', ['field_case_id' => $case, 'check' => 'identity'])->assertOk();
         $this->act($mechanic)->postJson('/api/v1/staff/field/confirm-field-check', ['field_case_id' => $case, 'check' => 'plate'])->assertOk();
-        $this->again()->post('/api/v1/staff/field/report-inspection', ['field_case_id' => $case, 'outcome' => 'no_issues'])->assertOk();
-        $this->again()->post('/api/v1/staff/field/report-inspection', ['field_case_id' => $case, 'outcome' => 'no_issues'])->assertStatus(409);
+        // SH-7 (a): a part without a status is refused, even after both checks.
+        $this->again()->post('/api/v1/staff/field/report-inspection', ['field_case_id' => $case,
+            'results' => $this->inspectionResults($parts, [$parts[0] => ['status' => '']])])->assertStatus(422);
+        $this->assertNull(DB::table('field_cases')->where('id', $case)->value('inspection_outcome'), 'a refused report writes nothing');
+        $this->again()->post('/api/v1/staff/field/report-inspection', ['field_case_id' => $case, 'results' => $allGood])->assertOk();
+        $this->again()->post('/api/v1/staff/field/report-inspection', ['field_case_id' => $case, 'results' => $allGood])->assertStatus(409);
+        $this->assertSame('no_issues', DB::table('field_cases')->where('id', $case)->value('inspection_outcome'));
+        $this->assertSame(count($parts), DB::table('inspection_checklist_results')->count(), 'one answer per leaf part');
         $this->assertNotNull(DB::table('sell_details')->where('transaction_id', $id)->value('cleared_for_payment_at'));
         $this->assertSame('approved', DB::table('transactions')->where('id', $id)->value('current_state'), 'payment completes it in Phase 6');
     }
@@ -117,6 +149,7 @@ class TransitionTest extends TestCase
         $ceo = $this->account('ceo');
         $mechanic = $this->account('mechanic');
         $id = $this->sellOffer($seller, 'gce_visit');
+        $parts = $this->checklistParts();
         DB::table('transaction_documents')->where('transaction_id', $id)->update(['verification_state' => 'verified']);
         $this->act($ms)->postJson('/api/v1/staff/trading/sell/propose-purchase-ceiling', ['transaction_id' => $id, 'amount' => 380000])->assertOk();
         $this->act($ceo)->postJson('/api/v1/staff/vehicles/approve-price', ['proposal_id' => DB::table('vehicle_price_proposals')->where('transaction_id', $id)->value('id'), 'decision' => 'approved'])->assertOk();
@@ -127,17 +160,36 @@ class TransitionTest extends TestCase
         $this->assertNull(DB::table('field_cases')->where('id', $case)->value('assigned_confidential_informant'));
         $this->act($mechanic)->postJson('/api/v1/staff/field/confirm-field-check', ['field_case_id' => $case, 'check' => 'identity'])->assertOk();
         $this->again()->postJson('/api/v1/staff/field/confirm-field-check', ['field_case_id' => $case, 'check' => 'plate'])->assertOk();
-        $this->again()->post('/api/v1/staff/field/report-inspection', ['field_case_id' => $case, 'outcome' => 'issue_found', 'issue_description' => 'Worn clutch',
-            'repair_estimate' => 15000, 'photos' => [UploadedFile::fake()->image('c.jpg')]])->assertOk();
+        // SH-7 (b): a part that needs repair without a cost and a photo is refused.
+        $this->again()->post('/api/v1/staff/field/report-inspection', ['field_case_id' => $case,
+            'results' => $this->inspectionResults($parts, [$parts[0] => ['status' => 'for_repair']])])->assertStatus(422)
+            ->assertJsonPath('message', 'Give the repair cost of every part that needs repair.');
+        $this->again()->post('/api/v1/staff/field/report-inspection', ['field_case_id' => $case,
+            'results' => $this->inspectionResults($parts, [$parts[0] => ['status' => 'for_repair', 'cost' => '15000']])])->assertStatus(422)
+            ->assertJsonPath('message', 'Attach at least one photo of every part that needs repair.');
+        $this->again()->post('/api/v1/staff/field/report-inspection', [
+            'field_case_id' => $case,
+            'results' => $this->inspectionResults($parts, [$parts[0] => ['status' => 'for_repair', 'cost' => '15000', 'note' => 'Worn clutch']]),
+            "result_photo_{$parts[0]}" => [UploadedFile::fake()->image('c.jpg')],
+        ])->assertOk();
+        $issue = DB::table('field_cases')->where('id', $case)->first(['inspection_outcome', 'issue_description', 'repair_estimate']);
+        $this->assertSame('issue_found', $issue->inspection_outcome);
+        $this->assertSame('15000.00', $issue->repair_estimate);
+        $this->assertStringContainsString('Brake Pads', (string) $issue->issue_description);
+        $this->assertSame(1, DB::table('transaction_documents')->where('transaction_id', $id)->where('document_kind', 'inspection_photo')
+            ->where('note', $parts[0])->count(), 'the photo is filed against its part');
         $this->assertNull(DB::table('sell_details')->where('transaction_id', $id)->value('cleared_for_payment_at'));
 
-        $report = ['transaction_id' => $id, 'is_profitable' => 'yes', 'profitability_reason' => 'Still a margin', 'recalculated_price' => 350000, 'new_ceiling' => 355000, 'seller_remarks' => 'Clutch'];
+        // SH-6: the report carries only the revised ceiling and the seller's remarks; the recalculated price is gone.
+        $report = ['transaction_id' => $id, 'is_profitable' => 'yes', 'profitability_reason' => 'Still a margin', 'new_ceiling' => 355000, 'seller_remarks' => 'Clutch'];
         $this->act($ms)->postJson('/api/v1/staff/trading/sell/create-inspection-issue-report', $report)->assertOk();
         $this->again()->postJson('/api/v1/staff/trading/sell/create-inspection-issue-report', $report)->assertStatus(409);
+        $this->assertNull(DB::table('inspection_issue_reports')->where('transaction_id', $id)->value('recalculated_price'), 'SH-6: no recalculated price is stored');
         $this->assertSame('under_review', DB::table('transactions')->where('id', $id)->value('current_state'));
         $revised = DB::table('vehicle_price_proposals')->where('transaction_id', $id)->where('proposal_kind', 'revised_ceiling')->value('id');
         $this->act($ceo)->postJson('/api/v1/staff/vehicles/approve-price', ['proposal_id' => $revised, 'decision' => 'approved'])->assertOk();
-        $this->act($ms)->postJson('/api/v1/staff/trading/sell/record-seller-response', ['transaction_id' => $id, 'response' => 'agreed'])->assertOk();
+        // SH-6: the CEO approval is a maximum; the price the seller accepted is recorded after the negotiation.
+        $this->act($ms)->postJson('/api/v1/staff/trading/sell/record-seller-response', ['transaction_id' => $id, 'response' => 'agreed', 'agreed_price' => 350000])->assertOk();
         $this->again()->postJson('/api/v1/staff/trading/sell/record-seller-response', ['transaction_id' => $id, 'response' => 'agreed'])->assertStatus(409);
         $sell = DB::table('sell_details')->where('transaction_id', $id)->first();
         $this->assertEquals(350000, (float) $sell->agreed_price);

@@ -20,6 +20,8 @@ class SellDetail extends Model
             'valuation_amount' => 'decimal:2',
             'decision_date' => 'immutable_datetime',
             'condition_items' => 'array',
+            // SN-13: has / does_not_have / expired per paper kind, keyed like the sell form's answers.
+            'papers_checklist' => 'array',
             'has_known_issues' => 'boolean',
             'agreed_price' => 'decimal:2',
             'cleared_for_payment_at' => 'immutable_datetime',

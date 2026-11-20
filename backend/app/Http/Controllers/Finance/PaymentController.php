@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Finance;
 
 use App\Http\Controllers\Controller;
 use App\Services\FileService;
+use App\Services\Finance\Ledger;
 use App\Services\Finance\Money;
 use App\Services\Finance\Payments;
 use App\Services\Finance\PaymentRules;
@@ -174,6 +175,10 @@ class PaymentController extends Controller
                 abort_unless($due !== null && Money::cents($due) === Money::cents($p->amount), 422, 'The payment amount does not match the installment.');
             }
             DB::table('payment_records')->where('id', $paymentId)->update(['verified_by' => $actor]);
+            // SN-10: verified buyer money is revenue. Keyed to the payment row, so a retried verification (the
+            // duplicate row, the webhook, the second Head Accountant) never posts it twice.
+            Ledger::post('revenue', Money::cents($p->amount), 'Buyer payment verified: '.str_replace('_', ' ', (string) ($p->payment_kind ?? 'payment')),
+                'payment:'.$paymentId, (string) $actor, $txId);
 
             if ($p->installment_id) {
                 DB::table('installments')->where('id', $p->installment_id)->update(['state' => 'paid', 'payment_date' => $p->settlement_date ?? now()->toDateString()]);

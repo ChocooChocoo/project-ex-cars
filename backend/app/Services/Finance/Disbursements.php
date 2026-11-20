@@ -48,6 +48,16 @@ final class Disbursements
         $sellDetails = DB::table('sell_details')->where('transaction_id', $tx->id)->first(['agreed_price', 'has_known_issues']);
         self::notifyOnce(['role' => 'ceo'], 'sell_payment_disbursed', 'Seller payment disbursed',
             'GCE paid ₱'.Money::decimal(Money::cents($sellDetails?->agreed_price)).' for a seller\'s car.', 'transactions', $tx->id);
+        // BH-3: the Head Accountant gets one "Car fully paid" record instead of a zero-value return task.
+        $vehicle = DB::table('vehicles')->where('id', $tx->vehicle_id)->first(['year', 'make', 'model', 'stock_code']);
+        $car = $vehicle ? trim($vehicle->year.' '.$vehicle->make.' '.$vehicle->model) : 'A car';
+        if ($vehicle?->stock_code) {
+            $car .= " ({$vehicle->stock_code})";
+        }
+        $seller = DB::table('profiles')->where('id', $tx->customer_id)->value('full_name');
+        self::notifyOnce(['role' => 'head_accountant'], 'sell_car_fully_paid', 'Car fully paid',
+            "{$car} bought from ".($seller ?: 'the seller').' for '.Money::currency(Money::cents($sellDetails?->agreed_price)).'. Status: seller paid in full.',
+            'transactions', $tx->id);
 
         $case = DB::table('field_cases')->where('transaction_id', $tx->id)->where('case_kind', 'acquisition')->where('state', '!=', 'cancelled')
             ->orderByDesc('created_at')->first(['mechanic_id', 'inspection_outcome']);

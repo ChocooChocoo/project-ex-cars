@@ -19,7 +19,10 @@ class PaymentConcurrencyTest extends TestCase
     use FinanceFixtures, RefreshDatabase;
 
     private const TABLES = ['payment_records', 'installments', 'installment_accounts', 'payment_terms', 'transactions', 'purchase_details', 'viewing_arrangements',
-        'transaction_status_history', 'notifications', 'vehicles', 'audit_events', 'field_cases', 'sale_handovers', 'disbursement_requests', 'disbursement_events', 'sell_details', 'reconditioning_jobs'];
+        'transaction_status_history', 'notifications', 'vehicles', 'audit_events', 'field_cases', 'sale_handovers', 'disbursement_requests', 'disbursement_events', 'sell_details', 'reconditioning_jobs',
+        // Phase 8 posts a `revenue` entry when a buyer payment is verified, and those rows carry recorded_by. Left
+        // behind, they outlive the users deleted below and ModelMappingTest's belongsTo check resolves them to null.
+        'financial_entries'];
 
     protected function setUp(): void
     {

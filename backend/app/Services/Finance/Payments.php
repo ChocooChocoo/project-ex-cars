@@ -52,6 +52,10 @@ final class Payments
             $settled = $rows->reject(fn ($r) => in_array($r->payment_kind, ['installment', 'reschedule_fee'], true));
             foreach ($settled as $row) {
                 DB::table('payment_records')->where('id', $row->id)->update(['verified_by' => $row->recorded_by]);
+                // SN-10: PayMongo proved the money arrived, so these rows are verified on the spot. Same key as the
+                // Head Accountant's verify step, so a payment that took both paths posts its revenue once.
+                Ledger::post('revenue', Money::cents($row->amount), 'Buyer payment verified: '.str_replace('_', ' ', (string) ($row->payment_kind ?? 'payment')),
+                    'payment:'.$row->id, (string) $row->recorded_by, $txId);
             }
 
             self::confirmInitialDownpaymentIfPaid($txId);

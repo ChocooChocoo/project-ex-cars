@@ -11,6 +11,7 @@ use App\Models\SellDetail;
 use App\Models\Transaction;
 use App\Models\TransactionDocument;
 use App\Models\Vehicle;
+use App\Models\VehicleInspection;
 use App\Services\FileService;
 use App\Services\Trading\Trading;
 use App\Support\ApiRow;
@@ -106,7 +107,7 @@ class FieldReadController extends Controller
     private static function money(string $caseId): array
     {
         $budget = DB::table('disbursement_requests')->where('field_case_id', $caseId)->orderByDesc('created_at')
-            ->first(['id', 'status', 'amount_cents', 'returned_cents', 'returned_at', 'return_confirmed_at']);
+            ->first(['id', 'status', 'amount_cents', 'purpose', 'rejection_reason', 'returned_cents', 'returned_at', 'return_confirmed_at']);
         $expenses = DB::table('field_case_expenses')->where('field_case_id', $caseId)->orderBy('submitted_at')
             ->get(['id', 'amount', 'description', 'submitted_by', 'submitted_at', 'reimbursed_at', 'proof_document_id']);
         $paths = DB::table('transaction_documents')->whereIn('id', $expenses->pluck('proof_document_id')->filter())->whereNotNull('storage_path')->pluck('storage_path', 'id');
@@ -114,6 +115,7 @@ class FieldReadController extends Controller
 
         return [
             'budget' => $budget ? ['id' => $budget->id, 'status' => $budget->status, 'amount_cents' => (int) $budget->amount_cents,
+                'purpose' => $budget->purpose, 'rejection_reason' => $budget->rejection_reason,
                 'returned_cents' => $budget->returned_cents === null ? null : (int) $budget->returned_cents,
                 'returned_at' => self::iso($budget->returned_at), 'return_confirmed_at' => self::iso($budget->return_confirmed_at)] : null,
             'expenses' => self::expenseRows($expenses)->map(fn ($e) => $e + ['proof_url' => $e['proof_document_id'] && isset($paths[$e['proof_document_id']])
@@ -177,7 +179,10 @@ class FieldReadController extends Controller
         }
 
         if ($case->case_kind !== 'acquisition') {
-            $purchaseColumns = $case->case_kind === 'delivery' ? ['final_price', 'delivery_fee', 'downpayment_amount', 'payment_method', 'arrangement_kind'] : ['payment_method', 'arrangement_kind'];
+            // BH-8: a buyer meet-up shows where to go, so its pin and address travel with the case pack.
+            $purchaseColumns = $case->case_kind === 'delivery'
+                ? ['final_price', 'delivery_fee', 'downpayment_amount', 'payment_method', 'arrangement_kind']
+                : ['payment_method', 'arrangement_kind', 'meetup_lat', 'meetup_lng', 'meetup_address'];
             $transaction = self::transactionPack($case->transaction_id, ['id', 'make', 'model', 'year', 'stock_code'], $purchaseColumns);
             abort_unless($transaction, 404);
 
@@ -196,13 +201,16 @@ class FieldReadController extends Controller
             ->get(['id', 'document_kind', 'id_type', 'verification_state', 'storage_path']);
         $expenses = DB::table('field_case_expenses')->where('field_case_id', $id)->orderBy('submitted_at')->get(['id', 'amount', 'description', 'submitted_by', 'submitted_at', 'reimbursed_at']);
         $fund = DB::table('disbursement_requests')->where('purchase_transaction_id', $case->transaction_id)->where('status', '!=', 'rejected')->orderByDesc('created_at')
-            ->first(['id', 'status', 'amount_cents', 'purpose', 'requested_by', 'returned_cents', 'returned_at', 'return_confirmed_at']);
+            ->first(['id', 'status', 'amount_cents', 'purpose', 'requested_by', 'rejection_reason', 'returned_cents', 'returned_at', 'return_confirmed_at']);
 
         return response()->json($base + [
             'transaction' => $transaction,
             'sellDetails' => $transaction['sell_details'],
             'documents' => CustomerTradingReadController::signedDocuments($documents),
             'expenses' => self::expenseRows($expenses)->values(),
+            // SH-7: the checklist tree and the part-by-part result the Mechanic answers in the inspection card.
+            'inspection' => VehicleInspection::pack($case->id, $case->transaction_id),
+            'checklist' => ApiRow::list(VehicleInspection::checklistNodes()),
             'fund' => $fund ? array_merge((array) $fund, ['amount_cents' => (int) $fund->amount_cents, 'returned_cents' => $fund->returned_cents === null ? null : (int) $fund->returned_cents,
                 'returned_at' => self::iso($fund->returned_at), 'return_confirmed_at' => self::iso($fund->return_confirmed_at)]) : null,
         ]);

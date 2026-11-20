@@ -84,6 +84,19 @@ final class Trading
         return $id !== null && self::fieldWorkers()->contains(fn ($w) => $w->account_id === $id && $w->role === $role);
     }
 
+    /**
+     * SN-4: where the original papers GCE received from the seller are now. A buyer's sale that hands them over
+     * marks them `released`; an unsuccessful sale that returns them marks them `on_hold`. Cars bought before the
+     * papers were captured have no custody rows, so this changes nothing for them.
+     */
+    public static function setPapersCustody(string $saleTransactionId, string $state): void
+    {
+        $vehicleId = DB::table('transactions')->where('id', $saleTransactionId)->value('vehicle_id');
+        if ($vehicleId) {
+            DB::table('vehicle_document_items')->where('vehicle_id', $vehicleId)->whereNotNull('custody_state')->update(['custody_state' => $state]);
+        }
+    }
+
     public static function history(string $transactionId, string $from, string $to, string $actorId, ?string $reason): void
     {
         DB::table('transaction_status_history')->insert([
@@ -199,7 +212,8 @@ final class Trading
 
     /**
      * §2 step 6, Mark Sold to This Buyer: the car leaves the listings and every other open request for it ends,
-     * freeing their slots. Other buyers are told.
+     * freeing their slots. Other buyers are told. BC-4: the Head Accountant is told the sale completed, with the
+     * car, the buyer, the price and the method, so the payment record reaches them.
      */
     public static function finalizeBuySale(object $sale, string $actorId, bool $keepFlowStatus = false): void
     {
@@ -212,6 +226,7 @@ final class Trading
             return;
         }
         self::markVehicleSold($sale->vehicle_id);
+        self::notifySaleCompleted($sale);
 
         $competitors = DB::table('transactions')->where('vehicle_id', $sale->vehicle_id)->where('transaction_kind', 'buy')
             ->where('id', '!=', $sale->id)->whereIn('current_state', ['pending', 'under_review', 'approved'])
@@ -223,6 +238,27 @@ final class Trading
             self::notify(['userId' => $other->customer_id], 'vehicle_sold_elsewhere', 'This car has been sold',
                 'The car you requested was sold to another buyer, so your request has been closed.', $other->id);
         }
+    }
+
+    /** BC-4: the Head Accountant learns which car sold, to whom, at what price and how it was paid. */
+    private static function notifySaleCompleted(object $sale): void
+    {
+        $details = DB::table('purchase_details')->where('transaction_id', $sale->id)->first();
+        $vehicle = DB::table('vehicles')->where('id', $sale->vehicle_id)->first(['make', 'model', 'year', 'stock_code']);
+        $buyer = DB::table('profiles')->where('id', $sale->customer_id)->value('full_name');
+        $car = $vehicle ? trim($vehicle->year.' '.$vehicle->make.' '.$vehicle->model) : 'A car';
+        if ($vehicle?->stock_code) {
+            $car .= " ({$vehicle->stock_code})";
+        }
+        $method = match (true) {
+            ($details?->payment_option ?? null) === 'financing' || $details?->payment_method === 'financing' => 'Financing',
+            $details?->payment_method === 'bank_transfer' => 'Bank Transfer',
+            $details?->payment_method === 'cash' => 'Cash',
+            default => 'Not recorded',
+        };
+        $price = self::peso((float) ($details?->final_price ?? 0));
+        self::notify(['role' => 'head_accountant'], 'sale_completed', 'Car sold',
+            "{$car} sold to ".($buyer ?: 'the buyer')." for ₱{$price}, paid by {$method}. Record the payment on the transaction.", $sale->id);
     }
 
     /** Appendix C: no-shows and Not Legit declines go on the buyer's record. */

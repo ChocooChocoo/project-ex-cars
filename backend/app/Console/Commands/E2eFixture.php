@@ -42,6 +42,10 @@ class E2eFixture extends Command
             'record-financing-downpayment' => $this->recordFinancingDownpayment($tx()),
             'record-verified-payment' => $this->recordVerifiedPayment($tx(), (float) $this->argument('extra')),
             'mark-financing-paid' => $this->markFinancingPaid($tx()),
+            // BC-2: a GCE-visit sale is signed in the app; the specs that are not about signing skip the drawing.
+            'sign-contract' => DB::table('sale_handovers')->updateOrInsert(['transaction_id' => $tx()->id], [
+                'contract_state' => 'signed', 'contract_signed_at' => now(), 'signing_method' => 'face_to_face',
+            ]),
             'query' => $this->line(json_encode(['data' => $this->query(json_decode(base64_decode(strtr((string) $arg, '-_', '+/')), true, 32, JSON_THROW_ON_ERROR))])),
             default => throw new \InvalidArgumentException('Unknown fixture action.'),
         };

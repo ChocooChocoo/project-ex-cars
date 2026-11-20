@@ -28,6 +28,9 @@ class PurchaseDetail extends Model
             'delivery_terms_agreed_at' => 'immutable_datetime',
             'cancellation_towing_ack_at' => 'immutable_datetime',
             'reschedule_pending_at' => 'immutable_datetime',
+            // SH-14 / BH-8: the Meet Halfway pin saved on the map and its composed address.
+            'meetup_lat' => 'decimal:6',
+            'meetup_lng' => 'decimal:6',
         ];
     }
 

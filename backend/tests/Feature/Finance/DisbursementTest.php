@@ -80,6 +80,11 @@ class DisbursementTest extends TestCase
         $this->assertSame(1, DB::table('disbursement_events')->where('disbursement_id', $id)->where('event_kind', 'paid')->count());
         $this->assertSame(1, DB::table('notifications')->where('kind', 'sell_payment_disbursed')->count());
         $this->assertSame(1, DB::table('notifications')->where('kind', 'sell_vehicle_ready_to_post')->count());
+        // BH-3: one "Car fully paid" record for the Head Accountant, with the agreed price.
+        $paid = DB::table('notifications')->where('kind', 'sell_car_fully_paid')->get();
+        $this->assertCount(1, $paid);
+        $this->assertSame('head_accountant', $paid[0]->recipient_role);
+        $this->assertStringContainsString('for ₱450,000.00. Status: seller paid in full.', $paid[0]->body);
         $this->assertSame(1, DB::table('transaction_status_history')->where('transaction_id', $sale['tx'])->where('to_state', 'completed')->count());
     }
 

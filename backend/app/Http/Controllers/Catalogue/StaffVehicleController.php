@@ -11,6 +11,7 @@ use App\Models\ReconditioningPart;
 use App\Models\Transaction;
 use App\Models\Vehicle;
 use App\Models\VehicleMedia;
+use App\Models\VehicleInspection;
 use App\Models\VehiclePriceProposal;
 use App\Services\FileService;
 use App\Support\ApiRow;
@@ -40,10 +41,12 @@ class StaffVehicleController extends Controller
             ->whereNotNull('sell_details.agreed_price')
             ->pluck('sell_details.agreed_price', 'transactions.vehicle_id');
 
+        // The Marketing Specialist's "ready for pricing" list reads listing_state now (SH-1): a completed
+        // reconditioning already moved the car to 'awaiting_price_approval', so no papers step decides it.
         $reconditioning = [];
         if ($user->hasRole('marketing_specialist')) {
-            foreach (ReconditioningJob::query()->orderByDesc('created_at')->get(['vehicle_id', 'state', 'papers_processed_at']) as $job) {
-                $reconditioning[$job->vehicle_id] ??= ['state' => $job->state, 'papers_processed_at' => $job->papers_processed_at?->toJSON()];
+            foreach (ReconditioningJob::query()->orderByDesc('created_at')->get(['vehicle_id', 'state']) as $job) {
+                $reconditioning[$job->vehicle_id] ??= ['state' => $job->state];
             }
         }
 
@@ -70,7 +73,9 @@ class StaffVehicleController extends Controller
             ? VehiclePriceProposal::query()->where('vehicle_id', $id)->where('decision', 'pending')->orderByDesc('created_at')
                 ->first(['id', 'proposed_amount', 'notes', 'created_at', 'proposal_kind'])
             : null;
-        $revision = $user->hasRole('marketing_specialist') && in_array($vehicle->listing_state, ['draft', 'repairing'], true)
+        // SH-1: a rejected reprice leaves the car in 'awaiting_price_approval', so the Specialist sees the CEO's
+        // reason there too; a fresh car is 'draft'.
+        $revision = $user->hasRole('marketing_specialist') && in_array($vehicle->listing_state, ['draft', 'repairing', 'awaiting_price_approval'], true)
             ? VehiclePriceProposal::query()->where('vehicle_id', $id)->whereNotIn('proposal_kind', ['purchase_ceiling', 'revised_ceiling'])
                 ->orderByDesc('created_at')->first(['decision', 'decision_notes', 'decision_date'])
             : null;
@@ -80,8 +85,23 @@ class StaffVehicleController extends Controller
             'media' => ApiRow::list($media),
             'proposal' => ApiRow::of($proposal),
             'reconditioning' => $this->latestReconditioning($files, $id),
+            // SH-4: the acquisition inspection that found the issues, so the Mechanic's report starts pre-filled.
+            'inspection' => $this->acquisitionInspection($id),
             'revision' => ApiRow::of($revision),
         ]);
+    }
+
+    /** SH-4: the latest seller meet-up inspection of the transaction that brought this car in. */
+    private function acquisitionInspection(string $vehicleId): ?array
+    {
+        $sellTx = DB::table('transactions')->where('vehicle_id', $vehicleId)->where('transaction_kind', 'sell')
+            ->orderByDesc('opened_at')->value('id');
+        if (! $sellTx) {
+            return null;
+        }
+        $fieldCaseId = DB::table('field_cases')->where('transaction_id', $sellTx)->where('case_kind', 'acquisition')->value('id');
+
+        return VehicleInspection::pack($fieldCaseId, $sellTx);
     }
 
     /** §6 steps 27–38: latest reconditioning job with parts, fund requests, receipts; private photos get 1 h links. */
@@ -93,7 +113,7 @@ class StaffVehicleController extends Controller
         }
         $row = ApiRow::of($job);
         $disbursement = $job->disbursement_id ? DisbursementRequest::query()->find($job->disbursement_id) : null;
-        $row['disbursement_requests'] = ApiRow::of($disbursement, ['status', 'amount_cents']);
+        $row['disbursement_requests'] = ApiRow::of($disbursement, ['status', 'amount_cents', 'rejection_reason']);
         $row['reconditioning_parts'] = ReconditioningPart::query()->where('job_id', $job->id)->orderBy('created_at')->get()
             ->map(fn ($part) => ApiRow::of($part) + ['photo_url' => $files->signedUrl('reconditioning-receipts', $part->photo_path)])->values();
         $row['reconditioning_fund_requests'] = ReconditioningFundRequest::query()->where('job_id', $job->id)->orderBy('created_at')->get()
@@ -105,7 +125,7 @@ class StaffVehicleController extends Controller
                     'reconditioning_fund_receipts' => $receipts->map(fn ($r) => ApiRow::of($r) + [
                         'signed_url' => $files->signedUrl('reconditioning-receipts', $r->storage_path),
                     ])->values(),
-                    'disbursement_requests' => ApiRow::of($disbursement, ['status']),
+                    'disbursement_requests' => ApiRow::of($disbursement, ['status', 'rejection_reason']),
                 ];
             })->values();
 

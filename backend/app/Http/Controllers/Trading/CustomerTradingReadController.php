@@ -20,6 +20,7 @@ use App\Models\TransactionStatusHistory;
 use App\Models\Vehicle;
 use App\Models\ViewingArrangement;
 use App\Services\FileService;
+use App\Services\Trading\SellFlow;
 use App\Support\ApiRow;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -61,6 +62,35 @@ class CustomerTradingReadController extends Controller
         ]);
     }
 
+    /**
+     * SH-10: the documents a customer may see. Laravel filters by audience here rather than trusting the page:
+     * only TransactionDocument::CUSTOMER_KINDS leave the server, never the CI's expense proofs or the Mechanic's
+     * inspection photos. The rows are already the customer's own transaction, so a CI paper filed against another
+     * sale (a delivery proof on a different buy, an acquisition inspection on the sell) never matches.
+     */
+    private static function customerDocuments(string $transactionId): \Illuminate\Support\Collection
+    {
+        return TransactionDocument::query()->where('transaction_id', $transactionId)
+            ->whereIn('document_kind', TransactionDocument::CUSTOMER_KINDS)->orderByDesc('upload_date')->get();
+    }
+
+    /**
+     * SH-6: the seller's own history, with every internal sell reason blanked. A sell history reason quotes the
+     * ceiling, the CEO's decision and the staff-only profitability note, so the page never sees them either.
+     */
+    private static function sellerHistory(string $transactionId, bool $sell): \Illuminate\Support\Collection
+    {
+        $rows = TransactionStatusHistory::query()->where('transaction_id', $transactionId)->orderBy('changed_at')->get();
+        if (! $sell) {
+            return $rows;
+        }
+        foreach ($rows as $row) {
+            $row->reason = SellFlow::sellerVisibleReason($row->reason);
+        }
+
+        return $rows;
+    }
+
     /** GET /my-transactions/{id}: every prop of TransactionDetail except the profile autofill (the browser has it). */
     public function show(Request $request, string $id): JsonResponse
     {
@@ -69,7 +99,8 @@ class CustomerTradingReadController extends Controller
         $tx = Transaction::query()->where('id', $id)->where('customer_id', $userId)->firstOrFail();
         $vehicle = $tx->vehicle_id ? Vehicle::query()->find($tx->vehicle_id) : null;
         $handover = SaleHandover::query()->find($id);
-        $handoverRow = $handover ? ApiRow::of($handover, ['papers_status', 'contract_state', 'contract_body', 'contract_signed_at', 'signing_method']) : null;
+        $handoverRow = $handover ? ApiRow::of($handover, ['papers_status', 'contract_state', 'contract_body', 'contract_signed_at', 'signing_method'])
+            + ['sm_signed' => $handover->sm_signature_path !== null] : null;
         // The buyer reads the contract only once the Head Accountant has approved it.
         if ($handoverRow && ! in_array($handoverRow['contract_state'], ['approved', 'signed'], true)) {
             $handoverRow['contract_body'] = null;
@@ -97,17 +128,19 @@ class CustomerTradingReadController extends Controller
         if ($tx->transaction_kind === 'sell') {
             $report = DB::table('inspection_issue_reports as r')->leftJoin('vehicle_price_proposals as p', 'p.id', '=', 'r.proposal_id')
                 ->where('r.transaction_id', $id)->where('r.is_profitable', true)
-                ->first(['r.recalculated_price', 'r.seller_remarks', 'r.issue_found', 'r.seller_response', 'p.decision']);
-            if ($report && $report->decision === 'approved' && $report->recalculated_price !== null) {
-                $counter = ['price' => (float) $report->recalculated_price, 'remarks' => $report->seller_remarks, 'issue' => $report->issue_found, 'response' => $report->seller_response];
+                ->first(['r.seller_remarks', 'r.seller_response', 'p.decision']);
+            // SH-6: the approved revised ceiling is internal. The seller reads the remarks written for them and
+            // their own answer; the price is the one agreed in the chat, which never comes from this card.
+            if ($report && $report->decision === 'approved') {
+                $counter = ['remarks' => $report->seller_remarks, 'response' => $report->seller_response];
             }
         }
         $own = $vehicle?->financing_markup_pct;
 
         return response()->json([
             'transaction' => $transaction,
-            'history' => ApiRow::list(TransactionStatusHistory::query()->where('transaction_id', $id)->orderBy('changed_at')->get()),
-            'documents' => self::signedDocuments(TransactionDocument::query()->where('transaction_id', $id)->orderByDesc('upload_date')->get()),
+            'history' => ApiRow::list(self::sellerHistory($id, $tx->transaction_kind === 'sell')),
+            'documents' => self::signedDocuments(self::customerDocuments($id)),
             'payments' => ApiRow::list(PaymentRecord::query()->where('transaction_id', $id)->orderByDesc('settlement_date')->get()),
             'installmentAccount' => $account ? ApiRow::of($account) + ['installments' => ApiRow::list(Installment::query()->where('account_id', $account->id)->orderBy('sequence_no')->get())] : null,
             'paymentTerms' => ApiRow::of(PaymentTerm::query()->where('purchase_transaction_id', $id)->first()),

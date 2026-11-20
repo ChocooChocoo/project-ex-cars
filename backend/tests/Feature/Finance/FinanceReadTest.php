@@ -32,8 +32,10 @@ class FinanceReadTest extends TestCase
         $other = $this->account('confidential_informant');
         ['case' => $case] = $this->deliveryCase($ci->id);
         ['case' => $otherCase] = $this->deliveryCase($other->id);
-        $this->act($ci)->postJson('/api/v1/staff/field-budget/request', ['field_case_id' => $case, 'amount' => '1500.50', 'purpose' => 'Fuel and tolls'])->assertOk();
-        $this->act($other)->postJson('/api/v1/staff/field-budget/request', ['field_case_id' => $otherCase, 'amount' => 900, 'purpose' => 'Fuel'])->assertOk();
+        // BH-5: the budget covers are a ticked category list now; the stored purpose is the joined labels.
+        $this->act($ci)->postJson('/api/v1/staff/field-budget/request', ['field_case_id' => $case, 'amount' => '1500.50', 'categories' => ['fuel', 'tolls']])->assertOk();
+        $this->act($other)->postJson('/api/v1/staff/field-budget/request', ['field_case_id' => $otherCase, 'amount' => 900, 'categories' => ['fuel']])->assertOk();
+        $this->assertSame('Fuel, Tolls', DB::table('disbursement_requests')->where('field_case_id', $case)->value('purpose'));
         DB::table('financial_entries')->insert(['id' => (string) Str::uuid(), 'entry_kind' => 'revenue', 'amount_cents' => 100, 'description' => 'x', 'recorded_by' => $ci->id, 'recorded_at' => now(), 'created_at' => now()]);
 
         $page = $this->act($ci)->getJson('/api/v1/staff/finance')->assertOk();
@@ -55,12 +57,12 @@ class FinanceReadTest extends TestCase
     {
         $ci = $this->account('confidential_informant');
         ['case' => $case, 'tx' => $tx] = $this->deliveryCase($ci->id);
-        $this->act($this->account('confidential_informant'))->postJson('/api/v1/staff/field-budget/request', ['field_case_id' => $case, 'amount' => 100, 'purpose' => 'x'])
+        $this->act($this->account('confidential_informant'))->postJson('/api/v1/staff/field-budget/request', ['field_case_id' => $case, 'amount' => 100, 'categories' => ['fuel']])
             ->assertStatus(403);
-        $this->act($ci)->postJson('/api/v1/staff/field-budget/request', ['field_case_id' => $case, 'amount' => 0, 'purpose' => 'x'])->assertStatus(422)
+        $this->act($ci)->postJson('/api/v1/staff/field-budget/request', ['field_case_id' => $case, 'amount' => 0, 'categories' => ['fuel']])->assertStatus(422)
             ->assertJsonPath('message', 'Enter the estimated expenses.');
-        $this->act($ci)->postJson('/api/v1/staff/field-budget/request', ['field_case_id' => $case, 'amount' => 2000, 'purpose' => 'Fuel'])->assertOk();
-        $this->act($ci)->postJson('/api/v1/staff/field-budget/request', ['field_case_id' => $case, 'amount' => 2000, 'purpose' => 'Fuel'])->assertStatus(409)
+        $this->act($ci)->postJson('/api/v1/staff/field-budget/request', ['field_case_id' => $case, 'amount' => 2000, 'categories' => ['fuel']])->assertOk();
+        $this->act($ci)->postJson('/api/v1/staff/field-budget/request', ['field_case_id' => $case, 'amount' => 2000, 'categories' => ['fuel']])->assertStatus(409)
             ->assertJsonPath('message', 'This field case already has a budget request.');
         $this->assertSame('The Confidential Informant requests ₱2,000.00 for estimated expenses. Review it in Finance.',
             DB::table('notifications')->where('kind', 'field_budget_requested')->where('reference_id', $tx)->value('body'));

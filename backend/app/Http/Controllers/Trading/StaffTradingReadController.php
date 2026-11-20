@@ -16,6 +16,7 @@ use App\Models\Transaction;
 use App\Models\TransactionDocument;
 use App\Models\TransactionStatusHistory;
 use App\Models\Vehicle;
+use App\Models\VehicleInspection;
 use App\Models\ViewingArrangement;
 use App\Services\FileService;
 use App\Services\Trading\Trading;
@@ -139,6 +140,9 @@ class StaffTradingReadController extends Controller
                     ->get(['id', 'proposal_kind', 'proposed_amount', 'decision', 'notes', 'created_at'])),
                 'fieldCase' => ApiRow::of($fieldCase),
                 'issueReport' => ApiRow::of(\App\Models\InspectionIssueReport::query()->where('transaction_id', $id)->first()),
+                // SH-7 / SH-3: the part-by-part inspection, with costs and private photo links, for the Marketing
+                // Specialist now and the Head Accountant from Phase 8.
+                'inspection' => $fieldCase ? VehicleInspection::pack($fieldCase->id, $id) : null,
                 'expenses' => $expenses->map(fn ($e) => ['id' => $e->id, 'amount' => (float) $e->amount, 'description' => $e->description,
                     'submitted_at' => $iso($e->submitted_at), 'reimbursed_at' => $iso($e->reimbursed_at), 'field_cases' => ['transaction_id' => $id]])->values(),
                 'threadId' => $thread,
@@ -148,6 +152,9 @@ class StaffTradingReadController extends Controller
                     'returned_at' => $iso($fund->returned_at), 'return_confirmed_at' => $iso($fund->return_confirmed_at),
                 ]) : null,
                 'fundIsMine' => (bool) ($fund && $fund->requested_by === $user->id),
+                // SN-3: whether the bought car's OR/CR/Deed photos were already sent to the Confidential Informant.
+                'papersCustody' => $tx->vehicle_id ? DB::table('vehicle_document_items')->where('vehicle_id', $tx->vehicle_id)
+                    ->whereNotNull('custody_state')->value('custody_state') : null,
             ];
         }
 
@@ -157,6 +164,8 @@ class StaffTradingReadController extends Controller
 
         return response()->json([
             'transaction' => $transaction,
+            // BC-8: the same rule the approval gate enforces, so the page can disable Approve with one source of truth.
+            'verifiedPrerequisites' => $buy ? StaffTransactionController::verifiedPrerequisites($id) : null,
             'history' => ApiRow::list(TransactionStatusHistory::query()->where('transaction_id', $id)->orderBy('changed_at')->get()),
             'documents' => CustomerTradingReadController::signedDocuments(TransactionDocument::query()->where('transaction_id', $id)->orderByDesc('upload_date')->get()),
             'payments' => $payments,

@@ -4,12 +4,15 @@ namespace App\Http\Controllers\Field;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Trading\DeliveryController;
+use App\Models\VehicleInspection;
 use App\Services\FileService;
+use App\Services\Finance\Money;
 use App\Services\Trading\BuyRules;
 use App\Services\Trading\Trading;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -53,35 +56,75 @@ class FieldCaseActionController extends Controller
         return $case;
     }
 
+    /**
+     * The states a field worker may pick for a case. `assigned` comes from the creation dialog and `accepted` is
+     * stamped automatically when the worker first updates the case (SN-5), so neither is a choice here.
+     */
+    public const WORKER_STATES = ['in_progress', 'completed', 'cancelled'];
+
+    /** The expenses column is the sum of the filed rows (SN-6), in centavos. */
+    private static function expensesCents(string $caseId): int
+    {
+        return Money::sum(DB::table('field_case_expenses')->where('field_case_id', $caseId)->get(['amount']));
+    }
+
+    /** SN-8: only a seller meet-up at a halfway point has to file (or deny) the travel expenses. */
+    private static function needsExpenses(object $case): bool
+    {
+        return $case->case_kind === 'acquisition' && $case->transaction_id
+            && DB::table('sell_details')->where('transaction_id', $case->transaction_id)->value('meetup_method') === 'meet_halfway';
+    }
+
     /** updateFieldCase: overseers act on any case; field workers on their own. */
     public function updateFieldCase(Request $request): JsonResponse
     {
         $role = $this->role($request);
         abort_unless(in_array($role, ['ceo', 'confidential_informant', 'mechanic', 'sales_manager'], true), 403, 'Not authorized to update field cases');
         $data = $request->validate([
-            'field_case_id' => ['required', 'uuid'], 'state' => ['required', 'in:assigned,accepted,in_progress,completed,cancelled'],
-            'expenses_cents' => ['nullable', 'integer', 'min:0'], 'notes' => ['nullable', 'string', 'max:1000'],
+            'field_case_id' => ['required', 'uuid'], 'state' => ['nullable', 'in:assigned,accepted,in_progress,completed,cancelled'],
+            'no_expenses' => ['nullable', 'boolean'], 'notes' => ['nullable', 'string', 'max:1000'],
         ], ['*' => 'Invalid field case update.']);
+        $state = $data['state'] ?? null;
+        $noExpenses = $request->boolean('no_expenses');
+        abort_if($state === null && ! $noExpenses && ! $request->has('notes'), 422, 'Invalid field case update.');
         $userId = $request->user()->id;
-        Trading::run(function () use ($request, $data, $role, $userId) {
+        $overseer = in_array($role, ['ceo', 'sales_manager'], true);
+        Trading::run(function () use ($request, $data, $state, $noExpenses, $role, $overseer, $userId) {
             $case = $this->lockCase($data['field_case_id']);
-            if (! in_array($role, ['ceo', 'sales_manager'], true)) {
+            if (! $overseer) {
                 abort_unless(self::isAssigned($case, $userId), 403, 'Only the assigned field team can update this case.');
+                // SN-5: a field worker drives a case forward, never back to Assigned or Accepted.
+                abort_if($state !== null && ! in_array($state, self::WORKER_STATES, true), 422, 'A field worker can only set In progress, Completed or Cancelled.');
             }
-            $update = ['state' => $data['state'], 'updated_at' => now()];
-            if ($data['state'] === 'completed') {
-                // Selling step 11: a seller meet-up closes only once its expenses are filed.
-                if ($case->case_kind === 'acquisition' && $case->transaction_id) {
-                    abort_unless(DB::table('field_case_expenses')->where('field_case_id', $case->id)->exists(), 422, 'File the meet-up expenses with proofs before completing this case.');
+            $update = ['updated_at' => now()];
+            if ($state !== null) {
+                $update['state'] = $state;
+            }
+            $filedExpenses = DB::table('field_case_expenses')->where('field_case_id', $case->id)->exists();
+            if ($noExpenses) {
+                // SN-8: the honest "this trip cost nothing" answer, instead of an invented zero-value expense row.
+                abort_unless($case->assigned_confidential_informant === $userId, 403, 'The assigned Confidential Informant confirms the trip costs nothing.');
+                abort_unless(self::needsExpenses($case), 422, 'Only a Meet Halfway seller meet-up records travel expenses.');
+                abort_if($filedExpenses, 422, 'This case already has filed expenses.');
+                $update['no_expenses_at'] = now();
+            }
+            if ($state === 'completed') {
+                // Selling step 11 (SN-8): a Meet Halfway seller meet-up closes once its expenses are filed or denied.
+                if (self::needsExpenses($case)) {
+                    abort_unless($filedExpenses || $noExpenses || $case->no_expenses_at !== null, 422,
+                        'File the meet-up expenses with proofs before completing this case.');
                 }
                 $update['completion_date'] = now();
             }
-            if ($data['state'] === 'accepted' && ! $request->filled('accepted_at')) {
+            // SN-5: opening or updating a case is accepting the assignment; no worker needs to pick "Accepted".
+            if ($case->accepted_at === null && in_array($role, ['confidential_informant', 'mechanic'], true)) {
                 $update['accepted_at'] = now();
             }
-            if (array_key_exists('expenses_cents', $data) && $data['expenses_cents'] !== null) {
-                $update['expenses_cents'] = (int) $data['expenses_cents'];
+            if ($state === 'accepted' && ! $request->filled('accepted_at')) {
+                $update['accepted_at'] = now();
             }
+            // SN-6: the total is the sum of the itemised expenses; the client never sends it.
+            $update['expenses_cents'] = $filedExpenses ? self::expensesCents($case->id) : 0;
             if ($request->has('notes')) {
                 $update['notes'] = ($data['notes'] ?? null) ?: null;
             }
@@ -155,6 +198,8 @@ class FieldCaseActionController extends Controller
             if ($request->filled('expected_arrival')) {
                 $eta = Trading::parseTime($request->input('expected_arrival'));
                 abort_unless($eta, 422, 'Enter a valid expected arrival time.');
+                // SH-12: an expected arrival in the past tells the buyer nothing useful.
+                abort_unless(BuyRules::isFutureSchedule($eta), 422, 'Set a future expected arrival.');
             }
             DB::table('field_cases')->where('id', $case->id)->update(['delay_note' => $note, 'expected_arrival' => $eta, 'updated_at' => now()]);
             Trading::notify(['role' => 'sales_manager'], 'delivery_delay_reported', 'Delivery delay reported', "{$note}. Tell the buyer from the transaction page.", $case->transaction_id);
@@ -336,8 +381,11 @@ class FieldCaseActionController extends Controller
     private static function files(Request $request, string $key): array
     {
         $value = $request->file($key);
+        // Flatten fully: a repeated key arrives as `key[]`, but a browser or client that already sent
+        // `key[][]` must not silently lose its photos (the inspection then looked unphoto'd).
+        $flat = is_array($value) ? Arr::flatten($value) : ($value ? [$value] : []);
 
-        return array_values(array_filter(is_array($value) ? $value : ($value ? [$value] : []), fn ($f) => $f instanceof UploadedFile && $f->getSize() > 0));
+        return array_values(array_filter($flat, fn ($f) => $f instanceof UploadedFile && $f->getSize() > 0));
     }
 
     /** confirmFieldCheck (selling step 6). */
@@ -360,39 +408,107 @@ class FieldCaseActionController extends Controller
         return response()->json(['success' => true]);
     }
 
-    /** reportInspection (selling step 6): no issue clears the car for payment; an issue goes to the MS. */
+    /** $request's JSON list of inspection answers, normalised and refused unless every leaf part is answered. */
+    private function inspectionAnswers(Request $request): array
+    {
+        $raw = $request->input('results');
+        abort_unless(is_string($raw) && trim($raw) !== '', 422, 'Answer every part of the checklist before reporting the inspection.');
+        $rows = json_decode($raw, true);
+        abort_unless(is_array($rows) && $rows !== [] && count($rows) <= 500, 422, 'Invalid inspection report.');
+        $answers = [];
+        foreach ($rows as $row) {
+            abort_unless(is_array($row), 422, 'Invalid inspection report.');
+            $nodeId = $row['node_id'] ?? null;
+            abort_unless(is_string($nodeId) && Str::isUuid($nodeId), 422, 'Answer every part of the checklist before reporting the inspection.');
+            abort_if(isset($answers[$nodeId]), 422, 'Answer each part of the checklist once.');
+            $status = $row['status'] ?? null;
+            abort_unless(in_array($status, VehicleInspection::PART_STATUSES, true), 422, 'Answer every part of the checklist before reporting the inspection.');
+            $cost = $row['cost'] ?? null;
+            if ($status === 'for_repair') {
+                abort_unless(is_numeric($cost) && (float) $cost >= 0, 422, 'Give the repair cost of every part that needs repair.');
+            }
+            $note = trim((string) ($row['note'] ?? ''));
+            abort_if(mb_strlen($note) > 500, 422, 'Invalid inspection note.');
+            $answers[$nodeId] = ['status' => $status, 'cost' => $status === 'for_repair' ? Money::decimal(Money::cents($cost)) : null, 'note' => $note !== '' ? $note : null];
+        }
+        $leaf = array_map(fn ($node) => $node->id, VehicleInspection::leafNodes(VehicleInspection::checklistNodes()));
+        abort_if($leaf === [], 422, 'No checklist parts are defined yet.');
+        abort_unless(count(array_diff($leaf, array_keys($answers))) === 0, 422, 'Answer every part of the checklist before reporting the inspection.');
+        abort_unless(count(array_diff(array_keys($answers), $leaf)) === 0, 422, 'Invalid inspection report.');
+
+        return [$answers, $leaf];
+    }
+
+    /**
+     * reportInspection (selling step 6, SH-7): a part-by-part checklist. No issue clears the car for payment; any
+     * `for_repair` part goes to the Marketing Specialist with its cost, note and photos. `inspection_outcome`,
+     * `issue_description` and `repair_estimate` are still derived on the case so the older readers keep working.
+     */
     public function reportInspection(Request $request, FileService $files): JsonResponse
     {
-        $data = $request->validate([
-            'outcome' => ['required', 'in:no_issues,issue_found'], 'issue_description' => ['nullable', 'string', 'max:2000'], 'repair_estimate' => ['nullable', 'numeric', 'min:0'],
-        ], ['*' => 'Invalid inspection report.']);
-        $issue = $data['outcome'] === 'issue_found';
-        $description = trim((string) ($data['issue_description'] ?? ''));
-        $photos = self::files($request, 'photos');
+        [$answers, $leaf] = $this->inspectionAnswers($request);
+        $photosByNode = [];
         $stored = [];
         try {
-            Trading::run(function () use ($request, $files, $data, $issue, $description, $photos, &$stored) {
+            Trading::run(function () use ($request, $files, $answers, $leaf, &$photosByNode, &$stored) {
                 $case = $this->assignedCase($request, $request->input('field_case_id'));
                 abort_if($this->role($request) !== 'mechanic', 403, 'The Mechanic reports the inspection.');
                 abort_if($case->case_kind !== 'acquisition' || ! $case->transaction_id, 422, 'Only seller meet-up cases have an inspection report.');
                 abort_if((bool) $case->inspection_outcome, 409, 'The inspection is already reported.');
                 abort_if(! $case->identity_confirmed_at || ! $case->plate_confirmed_at, 422, "Confirm the seller's identity and the plate/chassis before reporting the inspection.");
-                abort_if($issue && ($description === '' || ! isset($data['repair_estimate']) || $data['repair_estimate'] === ''), 422, 'Describe the issue and give the estimated total repair cost.');
-                abort_if($issue && count($photos) === 0, 422, 'Attach photos of the issue.');
-                abort_if(count($photos) > 10, 422, 'Attach at most 10 photos.');
-                $error = self::fileError($photos, false);
-                abort_if($error !== null, 422, (string) $error);
-                $userId = $request->user()->id;
-                foreach ($photos as $photo) {
-                    $stored[] = $path = $files->store($photo, 'transaction-documents', $case->transaction_id)['path'];
-                    DB::table('transaction_documents')->insert([
-                        'id' => (string) Str::uuid(), 'transaction_id' => $case->transaction_id, 'document_kind' => 'inspection_photo', 'storage_path' => $path,
-                        'uploader_id' => $userId, 'verification_state' => 'verified', 'upload_date' => now(),
-                    ]);
+                $vehicleId = $case->vehicle_id ?: DB::table('transactions')->where('id', $case->transaction_id)->value('vehicle_id');
+                abort_unless($vehicleId, 422, 'This case has no vehicle to inspect.');
+                // Photos arrive as `result_photo_{node id}` (PHP keeps only the last repeated key, so the browser
+                // sends `result_photo_{node id}[]`), and each part says which ones are its own.
+                $total = 0;
+                foreach ($leaf as $nodeId) {
+                    $nodePhotos = self::files($request, "result_photo_{$nodeId}");
+                    abort_if($answers[$nodeId]['status'] === 'for_repair' && count($nodePhotos) === 0, 422,
+                        'Attach at least one photo of every part that needs repair.');
+                    abort_if(count($nodePhotos) > 6, 422, 'Attach at most 6 photos of a part.');
+                    $error = self::fileError($nodePhotos, false);
+                    abort_if($error !== null, 422, (string) $error);
+                    $photosByNode[$nodeId] = $nodePhotos;
                 }
+                // SH-7: the seller ticked these parts on the sell form; anything else marked for repair is hidden.
+                $declared = collect(json_decode((string) DB::table('sell_details')->where('transaction_id', $case->transaction_id)->value('condition_items'), true) ?: [])
+                    ->filter(fn ($id) => is_string($id))->values()->all();
+                $userId = $request->user()->id;
+                $inspectionId = (string) Str::uuid();
+                DB::table('vehicle_inspections')->insert([
+                    'id' => $inspectionId, 'vehicle_id' => $vehicleId, 'mechanic_id' => $userId, 'field_case_id' => $case->id,
+                    'inspection_date' => now(), 'created_at' => now(),
+                ]);
+                $issueLines = [];
+                foreach ($leaf as $nodeId) {
+                    $answer = $answers[$nodeId];
+                    $forRepair = $answer['status'] === 'for_repair';
+                    $hidden = $forRepair && ! in_array($nodeId, $declared, true);
+                    DB::table('inspection_checklist_results')->insert([
+                        'id' => (string) Str::uuid(), 'inspection_id' => $inspectionId, 'checklist_entry_id' => $nodeId,
+                        'status' => $answer['status'], 'notes' => $answer['note'], 'repair_cost' => $answer['cost'],
+                        'is_hidden_issue' => $hidden, 'answered_at' => now(),
+                    ]);
+                    if (! $forRepair) {
+                        continue;
+                    }
+                    $total += Money::cents($answer['cost']);
+                    $name = (string) DB::table('inspection_checklist_nodes')->where('id', $nodeId)->value('name');
+                    $issueLines[] = trim($name).' ('.Money::currency(Money::cents($answer['cost'])).')'.($answer['note'] ? ": {$answer['note']}" : '');
+                    foreach ($photosByNode[$nodeId] as $photo) {
+                        $stored[] = $path = $files->store($photo, 'transaction-documents', $case->transaction_id)['path'];
+                        DB::table('transaction_documents')->insert([
+                            'id' => (string) Str::uuid(), 'transaction_id' => $case->transaction_id, 'document_kind' => 'inspection_photo',
+                            'storage_path' => $path, 'note' => $nodeId, 'uploader_id' => $userId, 'verification_state' => 'verified', 'upload_date' => now(),
+                        ]);
+                    }
+                }
+                $issue = $issueLines !== [];
+                $description = $issue ? mb_substr(implode('; ', $issueLines), 0, 2000) : null;
+                DB::table('vehicle_inspections')->where('id', $inspectionId)->update(['findings' => $description ?? 'No issues found on the submitted checklist.']);
                 DB::table('field_cases')->where('id', $case->id)->update([
-                    'inspection_outcome' => $data['outcome'], 'issue_description' => $issue ? $description : null,
-                    'repair_estimate' => $issue ? $data['repair_estimate'] : null, 'inspected_at' => now(), 'state' => 'in_progress', 'updated_at' => now(),
+                    'inspection_outcome' => $issue ? 'issue_found' : 'no_issues', 'issue_description' => $description,
+                    'repair_estimate' => $issue ? Money::decimal($total) : null, 'inspected_at' => now(), 'state' => 'in_progress', 'updated_at' => now(),
                 ]);
                 if (! $issue) {
                     DB::table('sell_details')->where('transaction_id', $case->transaction_id)->update(['cleared_for_payment_at' => now(), 'updated_at' => now()]);
@@ -414,9 +530,13 @@ class FieldCaseActionController extends Controller
         return response()->json(['success' => true]);
     }
 
-    /** fileFieldExpense (selling steps 11–12): expense metadata with its proof; reimbursement is Phase 6. */
+    /**
+     * fileFieldExpense (selling steps 11–12, SH-9): only the Confidential Informant files meet-up expenses with
+     * their proof — the Mechanic's view of them is read-only. SN-6: the case's expenses total is the filed sum.
+     */
     public function fileFieldExpense(Request $request, FileService $files): JsonResponse
     {
+        abort_unless($this->role($request) === 'confidential_informant', 403, 'Only the Confidential Informant files meet-up expenses.');
         $data = $request->validate(['amount' => ['required', 'numeric', 'min:0'], 'description' => ['required', 'string', 'max:500']],
             ['amount.min' => 'Amount cannot be negative.', 'description.required' => 'Describe the expense.', '*' => 'Invalid expense.']);
         $description = trim($data['description']);
@@ -430,6 +550,8 @@ class FieldCaseActionController extends Controller
             Trading::run(function () use ($request, $files, $data, $description, $proof, &$stored) {
                 $case = $this->assignedCase($request, $request->input('field_case_id'));
                 abort_unless($case->transaction_id, 422, 'Expenses can only be filed on a case linked to a transaction.');
+                // SN-8: filing an expense replaces the "no expenses for this trip" answer.
+                abort_if($case->no_expenses_at !== null, 409, 'This trip was already recorded as having no expenses.');
                 $userId = $request->user()->id;
                 $stored = $files->store($proof, 'transaction-documents', $case->transaction_id)['path'];
                 $documentId = (string) Str::uuid();
@@ -441,6 +563,8 @@ class FieldCaseActionController extends Controller
                     'id' => (string) Str::uuid(), 'field_case_id' => $case->id, 'amount' => $data['amount'], 'description' => $description,
                     'proof_document_id' => $documentId, 'submitted_by' => $userId, 'submitted_at' => now(),
                 ]);
+                // SN-6: the case total shown in the list is always the sum of the filed rows.
+                DB::table('field_cases')->where('id', $case->id)->update(['expenses_cents' => self::expensesCents($case->id), 'updated_at' => now()]);
             });
         } catch (\Throwable $e) {
             $files->delete('transaction-documents', $stored);

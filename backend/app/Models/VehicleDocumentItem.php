@@ -20,12 +20,18 @@ class VehicleDocumentItem extends Model
         return [
             'required_state' => 'boolean',
             'checked_at' => 'immutable_datetime',
+            'received_at' => 'immutable_datetime',
         ];
     }
 
     public function checker(): BelongsTo
     {
         return $this->belongsTo(User::class, 'checker_id');
+    }
+
+    public function sourceTransaction(): BelongsTo
+    {
+        return $this->belongsTo(Transaction::class, 'source_transaction_id');
     }
 
     public function vehicle(): BelongsTo

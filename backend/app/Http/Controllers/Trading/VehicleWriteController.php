@@ -28,11 +28,12 @@ class VehicleWriteController extends Controller
         $data = $request->validate([
             'vin' => ['required', 'string', 'max:50'], 'plate_number' => ['required', 'string', 'max:50'], 'engine_number' => ['required', 'string', 'max:50'],
             'chassis_number' => ['required', 'string', 'max:50'], 'make' => ['required', 'string', 'max:100'], 'model' => ['required', 'string', 'max:100'],
-            'year' => ['required', 'integer', 'min:1900', 'max:2100'], 'condition' => ['required', 'string', 'max:50'], 'mileage' => ['nullable', 'integer', 'min:0'],
+            'year' => ['required', 'integer', 'min:1900', 'max:2100'], 'mileage' => ['nullable', 'integer', 'min:0'],
             'fuel_type' => ['nullable', 'string', 'max:50'], 'transmission' => ['nullable', 'string', 'max:50'], 'exterior_color' => ['nullable', 'string', 'max:50'],
-            'interior_color' => ['nullable', 'string', 'max:50'], 'body_type' => ['nullable', 'string', 'max:50'], 'purpose' => ['nullable', 'string', 'max:50'],
+            'interior_color' => ['nullable', 'string', 'max:50'], 'interior_features' => ['nullable', 'string', 'max:1000'],
+            'body_type' => ['nullable', 'string', 'max:50'], 'purpose' => ['nullable', 'string', 'max:50'],
             'engine' => ['nullable', 'string', 'max:200'], 'description' => ['nullable', 'string', 'max:2000'], 'current_price' => ['nullable', 'numeric', 'min:0'],
-            'financing_markup_pct' => ['nullable', 'numeric', 'min:0', 'max:100'], 'warranty_details' => ['nullable', 'string', 'max:500'], 'offer_details' => ['nullable', 'string', 'max:500'],
+            'financing_markup_pct' => ['nullable', 'numeric', 'min:0', 'max:100'], 'offer_details' => ['nullable', 'string', 'max:500'],
         ], [
             'vin.required' => 'VIN is required.', 'plate_number.required' => 'Plate number is required.', 'engine_number.required' => 'Engine number is required.',
             'chassis_number.required' => 'Chassis number is required.', 'make.required' => 'Make is required.', 'model.required' => 'Model is required.',
@@ -94,7 +95,7 @@ class VehicleWriteController extends Controller
         return response()->json(['success' => true]);
     }
 
-    /** proposePrice: a selling price, or a reprice after reconditioning and re-processed papers. */
+    /** proposePrice: a selling price, or a reprice once the car's reconditioning is complete. */
     public function proposePrice(Request $request): JsonResponse
     {
         abort_unless($this->role($request) === 'marketing_specialist', 403, 'Not authorized');
@@ -105,11 +106,11 @@ class VehicleWriteController extends Controller
             Trading::run(function () use ($data, $userId) {
                 $vehicle = DB::table('vehicles')->where('id', $data['vehicle_id'])->lockForUpdate()->first(['listing_state']);
                 abort_unless($vehicle, 404, 'Vehicle not found.');
-                $job = DB::table('reconditioning_jobs')->where('vehicle_id', $data['vehicle_id'])->orderByDesc('created_at')->first(['state', 'papers_processed_at']);
+                $job = DB::table('reconditioning_jobs')->where('vehicle_id', $data['vehicle_id'])->orderByDesc('created_at')->first(['state']);
                 abort_if($job && $job->state !== 'completed', 422, "Finish the car's reconditioning before repricing it.");
-                $reprice = $job && $vehicle->listing_state === 'repairing';
-                abort_if($reprice && ! $job->papers_processed_at, 422, 'The Sales Manager must re-process the papers first.');
-                $kind = $reprice ? 'reprice' : 'selling_price';
+                // SH-1 / SH-2: a reconditioned car is 'awaiting_price_approval', so it no longer depends on the car
+                // still reading 'repairing', and no Sales Manager papers step gates the reprice any more.
+                $kind = $job ? 'reprice' : 'selling_price';
                 abort_if(DB::table('vehicle_price_proposals')->where('vehicle_id', $data['vehicle_id'])->where('proposal_kind', $kind)->where('decision', 'pending')->exists(), 409,
                     'This vehicle already has a pending price proposal.');
                 DB::table('vehicle_price_proposals')->insert([
@@ -157,12 +158,14 @@ class VehicleWriteController extends Controller
             ] + ($note ? ['proposed_amount' => $proposal->proposed_amount] : []));
             if (! $ceiling) {
                 $vehicle = DB::table('vehicles')->where('id', $proposal->vehicle_id)->first(['posted_at']);
+                // SH-1: a rejected reprice sends the car back to 'awaiting_price_approval' (where the Marketing
+                // Specialist proposes again), never to 'repairing': the repairs are already done.
+                $fallback = $proposal->proposal_kind === 'reprice' ? 'awaiting_price_approval' : 'draft';
                 DB::table('vehicles')->where('id', $proposal->vehicle_id)->update(
                     ($decision === 'approved' ? ['current_price' => $proposal->proposed_amount] : [])
-                    + ['listing_state' => $decision === 'approved' ? 'available' : ($proposal->proposal_kind === 'reprice' ? 'repairing' : 'draft'), 'updated_at' => now()]
+                    + ['listing_state' => $decision === 'approved' ? 'available' : $fallback, 'updated_at' => now()]
                     + ($decision === 'approved' && ! $vehicle?->posted_at ? ['posted_at' => now()] : []),
-                );
-                if ($decision === 'rejected' && $proposal->proposer_id) {
+                );                if ($decision === 'rejected' && $proposal->proposer_id) {
                     Trading::notify(['userId' => $proposal->proposer_id], 'price_revision_requested', 'Price revision requested',
                         $notes ? "The CEO asked for a new price: {$notes}" : 'The CEO asked for a new price.', $proposal->vehicle_id, 'vehicles');
                 }

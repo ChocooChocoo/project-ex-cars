@@ -19,6 +19,9 @@ class InspectionChecklistResult extends Model
     {
         return [
             'answered_at' => 'immutable_datetime',
+            // SH-7: the part-by-part inspection stores what a repair costs and whether the seller declared it.
+            'repair_cost' => 'decimal:2',
+            'is_hidden_issue' => 'boolean',
         ];
     }
 

@@ -13,6 +13,21 @@ use Illuminate\Http\JsonResponse;
 /** Inspection read models for (staff)/inspections. Route group limits roles to INSPECTION_VIEWER_ROLES. */
 class InspectionController extends Controller
 {
+    /** Roles that read the /inspections page and its detail (routes/api.php; the page checks the same list). */
+    public const VIEWER_ROLES = ['ceo', 'account_manager', 'confidential_informant', 'mechanic', 'sales_manager'];
+
+    /**
+     * SH-3: the roles that may read an inspection RESULT attached to a fund request they are reviewing. That is the
+     * page's audience plus the Head Accountant, who decides whether to release the money for the car. It is a
+     * separate list on purpose: the Head Accountant gains the result beside the fund, never the /inspections page.
+     */
+    public const FUND_RESULT_ROLES = [...self::VIEWER_ROLES, 'head_accountant'];
+
+    public static function canReadFundResult(?object $user): bool
+    {
+        return (bool) $user?->hasRole(...self::FUND_RESULT_ROLES);
+    }
+
     public function index(): JsonResponse
     {
         $rows = VehicleInspection::query()->with('vehicle:id,make,model,year,stock_code')->orderByDesc('inspection_date')->get();

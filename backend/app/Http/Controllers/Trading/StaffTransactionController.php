@@ -3,7 +3,8 @@
 namespace App\Http\Controllers\Trading;
 
 use App\Http\Controllers\Controller;
-use App\Services\FileService;
+use App\Services\Finance\Money;
+use App\Services\Finance\PaymentRules;
 use App\Services\Trading\BuyRules;
 use App\Services\Trading\Trading;
 use Carbon\CarbonImmutable;
@@ -19,8 +20,6 @@ use Illuminate\Support\Str;
  */
 class StaffTransactionController extends Controller
 {
-    private const PAPERWORK_KINDS = ['valid_id', 'proof_of_billing', 'invoice', 'receipt', 'sale_document', 'sale_certificate', 'payment_receipt'];
-
     private const SELL_PAPER_KINDS = ['valid_id', 'orcr', 'official_receipt', 'certificate_of_registration', 'deed_of_sale'];
 
     private function role(Request $request): string
@@ -51,7 +50,12 @@ class StaffTransactionController extends Controller
         return $tx;
     }
 
-    private static function verifiedPrerequisites(string $id): bool
+    /**
+     * BC-8: the one rule behind both the approval gate and the button state the page reads
+     * (`verified_prerequisites` from StaffTradingReadController::show), so the UI and the API cannot drift: two
+     * valid IDs, each with a verified front and back, and a verified proof of billing.
+     */
+    public static function verifiedPrerequisites(string $id): bool
     {
         $ids = DB::table('transaction_documents')->where('transaction_id', $id)->where('document_kind', 'valid_id')
             ->where('verification_state', 'verified')->get(['document_kind', 'verification_state', 'id_type', 'id_side']);
@@ -67,8 +71,12 @@ class StaffTransactionController extends Controller
         $data = $request->validate([
             'id' => ['required', 'uuid'],
             'to_state' => ['required', 'in:pending,under_review,approved,rejected,completed,cancelled'],
-            'reason' => ['nullable', 'string', 'max:500'],
-        ], ['*' => 'Invalid transition.']);
+            // BC-9: a rejection always says why; the customer reads it on the request.
+            'reason' => ['required_if:to_state,rejected', 'nullable', 'string', 'max:500'],
+        ], [
+            'reason.required_if' => 'Give the reason for rejecting this request.',
+            '*' => 'Invalid transition.',
+        ]);
         $role = $this->role($request);
         $actorId = $request->user()->id;
         $toState = $data['to_state'];
@@ -98,9 +106,11 @@ class StaffTransactionController extends Controller
                     ->whereIn('confirmation_state', ['pending', 'confirmed'])->first(['schedule', 'location']);
                 abort_unless($meetup, 422, 'The buyer has not booked the meet-up yet.');
                 if ($purchase->payment_method === 'bank_transfer') {
-                    $amount = $request->input('downpayment_amount');
-                    abort_unless(is_numeric($amount) && (float) $amount > 0, 422, 'Enter the meet-up downpayment before approving.');
-                    $downpayment = (float) $amount;
+                    // BH-6: the commitment downpayment is 10% of the price, the same rule as PaymentRules::downPayment
+                    // and downPaymentFor() in the browser. A typed amount is ignored, never trusted.
+                    $price = (float) ($purchase->final_price ?? 0);
+                    abort_unless($price > 0, 422, 'Set the vehicle price first.');
+                    $downpayment = PaymentRules::downPayment(Money::cents($price)) / 100;
                 } else {
                     $informant = $request->input('informant_id');
                     $mechanic = $request->input('mechanic_id');
@@ -188,8 +198,11 @@ class StaffTransactionController extends Controller
         Trading::history($tx->id, $tx->current_state, 'cancelled', $actorId, $reason);
         DB::table('viewing_arrangements')->where('purchase_transaction_id', $tx->id)
             ->whereIn('confirmation_state', ['pending', 'confirmed'])->update(['confirmation_state' => 'completed']);
-        DB::table('sale_handovers')->where('transaction_id', $tx->id)->whereIn('papers_status', ['requested', 'released_to_ci', 'handed_over'])
+        $returned = DB::table('sale_handovers')->where('transaction_id', $tx->id)->whereIn('papers_status', ['requested', 'released_to_ci', 'handed_over'])
             ->update(['papers_status' => 'returned', 'papers_updated_at' => now()]);
+        if ($returned > 0) {
+            Trading::setPapersCustody($tx->id, 'on_hold'); // BC-5 / SN-4: returned papers are On Hold.
+        }
     }
 
     /** recordBuyerDecline (§2 step 5 / §3 step 7). A Legit delivery decline drafts the refund; Phase 6 releases it. */
@@ -310,33 +323,6 @@ class StaffTransactionController extends Controller
         return response()->json(['success' => true]);
     }
 
-    /** recordPaperwork: staff invoices and receipts (the buyer's own IDs never come through here). */
-    public function recordPaperwork(Request $request, FileService $files): JsonResponse
-    {
-        abort_unless(in_array($this->role($request), ['ceo', 'sales_manager', 'account_manager', 'head_accountant'], true), 403, 'Not authorized');
-        $data = $request->validate(['transaction_id' => ['required', 'uuid'], 'document_kind' => ['required', 'in:'.implode(',', self::PAPERWORK_KINDS)]], ['*' => 'Invalid paperwork.']);
-        abort_if(in_array($data['document_kind'], ['valid_id', 'proof_of_billing'], true), 422, 'The buyer uploads the valid ID and proof of billing. Staff verify them.');
-        $tx = DB::table('transactions')->where('id', $data['transaction_id'])->first(['transaction_kind', 'current_state']);
-        abort_unless($tx, 404, 'Transaction not found.');
-        // Policy gap 2 (Phase 1 decision: tighten): staff paperwork belongs to a completed purchase, the one place the
-        // transaction page offers it; it can no longer be attached to any other transaction.
-        abort_unless($tx->transaction_kind === 'buy' && $tx->current_state === 'completed', 422, 'Paperwork is recorded on a completed purchase.');
-        $file = $request->file('file');
-        abort_if($request->has('file') && (! $file || $file->getSize() === 0), 422, 'Select a file to upload.');
-        $stored = $file ? $files->store($file, 'transaction-documents', $data['transaction_id']) : null;
-        try {
-            DB::table('transaction_documents')->insert([
-                'id' => (string) Str::uuid(), 'transaction_id' => $data['transaction_id'], 'document_kind' => $data['document_kind'],
-                'storage_path' => $stored['path'] ?? null, 'uploader_id' => $request->user()->id, 'verification_state' => 'verified', 'upload_date' => now(),
-            ]);
-        } catch (\Throwable $e) {
-            $files->delete('transaction-documents', $stored['path'] ?? null);
-            throw $e;
-        }
-
-        return response()->json(['success' => true]);
-    }
-
     /** verifyTransactionDocument: HA verifies papers; SM the buyer's IDs/billing; MS a seller's papers. */
     public function verifyTransactionDocument(Request $request): JsonResponse
     {
@@ -416,6 +402,8 @@ class StaffTransactionController extends Controller
         abort_if(empty($data['assigned_confidential_informant']) && empty($data['mechanic_id']), 422, 'Assign an informant or a mechanic to this field case.');
         $schedule = Trading::parseTime($data['schedule'] ?? null);
         abort_if(! empty($data['schedule']) && ! $schedule, 422, 'Schedule must be a valid date and time.');
+        // SH-12: a schedule that already passed would send the team nowhere.
+        abort_if($schedule && ! BuyRules::isFutureSchedule($schedule), 422, 'Set a future field case date and time.');
         $transactionId = ($data['transaction_id'] ?? null) ?: null;
         $actorId = $request->user()->id;
         $id = (string) Str::uuid();

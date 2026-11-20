@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Trading;
 
+use App\Services\Trading\BuyRules;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -55,27 +56,14 @@ class RulesTest extends TestCase
     }
 
     #[Test]
-    public function staff_paperwork_and_document_verification_keep_their_owners(): void
+    public function document_verification_keeps_its_owner(): void
     {
         $buyer = $this->customer();
         $id = $this->buyRequest($buyer, $this->vehicle(), tx: ['current_state' => 'under_review']);
         $this->buyerDocuments($id, $buyer->id);
         $sm = $this->account('sales_manager');
-        foreach (['valid_id', 'proof_of_billing'] as $kind) {
-            $this->act($sm)->postJson('/api/v1/staff/trading/paperwork', ['transaction_id' => $id, 'document_kind' => $kind])->assertStatus(422);
-        }
-        $invoice = fn () => UploadedFile::fake()->createWithContent('i.pdf', "%PDF-1.4
-1 0 obj<<>>endobj
-trailer<<>>
-%%EOF");
-        // Policy gap 2: paperwork only on a completed purchase, never on an open request or a sell offer.
-        $this->act($sm)->post('/api/v1/staff/trading/paperwork', ['transaction_id' => $id, 'document_kind' => 'invoice', 'file' => $invoice()])
-            ->assertStatus(422)->assertJson(['message' => 'Paperwork is recorded on a completed purchase.']);
-        DB::table('transactions')->where('id', $id)->update(['current_state' => 'completed']);
-        $this->act($sm)->post('/api/v1/staff/trading/paperwork', ['transaction_id' => $id, 'document_kind' => 'invoice', 'file' => $invoice()])->assertOk();
-        DB::table('transactions')->where('id', $id)->update(['transaction_kind' => 'sell']);
-        $this->act($this->account('account_manager'))->post('/api/v1/staff/trading/paperwork', ['transaction_id' => $id, 'document_kind' => 'receipt', 'file' => $invoice()])->assertStatus(422);
-        DB::table('transactions')->where('id', $id)->update(['transaction_kind' => 'buy', 'current_state' => 'under_review']);
+        // BC-1: the client called the Record invoice / Record receipt buttons useless, so the endpoint is gone.
+        $this->act($sm)->postJson('/api/v1/staff/trading/paperwork', ['transaction_id' => $id, 'document_kind' => 'invoice'])->assertNotFound();
         $idDoc = DB::table('transaction_documents')->where('transaction_id', $id)->where('document_kind', 'valid_id')->value('id');
         foreach (['ceo', 'account_manager'] as $role) {
             $this->act($this->account($role))->postJson('/api/v1/staff/trading/verify-document', ['document_id' => $idDoc, 'decision' => 'verified'])->assertForbidden();
@@ -137,7 +125,14 @@ trailer<<>>
         $this->again()->postJson('/api/v1/trading/sign-contract', ['transaction_id' => $id, 'signed_name' => 'Juan', 'signature_path' => 'elsewhere/signature-1.png'])->assertStatus(422);
         $path = "{$id}/signature-1.png";
         $this->again()->post('/api/v1/trading/uploads', ['path' => $path, 'file' => UploadedFile::fake()->image('s.png')])->assertOk();
-        $this->again()->postJson('/api/v1/trading/sign-contract', ['transaction_id' => $id, 'signed_name' => 'Juan', 'signature_path' => $path])->assertOk();
+        // BC-3: at a GCE visit the Sales Manager signs for GCE first.
+        $this->again()->postJson('/api/v1/trading/sign-contract', ['transaction_id' => $id, 'signed_name' => 'Juan', 'signature_path' => $path])
+            ->assertStatus(422)->assertJson(['message' => 'Wait for the Sales Manager to sign for GCE, then sign here.']);
+        $this->act($ha)->post('/api/v1/staff/trading/handover/record-sm-signature', ['transaction_id' => $id, 'signature' => UploadedFile::fake()->image('sm.png')])->assertForbidden();
+        $this->act($sm)->post('/api/v1/staff/trading/handover/record-sm-signature', ['transaction_id' => $id, 'signature' => UploadedFile::fake()->image('sm.png')])->assertOk();
+        $this->again()->post('/api/v1/staff/trading/handover/record-sm-signature', ['transaction_id' => $id, 'signature' => UploadedFile::fake()->image('sm.png')])->assertStatus(409);
+        $this->assertSame($sm->id, DB::table('sale_handovers')->where('transaction_id', $id)->value('sm_signed_by'));
+        $this->act($buyer)->postJson('/api/v1/trading/sign-contract', ['transaction_id' => $id, 'signed_name' => 'Juan', 'signature_path' => $path])->assertOk();
         $this->again()->postJson('/api/v1/trading/sign-contract', ['transaction_id' => $id, 'signed_name' => 'Juan', 'signature_path' => $path])->assertStatus(409);
         $this->assertSame('signed', DB::table('sale_handovers')->where('transaction_id', $id)->value('contract_state'));
         // The buyer reads the contract body only once it is approved.
@@ -145,14 +140,14 @@ trailer<<>>
     }
 
     #[Test]
-    public function the_gce_visit_papers_chain_needs_a_checked_payment_and_the_ci(): void
+    public function the_gce_visit_papers_chain_needs_the_ci_and_a_check_only_when_money_comes_first(): void
     {
         $buyer = $this->customer();
         $sm = $this->account('sales_manager');
         $ci = $this->account('confidential_informant');
+
+        // BC-4: a full payment at a GCE visit is settled at the office, so nothing is checked before its papers go.
         $id = $this->buyRequest($buyer, $this->vehicle(), 'cash', 'gce_visit', null, ['current_state' => 'approved']);
-        $this->act($sm)->postJson('/api/v1/staff/trading/handover/request-papers-release', ['transaction_id' => $id])->assertStatus(422);
-        $this->payment($id, 'full', 500000, $this->account('head_accountant')->id);
         $this->act($sm)->postJson('/api/v1/staff/trading/handover/request-papers-release', ['transaction_id' => $id])->assertOk();
         $this->again()->postJson('/api/v1/staff/trading/handover/request-papers-release', ['transaction_id' => $id])->assertStatus(409);
         $this->again()->postJson('/api/v1/staff/trading/handover/approve-papers-release', ['transaction_id' => $id])->assertForbidden();
@@ -161,6 +156,23 @@ trailer<<>>
         $this->assertSame('received', DB::table('sale_handovers')->where('transaction_id', $id)->value('papers_status'));
         $this->act($ci)->getJson('/api/v1/staff/vehicle-papers')->assertOk()->assertJsonPath('handovers.0.transaction_id', $id);
         $this->act($sm)->getJson('/api/v1/staff/vehicle-papers')->assertForbidden();
+
+        // The other half of the rule: a financing sale pays an Initial Downpayment first, so its papers wait for
+        // the Head Accountant's check — and an unverified payment does not satisfy it.
+        $financed = $this->buyRequest($this->customer(), $this->vehicle(), 'financing', 'gce_visit', null, ['current_state' => 'approved']);
+        $this->act($sm)->postJson('/api/v1/staff/trading/handover/request-papers-release', ['transaction_id' => $financed])->assertStatus(422)
+            ->assertJsonPath('message', 'The Head Accountant must check the payment before the papers are requested.');
+        $this->payment($financed, 'downpayment', 50000, null);
+        $this->again()->postJson('/api/v1/staff/trading/handover/request-papers-release', ['transaction_id' => $financed])->assertStatus(422);
+        $this->assertNull(DB::table('sale_handovers')->where('transaction_id', $financed)->value('papers_status'));
+        DB::table('payment_records')->where('transaction_id', $financed)->update(['verified_by' => $this->account('head_accountant')->id]);
+        $this->again()->postJson('/api/v1/staff/trading/handover/request-papers-release', ['transaction_id' => $financed])->assertOk();
+
+        // Any arrangement with a downpayment or a delivery fee comes first, whatever its method.
+        $this->assertTrue(BuyRules::needsPaymentCheckBeforePapers((object) ['payment_option' => 'full', 'payment_method' => 'bank_transfer', 'downpayment_amount' => '50000']));
+        $this->assertTrue(BuyRules::needsPaymentCheckBeforePapers((object) ['payment_option' => 'full', 'payment_method' => 'cash', 'delivery_fee' => '2500']));
+        $this->assertTrue(BuyRules::needsPaymentCheckBeforePapers((object) ['payment_option' => 'financing', 'payment_method' => 'financing']));
+        $this->assertFalse(BuyRules::needsPaymentCheckBeforePapers((object) ['payment_option' => 'full', 'payment_method' => 'bank_transfer', 'downpayment_amount' => null, 'delivery_fee' => null]));
     }
 
     #[Test]

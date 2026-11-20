@@ -125,7 +125,15 @@ class CustomerTradingController extends Controller
 
         Trading::run(function () use ($request, $transactionId, $kind, $idType, $idSide, $path) {
             $tx = $this->ownTx($request, $transactionId, lock: true);
-            abort_if($tx->transaction_kind !== 'buy', 422, 'Documents can only be uploaded for purchases.');
+            // SN-14: a buy takes its IDs and proof of billing here. SN-11: a sell offer only ever replaces a valid
+            // ID that staff rejected (the OR/CR/Deed are declared on the checklist instead), so the same slot is
+            // freed and the resubmission the Marketing Specialist asked for can actually happen.
+            $sellIdReplacement = $tx->transaction_kind === 'sell'
+                && $kind === 'valid_id'
+                && DB::table('transaction_documents')->where('transaction_id', $transactionId)
+                    ->where('document_kind', 'valid_id')->where('verification_state', 'rejected')->exists();
+            abort_if($tx->transaction_kind !== 'buy' && ! $sellIdReplacement, 422,
+                'Documents can only be uploaded for purchases, or to replace an ID GCE asked a seller to resubmit.');
             if ($kind === 'valid_id') {
                 $ids = BuyRules::activeBuyerIds(DB::table('transaction_documents')->where('transaction_id', $transactionId)->get());
                 abort_if(count($ids) >= 4, 422, 'You can upload four ID images: the front and back of two IDs.');
@@ -144,25 +152,6 @@ class CustomerTradingController extends Controller
                 CheckTransactionDocument::dispatch($id, 'valid_id', $idType)->afterCommit();
             }
         });
-
-        return response()->json(['success' => true]);
-    }
-
-    /** removePurchaseDocument: only while the request is a draft and the image is unverified. */
-    public function removePurchaseDocument(Request $request, FileService $files, string $documentId): JsonResponse
-    {
-        abort_unless(Str::isUuid($documentId), 422, 'Invalid document.');
-        $path = Trading::run(function () use ($request, $documentId) {
-            $document = DB::table('transaction_documents')->where('id', $documentId)->lockForUpdate()->first();
-            abort_unless($document, 404, 'Document not found.');
-            $tx = $this->ownTx($request, $document->transaction_id, 'Document not found.', true);
-            abort_if($tx->current_state !== 'pending', 422, 'This request has already been sent, so its documents can no longer be removed.');
-            abort_if($document->verification_state !== 'pending', 422, 'Only a document still waiting for verification can be removed.');
-            DB::table('transaction_documents')->where('id', $documentId)->delete();
-
-            return $document->storage_path;
-        });
-        $files->delete(self::BUCKET, $path);
 
         return response()->json(['success' => true]);
     }
@@ -202,6 +191,10 @@ class CustomerTradingController extends Controller
             'arrangement_kind' => ['nullable', 'in:delivery,meetup,gce_visit'],
             'schedule' => ['nullable', 'string'],
             'location' => ['nullable', 'string', 'max:500'],
+            // BH-8: a Meet Halfway meet-up is a pin inside CALABARZON plus its composed address, not a PSGC address.
+            'meetup_lat' => ['nullable', 'numeric', 'between:-90,90'],
+            'meetup_lng' => ['nullable', 'numeric', 'between:-180,180'],
+            'meetup_address' => ['nullable', 'string', 'max:500'],
             'notes' => ['nullable', 'string', 'max:500'],
             'acknowledge_condition' => ['nullable', 'in:yes'],
             'agree_delivery_terms' => ['nullable', 'in:yes'],
@@ -219,6 +212,8 @@ class CustomerTradingController extends Controller
         abort_if($slot && ! $slot->isFuture(), 422, 'Pick a future date and time.');
         abort_if($slot && ! BuyRules::isBusinessSlot($slot), 422, BuyRules::SLOT_RULE_MESSAGE);
         abort_if($slot && $kind === 'delivery' && ! BuyRules::isDeliveryDate($slot), 422, BuyRules::DELIVERY_LEAD_MESSAGE);
+        // BH-1: a halfway meet-up needs 2 Manila calendar days ahead; a GCE visit is bookable the same day.
+        abort_if($slot && $kind === 'meetup' && ! BuyRules::isMeetupDate($slot), 422, BuyRules::MEETUP_LEAD_MESSAGE);
 
         $result = Trading::run(function () use ($request, $data, $userId, $kind, $option, $method, $slot) {
             $tx = $this->ownTx($request, $data['transaction_id'], lock: true);
@@ -241,8 +236,20 @@ class CustomerTradingController extends Controller
             $payMethod = $financing ? ($data['financing_pay_method'] ?? null) : null;
 
             $location = trim((string) ($data['location'] ?? ''));
-            if (in_array($kind, ['meetup', 'delivery'], true)) {
-                abort_if($location === '' && ! $request->filled('address'), 422, 'Enter a location for meet-up or delivery.');
+            $meetupPoint = null;
+            if ($kind === 'meetup') {
+                // BH-8: the buyer drops a pin on the map instead of picking PSGC dropdowns. The purchase_details
+                // CHECK still wants a location, so the composed meet-up address is stored as one.
+                $lat = $data['meetup_lat'] ?? $existing?->meetup_lat;
+                $lng = $data['meetup_lng'] ?? $existing?->meetup_lng;
+                abort_if($lat === null || $lng === null, 422, 'Set the meet-up point on the map.');
+                abort_unless(BuyRules::isInCalabarzon($lat, $lng), 422, BuyRules::OUTSIDE_CALABARZON_MESSAGE);
+                $meetupAddress = trim((string) ($data['meetup_address'] ?? '')) ?: trim((string) ($existing?->meetup_address ?? ''));
+                abort_if($meetupAddress === '', 422, 'Type the block, lot or landmark of the meet-up point.');
+                $meetupPoint = ['meetup_lat' => $lat, 'meetup_lng' => $lng, 'meetup_address' => $meetupAddress];
+                $location = $meetupAddress;
+            } elseif ($kind === 'delivery') {
+                abort_if($location === '' && ! $request->filled('address'), 422, 'Enter a location for delivery.');
                 $location = $this->saveBuyerAddress($request);
             }
             $price = DB::table('vehicles')->where('id', $tx->vehicle_id)->value('current_price');
@@ -250,7 +257,7 @@ class CustomerTradingController extends Controller
                 'payment_option' => $option, 'payment_method' => $method, 'final_price' => $price ?: null,
                 'arrangement_kind' => $kind ?: null, 'location' => $kind === 'gce_visit' ? null : ($location ?: null),
                 'financing_pay_method' => $payMethod,
-            ];
+            ] + ($meetupPoint ?? []);
             if ($ack) {
                 $row['condition_acknowledged_at'] = now();
             }
@@ -339,6 +346,8 @@ class CustomerTradingController extends Controller
                 abort_if(! $slot || $slot->arrangement_kind !== $details?->arrangement_kind, 422, 'Book the meeting time first.');
                 abort_if(! $scheduledAt->isFuture(), 422, 'The booked time has passed. Pick a new one.');
                 abort_unless(BuyRules::isBusinessSlot($scheduledAt), 422, BuyRules::SLOT_RULE_MESSAGE);
+                // BH-1: the lead time is checked again on submit, so a slot saved under an older rule cannot slip through.
+                abort_unless($details?->arrangement_kind !== 'meetup' || BuyRules::isMeetupDate($scheduledAt), 422, BuyRules::MEETUP_LEAD_MESSAGE);
             }
 
             $review = ['current_state' => 'under_review', 'flow_status' => 'pending_sm_approval', 'review_due_at' => BuyRules::reviewDueAt()];
@@ -402,6 +411,10 @@ class CustomerTradingController extends Controller
         $data = $request->validate([
             'transaction_id' => ['required', 'uuid'], 'decision' => ['required', 'in:proceed,decline'],
             'schedule' => ['nullable', 'string'], 'location' => ['nullable', 'string', 'max:300'],
+            // BH-8: a financed meet-up books the map pin and its composed address, as the cash path does.
+            'meetup_lat' => ['nullable', 'numeric', 'between:-90,90'],
+            'meetup_lng' => ['nullable', 'numeric', 'between:-180,180'],
+            'meetup_address' => ['nullable', 'string', 'max:500'],
         ], ['*' => 'Invalid response.']);
         $userId = $request->user()->id;
 
@@ -428,7 +441,24 @@ class CustomerTradingController extends Controller
             $visit = Trading::parseTime($data['schedule'] ?? null);
             abort_if(! $visit || ! BuyRules::isVisitSlot($visit), 422, $kind === 'gce_visit'
                 ? 'Pick a future GCE visit slot on the hour.' : "Pick a future {$label} time. ".BuyRules::SLOT_RULE_MESSAGE);
-            $location = $kind !== 'gce_visit' ? $this->saveBuyerAddress($request) : null;
+            // BH-1: this replaces any earlier appointment, so a financed meet-up keeps the 2-day lead time too.
+            abort_if($kind === 'meetup' && ! BuyRules::isMeetupDate($visit), 422, BuyRules::MEETUP_LEAD_MESSAGE);
+            $location = $kind === 'delivery' ? $this->saveBuyerAddress($request) : null;
+            $meetupPoint = [];
+            if ($kind === 'meetup') {
+                // BH-8: the same pin rule as the cash path: inside CALABARZON, with a typed address. A row saved
+                // before the map existed has no pin yet, so fall back to anything already stored (and say so).
+                $existing = DB::table('purchase_details')->where('transaction_id', $tx->id)->first(['meetup_lat', 'meetup_lng', 'meetup_address', 'location']);
+                $lat = $data['meetup_lat'] ?? $existing?->meetup_lat;
+                $lng = $data['meetup_lng'] ?? $existing?->meetup_lng;
+                abort_if($lat === null || $lng === null, 422, 'Set the meet-up point on the map.');
+                abort_unless(BuyRules::isInCalabarzon($lat, $lng), 422, BuyRules::OUTSIDE_CALABARZON_MESSAGE);
+                $meetupAddress = trim((string) ($data['meetup_address'] ?? ''))
+                    ?: trim((string) ($existing?->meetup_address ?? $existing?->location ?? ''));
+                abort_if($meetupAddress === '', 422, 'Type the block, lot or landmark of the meet-up point.');
+                $location = $meetupAddress;
+                $meetupPoint = ['meetup_lat' => $lat, 'meetup_lng' => $lng, 'meetup_address' => $meetupAddress];
+            }
             $when = Trading::when($visit);
             // A time saved before approval is replaced by this appointment.
             Trading::releaseVisitSlots($tx->id);
@@ -439,7 +469,7 @@ class CustomerTradingController extends Controller
                 return 'slot_taken';
             }
             if ($location !== null) {
-                DB::table('purchase_details')->where('transaction_id', $tx->id)->update(['location' => $location, 'updated_at' => now()]);
+                DB::table('purchase_details')->where('transaction_id', $tx->id)->update(['location' => $location, 'updated_at' => now()] + $meetupPoint);
             }
             Trading::updateTx($tx->id, ['flow_status' => $kind === 'delivery' ? 'purchase_claim' : 'gce_visit_scheduled_dp_pending']);
             // A financed delivery is a Purchase Claim at once: the car leaves the showroom now.
@@ -512,6 +542,10 @@ class CustomerTradingController extends Controller
 
                 return;
             }
+            // BC-3: at a GCE visit the Sales Manager signs for GCE first, so the Deed of Sale carries both signatures.
+            $details = DB::table('purchase_details')->where('transaction_id', $tx->id)->first(['arrangement_kind']);
+            abort_if(BuyRules::needsSmSignature($details) && ! $handover?->sm_signature_path, 422,
+                'Wait for the Sales Manager to sign for GCE, then sign here.');
             $name = trim((string) $request->input('signed_name'));
             abort_if($name === '', 422, 'Type your full name to sign.');
             $signature = (string) $request->input('signature_path');

@@ -22,6 +22,10 @@ final class PaymentRules
         if (BuyRules::isHalfwayCashRequest($d)) {
             return $kind === 'downpayment';
         }
+        // BC-4: a Full Payment at a GCE visit is paid at the office before the Deed of Sale is signed.
+        if (BuyRules::isOnsiteCashRequest($d)) {
+            return true;
+        }
 
         return $d?->arrangement_kind === 'delivery' && in_array($kind, self::PRE_DELIVERY_KINDS, true);
     }
@@ -71,7 +75,7 @@ final class PaymentRules
         ], fn ($p) => $p['cents'] > 0));
 
         if ($d?->payment_method === 'bank_transfer') {
-            if (! BuyRules::needsContract($d) || $contractState === 'signed') {
+            if (! BuyRules::needsContract($d) || $contractState === 'signed' || $d->arrangement_kind === 'gce_visit') {
                 $remaining = Money::cents($d->final_price) - self::verifiedTowardPrice($payments);
 
                 return $remaining > 0 ? [self::balancePart($remaining)] : [];

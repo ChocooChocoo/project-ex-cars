@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Finance;
 
 use App\Http\Controllers\Controller;
 use App\Services\Finance\Disbursements;
+use App\Services\Finance\Ledger;
 use App\Services\Finance\Money;
 use App\Services\Trading\Trading;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -171,8 +172,17 @@ class FinanceController extends Controller
                 abort_unless((self::NEXT[$locked->status] ?? null) === $kind, 409, "Cannot move from {$locked->status} to {$kind}.");
             }
             $by = ['approved' => 'approved_by', 'released' => 'released_by', 'received' => 'received_by'][$kind] ?? null;
-            DB::table('disbursement_requests')->where('id', $locked->id)->update(['status' => $kind, 'updated_at' => now()] + ($by ? [$by => $actor] : []));
+            // BH-4: the rejection reason travels with the request so its requester reads why it was refused.
+            $reason = trim((string) ($data['notes'] ?? ''));
+            DB::table('disbursement_requests')->where('id', $locked->id)->update(['status' => $kind, 'updated_at' => now()]
+                + ($by ? [$by => $actor] : []) + ($kind === 'rejected' ? ['rejection_reason' => $reason !== '' ? $reason : null] : []));
             Disbursements::event($locked->id, $kind, $actor, $data['notes'] ?? null);
+            // SN-10: releasing the cash is the outflow; the description is the request's own reason. One entry per
+            // request however often the release is retried — `completePurchase` posts nothing, it only spends it.
+            if ($kind === 'released') {
+                Ledger::post('disbursement', (int) $locked->amount_cents, "Funds released: {$locked->title}. {$locked->purpose}",
+                    'release:'.$locked->id, (string) $actor, $locked->purchase_transaction_id, $locked->field_case_id);
+            }
             // The reconditioning ledger follows the same step (the vehicle page reads the fund request's own state).
             $fundState = match (true) {
                 $kind === 'approved' => 'approved',
@@ -197,11 +207,14 @@ class FinanceController extends Controller
 
         DB::transaction(function () use ($request, $id) {
             $expense = DB::table('field_case_expenses as e')->leftJoin('field_cases as f', 'f.id', '=', 'e.field_case_id')->leftJoin('vehicles as v', 'v.id', '=', 'f.vehicle_id')
-                ->where('e.id', $id)->lockForUpdate()->first(['e.id', 'e.reimbursed_at', 'v.listing_state']);
+                ->where('e.id', $id)->lockForUpdate()->first(['e.id', 'e.amount', 'e.description', 'e.reimbursed_at', 'e.field_case_id', 'f.transaction_id', 'v.listing_state']);
             abort_unless($expense, 404, 'Expense not found.');
             abort_if($expense->reimbursed_at, 409, 'This expense is already reimbursed.');
             abort_unless($expense->listing_state === 'sold', 422, 'Reimburse only after the vehicle is sold.');
             DB::table('field_case_expenses')->where('id', $id)->whereNull('reimbursed_at')->update(['reimbursed_at' => now(), 'reimbursed_by' => $request->user()->id]);
+            // SN-10: reimbursed cash leaves the drawer; the itemised expense gives it its description.
+            Ledger::post('expense', Money::cents($expense->amount), 'Field expense reimbursed: '.($expense->description ?: 'field expense'),
+                'expense:'.$expense->id, (string) $request->user()->id, $expense->transaction_id, $expense->field_case_id);
         });
 
         return response()->json(['success' => true]);

@@ -28,6 +28,7 @@ class SaleHandover extends Model
             'signing_reported_at' => 'immutable_datetime',
             'buyer_met_at' => 'immutable_datetime',
             'cash_reported_at' => 'immutable_datetime',
+            'sm_signed_at' => 'immutable_datetime',
         ];
     }
 
@@ -44,6 +45,11 @@ class SaleHandover extends Model
     public function papersCi(): BelongsTo
     {
         return $this->belongsTo(User::class, 'papers_ci_id');
+    }
+
+    public function smSignedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'sm_signed_by');
     }
 
     public function transaction(): BelongsTo

@@ -85,11 +85,9 @@ class FinancingVisitController extends Controller
                 DB::table('reconditioning_jobs')->insert(['id' => (string) Str::uuid(), 'vehicle_id' => $tx->vehicle_id, 'transaction_id' => $id, 'state' => 'awaiting_report', 'created_at' => now()]);
             }
             Trading::history($id, $tx->current_state, $tx->current_state, $actorId, 'Repossessed / Recovered by GCE');
-            foreach (['mechanic', 'sales_manager'] as $role) {
-                Trading::notify(['role' => $role], 'vehicle_recovered', 'Repossessed car returned to GCE', $role === 'mechanic'
-                    ? 'Inspect the car and submit the Overall Vehicle Status Report with a restoration estimate.'
-                    : "Re-process the car's papers while it is reconditioned.", $id);
-            }
+            // SH-2: the Sales Manager no longer re-processes papers, so only the Mechanic is told about the recovery.
+            Trading::notify(['role' => 'mechanic'], 'vehicle_recovered', 'Repossessed car returned to GCE',
+                'Inspect the car and submit the Overall Vehicle Status Report with a restoration estimate.', $id);
         });
 
         return response()->json(['success' => true]);

@@ -11,9 +11,34 @@ final class BuyRules
 
     public const DELIVERY_LEAD_MESSAGE = 'Delivery must be scheduled at least 7 days after your request date.';
 
+    /** BH-1: a halfway meet-up is at least 2 calendar days ahead in Manila; a GCE visit may be the same day. */
+    public const MEETUP_LEAD_DAYS = 2;
+
+    public const MEETUP_LEAD_MESSAGE = 'A halfway meet-up must be booked at least 2 days ahead.';
+
     public const DIRECT_PAYMENT_METHODS = ['cash', 'bank_transfer'];
 
     public const REVIEW_WINDOW_DAYS = 7;
+
+    /**
+     * SH-14 / BH-8: the CALABARZON bounding box the browser enforces (src/lib/transactions/meetup-area.ts). The
+     * box alone also covers Metro Manila and sea, so the browser also checks the reverse-geocoded region; the API
+     * proves the coordinates are inside the box.
+     */
+    public const CALABARZON_BOUNDS = ['south' => 13.18, 'west' => 120.56, 'north' => 15.10, 'east' => 122.75];
+
+    public const OUTSIDE_CALABARZON_MESSAGE = 'Meet-ups must be inside CALABARZON.';
+
+    public static function isInCalabarzon(mixed $lat, mixed $lng): bool
+    {
+        if (! is_numeric($lat) || ! is_numeric($lng)) {
+            return false;
+        }
+        $b = self::CALABARZON_BOUNDS;
+
+        return (float) $lat >= $b['south'] && (float) $lat <= $b['north']
+            && (float) $lng >= $b['west'] && (float) $lng <= $b['east'];
+    }
 
     /** state-machine.ts TRANSITION_RULES: from → to → roles. */
     public const TRANSITION_RULES = [
@@ -49,6 +74,25 @@ final class BuyRules
     public static function isDeliveryDate(CarbonImmutable $at, ?CarbonImmutable $requestedAt = null): bool
     {
         return $at->greaterThanOrEqualTo(($requestedAt ?? CarbonImmutable::now())->addDays(7));
+    }
+
+    /**
+     * BH-1: the slot's Manila calendar date is Manila today + 2 or later. Only the date counts, so a meet-up
+     * late on the second day ahead is as valid as a morning one. The app runs in UTC, so both sides are
+     * converted to Manila before their dates are compared: the browser's own time zone is never involved.
+     */
+    public static function isMeetupDate(CarbonImmutable $at, ?CarbonImmutable $requestedAt = null): bool
+    {
+        $slotDate = $at->setTimezone('Asia/Manila')->format('Y-m-d');
+        $earliest = ($requestedAt ?? CarbonImmutable::now())->setTimezone('Asia/Manila')->addDays(self::MEETUP_LEAD_DAYS)->format('Y-m-d');
+
+        return $slotDate >= $earliest;
+    }
+
+    /** SH-12: a staff schedule or expected arrival must still be ahead, or it tells the team nothing. */
+    public static function isFutureSchedule(CarbonImmutable $at): bool
+    {
+        return $at->greaterThan(CarbonImmutable::now());
     }
 
     /** Buyers may cancel a scheduled meetup or delivery only at least 5 hours before it. */
@@ -109,14 +153,44 @@ final class BuyRules
         return in_array($d?->arrangement_kind, ['meetup', 'delivery'], true);
     }
 
+    /** BC-2: every sale has a contract (the Deed of Sale is signed on it), whatever the arrangement. */
     public static function needsContract(?object $d): bool
     {
-        return self::isFieldArrangement($d) || $d?->payment_method === 'financing';
+        return self::isFieldArrangement($d) || $d?->arrangement_kind === 'gce_visit' || $d?->payment_method === 'financing';
     }
 
+    /**
+     * BC-2: a GCE visit is signed in the app (the buyer's e-signature and the Sales Manager's), and so is financing
+     * at a meet-up. A delivery is signed on paper on arrival.
+     */
     public static function signsInApp(?object $d): bool
     {
-        return $d?->payment_method === 'financing' && $d?->arrangement_kind !== 'delivery';
+        return $d?->arrangement_kind === 'gce_visit' || ($d?->payment_method === 'financing' && $d?->arrangement_kind !== 'delivery');
+    }
+
+    /** BC-3: the Sales Manager signs for GCE before the buyer signs a GCE-visit sale in the app. */
+    public static function needsSmSignature(?object $d): bool
+    {
+        return $d?->arrangement_kind === 'gce_visit';
+    }
+
+    /**
+     * BC-4: the papers are requested only once the money that has to be checked has been checked. A Full Payment at
+     * a GCE visit (cash or bank transfer) is settled at the office, so nothing is verified before the papers go. A
+     * financing sale has its Initial Downpayment, and a meet-up or a delivery has a downpayment or a delivery fee to
+     * verify, so both wait for the Head Accountant. The answer comes from the stored rows, never the arrangement
+     * name alone, so no sale is let through (or held back) on a guess.
+     */
+    public static function needsPaymentCheckBeforePapers(?object $d): bool
+    {
+        if (! $d) {
+            return false;
+        }
+        if (($d->payment_option ?? null) === 'financing' || ($d->payment_method ?? null) === 'financing') {
+            return true;
+        }
+
+        return (float) ($d->downpayment_amount ?? 0) > 0 || (float) ($d->delivery_fee ?? 0) > 0;
     }
 
     public static function papersReadyForSale(?object $d, ?object $handover): bool
@@ -128,11 +202,10 @@ final class BuyRules
     public static function missingContractCopies(?object $d, ?object $handover): array
     {
         $missing = [];
+        // BH-2: the Confidential Informant handles the contract on a field arrangement. The Mechanic no longer keeps
+        // a signed copy, so only the CI's copy is missing while it is unrecorded.
         if (self::isFieldArrangement($d) && ! $handover?->ci_copy_at) {
             $missing[] = 'Confidential Informant';
-        }
-        if (self::isHalfwayCashRequest($d) && ! $handover?->mechanic_copy_at) {
-            $missing[] = 'Mechanic';
         }
 
         return $missing;

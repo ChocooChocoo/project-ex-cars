@@ -148,4 +148,21 @@ class AdministrationTest extends TestCase
         $this->act($this->account('mechanic'))->postJson('/api/v1/trading/sell', ['make' => 'Toyota'])->assertStatus(403);
         $this->assertSame(0, DB::table('vehicles')->count());
     }
+
+    #[Test]
+    public function sn1_the_vehicle_form_no_longer_sends_condition_or_warranty_details(): void
+    {
+        // SN-1: the client called both fields useless on the posting form. The column keeps its DB default.
+        $ms = $this->account('marketing_specialist');
+        $body = ['plate_number' => 'ABC 1234', 'engine_number' => 'ENG-9', 'chassis_number' => 'CHS-7', 'make' => 'Toyota', 'model' => 'Vios', 'year' => 2022];
+        $this->act($ms)->postJson('/api/v1/staff/vehicles', $body + ['vin' => 'VIN-1'])->assertOk();
+        $this->act($ms)->postJson('/api/v1/staff/vehicles', $body + ['vin' => 'VIN-2', 'condition' => 'certified', 'warranty_details' => '1 year'])->assertOk();
+
+        $cars = DB::table('vehicles')->orderBy('vin')->get(['vin', 'condition', 'warranty_details']);
+        $this->assertSame(['VIN-1', 'VIN-2'], $cars->pluck('vin')->all(), 'neither field is required any more');
+        foreach ($cars as $car) {
+            $this->assertSame('used', $car->condition, 'the client value is ignored; the column default applies');
+            $this->assertNull($car->warranty_details);
+        }
+    }
 }

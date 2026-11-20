@@ -61,7 +61,29 @@ class ReconditioningController extends Controller
         return '₱'.Trading::peso($amount);
     }
 
-    /** submitReconditioningReport (§6 steps 27–30): status report, parts with photos, and the fund request. */
+    /** SH-4: the first inspection photo stored for this checklist answer, if any. */
+    private function inspectionPhoto(string $resultId): ?string
+    {
+        $answer = DB::table('inspection_checklist_results')->where('id', $resultId)->first(['inspection_id', 'checklist_entry_id']);
+        if (! $answer) {
+            return null;
+        }
+        $fieldCaseId = DB::table('vehicle_inspections')->where('id', $answer->inspection_id)->value('field_case_id');
+        $transactionId = $fieldCaseId ? DB::table('field_cases')->where('id', $fieldCaseId)->value('transaction_id') : null;
+        if (! $transactionId) {
+            return null;
+        }
+
+        return DB::table('transaction_documents')->where('transaction_id', $transactionId)->where('document_kind', 'inspection_photo')
+            ->where('note', $answer->checklist_entry_id)->orderBy('upload_date')->value('storage_path');
+    }
+
+    /**
+     * submitReconditioningReport (§6 steps 27–30, SH-4): status report, parts with photos, and the fund request.
+     *
+     * A row may carry the `result_id` of a `for_repair` answer of the car's acquisition inspection: the part is
+     * then already known by name, and the inspection photo is reused when the Mechanic attaches no new one.
+     */
     public function submitReport(Request $request, FileService $files): JsonResponse
     {
         abort_unless($request->user()->hasRole('mechanic'), 403, 'Not authorized for this reconditioning step.');
@@ -71,36 +93,60 @@ class ReconditioningController extends Controller
         abort_if($statusReport === '', 422, "Describe the car's overall condition.");
         abort_if(mb_strlen($statusReport) > 4000, 422, 'Invalid report.');
         abort_if(count($parts) === 0, 422, 'Add at least one part.');
+        $resultIds = [];
         foreach ($parts as $part) {
             abort_if(trim((string) ($part['part_name'] ?? '')) === '', 422, 'Name every part.');
             abort_if(trim((string) ($part['replacement_brand'] ?? '')) === '', 422, 'Give the replacement brand.');
             abort_unless(is_numeric($part['estimated_cost'] ?? null) && (float) $part['estimated_cost'] >= 0, 422, 'An estimate cannot be negative.');
+            $resultId = $part['result_id'] ?? null;
+            if ($resultId !== null && $resultId !== '') {
+                abort_unless(is_string($resultId) && Str::isUuid($resultId), 422, 'Add a valid part.');
+                $resultIds[] = $resultId;
+            }
         }
         $photos = [];
         foreach (array_keys($parts) as $index) {
             $photo = $request->file("part_photo_{$index}");
-            abort_if(! $photo || $photo->getSize() === 0, 422, 'Add a photo of every part.');
+            if (! $photo || $photo->getSize() === 0) {
+                // SH-4: no new photo is fine when the row comes from the inspection and has one to reuse.
+                abort_if(! ($parts[$index]['result_id'] ?? null) || ! $this->inspectionPhoto((string) $parts[$index]['result_id']), 422, 'Add a photo of every part.');
+                $photos[$index] = null;
+                continue;
+            }
             abort_if($photo->getSize() > FileService::MAX_BYTES || ! in_array((new \finfo(FILEINFO_MIME_TYPE))->file($photo->getRealPath()), ['image/jpeg', 'image/png', 'image/webp'], true), 422,
                 'Part photos must be JPEG, PNG or WebP images of 2 MB or less.');
-            $photos[] = $photo;
+            $photos[$index] = $photo;
         }
         $userId = $request->user()->id;
         $stored = [];
         try {
-            Trading::run(function () use ($request, $files, $parts, $photos, $statusReport, $userId, &$stored) {
+            Trading::run(function () use ($request, $files, $parts, $photos, $statusReport, $userId, $resultIds, &$stored) {
                 $job = $this->lockJob($request->input('job_id'));
                 abort_if($job->state !== 'awaiting_report', 409, 'This car is not waiting for a status report.');
                 abort_if($job->mechanic_id && $job->mechanic_id !== $userId, 403, 'Only the assigned Mechanic can report on this car.');
+                foreach ($resultIds as $resultId) {
+                    abort_unless(DB::table('inspection_checklist_results')->where('id', $resultId)->exists(), 422, 'Add a valid part.');
+                }
                 $total = (int) array_sum(array_map(fn ($p) => Money::cents($p['estimated_cost']), $parts));
                 $summary = implode(', ', array_map(fn ($p) => trim($p['part_name']).' ('.trim($p['replacement_brand']).')', $parts));
-                foreach ($photos as $photo) {
-                    $stored[] = $files->store($photo, 'reconditioning-receipts', "parts/{$job->id}")['path'];
+                // One photo per part row; a reused inspection photo is copied into the reconditioning bucket.
+                $paths = [];
+                foreach (array_values($parts) as $i => $part) {
+                    if ($photos[$i] instanceof \Illuminate\Http\UploadedFile) {
+                        $paths[$i] = $stored[] = $files->store($photos[$i], 'reconditioning-receipts', "parts/{$job->id}")['path'];
+                        continue;
+                    }
+                    $source = $this->inspectionPhoto((string) $part['result_id']);
+                    abort_unless($source, 422, 'Add a photo of every part.');
+                    $paths[$i] = "parts/{$job->id}/".Str::uuid().'.'.strtolower(pathinfo($source, PATHINFO_EXTENSION));
+                    $files->disk('reconditioning-receipts')->copy('transaction-documents/'.$source, 'reconditioning-receipts/'.$paths[$i]);
+                    $stored[] = $paths[$i];
                 }
                 DB::table('reconditioning_parts')->where('job_id', $job->id)->delete();
                 foreach (array_values($parts) as $i => $part) {
                     DB::table('reconditioning_parts')->insert([
                         'id' => (string) Str::uuid(), 'job_id' => $job->id, 'part_name' => trim($part['part_name']), 'replacement_brand' => trim($part['replacement_brand']),
-                        'estimated_cost_cents' => Money::cents($part['estimated_cost']), 'photo_path' => $stored[$i], 'created_at' => now(), 'updated_at' => now(),
+                        'estimated_cost_cents' => Money::cents($part['estimated_cost']), 'photo_path' => $paths[$i], 'created_at' => now(), 'updated_at' => now(),
                     ]);
                 }
                 $requestId = (string) Str::uuid();
@@ -146,7 +192,7 @@ class ReconditioningController extends Controller
         return response()->json(['success' => true]);
     }
 
-    /** completeReconditioning (§6 steps 34–36): the final report; leftover funds become a refund due. */
+    /** completeReconditioning (§6 steps 34–36, SH-1): the final report; leftover funds become a refund due. */
     public function complete(Request $request): JsonResponse
     {
         abort_unless($request->user()->hasRole('mechanic'), 403, 'Not authorized for this reconditioning step.');
@@ -167,25 +213,15 @@ class ReconditioningController extends Controller
             DB::table('reconditioning_jobs')->where('id', $job->id)->update([
                 'state' => 'completed', 'final_report' => $report, 'actual_cost' => $actual / 100, 'completed_at' => now(), 'refund_due_cents' => $refund,
             ]);
+            // SH-1: the car leaves "Repairing" for every role. It is ready to be repriced, exactly as the no-issue
+            // path leaves a bought car; nothing (no Sales Manager papers step) sits between the two states any more.
+            DB::table('vehicles')->where('id', $job->vehicle_id)->where('listing_state', 'repairing')
+                ->update(['listing_state' => 'awaiting_price_approval', 'updated_at' => now()]);
             if ($refund > 0) {
                 self::notifyRole('head_accountant', 'Reconditioning refund due', 'Repairs cost '.self::peso($actual / 100).'. The Mechanic must return '.self::peso($refund / 100).' of the released funds.',
                     'transactions', $job->transaction_id);
             }
             self::notifyRole('marketing_specialist', 'Reconditioned car ready for repricing', 'Repairs cost '.self::peso($actual / 100).'. Review the reports and propose the revised price.', 'vehicles', $job->vehicle_id);
-        });
-
-        return response()->json(['success' => true]);
-    }
-
-    /** markPapersProcessed (§6 step 33). */
-    public function markPapersProcessed(Request $request): JsonResponse
-    {
-        abort_unless($request->user()->hasRole('sales_manager'), 403, 'Not authorized for this reconditioning step.');
-        $userId = $request->user()->id;
-        Trading::run(function () use ($request, $userId) {
-            $job = $this->lockJob($request->input('job_id'));
-            abort_if((bool) $job->papers_processed_at, 409, 'The papers are already re-processed.');
-            DB::table('reconditioning_jobs')->where('id', $job->id)->update(['papers_processed_at' => now(), 'papers_processed_by' => $userId]);
         });
 
         return response()->json(['success' => true]);

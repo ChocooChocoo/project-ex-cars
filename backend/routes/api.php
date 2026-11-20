@@ -44,6 +44,7 @@ use App\Http\Controllers\Trading\HandoverController;
 use App\Http\Controllers\Trading\PapersReadController;
 use App\Http\Controllers\Trading\ReconditioningController;
 use App\Http\Controllers\Trading\SellFlowController;
+use App\Http\Controllers\Trading\SellPapersController;
 use App\Http\Controllers\Trading\SellIntakeController;
 use App\Http\Controllers\Trading\StaffTradingReadController;
 use App\Http\Controllers\Trading\StaffTransactionController;
@@ -151,7 +152,6 @@ Route::prefix('v1')->group(function () {
             Route::post('trading/sell/prepare-uploads', [SellIntakeController::class, 'prepareUploads'])->middleware('throttle:20,1');
             Route::post('trading/sell', [SellIntakeController::class, 'submit'])->middleware('throttle:10,1');
             Route::post('trading/purchase-documents', [CustomerTradingController::class, 'uploadPurchaseDocument']);
-            Route::delete('trading/purchase-documents/{documentId}', [CustomerTradingController::class, 'removePurchaseDocument']);
             Route::post('trading/buy', [CustomerTradingController::class, 'createBuyTransaction']);
             Route::post('trading/buy-details', [CustomerTradingController::class, 'saveBuyDetails']);
             Route::post('trading/submit-buy-request', [CustomerTradingController::class, 'submitBuyRequest']);
@@ -242,7 +242,6 @@ Route::prefix('v1')->group(function () {
             Route::post('trading/buyer-decline', [StaffTransactionController::class, 'recordBuyerDecline']);
             Route::post('trading/no-show', [StaffTransactionController::class, 'recordNoShow']);
             Route::post('trading/promote', [StaffTransactionController::class, 'promoteQueuedRequest']);
-            Route::post('trading/paperwork', [StaffTransactionController::class, 'recordPaperwork']);
             Route::post('trading/verify-document', [StaffTransactionController::class, 'verifyTransactionDocument']);
             Route::post('trading/walk-in', [StaffTransactionController::class, 'createWalkInTransaction']);
             Route::post('trading/field-cases', [StaffTransactionController::class, 'createFieldCase']);
@@ -256,7 +255,7 @@ Route::prefix('v1')->group(function () {
                 Route::post('trading/cancel-unpaid-delivery', [DeliveryController::class, 'cancelUnpaidDelivery']);
             });
             foreach (['requestPapersRelease', 'approvePapersRelease', 'receivePapers', 'releasePapersToCi', 'handPapersToBuyer', 'saveContract', 'reviewContract',
-                'recordBuyerMet', 'reportSigning', 'recordFaceToFaceSigning', 'recordContractCopy', 'uploadFieldDocument', 'recordFieldSignatures'] as $action) {
+                'recordBuyerMet', 'reportSigning', 'recordFaceToFaceSigning', 'recordContractCopy', 'uploadFieldDocument', 'recordFieldSignatures', 'recordSmSignature'] as $action) {
                 Route::post('trading/handover/'.Str::kebab($action), [HandoverController::class, $action]);
             }
             Route::post('trading/visit-decision', [FinancingVisitController::class, 'recordVisitDecision']);
@@ -286,6 +285,11 @@ Route::prefix('v1')->group(function () {
             Route::post('reconditioning/refund-returned', [ReconditioningController::class, 'markRefundReturned']);
             Route::post('trading/vehicle-recovered', [FinancingVisitController::class, 'recordVehicleRecovered']);
 
+            // SN-3: the Marketing Specialist sends the bought car's OR/CR/Deed photos to the Confidential Informant.
+            Route::post('trading/sell/capture-papers', [SellPapersController::class, 'capture'])->middleware('role:marketing_specialist,ceo');
+            // BC-7: the papers that came with the car, for the people who sell it on.
+            Route::get('transactions/{id}/car-papers', [PapersReadController::class, 'carPapers'])
+                ->middleware('role:sales_manager,ceo,confidential_informant,head_accountant');
             // Sell offers (sell-actions.ts).
             Route::middleware('role:marketing_specialist')->group(function () {
                 foreach (['flagSellSubmission', 'proposePurchaseCeiling', 'recordAgreedPrice', 'createInspectionIssueReport', 'recordSellerResponse'] as $action) {
@@ -311,7 +315,6 @@ Route::prefix('v1')->group(function () {
             Route::post('reconditioning/report', [ReconditioningController::class, 'submitReport']);
             Route::post('reconditioning/start', [ReconditioningController::class, 'start']);
             Route::post('reconditioning/complete', [ReconditioningController::class, 'complete']);
-            Route::post('reconditioning/papers-processed', [ReconditioningController::class, 'markPapersProcessed']);
         });
     });
 });

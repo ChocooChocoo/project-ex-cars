@@ -21,7 +21,7 @@ class HandoverController extends Controller
 
     private const CI_ONLY = 'Only the Confidential Informant handles the vehicle papers.';
 
-    private const PAPERS_LABELS = ['requested' => 'Papers Requested', 'released_to_ci' => 'Papers Released to CI', 'handed_over' => 'Released', 'received' => 'Papers Received', 'returned' => 'Papers Returned to CI'];
+    private const PAPERS_LABELS = ['requested' => 'Papers Requested', 'released_to_ci' => 'Papers Released to CI', 'handed_over' => 'Released', 'received' => 'Papers Received', 'returned' => 'On Hold'];
 
     private const FIELD_DOCUMENT_KINDS = ['orcr', 'official_receipt', 'certificate_of_registration', 'deed_of_sale', 'sale_document', 'other'];
 
@@ -59,6 +59,9 @@ class HandoverController extends Controller
     private function setPapers(object $sale, string $actorId, string $status, ?string $ciId = null): void
     {
         $this->setHandover($sale, $actorId, ['papers_status' => $status, 'papers_updated_at' => now()] + ($ciId ? ['papers_ci_id' => $ciId] : []), self::PAPERS_LABELS[$status]);
+        if ($status === 'handed_over') {
+            Trading::setPapersCustody($sale->id, 'released');
+        }
     }
 
     /** The field case of a meet-up or delivery: [informant, mechanic]. */
@@ -105,7 +108,10 @@ class HandoverController extends Controller
 
         return $this->step($request, function (object $sale, string $actorId) {
             abort_if($sale->field, 422, 'For a meet-up or a delivery, the Confidential Informant releases the papers on the field case.');
-            abort_unless($sale->paymentChecked, 422, 'The Head Accountant must check the payment before the papers are requested.');
+            // BC-4: only the sale that has an upfront payment to verify waits for the Head Accountant. A full payment
+            // at a GCE visit is settled at the office, so its papers may be requested right after the approval.
+            abort_if(BuyRules::needsPaymentCheckBeforePapers($sale->details) && ! $sale->paymentChecked, 422,
+                'The Head Accountant must check the payment before the papers are requested.');
             abort_if($sale->papers && $sale->papers !== 'returned', 409, 'The papers were already requested.');
             $this->setPapers($sale, $actorId, 'requested');
             Trading::notify(['role' => 'confidential_informant'], 'papers_release_requested', 'Vehicle papers requested',
@@ -166,7 +172,7 @@ class HandoverController extends Controller
         abort_unless(in_array($this->role($request), ['sales_manager', 'ceo'], true), 403, 'Only the Sales Manager writes the contract.');
 
         return $this->step($request, function (object $sale, string $actorId) use ($request) {
-            abort_unless(BuyRules::signsInApp($sale->details), 422, 'This contract is signed on paper at the meet-up or on delivery.');
+            abort_unless(BuyRules::signsInApp($sale->details), 422, 'This contract is signed on paper on delivery.');
             abort_unless(in_array($sale->handover->contract_state ?? 'draft', ['draft', 'returned'], true), 409, 'The contract can no longer be changed.');
             $body = trim((string) $request->input('body'));
             abort_if($body === '', 422, 'Write the contract first.');
@@ -317,6 +323,38 @@ class HandoverController extends Controller
             foreach ($uploaded as $path) {
                 $files->delete('transaction-documents', $path);
             }
+            throw $e;
+        }
+
+        return response()->json(['success' => true]);
+    }
+
+    /**
+     * BC-3: the Sales Manager signs a GCE-visit sale for GCE, before the buyer signs it in the app. The signature
+     * is drawn on the Deed of Sale (and the Policy & Warranty on financing) above the Sales Manager's printed name.
+     */
+    public function recordSmSignature(Request $request, FileService $files): JsonResponse
+    {
+        abort_unless(in_array($this->role($request), ['sales_manager', 'ceo'], true), 403, 'Only the Sales Manager signs for GCE at a GCE visit.');
+        $file = $request->file('signature');
+        abort_if(! $file || $file->getSize() === 0, 422, 'Draw your signature.');
+        abort_if($file->getSize() > FileService::MAX_BYTES, 422, 'The signature must be 2 MB or smaller.');
+        abort_if((new \finfo(FILEINFO_MIME_TYPE))->file($file->getRealPath()) !== 'image/png', 422, 'The signature must be a PNG image.');
+        $stored = null;
+        try {
+            Trading::run(function () use ($request, $files, $file, &$stored) {
+                $sale = $this->sale($request->input('transaction_id'));
+                $actorId = $request->user()->id;
+                abort_unless(BuyRules::needsSmSignature($sale->details), 422, 'Only a GCE-visit sale is signed by the Sales Manager.');
+                abort_if(($sale->handover->contract_state ?? null) === 'signed', 409, 'The buyer has already signed the contract.');
+                abort_if(($sale->handover->sm_signature_path ?? null) !== null, 409, 'You have already signed this sale.');
+                $path = "{$sale->id}/signature-sm-".now()->getTimestampMs().'.png';
+                $stored = $files->storeAt($file, 'transaction-documents', $path)['path'];
+                $this->setHandover($sale, $actorId, ['sm_signature_path' => $path, 'sm_signed_by' => $actorId, 'sm_signed_at' => now()],
+                    'Signed for GCE by the Sales Manager');
+            });
+        } catch (\Throwable $e) {
+            $files->delete('transaction-documents', $stored);
             throw $e;
         }
 
