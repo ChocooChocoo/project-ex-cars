@@ -455,7 +455,7 @@ describe("Fund request context (SN-9, SH-3, BH-4)", () => {
 
     expect(screen.getByText("Inspection on site")).toBeInTheDocument();
     expect(screen.getByText("Brake pads")).toBeInTheDocument();
-    expect(screen.getByText("1 part need repair")).toBeInTheDocument();
+    expect(screen.getByText("1 part needs repair")).toBeInTheDocument();
   });
 
   it("shows why a request was rejected", () => {

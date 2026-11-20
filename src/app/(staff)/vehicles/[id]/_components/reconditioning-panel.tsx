@@ -118,6 +118,10 @@ export function ReconditioningPanel({
   const storedParts = job.reconditioning_parts ?? [];
   const fundRequests = job.reconditioning_fund_requests ?? [];
   const released = releasedFundsCents(fundRequests, job.disbursement_requests ?? null);
+  // Every fund request was rejected: the Mechanic reports again instead of waiting for funds that will not come.
+  const fundsRejected =
+    fundRequests.length > 0 &&
+    fundRequests.every((request) => (request.disbursement_requests?.status ?? request.state) === "rejected");
   const estimated = storedParts.length > 0 ? partsTotalCents(storedParts) : Number(job.estimated_cost ?? 0) * 100;
   const refundDue = Number(job.refund_due_cents ?? 0);
   const totalInput = partsTotalCents(parts);
@@ -183,8 +187,8 @@ export function ReconditioningPanel({
           <Badge variant={state === "completed" ? "default" : "secondary"}>{STATE_LABELS[state] ?? state}</Badge>
         </CardTitle>
         <CardDescription>
-          Repossessed car. The Mechanic reports the parts and restores it, then the Marketing Specialist proposes the
-          revised price for the CEO.
+          The Mechanic reports the parts and restores the car, then the Marketing Specialist proposes the revised price
+          for the CEO.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4 text-sm">
@@ -295,7 +299,7 @@ export function ReconditioningPanel({
           </section>
         ) : null}
 
-        {isMechanic && state === "awaiting_report" ? (
+        {isMechanic && (state === "awaiting_report" || (state === "awaiting_funds" && fundsRejected)) ? (
           <section className="flex flex-col gap-3 rounded-md border p-3">
             <Label htmlFor="recon-report">Overall Vehicle Status Report</Label>
             <Textarea
@@ -393,7 +397,7 @@ export function ReconditioningPanel({
           </section>
         ) : null}
 
-        {isMechanic && state === "awaiting_funds" ? (
+        {isMechanic && state === "awaiting_funds" && !fundsRejected ? (
           <Button
             size="sm"
             className="self-start"

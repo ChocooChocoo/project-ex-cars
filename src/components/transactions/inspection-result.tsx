@@ -68,7 +68,7 @@ export function InspectionResult({
           ) : (
             <>
               <Badge variant="destructive">
-                {repairs.length} part{repairs.length === 1 ? "" : "s"} need repair
+                {repairs.length} part{repairs.length === 1 ? " needs" : "s need"} repair
               </Badge>
               {hidden.length > 0 ? <Badge variant="outline">{hidden.length} hidden</Badge> : null}
             </>

@@ -241,6 +241,34 @@ class InspectionChecklistTest extends TestCase
     }
 
     #[Test]
+    public function a_rejected_fund_request_lets_the_mechanic_send_a_new_report(): void
+    {
+        $mechanic = $this->account('mechanic');
+        $ha = $this->account('head_accountant');
+        $vehicle = $this->vehicle(450000, 'repairing');
+        DB::table('reconditioning_jobs')->insert(['id' => $job = (string) Str::uuid(), 'vehicle_id' => $vehicle,
+            'state' => 'awaiting_report', 'mechanic_id' => $mechanic->id, 'created_at' => now()]);
+        $this->act($mechanic)->post('/api/v1/staff/reconditioning/report', ['job_id' => $job, 'status_report' => 'Needs a new head.',
+            'parts' => json_encode([['part_name' => 'Cylinder Head', 'replacement_brand' => 'OEM', 'estimated_cost' => '30000']]),
+            'part_photo_0' => UploadedFile::fake()->image('head.jpg')])->assertOk();
+        $fund = DB::table('reconditioning_jobs')->where('id', $job)->value('disbursement_id');
+
+        // While the request is open, a second report is refused.
+        $this->act($mechanic)->post('/api/v1/staff/reconditioning/report', ['job_id' => $job, 'status_report' => 'Again.',
+            'parts' => json_encode([['part_name' => 'Cylinder Head', 'replacement_brand' => 'OEM', 'estimated_cost' => '30000']]),
+            'part_photo_0' => UploadedFile::fake()->image('head2.jpg')])->assertStatus(409);
+
+        // BH-4: once the Head Accountant rejects it, the Mechanic reports again and a new request is raised.
+        $this->act($ha)->postJson('/api/v1/staff/finance/advance', ['disbursement_id' => $fund, 'event_kind' => 'rejected', 'notes' => 'Get a second quote.'])->assertOk();
+        $this->act($mechanic)->post('/api/v1/staff/reconditioning/report', ['job_id' => $job, 'status_report' => 'Second quote.',
+            'parts' => json_encode([['part_name' => 'Cylinder Head', 'replacement_brand' => 'Aftermarket', 'estimated_cost' => '24000']]),
+            'part_photo_0' => UploadedFile::fake()->image('head3.jpg')])->assertOk();
+        $this->assertSame(2, DB::table('disbursement_requests')->where('title', 'Reconditioning fund')->count());
+        $this->assertSame(2400000, (int) DB::table('reconditioning_parts')->where('job_id', $job)->value('estimated_cost_cents'));
+        $this->assertNotSame($fund, DB::table('reconditioning_jobs')->where('id', $job)->value('disbursement_id'));
+    }
+
+    #[Test]
     public function a_rejected_reprice_returns_the_car_to_awaiting_price_approval(): void
     {
         $ms = $this->account('marketing_specialist');

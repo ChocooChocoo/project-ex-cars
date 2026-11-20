@@ -38,6 +38,33 @@ describe("ReconditioningPanel rejection reason (BH-4)", () => {
     expect(screen.getByText("Rejected: Attach the supplier quotation first")).toBeInTheDocument();
   });
 
+  it("lets the Mechanic send a new report instead of waiting for funds that will not come", () => {
+    render(<ReconditioningPanel job={job} userRole="mechanic" />);
+    expect(screen.getByRole("button", { name: "Submit report and request funds" })).toBeInTheDocument();
+    expect(screen.queryByText("Waiting for the Head Accountant to release funds")).not.toBeInTheDocument();
+  });
+
+  it("keeps waiting while a fund request is still open", () => {
+    render(
+      <ReconditioningPanel
+        job={{
+          ...job,
+          reconditioning_fund_requests: [
+            { ...job.reconditioning_fund_requests[0], disbursement_requests: { status: "submitted" } },
+          ],
+        }}
+        userRole="mechanic"
+      />,
+    );
+    expect(screen.getByText("Waiting for the Head Accountant to release funds")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Submit report and request funds" })).not.toBeInTheDocument();
+  });
+
+  it("says nothing about repossession for a bought car", () => {
+    render(<ReconditioningPanel job={job} userRole="mechanic" />);
+    expect(screen.queryByText(/Repossessed car/)).not.toBeInTheDocument();
+  });
+
   it("shows no rejection line when the request was not rejected", () => {
     render(
       <ReconditioningPanel

@@ -43,6 +43,15 @@ class ReconditioningController extends Controller
         return (int) $requests->sum(fn ($r) => in_array($r->status ?? $r->state, self::FUNDED, true) ? max(0, (int) round((float) $r->amount_cents)) : 0);
     }
 
+    /** True when the report was sent, a fund request exists, and the Head Accountant rejected every one of them. */
+    private static function allFundRequestsRejected(object $job): bool
+    {
+        $statuses = DB::table('reconditioning_fund_requests as f')->leftJoin('disbursement_requests as d', 'd.id', '=', 'f.disbursement_id')
+            ->where('f.job_id', $job->id)->get(['f.state', 'd.status'])->map(fn ($r) => $r->status ?? $r->state);
+
+        return $statuses->isNotEmpty() && $statuses->every(fn ($s) => $s === 'rejected');
+    }
+
     private static function notifyRole(string $role, string $title, string $body, ?string $table, ?string $id): void
     {
         if ($id) {
@@ -122,7 +131,9 @@ class ReconditioningController extends Controller
         try {
             Trading::run(function () use ($request, $files, $parts, $photos, $statusReport, $userId, $resultIds, &$stored) {
                 $job = $this->lockJob($request->input('job_id'));
-                abort_if($job->state !== 'awaiting_report', 409, 'This car is not waiting for a status report.');
+                // A rejected fund request is a dead end otherwise: the Mechanic sends a new report and a new request.
+                abort_unless($job->state === 'awaiting_report' || ($job->state === 'awaiting_funds' && self::allFundRequestsRejected($job)), 409,
+                    'This car is not waiting for a status report.');
                 abort_if($job->mechanic_id && $job->mechanic_id !== $userId, 403, 'Only the assigned Mechanic can report on this car.');
                 foreach ($resultIds as $resultId) {
                     abort_unless(DB::table('inspection_checklist_results')->where('id', $resultId)->exists(), 422, 'Add a valid part.');
