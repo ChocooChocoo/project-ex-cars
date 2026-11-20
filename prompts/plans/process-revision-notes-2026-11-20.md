@@ -388,23 +388,30 @@ Done when
 
 ## Phase 7 — Buying guide and regression checks
 
-Status: 🔲 Not Started
+Status: 🟡 In Progress (browser walk pending)
 
 Goal: finish the buying guide wording and re-test the items the notes mention again.
 
 Tasks
-- [ ] Line 110 (decision 7): steps 1–4 in `src/lib/transactions/buying-requirements.ts` state the payslip rule.
-- [ ] Line 146: confirm `PaymentRules::downPayment` uses the vehicle's total price (`final_price`), not the price
+- [x] Line 110 (decision 7): steps 1–4 in `src/lib/transactions/buying-requirements.ts` state the payslip rule.
+- [x] Line 146: confirm `PaymentRules::downPayment` uses the vehicle's total price (`final_price`), not the price
   after discounts or fees; add a test for ₱500,000 → ₱50,000.
 - [ ] Regression walk with Playwright MCP for the Done items the notes repeat: no Google Maps links (`grep -ri
   "google.com/maps" src backend/app` empty), Mechanic status options, overall vehicle status field in
   reconditioning (line 238), and the full no-issue selling flow (line 242).
 
+Implementation notes
+- The payslip rule is in Step 3 of `src/app/(customer)/buying-requirements/page.tsx` (the steps live there, not in
+  `buying-requirements.ts`).
+- `PaymentRulesTest::financing_amounts_match_the_loan_calculator` already asserts ₱500,000 → ₱50,000, and every
+  caller passes `final_price`. No change needed.
+- `grep -ri "google.com/maps" src backend/app` is empty.
+
 Dependencies: Phases 4–6.
 
 Done when
-- [ ] Buying guide states the payslip rule.
-- [ ] Downpayment test passes.
+- [x] Buying guide states the payslip rule.
+- [x] Downpayment test passes.
 - [ ] No-issue selling flow completes end to end with no change in behaviour.
 
 ← Previous: Phase 6

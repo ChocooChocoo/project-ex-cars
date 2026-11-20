@@ -25,7 +25,7 @@ const STEPS = [
     step: "Step 3",
     title: "View the car and agree on payment",
     details:
-      "Browse the showroom and agree on the price. Pay in cash, by bank transfer through PayMongo, or through In-House Financing (the Showroom price plus GCE's financing charge, over 6 to 60 months). Bring your latest payslip; GCE checks it during the financing review.",
+      "Browse the showroom and agree on the price. Pay in cash, by bank transfer through PayMongo, or through In-House Financing (the Showroom price plus GCE's financing charge, over 6 to 60 months). A payslip is needed only for In-House Financing: bring your latest one and GCE checks it during the financing review. Cash and bank transfer buyers do not need one.",
   },
   {
     step: "Step 4",

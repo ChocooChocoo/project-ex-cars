@@ -25,7 +25,9 @@ describe("SN-15: the buying guide states what to bring", () => {
     render(<BuyingRequirementsPage />);
 
     expect(
-      screen.getByText(/Bring your latest payslip; GCE checks it during the financing review\./),
+      screen.getByText(
+        /A payslip is needed only for In-House Financing.*Cash and bank transfer buyers do not need one\./,
+      ),
     ).toBeInTheDocument();
   });
 
