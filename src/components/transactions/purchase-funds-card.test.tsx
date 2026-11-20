@@ -55,3 +55,11 @@ describe("PurchaseFundsCard excess return choice (notes lines 209-213)", () => {
     expect(screen.getByLabelText("Cash returned (₱)")).toBeInTheDocument();
   });
 });
+
+describe("PurchaseFundsCard before the seller is paid", () => {
+  it("offers no excess return while the funds are only released", () => {
+    render(<PurchaseFundsCard {...base} fund={{ id: "d1", status: "released", amount_cents: 45_500_000 }} />);
+    expect(screen.queryByRole("button", { name: "Record Excess Return" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Excess to return")).not.toBeInTheDocument();
+  });
+});

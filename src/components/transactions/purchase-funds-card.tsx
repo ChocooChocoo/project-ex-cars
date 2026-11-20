@@ -137,7 +137,7 @@ export function PurchaseFundsCard({
                 <Badge variant="outline">{STATUS_LABELS[String(fund.status)] ?? String(fund.status)}</Badge>
               </dd>
             </div>
-            {released ? (
+            {fund.status === "paid" ? (
               <div>
                 <dt className="text-muted-foreground text-xs">Excess to return</dt>
                 <dd>{excess > 0 ? formatCurrency(excess) : "No excess"}</dd>
@@ -216,7 +216,7 @@ export function PurchaseFundsCard({
           )
         ) : null}
         {/* BH-3 / SN-2 / SH-11 and notes lines 209-213: the requester says whether anything is left. */}
-        {isRequester && fund && released && !fund.returned_at ? (
+        {isRequester && fund?.status === "paid" && !fund.returned_at ? (
           <ExcessReturnChoice
             idPrefix="funds-return"
             excess={excess}

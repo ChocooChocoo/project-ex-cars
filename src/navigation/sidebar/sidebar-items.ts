@@ -143,6 +143,12 @@ export const sidebarItems: NavGroup[] = [
     label: "Operations",
     items: [
       {
+        id: "supplier-vehicles",
+        title: "Supplier Vehicles",
+        url: "/supplier-vehicles",
+        icon: Forklift,
+      },
+      {
         id: "vehicles",
         title: "Vehicles",
         url: "/vehicles",
@@ -255,12 +261,6 @@ export const sidebarItems: NavGroup[] = [
         title: "Vehicle Papers",
         url: "/vehicle-papers",
         icon: ScrollText,
-      },
-      {
-        id: "supplier-vehicles",
-        title: "Supplier Vehicles",
-        url: "/supplier-vehicles",
-        icon: Forklift,
       },
       {
         id: "security-duty-checks",
