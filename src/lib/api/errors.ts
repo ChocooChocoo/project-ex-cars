@@ -32,6 +32,8 @@ export const API_UNAVAILABLE_MESSAGE = "The service is not reachable right now. 
 export function toActionFailure(error: unknown): ActionFailure {
   if (error instanceof ApiError) {
     if (error.isOutage) return { ok: false, code: "api_unavailable", message: API_UNAVAILABLE_MESSAGE };
+    if (error.status === 429 && error.message === "Too Many Attempts.")
+      return { ok: false, code: error.code, message: "Too many requests. Wait a minute and submit again." };
     return { ok: false, code: error.code, message: error.message, fieldErrors: error.fieldErrors };
   }
   return { ok: false, code: "api_unavailable", message: API_UNAVAILABLE_MESSAGE };

@@ -28,21 +28,22 @@ class SellPapersTest extends TestCase
     }
 
     /** The upload grants and stored files a sell offer sends: its photos and the four ID images. */
-    private function preparedUploads($customer): array
+    private function preparedUploads($customer, int $photos = 1, int $issuePhotos = 0): array
     {
-        $files = [['kind' => 'sell_photo', 'key' => 'photo_paths[]']];
+        $files = array_fill(0, $photos, ['kind' => 'sell_photo', 'key' => 'photo_paths[]']);
         foreach ([1, 2] as $n) {
             foreach (['front', 'back'] as $side) {
                 $files[] = ['kind' => 'valid_id', 'key' => "id_{$side}_path_{$n}"];
             }
         }
+        $files = array_merge($files, array_fill(0, $issuePhotos, ['kind' => 'issue_photo', 'key' => 'issue_photo_paths[]']));
         $prepared = $this->act($customer)->postJson('/api/v1/trading/sell/prepare-uploads', [
             'files' => array_map(fn ($f) => ['kind' => $f['kind'], 'type' => 'image/jpeg', 'size' => 1000], $files),
         ])->assertOk()->json();
         $form = [];
         foreach ($files as $i => $file) {
             $grant = $prepared['uploads'][$i];
-            $this->again()->post('/api/v1/trading/uploads', ['path' => $grant['path'], 'token' => $grant['token'], 'file' => UploadedFile::fake()->image('a.jpg')])->assertOk();
+            $this->post('/api/v1/trading/uploads', ['path' => $grant['path'], 'token' => $grant['token'], 'file' => UploadedFile::fake()->image('a.jpg')])->assertOk();
             if (str_ends_with($file['key'], '[]')) {
                 $form[substr($file['key'], 0, -2)][] = $grant['path'];
             } else {
@@ -64,12 +65,26 @@ class SellPapersTest extends TestCase
     }
 
     #[Test]
+    public function a_full_offer_submits_after_all_its_uploads_in_the_same_minute(): void
+    {
+        $this->freezeTime();
+        [$transactionId, $uploads] = $this->preparedUploads($this->customer(), photos: 6, issuePhotos: 6);
+        $form = $this->offerForm($transactionId, $uploads);
+        $form['has_known_issues'] = 'yes';
+        $form['declared_issues'] = 'Minor dent on rear bumper.';
+
+        $this->postJson('/api/v1/trading/sell', $form)->assertCreated()->assertJsonPath('id', $transactionId)
+            ->assertHeader('X-RateLimit-Remaining', '9');
+        $this->assertSame(16, DB::table('transaction_documents')->where('transaction_id', $transactionId)->count());
+    }
+
+    #[Test]
     public function a_new_offer_is_submitted_with_the_checklist_and_no_paper_files(): void
     {
         $seller = $this->customer();
         [$transactionId, $uploads] = $this->preparedUploads($seller);
 
-        $id = $this->again()->postJson('/api/v1/trading/sell', $this->offerForm($transactionId, $uploads))->assertOk()->json('id');
+        $id = $this->again()->postJson('/api/v1/trading/sell', $this->offerForm($transactionId, $uploads))->assertCreated()->json('id');
 
         // The answers are stored on sell_details, keyed by document kind.
         $checklist = json_decode(DB::table('sell_details')->where('transaction_id', $id)->value('papers_checklist'), true);
@@ -107,7 +122,7 @@ class SellPapersTest extends TestCase
         $this->again()->postJson('/api/v1/trading/sell', $body)->assertStatus(422)->assertJson(['message' => 'Confirm that you will bring the signed copies of your valid IDs.']);
         // Notes line 115: an expired deed of sale is accepted.
         $form['papers_checklist']['deed_of_sale'] = 'expired';
-        $this->again()->postJson('/api/v1/trading/sell', $form)->assertOk();
+        $this->again()->postJson('/api/v1/trading/sell', $form)->assertCreated();
     }
 
     #[Test]
@@ -133,7 +148,7 @@ class SellPapersTest extends TestCase
     {
         $seller = $this->customer();
         [$transactionId, $uploads] = $this->preparedUploads($seller);
-        $id = $this->again()->postJson('/api/v1/trading/sell', $this->offerForm($transactionId, $uploads))->assertOk()->json('id');
+        $id = $this->again()->postJson('/api/v1/trading/sell', $this->offerForm($transactionId, $uploads))->assertCreated()->json('id');
         // The Marketing Specialist asked for a new front of ID #1.
         DB::table('transaction_documents')->where('transaction_id', $id)
             ->where('document_kind', 'valid_id')->where('id_type', 'passport')->where('id_side', 'front')
@@ -158,7 +173,7 @@ class SellPapersTest extends TestCase
     {
         $seller = $this->customer();
         [$transactionId, $uploads] = $this->preparedUploads($seller);
-        $id = $this->again()->postJson('/api/v1/trading/sell', $this->offerForm($transactionId, $uploads))->assertOk()->json('id');
+        $id = $this->again()->postJson('/api/v1/trading/sell', $this->offerForm($transactionId, $uploads))->assertCreated()->json('id');
 
         $path = "{$id}/valid_id-".Str::random(8).'.jpg';
         $this->again()->post('/api/v1/trading/uploads', ['path' => $path, 'file' => UploadedFile::fake()->image('id.jpg')])->assertOk();
@@ -186,7 +201,7 @@ class SellPapersTest extends TestCase
         // SN-11: the OR/CR/Deed are inspected on site, so verified IDs open the gate on their own.
         $seller = $this->customer();
         [$transactionId, $uploads] = $this->preparedUploads($seller);
-        $id = $this->again()->postJson('/api/v1/trading/sell', $this->offerForm($transactionId, $uploads))->assertOk()->json('id');
+        $id = $this->again()->postJson('/api/v1/trading/sell', $this->offerForm($transactionId, $uploads))->assertCreated()->json('id');
         $this->assertSame(0, DB::table('transaction_documents')->where('transaction_id', $id)->whereIn('document_kind', ['official_receipt', 'certificate_of_registration', 'deed_of_sale', 'orcr'])->count());
 
         DB::table('transaction_documents')->where('transaction_id', $id)->where('document_kind', 'valid_id')->update(['verification_state' => 'verified']);

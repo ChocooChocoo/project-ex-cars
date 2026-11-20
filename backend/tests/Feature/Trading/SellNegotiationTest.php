@@ -54,7 +54,7 @@ class SellNegotiationTest extends TestCase
             }
         }
 
-        return $this->again()->postJson('/api/v1/trading/sell', $form)->assertOk()->json('id');
+        return $this->again()->postJson('/api/v1/trading/sell', $form)->assertCreated()->json('id');
     }
 
     /** SH-7: a published system → part checklist so the Mechanic can report the inspection (created once). */

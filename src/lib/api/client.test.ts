@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { apiAction } from "./action";
 import { browserApi } from "./client";
 
 function setCookie(value: string) {
@@ -13,6 +14,29 @@ afterEach(() => {
 });
 
 describe("browserApi", () => {
+  it("tells users how to retry a rate-limited action", async () => {
+    setCookie("XSRF-TOKEN=fresh; path=/");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ message: "Too Many Attempts." }), { status: 429 })),
+    );
+
+    await expect(apiAction("/trading/sell", {})).resolves.toEqual({
+      error: "Too many requests. Wait a minute and submit again.",
+    });
+  });
+
+  it("preserves a rate limiter's custom instructions", async () => {
+    setCookie("XSRF-TOKEN=fresh; path=/");
+    const message = "Too many emails sent. Please wait a few minutes and try again.";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ code: "rate_limited", message }), { status: 429 })),
+    );
+
+    await expect(apiAction("/auth/email/resend", {})).resolves.toEqual({ error: message });
+  });
+
   it("refreshes a stale CSRF token once and retries the write", async () => {
     setCookie("XSRF-TOKEN=stale; path=/");
     const fetchMock = vi

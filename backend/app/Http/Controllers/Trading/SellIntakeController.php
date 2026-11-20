@@ -253,6 +253,6 @@ class SellIntakeController extends Controller
             Trading::history($transactionId, 'pending', 'pending', $userId, 'Sell transaction created');
         });
 
-        return response()->json(['success' => true, 'id' => $transactionId]);
+        return response()->json(['success' => true, 'id' => $transactionId], 201);
     }
 }

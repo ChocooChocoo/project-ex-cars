@@ -57,7 +57,7 @@ class TransitionTest extends TestCase
                 $form[$file['key']] = $grant['path'];
             }
         }
-        $id = $this->again()->postJson('/api/v1/trading/sell', $form)->assertOk()->json('id');
+        $id = $this->again()->postJson('/api/v1/trading/sell', $form)->assertCreated()->json('id');
         $this->assertSame('pending', DB::table('transactions')->where('id', $id)->value('current_state'));
 
         return $id;
@@ -225,14 +225,23 @@ class TransitionTest extends TestCase
 
         $slot = $this->slot();
         $this->act($buyer)->postJson('/api/v1/trading/buy-details', ['transaction_id' => $id, 'payment_method' => 'cash', 'arrangement_kind' => 'gce_visit', 'schedule' => $slot->toIso8601String()])->assertOk();
+        $this->again()->postJson('/api/v1/trading/submit-buy-request', ['transaction_id' => $id])->assertUnprocessable()
+            ->assertJsonPath('message', 'Upload your latest payslip before submitting.');
+        $payslip = "{$id}/payslip-".Str::random(8).'.jpg';
+        $this->again()->post('/api/v1/trading/uploads', ['path' => $payslip, 'file' => UploadedFile::fake()->image('payslip.jpg')])->assertOk();
+        $this->again()->postJson('/api/v1/trading/purchase-documents', ['transaction_id' => $id, 'document_kind' => 'payslip', 'storage_path' => $payslip])->assertOk();
         $this->again()->postJson('/api/v1/trading/submit-buy-request', ['transaction_id' => $id])->assertOk()->assertJson(['success' => true, 'queueState' => null]);
         $this->again()->postJson('/api/v1/trading/submit-buy-request', ['transaction_id' => $id])->assertStatus(409);
         $this->assertSame('under_review', DB::table('transactions')->where('id', $id)->value('current_state'));
 
         $this->act($sm)->postJson('/api/v1/staff/trading/transition', ['id' => $id, 'to_state' => 'approved'])->assertStatus(422);
-        foreach (DB::table('transaction_documents')->where('transaction_id', $id)->pluck('id') as $doc) {
+        foreach (DB::table('transaction_documents')->where('transaction_id', $id)->where('document_kind', '!=', 'payslip')->pluck('id') as $doc) {
             $this->again()->postJson('/api/v1/staff/trading/verify-document', ['document_id' => $doc, 'decision' => 'verified'])->assertOk();
         }
+        $this->again()->postJson('/api/v1/staff/trading/transition', ['id' => $id, 'to_state' => 'approved'])->assertUnprocessable();
+        $this->again()->getJson("/api/v1/staff/transactions/{$id}")->assertJsonPath('verifiedPrerequisites', false);
+        $documentId = DB::table('transaction_documents')->where('transaction_id', $id)->where('document_kind', 'payslip')->value('id');
+        $this->again()->postJson('/api/v1/staff/trading/verify-document', ['document_id' => $documentId, 'decision' => 'verified'])->assertOk();
         $this->assertSame('verified', DB::table('purchase_details')->where('transaction_id', $id)->value('document_check_state'));
         $this->act($this->account('marketing_specialist'))->postJson('/api/v1/staff/trading/transition', ['id' => $id, 'to_state' => 'approved'])->assertForbidden();
         $this->act($this->account('account_manager'))->postJson('/api/v1/staff/trading/transition', ['id' => $id, 'to_state' => 'approved'])->assertForbidden();

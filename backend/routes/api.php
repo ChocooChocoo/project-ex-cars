@@ -62,21 +62,21 @@ Route::prefix('v1')->group(function () {
         Route::post('register-supplier', [SupplierController::class, 'register'])->middleware('throttle:auth-email');
         Route::post('email/resend', [RegistrationController::class, 'resend'])->middleware('throttle:auth-email');
         Route::get('email/verify/{id}/{hash}', [RegistrationController::class, 'verify'])
-            ->middleware(['signed:relative', 'throttle:6,1'])->name('verification.verify');
+            ->middleware(['signed:relative', 'throttle:6,1,email-verify'])->name('verification.verify');
         Route::get('email/change/{id}', [RegistrationController::class, 'confirmEmailChange'])
-            ->middleware(['signed:relative', 'throttle:6,1'])->name('email.change.confirm');
+            ->middleware(['signed:relative', 'throttle:6,1,email-change-confirm'])->name('email.change.confirm');
         Route::post('password/forgot', [PasswordResetController::class, 'sendLink'])->middleware('throttle:auth-email');
         Route::post('password/reset', [PasswordResetController::class, 'reset'])->middleware('throttle:login');
     });
 
     // Public reads (landing page) and signed private-file links: the signature is the credential.
-    Route::get('catalogue/landing', [ShowroomController::class, 'landing'])->middleware('throttle:60,1');
+    Route::get('catalogue/landing', [ShowroomController::class, 'landing'])->middleware('throttle:60,1,catalogue-landing');
     Route::get('files/{bucket}/{path}', [FileController::class, 'show'])->where('path', '.*')
         ->middleware('signed:relative')->name('files.show');
-    Route::get('thumbnail', [ThumbnailController::class, 'show'])->middleware('throttle:120,1');
+    Route::get('thumbnail', [ThumbnailController::class, 'show'])->middleware('throttle:120,1,thumbnail');
 
     // PayMongo's webhook (Phase 6): no session; the HMAC signature over the raw body is the credential.
-    Route::post('paymongo/webhook', PayMongoWebhookController::class)->middleware('throttle:120,1');
+    Route::post('paymongo/webhook', PayMongoWebhookController::class)->middleware('throttle:120,1,paymongo-webhook');
 
     Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::get('me', [MeController::class, 'show']);
@@ -84,7 +84,7 @@ Route::prefix('v1')->group(function () {
         Route::put('me/password', [MeController::class, 'updatePassword'])->middleware('throttle:login');
         Route::post('me/email', [MeController::class, 'requestEmailChange'])->middleware(['role:customer', 'throttle:auth-email']);
         Route::post('me/tutorial', [MeController::class, 'completeTutorial']);
-        Route::post('me/avatar', [MeController::class, 'updateAvatar'])->middleware('throttle:20,1');
+        Route::post('me/avatar', [MeController::class, 'updateAvatar'])->middleware('throttle:20,1,avatar');
         Route::delete('me/avatar', [MeController::class, 'removeAvatar']);
 
         // Catalogue (Phase 4).
@@ -93,7 +93,7 @@ Route::prefix('v1')->group(function () {
         Route::get('favourites', [FavouriteController::class, 'index']);
         Route::post('favourites/{vehicleId}', [FavouriteController::class, 'toggle']);
         Route::get('recommendations', [RecommendationController::class, 'index']);
-        Route::post('recommendations', [RecommendationController::class, 'store'])->middleware('throttle:20,1');
+        Route::post('recommendations', [RecommendationController::class, 'store'])->middleware('throttle:20,1,recommendations');
         Route::get('recommendations/{runId}', [RecommendationController::class, 'show']);
         Route::post('recommendations/{runId}/feedback', [RecommendationController::class, 'feedback']);
 
@@ -102,9 +102,9 @@ Route::prefix('v1')->group(function () {
         Route::get('inquiries/unread-count', [InquiryController::class, 'unreadTotal']);
         Route::get('inquiries/{id}', [InquiryController::class, 'show']);
         Route::get('inquiries/{id}/messages', [InquiryController::class, 'messages'])->middleware('throttle:polling');
-        Route::post('inquiries/{id}/messages', [InquiryController::class, 'storeMessage'])->middleware('throttle:30,1');
+        Route::post('inquiries/{id}/messages', [InquiryController::class, 'storeMessage'])->middleware('throttle:30,1,inquiry-messages');
         Route::post('inquiries/{id}/read', [InquiryController::class, 'markRead']);
-        Route::post('inquiries/{id}/reports', [InquiryController::class, 'report'])->middleware('throttle:10,1');
+        Route::post('inquiries/{id}/reports', [InquiryController::class, 'report'])->middleware('throttle:10,1,inquiry-reports');
         Route::get('staff/message-reports', [InquiryController::class, 'reports'])->middleware('role:ceo,account_manager');
         Route::get('notifications', [NotificationController::class, 'index'])->middleware('throttle:polling');
         Route::get('notifications/count', [NotificationController::class, 'count']);
@@ -136,7 +136,7 @@ Route::prefix('v1')->group(function () {
         Route::post('admin/suppliers/decide', [SupplierController::class, 'decide'])->middleware('role:account_manager,ceo');
         Route::middleware('role:supplier')->prefix('supplier')->group(function () {
             Route::get('dashboard', [SupplierController::class, 'dashboard']);
-            Route::post('posts', [SupplierController::class, 'storePost'])->middleware('throttle:20,1');
+            Route::post('posts', [SupplierController::class, 'storePost'])->middleware('throttle:20,1,supplier-posts');
             Route::post('posts/{id}', [SupplierController::class, 'updatePost']);
             Route::post('posts/{id}/withdraw', [SupplierController::class, 'withdrawPost']);
         });
@@ -167,9 +167,9 @@ Route::prefix('v1')->group(function () {
             Route::get('my-transactions', [CustomerTradingReadController::class, 'index']);
             Route::get('my-transactions/{id}', [CustomerTradingReadController::class, 'show']);
             Route::get('sell/checklist', [CustomerTradingReadController::class, 'checklist']);
-            Route::post('trading/uploads', [CustomerTradingController::class, 'upload'])->middleware('throttle:60,1');
-            Route::post('trading/sell/prepare-uploads', [SellIntakeController::class, 'prepareUploads'])->middleware('throttle:20,1');
-            Route::post('trading/sell', [SellIntakeController::class, 'submit'])->middleware('throttle:10,1');
+            Route::post('trading/uploads', [CustomerTradingController::class, 'upload'])->middleware('throttle:120,1,uploads');
+            Route::post('trading/sell/prepare-uploads', [SellIntakeController::class, 'prepareUploads'])->middleware('throttle:20,1,sell-prepare');
+            Route::post('trading/sell', [SellIntakeController::class, 'submit'])->middleware('throttle:10,1,sell-submit');
             Route::post('trading/purchase-documents', [CustomerTradingController::class, 'uploadPurchaseDocument']);
             Route::post('trading/buy', [CustomerTradingController::class, 'createBuyTransaction']);
             Route::post('trading/buy-details', [CustomerTradingController::class, 'saveBuyDetails']);
@@ -180,8 +180,8 @@ Route::prefix('v1')->group(function () {
             Route::post('trading/cancel', [CustomerTradingController::class, 'cancelTransaction']);
             Route::post('trading/review', [CustomerTradingController::class, 'submitReview']);
             // Payments (Phase 6).
-            Route::post('payments/checkout', [CheckoutController::class, 'startOnline'])->middleware('throttle:20,1');
-            Route::post('payments/installment-checkout', [CheckoutController::class, 'startInstallment'])->middleware('throttle:20,1');
+            Route::post('payments/checkout', [CheckoutController::class, 'startOnline'])->middleware('throttle:20,1,checkout');
+            Route::post('payments/installment-checkout', [CheckoutController::class, 'startInstallment'])->middleware('throttle:20,1,installment-checkout');
             Route::post('inquiries', [InquiryWorkflowController::class, 'create']);
         });
         Route::get('field-cases/{id}/location', [FieldCaseActionController::class, 'location'])->middleware('throttle:polling');
@@ -200,11 +200,11 @@ Route::prefix('v1')->group(function () {
             // Staff operations (Phase 7). Each service re-checks the role rule of the Postgres function it replaces.
             Route::get('attendance', [AttendanceController::class, 'index']);
             Route::get('attendance/state', [AttendanceController::class, 'state']);
-            Route::post('attendance/clock-in', [AttendanceController::class, 'clockIn'])->middleware('throttle:20,1');
-            Route::post('attendance/clock-out', [AttendanceController::class, 'clockOut'])->middleware('throttle:20,1');
+            Route::post('attendance/clock-in', [AttendanceController::class, 'clockIn'])->middleware('throttle:20,1,clock-in');
+            Route::post('attendance/clock-out', [AttendanceController::class, 'clockOut'])->middleware('throttle:20,1,clock-out');
             Route::post('attendance/review', [AttendanceController::class, 'review'])->middleware('role:ceo,account_manager,head_accountant');
             Route::get('employee-requests', [EmployeeRequestController::class, 'index']);
-            Route::post('employee-requests', [EmployeeRequestController::class, 'submit'])->middleware('throttle:20,1');
+            Route::post('employee-requests', [EmployeeRequestController::class, 'submit'])->middleware('throttle:20,1,employee-requests');
             Route::post('employee-requests/cancel', [EmployeeRequestController::class, 'cancel']);
             Route::post('employee-requests/review', [EmployeeRequestController::class, 'review'])->middleware('role:ceo,account_manager');
             Route::middleware('role:ceo,account_manager,head_accountant')->group(function () {
@@ -233,7 +233,7 @@ Route::prefix('v1')->group(function () {
             Route::get('security-duty-checks', [SecurityDutyController::class, 'index'])->middleware('role:ceo,head_security');
             Route::middleware('role:head_security')->group(function () {
                 Route::post('security-duty-checks', [SecurityDutyController::class, 'start']);
-                Route::post('security-duty-checks/evidence', [SecurityDutyController::class, 'upload'])->middleware('throttle:30,1');
+                Route::post('security-duty-checks/evidence', [SecurityDutyController::class, 'upload'])->middleware('throttle:30,1,security-evidence');
                 Route::post('security-duty-checks/complete', [SecurityDutyController::class, 'complete']);
             });
             Route::middleware('role:ceo,account_manager,sales_manager')->group(function () {
