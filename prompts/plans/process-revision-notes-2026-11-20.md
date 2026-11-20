@@ -235,32 +235,46 @@ Done when
 
 ## Phase 3 — Supplier field acquisition and showroom posting
 
-Status: 🔲 Not Started
+Status: ✅ Done
 
 Goal: an approved supplier vehicle is inspected, paid for, reconditioned if needed and posted to the showroom once.
 
 Tasks
-- [ ] MS assigns a Mechanic and a CI to an `approved` post: creates a `field_cases` row with a new kind
+- [x] MS assigns a Mechanic and a CI to an `approved` post: creates a `field_cases` row with a new kind
   `supplier_acquisition` linked to the post (`assigned`). Reuse `FieldCaseActionController` state handling.
-- [ ] CI field case: supplier name, address and post details; "Request purchase fund" through
+- [x] CI field case: supplier name, address and post details; "Request purchase fund" through
   `FinanceController::requestPurchaseFunds` / `Disbursements` with the proposed price; "Confirm arrival" records
   `arrived_at`.
-- [ ] Mechanic inspection: reuse the per-part checklist from SH-7 (`reportInspection`, `inspection-result.tsx`).
+- [x] Mechanic inspection: reuse the per-part checklist from SH-7 (`reportInspection`, `inspection-result.tsx`).
   No issue → MS sees "Ready for Posting" after the purchase is recorded (decision 2). Hidden issue → MS sees the
   per-part costs and photos with Approve / Decline; Approve notifies the CI, Decline closes the case and returns the
   post to the supplier as `rejected`.
-- [ ] CI "Record supplier paid": one `DB::transaction` that creates the `vehicles` row (stock code, details and
+- [x] CI "Record supplier paid": one `DB::transaction` that creates the `vehicles` row (stock code, details and
   photos copied from the post), marks the post `purchased`, completes the disbursement and increments nothing twice
   (unique `vehicles.supplier_post_id`). Hidden-issue vehicles enter `repairing` and reuse `ReconditioningController`
   with the inspection prefill (SH-4); no-issue vehicles enter `awaiting_price_approval`.
-- [ ] MS posts the vehicle with the existing pricing and posting flow; it appears in `/showroom`.
+- [x] MS posts the vehicle with the existing pricing and posting flow; it appears in `/showroom`.
+
+Implementation notes
+- No new case kind. "Assign" (`SupplierController::assign`) opens a sell transaction in one DB transaction: the
+  supplier is the seller, the CEO-approved market value is the approved purchase ceiling, the agreed price is at most
+  that value, and the acquisition field case carries the CI and the Mechanic. From there the existing sell screens
+  run unchanged: CI purchase fund (Meet Halfway path), Mechanic inspection, the issue report and second negotiation
+  for a hidden issue, Record seller paid, reconditioning or pricing, and posting.
+- The vehicle row is created at assignment (draft), like the customer sell intake, and `supplier_vehicle_posts
+  .transaction_id` is unique, so a retry opens nothing. `Trading::updateTx` keeps the post in step: completed →
+  purchased, cancelled or rejected → rejected.
+- The hidden-issue Approve/Decline is the existing issue report → CEO revised ceiling → second negotiation; the
+  supplier "refusing" cancels the sell and the post becomes rejected.
+- Supplier photos are not copied to the showroom: like a customer's sell photos, the MS adds showroom photos when
+  posting.
 
 Dependencies: Phase 2. Reuses prior Phases 5–8.
 
 Done when
-- [ ] Both paths reach the showroom only after payment, and the hidden-issue path only after reconditioning.
-- [ ] Retrying "Record supplier paid" creates one vehicle and one cash outflow (PHP test).
-- [ ] The supplier's purchased count goes up by one and the post leaves their active list.
+- [x] Both paths reach the showroom only after payment, and the hidden-issue path only after reconditioning.
+- [x] Retrying "Record supplier paid" creates one vehicle and one cash outflow (PHP test).
+- [x] The supplier's purchased count goes up by one and the post leaves their active list.
 
 ← Previous: Phase 2 | Next: Phase 4 →
 

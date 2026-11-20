@@ -9,6 +9,8 @@ use App\Notifications\SupplierAccountCreated;
 use App\Services\AccountService;
 use App\Services\FileService;
 use App\Services\NotificationService;
+use App\Services\Trading\BuyRules;
+use App\Services\Trading\Trading;
 use App\Support\Rules;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Events\Registered;
@@ -262,6 +264,83 @@ class SupplierController extends Controller
         return response()->json(['success' => true]);
     }
 
+    /**
+     * MS, notes lines 70-72: after the CEO's approval, assign a Mechanic and a Confidential Informant. GCE then buys
+     * the car through the sell pipeline: this opens the sell transaction (supplier as seller, the CEO-approved market
+     * value as the ceiling), its draft vehicle and the acquisition field case, in one database transaction.
+     */
+    public function assign(Request $request, string $id): JsonResponse
+    {
+        $data = $request->validate([
+            'informant_id' => ['required', 'uuid'], 'mechanic_id' => ['required', 'uuid'],
+            'schedule' => ['required', 'string'], 'location' => ['required', 'string', 'max:500'],
+            'agreed_price' => ['required', 'numeric', 'gt:0'],
+        ], [
+            'informant_id.*' => 'Choose the Confidential Informant.', 'mechanic_id.*' => 'Choose the Mechanic who inspects the car.',
+            'schedule.*' => 'Set the inspection date and time.', 'location.*' => "Enter the supplier's address.",
+            'agreed_price.*' => 'Enter the agreed price.',
+        ]);
+        $schedule = Trading::parseTime($data['schedule']);
+        abort_unless($schedule && BuyRules::isFutureSchedule($schedule), 422, 'Set a future inspection date and time.');
+        abort_unless(Trading::isWorker($data['informant_id'], 'confidential_informant'), 422, 'The selected user is not an active Confidential Informant.');
+        abort_unless(Trading::isWorker($data['mechanic_id'], 'mechanic'), 422, 'The selected user is not an active mechanic.');
+        $actorId = $request->user()->id;
+
+        $txId = Trading::run(function () use ($id, $data, $schedule, $actorId) {
+            abort_unless(Str::isUuid($id), 404, 'Vehicle post not found.');
+            $post = DB::table('supplier_vehicle_posts')->where('id', $id)->lockForUpdate()->first();
+            abort_unless($post, 404, 'Vehicle post not found.');
+            abort_unless($post->state === 'approved' && $post->transaction_id === null, 409, 'Only a CEO-approved vehicle can be assigned, once.');
+            abort_if((float) $data['agreed_price'] > (float) $post->market_value, 422, 'The agreed price must stay within the approved market value.');
+
+            $vehicleId = (string) Str::uuid();
+            $txId = (string) Str::uuid();
+            $location = trim($data['location']);
+            DB::table('vehicles')->insert([
+                'id' => $vehicleId, 'stock_code' => 'SUP-'.strtoupper(substr($post->make, 0, 3)).'-'.strtoupper(base_convert((string) now()->getTimestampMs(), 10, 36)),
+                'make' => $post->make, 'model' => $post->model, 'year' => $post->year, 'mileage' => $post->mileage,
+                'description' => $post->description, 'listing_state' => 'draft', 'created_at' => now(), 'updated_at' => now(),
+            ]);
+            DB::table('transactions')->insert([
+                'id' => $txId, 'customer_id' => $post->supplier_id, 'transaction_kind' => 'sell', 'vehicle_id' => $vehicleId, 'current_state' => 'approved',
+                'created_by' => $actorId, 'opened_at' => now(), 'created_at' => now(), 'updated_at' => now(),
+            ]);
+            DB::table('sell_details')->insert([
+                'id' => (string) Str::uuid(), 'transaction_id' => $txId, 'offered_amount' => $post->asking_price, 'agreed_price' => $data['agreed_price'],
+                'condition_items' => '[]', 'has_known_issues' => false, 'meetup_method' => 'meet_halfway', 'meetup_address' => $location,
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+            // The CEO already approved the purchase at the market value (notes lines 65-66); it is this sell's ceiling.
+            DB::table('vehicle_price_proposals')->insert([
+                'id' => (string) Str::uuid(), 'vehicle_id' => $vehicleId, 'transaction_id' => $txId, 'proposal_kind' => 'purchase_ceiling',
+                'proposed_amount' => $post->market_value, 'proposer_id' => $post->proposed_by ?? $actorId, 'decision' => 'approved',
+                'decider_id' => $post->decided_by, 'decision_date' => $post->decided_at ?? now(), 'notes' => 'Supplier purchase approved by the CEO', 'created_at' => now(),
+            ]);
+            $caseId = (string) Str::uuid();
+            DB::table('field_cases')->insert([
+                'id' => $caseId, 'transaction_id' => $txId, 'vehicle_id' => $vehicleId, 'case_kind' => 'acquisition',
+                'assigned_confidential_informant' => $data['informant_id'], 'mechanic_id' => $data['mechanic_id'], 'schedule' => $schedule,
+                'location' => $location, 'state' => 'assigned', 'notes' => 'Supplier purchase. Agreed price PHP '.number_format((float) $data['agreed_price'], 2).'.',
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+            // The post's chat follows the purchase, so the sell flow's chat link opens the same thread.
+            DB::table('inquiries')->where('supplier_post_id', $post->id)->update(['transaction_id' => $txId, 'vehicle_id' => $vehicleId, 'updated_at' => now()]);
+            DB::table('supplier_vehicle_posts')->where('id', $post->id)->update(['state' => 'assigned', 'transaction_id' => $txId, 'updated_at' => now()]);
+            Trading::history($txId, 'approved', 'approved', $actorId, 'Supplier purchase opened; acquisition field case created');
+            foreach ([$data['informant_id'], $data['mechanic_id']] as $worker) {
+                Trading::notify(['userId' => $worker], 'field_case_assigned', 'New supplier inspection',
+                    "Inspect a supplier's car on ".Trading::when($schedule)." at {$location}.", $txId);
+            }
+            Trading::notify(['userId' => $post->supplier_id], 'supplier_assigned', 'GCE will inspect your vehicle',
+                "GCE's team will inspect your {$post->year} {$post->make} {$post->model} on ".Trading::when($schedule).'.', $post->id, 'supplier_vehicle_posts');
+            Trading::audit($actorId, 'field_case_created_acquisition', 'field_cases', $caseId, "Acquisition field case created for supplier post {$post->id}");
+
+            return $txId;
+        });
+
+        return response()->json(['success' => true, 'transaction_id' => $txId]);
+    }
+
     /** The supplier's own profile, or 403 while it is pending or rejected. */
     public static function approvedSupplierProfile(User $user): object
     {
@@ -298,7 +377,7 @@ class SupplierController extends Controller
             'asking_price' => (float) $p->asking_price, 'description' => $p->description, 'state' => $p->state,
             'photos' => array_map(fn ($path) => $this->files->signedUrl('supplier-posts', $path), $photos),
             'market_value' => isset($p->market_value) ? (float) $p->market_value : null, 'proposal_reason' => $p->proposal_reason ?? null,
-            'decision_reason' => $p->decision_reason ?? null,
+            'decision_reason' => $p->decision_reason ?? null, 'transaction_id' => $p->transaction_id ?? null,
             'thread_id' => DB::table('inquiries')->where('supplier_post_id', $p->id)->value('id'),
             'created_at' => self::iso($p->created_at), 'updated_at' => self::iso($p->updated_at),
         ];

@@ -21,6 +21,8 @@ import type { GceRole } from "@/lib/auth/roles";
 import { SUPPLIER_POST_STATE_LABELS, type SupplierPost, supplierPostTitle } from "@/lib/suppliers/supplier-posts";
 import { cn, formatCurrency } from "@/lib/utils";
 
+import { SupplierAcquisitionCard } from "./_components/supplier-acquisition-card";
+
 const VIEWER_ROLES: GceRole[] = ["marketing_specialist", "confidential_informant", "ceo"];
 
 // Notes lines 56-72: supplier posts for the Marketing Specialist (review, chat, propose, assign), the CEO
@@ -196,6 +198,8 @@ function SupplierPostPanel({ id, role }: { readonly id: string; readonly role: G
           </CardContent>
         </Card>
       ) : null}
+
+      <SupplierAcquisitionCard post={post} role={role} />
 
       {post.thread_id ? (
         <Card>

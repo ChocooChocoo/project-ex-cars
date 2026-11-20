@@ -126,7 +126,35 @@ final class Trading
             $query->where('current_state', $expectState);
         }
 
-        return $query->update($changes + ['updated_at' => now()]) > 0;
+        $updated = $query->update($changes + ['updated_at' => now()]) > 0;
+        if ($updated && isset($changes['current_state'])) {
+            self::syncSupplierPost($id, $changes['current_state']);
+        }
+
+        return $updated;
+    }
+
+    /**
+     * Notes lines 55 and 93: a supplier's post follows the sell transaction GCE opened for it. A completed purchase
+     * is "purchased" and leaves the supplier's active list; a cancelled or rejected one is "rejected".
+     */
+    private static function syncSupplierPost(string $transactionId, string $state): void
+    {
+        $next = match ($state) {
+            'completed' => 'purchased',
+            'cancelled', 'rejected' => 'rejected',
+            default => null,
+        };
+        if ($next === null) {
+            return;
+        }
+        $post = DB::table('supplier_vehicle_posts')->where('transaction_id', $transactionId)->where('state', 'assigned')->first(['id', 'supplier_id', 'year', 'make', 'model']);
+        if (! $post) {
+            return;
+        }
+        DB::table('supplier_vehicle_posts')->where('id', $post->id)->update(['state' => $next, 'updated_at' => now()]);
+        self::notify(['userId' => $post->supplier_id], 'supplier_'.$next, $next === 'purchased' ? 'GCE bought your vehicle' : 'GCE will not buy this vehicle',
+            "{$post->year} {$post->make} {$post->model}: ".($next === 'purchased' ? 'GCE paid for it.' : 'the purchase did not go through.'), $post->id, 'supplier_vehicle_posts');
     }
 
     /** True when the exception is the named unique key (MySQL 1062). */

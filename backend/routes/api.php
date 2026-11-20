@@ -145,6 +145,7 @@ Route::prefix('v1')->group(function () {
             Route::get('supplier-posts/{id}', [SupplierController::class, 'staffShow']);
             Route::post('supplier-posts/{id}/propose', [SupplierController::class, 'propose'])->middleware('role:marketing_specialist');
             Route::post('supplier-posts/{id}/decide', [SupplierController::class, 'ceoDecide'])->middleware('role:ceo');
+            Route::post('supplier-posts/{id}/assign', [SupplierController::class, 'assign'])->middleware('role:marketing_specialist');
         });
         Route::post('admin/accounts/employee', [AccountAdminController::class, 'storeEmployee'])->middleware('role:ceo,account_manager');
         Route::post('admin/roles', [AccountAdminController::class, 'assignRole'])->middleware('role:ceo,super_admin');
