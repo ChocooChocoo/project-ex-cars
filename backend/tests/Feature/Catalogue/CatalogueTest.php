@@ -59,6 +59,31 @@ class CatalogueTest extends TestCase
     }
 
     #[Test]
+    public function showroom_cards_prefer_the_first_public_photo_then_a_spin_frame(): void
+    {
+        $customer = $this->account('customer');
+        $photoCar = $this->vehicle();
+        $spinCar = $this->vehicle();
+        $emptyCar = $this->vehicle();
+        foreach ([
+            [$photoCar, 'photo', 'private.png', 0, false],
+            [$photoCar, '360_view', 'spin.png', 1, true],
+            [$photoCar, 'photo', 'cover.png', 2, true],
+            [$photoCar, 'photo', 'side.png', 3, true],
+            [$spinCar, '360_view', 'first-frame.png', 1, true],
+            [$emptyCar, 'interior', 'interior.png', 1, true],
+        ] as [$car, $kind, $path, $order, $public]) {
+            (new VehicleMedia)->forceFill(['vehicle_id' => $car->id, 'media_kind' => $kind, 'storage_path' => $path, 'display_order' => $order, 'public_state' => $public, 'uploaded_by' => $customer->id])->save();
+        }
+
+        $rows = collect($this->as($customer)->getJson('/api/v1/catalogue/vehicles')->assertOk()->json('vehicles'))->keyBy('id');
+        $base = rtrim(config('app.url'), '/').'/storage/showroom-media/';
+        $this->assertSame($base.'cover.png', $rows[$photoCar->id]['photo_url']);
+        $this->assertSame($base.'first-frame.png', $rows[$spinCar->id]['photo_url']);
+        $this->assertNull($rows[$emptyCar->id]['photo_url']);
+    }
+
+    #[Test]
     public function vehicle_detail_is_404_unless_available_and_hides_private_media(): void
     {
         $customer = $this->account('customer');

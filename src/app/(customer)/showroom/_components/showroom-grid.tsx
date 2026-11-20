@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 
+import Image from "next/image";
 import Link from "next/link";
 
 import { Car, Filter, Heart, Search } from "lucide-react";
@@ -16,6 +17,28 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/in
 import { Kbd } from "@/components/ui/kbd";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { VEHICLE_PURPOSES } from "@/lib/vehicles/catalog";
+
+function ShowroomCover({ src, alt }: { readonly src: string | null; readonly alt: string }) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+
+  return (
+    <div className="relative flex aspect-[4/3] items-center justify-center bg-muted">
+      {src && src !== failedSrc ? (
+        <Image
+          src={src}
+          alt={alt}
+          unoptimized
+          fill
+          sizes="(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+          className="object-contain"
+          onError={() => setFailedSrc(src)}
+        />
+      ) : (
+        <Car className="size-16 text-muted-foreground/40" />
+      )}
+    </div>
+  );
+}
 
 export function ShowroomGrid({
   vehicles,
@@ -160,9 +183,7 @@ export function ShowroomGrid({
             return (
               <Link key={id} href={`/showroom/${id}`} className="group">
                 <Card className="h-full overflow-hidden transition-shadow hover:shadow-md">
-                  <div className="flex aspect-[4/3] items-center justify-center bg-muted">
-                    <Car className="size-16 text-muted-foreground/40" />
-                  </div>
+                  <ShowroomCover src={typeof v.photo_url === "string" ? v.photo_url : null} alt={`${make} ${model}`} />
                   <CardContent className="flex flex-col gap-2 p-4">
                     <div className="flex items-start justify-between gap-2">
                       <div>

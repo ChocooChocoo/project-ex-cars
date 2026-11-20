@@ -36,13 +36,20 @@ class ShowroomController extends Controller
     }
 
     /** GET /catalogue/vehicles: available cars, newest first, plus the caller's favourite ids. */
-    public function index(Request $request): JsonResponse
+    public function index(Request $request, FileService $files): JsonResponse
     {
         $vehicles = Vehicle::query()->where('listing_state', 'available')->orderByDesc('posted_at')->get();
         $favouriteIds = Favourite::query()->where('customer_id', $request->user()->id)->pluck('vehicle_id');
+        $covers = VehicleMedia::query()->whereIn('vehicle_id', $vehicles->pluck('id'))
+            ->where('public_state', true)->whereIn('media_kind', VehicleMedia::VISIBLE_KINDS)
+            ->orderByRaw('CASE WHEN media_kind = ? THEN 0 ELSE 1 END', ['photo'])
+            ->orderBy('display_order')->orderBy('id')->get(['vehicle_id', 'storage_path'])
+            ->unique('vehicle_id')->mapWithKeys(fn ($media) => [
+                $media->vehicle_id => $files->publicUrl('showroom-media', $media->storage_path),
+            ]);
 
         return response()->json([
-            'vehicles' => $vehicles->map(fn (Vehicle $v) => self::publicVehicle($v))->values(),
+            'vehicles' => $vehicles->map(fn (Vehicle $v) => self::publicVehicle($v) + ['photo_url' => $covers[$v->id] ?? null])->values(),
             'favourite_ids' => $favouriteIds->values(),
         ]);
     }
