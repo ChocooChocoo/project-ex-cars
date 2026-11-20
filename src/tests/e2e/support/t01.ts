@@ -102,8 +102,14 @@ export async function uploadBuyerBilling(page: Page) {
   await page.waitForLoadState("networkidle");
 }
 
-// The buyer's side up to Submit Request: Buy Now, 2 IDs (front and back each) + proof of billing, method,
-// arrangement.
+export async function uploadBuyerPayslip(page: Page) {
+  const input = page.getByLabel("Latest payslip", { exact: true });
+  await input.setInputFiles(png("Payslip.png"));
+  await expect(input).toHaveCount(0, { timeout: 30_000 });
+  await page.waitForLoadState("networkidle");
+}
+
+// The buyer's side up to Submit Request.
 // T04/T10: a slot is a date plus a whole hour (9 AM–9 PM Manila) picked from the list. `when` is "YYYY-MM-DDTHH:00".
 export async function fillSlot(page: Page, when: string) {
   const [date, time] = when.split("T");
@@ -141,6 +147,7 @@ export async function buyerRequest(
   await uploadBuyerId(page, 1, "Driver's License", "Front");
   await uploadBuyerId(page, 1, "Driver's License", "Back");
   await uploadBuyerBilling(page);
+  await uploadBuyerPayslip(page);
   // T04: Financing is a Payment Option. T06: Full Payment is Cash or Bank Transfer (via PayMongo); PayMongo is
   // the channel, so it is never an option of its own.
   if (options.method === "Financing") await pick(page, "payment_option", "Financing");
@@ -177,11 +184,11 @@ export async function verifyAll(page: Page, expected: number) {
   }
 }
 
-// Sales Manager: verify the buyer's 3 papers and approve the request.
+// Sales Manager: verify the buyer's six uploaded files and approve the request.
 export async function approveAsSalesManager(page: Page, transactionId: string) {
   await signInAs(page, "sales_manager@gce.local");
   await open(page, `/sales_manager/transactions/${transactionId}`);
-  await verifyAll(page, 5);
+  await verifyAll(page, 6);
   // The last verification must have landed before the approval counts the verified papers.
   await page.waitForLoadState("networkidle");
   // A cash Meet Halfway is approved together with its team.

@@ -126,9 +126,11 @@ test.describe
       await page.waitForLoadState("networkidle");
 
       // The request cannot be approved while an image is waiting to be resubmitted.
-      await verifyAll(page, 4);
-      await page.getByRole("button", { name: /^Transition Approve/ }).click();
-      await expect(page.getByText(/Two verified valid IDs and a verified proof of billing/)).toBeVisible();
+      await verifyAll(page, 5);
+      await expect(page.getByRole("button", { name: /^Transition Approve/ })).toBeDisabled();
+      await expect(
+        page.getByText("Verify both IDs, the proof of billing, and the latest payslip first."),
+      ).toBeVisible();
 
       const { data: notice } = await db()
         .from("notifications")

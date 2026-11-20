@@ -74,6 +74,16 @@ describe("sellVehicleSchema papers checklist (SN-13)", () => {
     expect(sellVehicleSchema.safeParse(baseData({ signed_id_copies: false })).success).toBe(false);
   });
 
+  it("accepts the ticked checkbox the form sends as form data, not only a boolean", () => {
+    // The form writes "yes" into the FormData, and submitSellVehicle re-checks that same payload.
+    for (const ticked of [true, "yes", "true", "on"]) {
+      expect(sellVehicleSchema.safeParse(baseData({ signed_id_copies: ticked })).success).toBe(true);
+    }
+    for (const unticked of ["", "no", "false", null]) {
+      expect(sellVehicleSchema.safeParse(baseData({ signed_id_copies: unticked })).success).toBe(false);
+    }
+  });
+
   it("rejects an answer outside the three statuses", () => {
     expect(
       sellVehicleSchema.safeParse(

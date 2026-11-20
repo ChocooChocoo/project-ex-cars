@@ -6,6 +6,7 @@ import {
   setCustomerAddress,
   uploadBuyerBilling,
   uploadBuyerId,
+  uploadBuyerPayslip,
   verifyAll,
 } from "./support/t01";
 import { archiveListedTestVehicles, canCreateTestVehicle, createTestVehicle } from "./support/test-vehicle";
@@ -69,6 +70,7 @@ test.describe
       await uploadBuyerId(page, 1, "Driver's License", "Front");
       await uploadBuyerId(page, 1, "Driver's License", "Back");
       await uploadBuyerBilling(page);
+      await uploadBuyerPayslip(page);
       await pickById(page, "payment_method", "Cash");
       await pickById(page, "arrangement_kind", "Delivery");
       await page.locator("#schedule-date").fill("2031-08-20");

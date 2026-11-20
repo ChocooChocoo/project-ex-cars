@@ -7,6 +7,7 @@ import {
   recordVerifiedPayment,
   uploadBuyerBilling,
   uploadBuyerId,
+  uploadBuyerPayslip,
   verifyAll,
 } from "./support/t01";
 import { archiveListedTestVehicles, canCreateTestVehicle, createTestVehicle } from "./support/test-vehicle";
@@ -21,15 +22,6 @@ const expect = baseExpect.configure({ timeout: 20_000 });
 // sees the sale. Needs migration 00050 applied; the spec lists its own E2E-T01 test car.
 
 const seedPassword = process.env.SEED_USER_PASSWORD;
-
-const png = (name: string) => ({
-  name,
-  mimeType: "image/png",
-  buffer: Buffer.from(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
-    "base64",
-  ),
-});
 
 // A whole-hour slot far enough ahead that reruns rarely collide.
 const day = 1 + Math.floor(Math.random() * 27);
@@ -74,20 +66,6 @@ async function bookCashVisit(page: Page) {
   await page.waitForLoadState("networkidle");
 }
 
-async function upload(page: Page, kind: "Valid ID" | "Proof of Billing", idType?: string) {
-  await pick(page, "cust-doc-kind", kind);
-  if (idType) await pick(page, "cust-doc-id-type", idType);
-  await page
-    .locator('input[type="file"]')
-    .last()
-    .setInputFiles(png(`${kind}.png`));
-  const uploadButton = page.getByRole("button", { name: "Upload", exact: true });
-  await uploadButton.click();
-  // Wait for this upload's round trip and refresh, not an earlier upload's toast.
-  await expect(uploadButton).toBeEnabled();
-  await page.waitForLoadState("networkidle");
-}
-
 test.describe
   .serial("T01 Phase 2 cash onsite visit", () => {
     test.skip(!seedPassword || !canCreateTestVehicle(), "SEED_USER_PASSWORD and the local Laravel app are required");
@@ -102,7 +80,6 @@ test.describe
       vehiclePath = `/customer/showroom/${await createTestVehicle("ONSITE")}`;
       buyId = await startPurchase(page, vehiclePath);
 
-      // T10: two IDs, each front and back, and the proof of billing.
       await uploadBuyerId(page, 0, "Passport", "Front");
       await uploadBuyerId(page, 0, "Passport", "Back");
       await uploadBuyerId(page, 1, "Driver's License", "Front");
@@ -110,6 +87,8 @@ test.describe
       await uploadBuyerBilling(page);
       await bookCashVisit(page);
       await expect(page.getByText(/Visit slot locked for/)).toBeVisible();
+      await expect(page.getByRole("button", { name: "Submit Request" })).toBeDisabled();
+      await uploadBuyerPayslip(page);
 
       await page.getByRole("button", { name: "Submit Request" }).click();
       await expect(page.getByText(/Request sent/)).toBeVisible();
@@ -141,12 +120,13 @@ test.describe
       await signInAs(page, "sales_manager@gce.local");
       await page.goto(`/sales_manager/transactions/${buyId}`);
 
-      // Scenario 1, also try: approving before the three documents are confirmed is refused.
       await page.waitForLoadState("networkidle");
-      await approve(page);
-      await expect(page.getByText(/Two verified valid IDs and a verified proof of billing are required/)).toBeVisible();
+      await expect(page.getByRole("button", { name: /^Transition Approve/ })).toBeDisabled();
+      await expect(
+        page.getByText("Verify both IDs, the proof of billing, and the latest payslip first."),
+      ).toBeVisible();
 
-      await verifyAll(page, 5);
+      await verifyAll(page, 6);
       await approve(page);
       await expect(page.getByText("Approved").first()).toBeVisible();
       await page.waitForLoadState("networkidle");

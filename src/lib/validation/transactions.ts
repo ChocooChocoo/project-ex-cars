@@ -140,8 +140,13 @@ export const sellVehicleSchema = z
         { error: PAPERS_MISSING },
       ),
     ),
-    // Notes line 116: the seller must confirm the signed ID copies before the offer is sent.
-    signed_id_copies: z.literal(true, { error: SIGNED_ID_COPIES_MESSAGE }),
+    // Notes line 116: the seller must confirm the signed ID copies before the offer is sent. The checkbox reaches
+    // this schema as a boolean while the form is typed, but as the "yes" the FormData carries when the payload is
+    // re-checked on submit, so both shapes must satisfy it.
+    signed_id_copies: z.preprocess(
+      (value) => value === true || ["yes", "true", "on"].includes(String(value).trim().toLowerCase()),
+      z.literal(true, { error: SIGNED_ID_COPIES_MESSAGE }),
+    ),
     // C10: 1st, 2nd, 3rd, or 4 for "4th owner or more".
     owner_number: z.enum(["1", "2", "3", "4"], { error: "Choose which owner you are." }).transform(Number),
   })

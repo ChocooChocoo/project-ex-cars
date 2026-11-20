@@ -8,6 +8,7 @@ import {
   recordFinancingDownpayment,
   uploadBuyerBilling,
   uploadBuyerId,
+  uploadBuyerPayslip,
   writeAndApproveContract,
 } from "./support/t01";
 import { archiveListedTestVehicles, canCreateTestVehicle, createTestVehicle } from "./support/test-vehicle";
@@ -79,6 +80,7 @@ test.describe
       await uploadBuyerId(page, 1, "Driver's License", "Front");
       await uploadBuyerId(page, 1, "Driver's License", "Back");
       await uploadBuyerBilling(page);
+      await uploadBuyerPayslip(page);
       await pick(page, "payment_option", "Financing");
       await pick(page, "arrangement_kind", "GCE Visit");
       await pick(page, "requested_term", "1 year");
